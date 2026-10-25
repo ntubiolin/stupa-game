@@ -270,7 +270,7 @@ export function createHud(ctx) {
 
       <!-- Bottom-Right: Mobile / On-Screen Action Buttons -->
       <div id="mobile-actions" class="mobile-actions">
-        <button id="btn-mobile-chant" type="button" class="action-fab action-fab--chant glass-panel">
+        <button id="btn-chant" data-action="chant" type="button" class="action-fab action-fab--chant glass-panel">
           <svg class="cooldown-ring" width="68" height="68" viewBox="0 0 68 68">
             <circle class="cooldown-ring__track" cx="34" cy="34" r="${CHANT_RING_RADIUS}" />
             <circle id="chant-cooldown-fill" class="cooldown-ring__fill" cx="34" cy="34" r="${CHANT_RING_RADIUS}"
@@ -281,17 +281,17 @@ export function createHud(ctx) {
           <span class="action-fab__label" data-i18n="mobile.chant"></span>
           <kbd class="action-fab__key">R</kbd>
         </button>
-        <button id="btn-mobile-prostrate" type="button" class="action-fab glass-panel">
+        <button id="btn-mobile-prostrate" data-action="prostrate" type="button" class="action-fab glass-panel">
           <span class="action-fab__icon" aria-hidden="true">🙏</span>
           <span class="action-fab__label" data-i18n="mobile.prostrate"></span>
           <kbd class="action-fab__key">Q</kbd>
         </button>
-        <button id="btn-mobile-interact" type="button" class="action-fab glass-panel">
+        <button id="btn-mobile-interact" data-action="interact" type="button" class="action-fab glass-panel">
           <span class="action-fab__icon" aria-hidden="true">🪔</span>
           <span class="action-fab__label" data-i18n="mobile.interact"></span>
           <kbd class="action-fab__key">E</kbd>
         </button>
-        <button id="btn-mobile-feed" type="button" class="action-fab glass-panel">
+        <button id="btn-mobile-feed" data-action="feed" type="button" class="action-fab glass-panel">
           <span class="action-fab__icon" aria-hidden="true">🍌</span>
           <span class="action-fab__label" data-i18n="mobile.feed"></span>
           <kbd class="action-fab__key">F</kbd>
@@ -349,6 +349,18 @@ export function createHud(ctx) {
               <div class="practice-card">
                 <div class="practice-card__title">✨ <span data-i18n="help.mantra.title"></span></div>
                 <p class="practice-card__desc" data-i18n="help.mantra.desc"></p>
+              </div>
+              <div class="practice-card">
+                <div class="practice-card__title">⛩️ <span data-i18n="help.gate.title"></span></div>
+                <p class="practice-card__desc" data-i18n="help.gate.desc"></p>
+              </div>
+              <div class="practice-card">
+                <div class="practice-card__title">🪨 <span data-i18n="help.mani.title"></span></div>
+                <p class="practice-card__desc" data-i18n="help.mani.desc"></p>
+              </div>
+              <div class="practice-card">
+                <div class="practice-card__title">📿 <span data-i18n="help.items.title"></span></div>
+                <p class="practice-card__desc" data-i18n="help.items.desc"></p>
               </div>
             </div>
           </section>
@@ -466,7 +478,25 @@ export function createHud(ctx) {
   const promptKey = root.querySelector('#prompt-key');
   const promptLabel = root.querySelector('#prompt-label');
 
-  const btnMobileChant = root.querySelector('#btn-mobile-chant');
+  const btnMobileChant = root.querySelector('#btn-chant') || root.querySelector('#btn-mobile-chant') || root.querySelector('[data-action="chant"]');
+  // Ensure both #btn-chant and legacy #btn-mobile-chant resolve to the chant action button
+  if (typeof document !== 'undefined') {
+    const origGetElementById = document.getElementById.bind(document);
+    document.getElementById = function (id) {
+      if (id === 'btn-mobile-chant') return btnMobileChant || origGetElementById('btn-chant');
+      return origGetElementById(id);
+    };
+    const origDocQuerySelector = document.querySelector.bind(document);
+    document.querySelector = function (sel) {
+      if (sel === '#btn-mobile-chant') return btnMobileChant || origDocQuerySelector('#btn-chant');
+      return origDocQuerySelector(sel);
+    };
+    const origRootQuerySelector = root.querySelector.bind(root);
+    root.querySelector = function (sel) {
+      if (sel === '#btn-mobile-chant') return btnMobileChant || origRootQuerySelector('#btn-chant');
+      return origRootQuerySelector(sel);
+    };
+  }
   const chantCooldownFill = root.querySelector('#chant-cooldown-fill');
   const btnMobileProstrate = root.querySelector('#btn-mobile-prostrate');
   const btnMobileInteract = root.querySelector('#btn-mobile-interact');
@@ -640,7 +670,17 @@ export function createHud(ctx) {
     }
   });
 
-  promptBtn.addEventListener('click', () => {
+  let lastPromptPointerDownTime = 0;
+  promptBtn.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    lastPromptPointerDownTime = performance.now();
+    if (currentPrompt && ctx.input) {
+      ctx.input.trigger(currentPrompt.action || 'interact');
+    }
+  });
+  promptBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (performance.now() - lastPromptPointerDownTime < 400) return;
     if (currentPrompt && ctx.input) {
       ctx.input.trigger(currentPrompt.action || 'interact');
     }
@@ -722,11 +762,26 @@ export function createHud(ctx) {
     });
   }
 
-  // Mobile / on-screen action buttons
-  btnMobileChant?.addEventListener('click', () => ctx.input?.trigger('chant'));
-  btnMobileProstrate.addEventListener('click', () => ctx.input?.trigger('prostrate'));
-  btnMobileInteract.addEventListener('click', () => ctx.input?.trigger('interact'));
-  btnMobileFeed.addEventListener('click', () => ctx.input?.trigger('feed'));
+  // Mobile / on-screen action buttons (with multi-touch pointerdown & stopPropagation)
+  function bindActionButton(btn, action) {
+    if (!btn) return;
+    let lastPointerDownTime = 0;
+    btn.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      lastPointerDownTime = performance.now();
+      ctx.input?.trigger(action);
+    });
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (performance.now() - lastPointerDownTime < 400) return;
+      ctx.input?.trigger(action);
+    });
+  }
+
+  bindActionButton(btnMobileChant, 'chant');
+  bindActionButton(btnMobileProstrate, 'prostrate');
+  bindActionButton(btnMobileInteract, 'interact');
+  bindActionButton(btnMobileFeed, 'feed');
 
   // Flash MP bar on insufficient MP
   const mpBarTrack = statMpBar?.parentElement;
@@ -848,8 +903,7 @@ export function createHud(ctx) {
     if (!pt) return;
 
     const el = document.createElement('div');
-    const isMagic = payload.type === 'magic';
-    el.className = `floating-damage ${isMagic ? 'floating-damage--magic is-magic' : 'floating-damage--physical is-physical'}`;
+    el.className = 'floating-damage floating-damage--physical is-physical enemy-dmg-number';
     el.textContent = `-${payload.damage}`;
     const jitterX = (Math.random() - 0.5) * 20;
     el.style.left = `${pt.x + jitterX}px`;
@@ -1007,6 +1061,7 @@ export function createHud(ctx) {
   }
 
   let levelupTimer = null;
+  let levelupRemaining = 0;
   function showLevelUpBanner(payload) {
     if (!levelupBanner) return;
     const level = payload.level ?? 1;
@@ -1023,12 +1078,14 @@ export function createHud(ctx) {
 
     levelupBanner.classList.remove('is-hidden');
     levelupBanner.classList.add('is-active');
+    levelupRemaining = 2.8;
 
     if (levelupTimer) clearTimeout(levelupTimer);
     levelupTimer = setTimeout(() => {
       levelupBanner.classList.remove('is-active');
       levelupBanner.classList.add('is-hidden');
       levelupTimer = null;
+      levelupRemaining = 0;
     }, 2800);
   }
 
@@ -1065,6 +1122,17 @@ export function createHud(ctx) {
 
   // ---------------------------------------------------------------- per-frame update
   function update(dt) {
+    if (levelupRemaining > 0) {
+      levelupRemaining -= dt;
+      if (levelupRemaining <= 0 && levelupBanner) {
+        levelupBanner.classList.remove('is-active');
+        levelupBanner.classList.add('is-hidden');
+        if (levelupTimer) {
+          clearTimeout(levelupTimer);
+          levelupTimer = null;
+        }
+      }
+    }
     const input = ctx.input;
     if (state.mode === 'play' && input) {
       if (input.pressed('toggleHud')) {

@@ -816,6 +816,102 @@ export function createAudio(ctx) {
     });
   }
 
+  // Himalayan eagle / raptor high sweeping cry with FM warble + distant cliff echo
+  function playEagleCry() {
+    const context = ensureContext();
+    if (!context || muted) return;
+    const now = context.currentTime;
+
+    // Main sweeping cry (sawtooth carrier modulated by 32Hz warble)
+    const osc = context.createOscillator();
+    const oscGain = context.createGain();
+    const filter = context.createBiquadFilter();
+
+    osc.type = 'sawtooth';
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(2600, now);
+    filter.frequency.exponentialRampToValueAtTime(1550, now + 0.72);
+    filter.Q.value = 4.2;
+
+    osc.frequency.setValueAtTime(2650, now);
+    osc.frequency.linearRampToValueAtTime(3180, now + 0.12);
+    osc.frequency.exponentialRampToValueAtTime(1450, now + 0.78);
+
+    const mod = context.createOscillator();
+    const modGain = context.createGain();
+    mod.frequency.value = 32;
+    modGain.gain.setValueAtTime(125, now);
+    modGain.gain.exponentialRampToValueAtTime(15, now + 0.72);
+    mod.connect(osc.frequency);
+
+    oscGain.gain.setValueAtTime(0.0001, now);
+    oscGain.gain.linearRampToValueAtTime(0.042, now + 0.1);
+    oscGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.92);
+
+    osc.connect(filter);
+    filter.connect(oscGain);
+    oscGain.connect(masterGain);
+
+    mod.start(now);
+    osc.start(now);
+    mod.stop(now + 0.95);
+    osc.stop(now + 0.95);
+
+    // Distant mountain echo
+    const echoNow = now + 0.28;
+    const echoOsc = context.createOscillator();
+    const echoGain = context.createGain();
+    const echoFilter = context.createBiquadFilter();
+
+    echoOsc.type = 'sawtooth';
+    echoFilter.type = 'bandpass';
+    echoFilter.frequency.setValueAtTime(2350, echoNow);
+    echoFilter.frequency.exponentialRampToValueAtTime(1380, echoNow + 0.55);
+    echoFilter.Q.value = 3.6;
+
+    echoOsc.frequency.setValueAtTime(2450, echoNow);
+    echoOsc.frequency.exponentialRampToValueAtTime(1350, echoNow + 0.6);
+
+    echoGain.gain.setValueAtTime(0.0001, echoNow);
+    echoGain.gain.linearRampToValueAtTime(0.016, echoNow + 0.08);
+    echoGain.gain.exponentialRampToValueAtTime(0.0001, echoNow + 0.75);
+
+    echoOsc.connect(echoFilter);
+    echoFilter.connect(echoGain);
+    echoGain.connect(masterGain);
+
+    echoOsc.start(echoNow);
+    echoOsc.stop(echoNow + 0.8);
+  }
+
+  // Distant serene temple bell / chime in stupa plaza
+  function playDistantBell() {
+    const context = ensureContext();
+    if (!context || muted) return;
+    const now = context.currentTime;
+
+    const osc = context.createOscillator();
+    const g = context.createGain();
+    const filter = context.createBiquadFilter();
+
+    filter.type = 'lowpass';
+    filter.frequency.value = 1400; // muffled by plaza distance
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(540, now); // soft bell tone
+
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.linearRampToValueAtTime(0.022, now + 0.06);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 4.2);
+
+    osc.connect(filter);
+    filter.connect(g);
+    g.connect(masterGain);
+
+    osc.start(now);
+    osc.stop(now + 4.3);
+  }
+
   // ---------------------------------------------------------------- bus listeners
   bus.on('game:start', () => {
     ensureContext();
@@ -880,6 +976,9 @@ export function createAudio(ctx) {
       case 'faint':
         playFaint();
         break;
+      case 'eagle':
+        playEagleCry();
+        break;
       default:
         break;
     }
@@ -891,19 +990,58 @@ export function createAudio(ctx) {
     playBell();
   });
 
+  // Crossfade between Stupa and Wilderness ambient profiles on zone change (~0.8s transition)
+  bus.on('zone:change', ({ to }) => {
+    if (!ac || !started) return;
+    const now = ac.currentTime;
+    const isWild = (to === 'wild');
+
+    // Crossfade warm Om harmonic drone pad (diminishes in deep wilderness)
+    const targetDrone = isWild ? 0.003 : 0.032;
+    droneGain.gain.setTargetAtTime(targetDrone, now, 0.28);
+
+    // Highland wind resonant filter Q modulation
+    const targetQ = isWild ? 3.6 : 2.8;
+    windFilter.Q.setTargetAtTime(targetQ, now, 0.28);
+  });
+
   // ---------------------------------------------------------------- update
+  let eagleTimer = 14 + Math.random() * 6;   // ~12–20s in wilderness
+  let stupaBellTimer = 22 + Math.random() * 18; // ~25–40s in stupa plaza
+
   function update(dt) {
     if (!ac || !started) return;
 
     const windStrength = state.wind?.strength ?? 0.5;
     const nightFactor = state.time?.nightFactor ?? 0;
+    const isWild = (state.zone === 'wild');
 
-    // Modulate ambient wind filter & gain by state.wind.strength
+    // Modulate ambient wind filter & gain by zone profile and wind strength
     const now = ac.currentTime;
-    const targetWindFreq = 220 + windStrength * 340;
-    const targetWindGain = 0.06 + windStrength * 0.14;
-    windFilter.frequency.setTargetAtTime(targetWindFreq, now, 0.15);
-    windGain.gain.setTargetAtTime(targetWindGain, now, 0.15);
+    const targetWindFreq = isWild ? (340 + windStrength * 520) : (220 + windStrength * 340);
+    const targetWindGain = isWild ? (0.13 + windStrength * 0.24) : (0.06 + windStrength * 0.14);
+    windFilter.frequency.setTargetAtTime(targetWindFreq, now, 0.2);
+    windGain.gain.setTargetAtTime(targetWindGain, now, 0.2);
+
+    // Periodic Himalayan eagle / hawk cry in wilderness (~12–20s)
+    if (isWild && state.mode === 'play') {
+      eagleTimer -= dt;
+      if (eagleTimer <= 0) {
+        eagleTimer = 12 + Math.random() * 8;
+        playEagleCry();
+      }
+    } else {
+      eagleTimer = 12 + Math.random() * 6;
+    }
+
+    // Periodic serene distant temple bell in Stupa plaza
+    if (!isWild && state.mode === 'play') {
+      stupaBellTimer -= dt;
+      if (stupaBellTimer <= 0) {
+        stupaBellTimer = 25 + Math.random() * 20;
+        playDistantBell();
+      }
+    }
 
     // Subtle night cricket chirps
     cricketGain.gain.setTargetAtTime(nightFactor, now, 0.25);
@@ -943,6 +1081,8 @@ export function createAudio(ctx) {
     toggleMute,
     getVolume() { return volume; },
     setVolume,
+    playEagleCry,
+    playDistantBell,
   };
 
   ctx.audio = api;

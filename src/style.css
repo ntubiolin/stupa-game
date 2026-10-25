@@ -967,6 +967,10 @@ kbd {
   justify-content: center;
   gap: 2px;
   cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
   transition: transform 0.16s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -1291,10 +1295,10 @@ kbd {
   }
 
   .hud-left-stack {
-    top: 10px;
-    left: 10px;
-    width: 196px;
-    gap: 6px;
+    top: 8px;
+    left: 8px;
+    width: 176px;
+    gap: 5px;
   }
 
   .vitals-panel {
@@ -1335,17 +1339,57 @@ kbd {
   }
 
   .top-controls {
-    top: 12px;
-    right: 12px;
+    top: 8px;
+    right: 8px;
   }
 
   .time-panel {
-    min-width: 185px;
-    padding: 8px 10px;
+    min-width: 162px;
+    padding: 6px 8px;
   }
 
   .prompt-wrap {
     bottom: 96px;
+  }
+
+  .mobile-actions {
+    right: 14px;
+    bottom: 16px;
+    display: grid;
+    grid-template-columns: repeat(2, 56px);
+    grid-template-rows: repeat(2, 56px);
+    gap: 8px;
+    align-items: center;
+    justify-items: center;
+  }
+
+  .action-fab {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+  }
+
+  .action-fab--chant,
+  #btn-chant {
+    width: 62px;
+    height: 62px;
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  #btn-mobile-prostrate {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  #btn-mobile-feed {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  #btn-mobile-interact {
+    grid-column: 1;
+    grid-row: 2;
   }
 
   .action-fab__key {
