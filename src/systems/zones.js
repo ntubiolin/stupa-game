@@ -123,5 +123,8 @@ export function createZones(ctx) {
   };
 
   ctx.zones = api;
+  ctx.debug?.register('zones', {
+    teleport: (to) => api.teleport(to),
+  });
   return api;
 }

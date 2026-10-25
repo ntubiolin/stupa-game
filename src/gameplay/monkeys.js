@@ -308,6 +308,11 @@ export function createMonkeys(ctx) {
 
     bus.emit('sfx', { name: 'monkey' });
     bus.emit('merit', { type: 'monkey' });
+    bus.emit('vitals:restore', {
+      mp: config.VITALS?.restore?.monkeyMp ?? 10,
+      source: 'monkey',
+    });
+    bus.emit('monkey:fed', { position: m.position.clone() });
   }
 
   function resolvePlazaMonkeyCollision(pos) {

@@ -299,12 +299,225 @@ kbd {
   pointer-events: none;
 }
 
-/* Top-Left Merit & Kora Panel */
-.merit-panel {
+/* Top-Left Stack (Vitals above Merit) */
+.hud-left-stack {
   position: absolute;
   top: 18px;
   left: 18px;
   width: 268px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+  z-index: 10;
+  transition: transform 0.35s ease, opacity 0.35s ease;
+}
+
+.hud-left-stack .glass-panel {
+  pointer-events: auto;
+}
+
+/* Vitals Panel */
+.vitals-panel {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 18px;
+  pointer-events: auto;
+  background: var(--bg-glass);
+}
+
+.vitals-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(238, 195, 108, 0.16);
+}
+
+.vitals-level-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--col-gold);
+}
+
+.vitals-combat-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vitals-stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(255, 245, 225, 0.05);
+  border: 1px solid rgba(238, 195, 108, 0.16);
+  font-size: 0.75rem;
+  color: var(--col-text-muted);
+}
+
+.vitals-stat-val {
+  font-weight: 700;
+  color: var(--col-text);
+}
+
+.vitals-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.vitals-bar-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.vitals-bar-track {
+  position: relative;
+  width: 100%;
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.vitals-bar-track--exp {
+  height: 6px;
+}
+
+.vitals-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.vitals-bar-fill--hp {
+  background: linear-gradient(90deg, #b91c1c, #ef4444);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.45);
+}
+
+.vitals-bar-fill--mp {
+  background: linear-gradient(90deg, #0284c7, #38bdf8);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.45);
+}
+
+.vitals-bar-fill--exp {
+  background: linear-gradient(90deg, #d97706, #fde047);
+  box-shadow: 0 0 6px rgba(253, 224, 71, 0.4);
+}
+
+.vitals-bar-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1px 4px 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--col-text-muted);
+  line-height: 1.1;
+}
+
+.vitals-bar-text {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.70rem;
+}
+
+.vitals-bar-wrap--exp .vitals-bar-meta {
+  font-size: 0.65rem;
+}
+
+/* Floating popup over HP / MP bar */
+.vitals-popup-anchor {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.vitals-popup {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  animation: vitalsFloatUp 0.95s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  pointer-events: none;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+}
+
+.vitals-popup--heal {
+  color: #4ade80;
+}
+
+.vitals-popup--damage {
+  color: #f87171;
+}
+
+.vitals-popup--mp-gain {
+  color: #38bdf8;
+}
+
+.vitals-popup--mp-spend {
+  color: #c084fc;
+}
+
+@keyframes vitalsFloatUp {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.85);
+  }
+  20% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1.15);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-16px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-26px) scale(0.92);
+  }
+}
+
+/* Buff icon strip (reserved for #4) */
+.vitals-buffs {
+  display: none;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(238, 195, 108, 0.12);
+}
+
+.vitals-buff-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(238, 195, 108, 0.15);
+  border: 1px solid rgba(238, 195, 108, 0.3);
+  font-size: 0.68rem;
+  color: var(--col-gold);
+}
+
+/* Top-Left Merit & Kora Panel */
+.merit-panel {
+  position: relative;
+  width: 100%;
   padding: 14px 16px;
   border-radius: 20px;
   pointer-events: auto;
@@ -977,11 +1190,34 @@ kbd {
     padding: 26px 22px 22px;
   }
 
+  .hud-left-stack {
+    top: 10px;
+    left: 10px;
+    width: 196px;
+    gap: 6px;
+  }
+
+  .vitals-panel {
+    padding: 8px 10px;
+    border-radius: 14px;
+  }
+
+  .vitals-bar-track {
+    height: 11px;
+  }
+
+  .vitals-bar-track--exp {
+    height: 4px;
+  }
+
+  .vitals-bar-meta {
+    font-size: 0.65rem;
+  }
+
   .merit-panel {
-    top: 12px;
-    left: 12px;
-    width: 210px;
-    padding: 10px 12px;
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 14px;
   }
 
   .kora-ring-wrap {

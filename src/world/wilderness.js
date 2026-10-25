@@ -71,7 +71,7 @@ function createSeededRng(seed = 12345) {
 }
 
 export function createWilderness(ctx) {
-  const { scene, state, config, colliders } = ctx;
+  const { scene, state, config, colliders, bus } = ctx;
   const W = config.WILD;
   const origin = W.origin;
 
@@ -507,6 +507,37 @@ export function createWilderness(ctx) {
     group.add(m);
   }
 
+  // 6b. Subtle golden/turquoise glowing aura ring on each Mani stone mound (no PointLight)
+  const maniAuras = [];
+  const auraRingGeo = new THREE.RingGeometry(1.5, 3.6, 32);
+  auraRingGeo.rotateX(-Math.PI / 2);
+
+  for (let mIdx = 0; mIdx < maniList.length; mIdx++) {
+    const ms = maniList[mIdx];
+    const my = getHeight(ms.x, ms.z);
+    const auraMat = new THREE.MeshBasicMaterial({
+      color: 0x4eedc2, // turquoise-gold glow
+      transparent: true,
+      opacity: 0.22,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+      side: THREE.DoubleSide,
+    });
+    const auraMesh = new THREE.Mesh(auraRingGeo, auraMat);
+    auraMesh.position.set(ms.x, my + 0.04, ms.z);
+    group.add(auraMesh);
+
+    maniAuras.push({
+      mesh: auraMesh,
+      mat: auraMat,
+      x: ms.x,
+      z: ms.z,
+    });
+  }
+
+  let maniTimer = 0;
+
   // ---------------------------------------------------------------- 7. Procedural Highland Boulders (18–25 rocks)
   const bCfg = W.boulders || { count: 22, minRadius: 1.1, maxRadius: 2.3 };
   const boulderGeos = [];
@@ -674,8 +705,45 @@ export function createWilderness(ctx) {
     maniStones: maniStonesData,
     zones: W.zones,
     update(dt) {
-      if (state.zone && state.zone !== 'wild') return;
-      // Flags or subtle wind sway if needed
+      if (state.zone && state.zone !== 'wild') {
+        maniTimer = 0;
+        return;
+      }
+
+      let nearAnyMani = false;
+      const pPos = state.player?.position;
+      const maniRadius = config.VITALS?.restore?.maniRadius ?? 4;
+
+      if (pPos) {
+        for (let i = 0; i < maniAuras.length; i++) {
+          const a = maniAuras[i];
+          const dist = Math.hypot(pPos.x - a.x, pPos.z - a.z);
+          const isNear = dist <= maniRadius;
+          if (isNear) nearAnyMani = true;
+
+          // Pulse brighter & faster when player is within 4m
+          const pulseSpeed = isNear ? 4.2 : 1.8;
+          const baseAlpha = isNear ? 0.52 : 0.22;
+          const pulseAmp = isNear ? 0.28 : 0.10;
+          a.mat.opacity = baseAlpha + pulseAmp * Math.sin(state.elapsed * pulseSpeed + i * 1.5);
+          const s = 1.0 + (isNear ? 0.05 : 0.02) * Math.sin(state.elapsed * pulseSpeed);
+          a.mesh.scale.set(s, s, s);
+        }
+      }
+
+      if (nearAnyMani) {
+        maniTimer += dt;
+        const interval = config.VITALS?.restore?.maniInterval ?? 1.0;
+        if (maniTimer >= interval) {
+          maniTimer -= interval;
+          bus.emit('vitals:restore', {
+            mp: config.VITALS?.restore?.maniMp ?? 1,
+            source: 'mani',
+          });
+        }
+      } else {
+        maniTimer = 0;
+      }
     },
   };
 

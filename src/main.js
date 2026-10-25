@@ -16,6 +16,7 @@ import './style.css';
 import { CONFIG } from './config.js';
 import { createBus } from './core/events.js';
 import { createInput } from './core/input.js';
+import { createDebug } from './core/debug.js';
 import { i18n } from './i18n.js';
 
 import { createSky } from './world/sky.js';
@@ -30,6 +31,7 @@ import { createPlayer } from './player/player.js';
 import { createCameraRig } from './player/cameraRig.js';
 
 import { createZones } from './systems/zones.js';
+import { createVitals } from './systems/vitals.js';
 import { createInteraction } from './systems/interaction.js';
 import { createMerit } from './systems/merit.js';
 import { createAudio } from './systems/audio.js';
@@ -99,6 +101,7 @@ const ctx = {
   input: null,
 };
 ctx.input = createInput(ctx);
+createDebug(ctx);
 
 // ---------------------------------------------------------------- modules (order = update order)
 const sky = createSky(ctx);
@@ -111,6 +114,7 @@ const zones = createZones(ctx);
 const player = createPlayer(ctx);
 const lamps = createLamps(ctx);
 const monkeys = createMonkeys(ctx);
+const vitals = createVitals(ctx);
 const cameraRig = createCameraRig(ctx);
 
 const merit = createMerit(ctx);
@@ -123,6 +127,7 @@ const modules = [
   sky, stupa, flags, environment,
   wilderness, zones,
   player, lamps, monkeys,
+  vitals,
   cameraRig,
   merit, interaction, audio, hud,
 ];
@@ -171,4 +176,4 @@ function frame() {
 requestAnimationFrame(frame);
 
 // Debug handle (dev only)
-if (import.meta.env.DEV) window.__game = { ctx, modules: { sky, stupa, flags, environment, wilderness, zones, lamps, monkeys, player, cameraRig, merit, interaction, audio, hud } };
+if (import.meta.env.DEV) window.__game = { ctx, modules: { sky, stupa, flags, environment, wilderness, zones, lamps, monkeys, player, vitals, cameraRig, merit, interaction, audio, hud } };
