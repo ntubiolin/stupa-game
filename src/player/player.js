@@ -234,11 +234,19 @@ export function createPlayer(ctx) {
     }
   }
 
+  let wasSlowed = false;
   function restoreFlash() {
+    const isSlowed = state.elapsed < (state.player?.slowUntil || 0);
     for (const item of originalEmissives) {
-      item.mat.emissive.copy(item.color);
-      item.mat.emissiveIntensity = item.intensity;
+      if (isSlowed) {
+        item.mat.emissive.setHex(0x38bdf8);
+        item.mat.emissiveIntensity = 0.45;
+      } else {
+        item.mat.emissive.copy(item.color);
+        item.mat.emissiveIntensity = item.intensity;
+      }
     }
+    wasSlowed = isSlowed;
   }
 
   bus.on('player:hurt', (payload) => {
@@ -752,9 +760,20 @@ export function createPlayer(ctx) {
     state.player.position.z += state.player.velocity.z * dt;
     resolveCollisions(state.player.position);
 
+    const isSlowed = state.elapsed < (state.player?.slowUntil || 0);
     if (flashTimer > 0) {
       flashTimer = Math.max(0, flashTimer - dt);
       if (flashTimer === 0) {
+        restoreFlash();
+      }
+    } else {
+      if (isSlowed && !wasSlowed) {
+        for (const item of originalEmissives) {
+          item.mat.emissive.setHex(0x38bdf8);
+          item.mat.emissiveIntensity = 0.45;
+        }
+        wasSlowed = true;
+      } else if (!isSlowed && wasSlowed) {
         restoreFlash();
       }
     }

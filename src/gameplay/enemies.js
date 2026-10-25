@@ -51,7 +51,7 @@ export function createEnemies(ctx) {
   pretaHeadGeo.translate(0, 1.32, 0);
 
   const pretaMouthGeo = new THREE.TorusGeometry(0.045, 0.018, 6, 8);
-  pretaMouthGeo.translate(0, 1.26, 0.16);
+  pretaMouthGeo.translate(0, 1.26, -0.16);
 
   const pretaEyeGeo = new THREE.SphereGeometry(0.038, 8, 8);
   const pretaLimbGeo = new THREE.CylinderGeometry(0.045, 0.032, 0.58, 6);
@@ -120,6 +120,14 @@ export function createEnemies(ctx) {
   const chargeLineGeo = new THREE.PlaneGeometry(1.1, 8.0);
   chargeLineGeo.translate(0, 4.0, 0);
   chargeLineGeo.rotateX(-Math.PI / 2);
+
+  // Tsen red arrow aim line: 16m line x 0.22m wide
+  const aimLineGeo = new THREE.PlaneGeometry(0.22, 16.0);
+  aimLineGeo.translate(0, 8.0, 0);
+  aimLineGeo.rotateX(-Math.PI / 2);
+
+  // Preta mouth gathering green orb
+  const pretaOrbGeo = new THREE.SphereGeometry(0.14, 10, 8);
 
   // ---------------------------------------------------------------- 2. Particle System (Five-color liberation)
   const PARTICLE_COUNT = 80;
@@ -249,12 +257,25 @@ export function createEnemies(ctx) {
 
       // Glowing hungry eyes
       const eyeL = new THREE.Mesh(pretaEyeGeo, eyeMat);
-      eyeL.position.set(-0.065, 1.34, 0.16);
+      eyeL.position.set(-0.065, 1.34, -0.16);
       group.add(eyeL);
 
       const eyeR = new THREE.Mesh(pretaEyeGeo, eyeMat);
-      eyeR.position.set(0.065, 1.34, 0.16);
+      eyeR.position.set(0.065, 1.34, -0.16);
       group.add(eyeR);
+
+      // Green mouth gathering orb for ghostfire
+      const mouthOrbMat = new THREE.MeshBasicMaterial({
+        color: 0x22c55e,
+        transparent: true,
+        opacity: 0.88,
+        depthWrite: false,
+      });
+      const mouthOrb = new THREE.Mesh(pretaOrbGeo, mouthOrbMat);
+      mouthOrb.position.set(0, 1.26, -0.28);
+      mouthOrb.visible = false;
+      group.add(mouthOrb);
+      animNodes.mouthOrb = mouthOrb;
 
       // Limbs
       const armL = new THREE.Mesh(pretaLimbGeo, skinMat);
@@ -442,6 +463,8 @@ export function createEnemies(ctx) {
     // --- Telegraph Meshes
     let telegraphGroup = null;
     let telegraphFill = null;
+    let chargeLineMesh = null;
+    let aimLineMesh = null;
 
     if (kind === 'migoi') {
       telegraphGroup = new THREE.Group();
@@ -469,7 +492,7 @@ export function createEnemies(ctx) {
       telegraphFill.scale.set(0.001, 1, 0.001);
       telegraphGroup.add(telegraphFill);
 
-      scene.add(telegraphGroup);
+      (ctx.wildGroup || scene).add(telegraphGroup);
     } else if (kind === 'tsen') {
       telegraphGroup = new THREE.Group();
       telegraphGroup.name = `Telegraph_${id}`;
@@ -483,11 +506,23 @@ export function createEnemies(ctx) {
         side: THREE.DoubleSide,
         depthWrite: false,
       });
-      const lineMesh = new THREE.Mesh(chargeLineGeo, lineMat);
-      telegraphGroup.add(lineMesh);
-      telegraphFill = lineMesh;
+      chargeLineMesh = new THREE.Mesh(chargeLineGeo, lineMat);
+      telegraphGroup.add(chargeLineMesh);
+      telegraphFill = chargeLineMesh;
 
-      scene.add(telegraphGroup);
+      const aimMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(2.2, 0.2, 0.2),
+        toneMapped: false,
+        transparent: true,
+        opacity: 0.65,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      aimLineMesh = new THREE.Mesh(aimLineGeo, aimMat);
+      aimLineMesh.visible = false;
+      telegraphGroup.add(aimLineMesh);
+
+      (ctx.wildGroup || scene).add(telegraphGroup);
     }
 
     enemyGroup.add(group);
@@ -505,6 +540,8 @@ export function createEnemies(ctx) {
       height: kCfg.height,
       pos: { x: spawnPos.x, y: spawnPos.y, z: spawnPos.z },
       heading: 0,
+      lockedHeading: 0,
+      lastAttackId: null,
       state: 'wander',
       stateTimer: 0,
       activeAttack: null,
@@ -519,6 +556,8 @@ export function createEnemies(ctx) {
       animNodes,
       telegraphGroup,
       telegraphFill,
+      chargeLineMesh,
+      aimLineMesh,
       chargeData: null,
       animTime: Math.random() * 10,
     };
@@ -582,10 +621,14 @@ export function createEnemies(ctx) {
   // ---------------------------------------------------------------- 5. Initial Spawning
   function disposeEnemy(e) {
     if (e.telegraphGroup) {
+      (ctx.wildGroup || scene).remove(e.telegraphGroup);
       scene.remove(e.telegraphGroup);
       e.telegraphGroup.traverse((child) => {
         if (child.material) child.material.dispose();
       });
+    }
+    if (e.animNodes?.mouthOrb) {
+      e.animNodes.mouthOrb.visible = false;
     }
     enemyGroup.remove(e.group);
     if (Array.isArray(e.materials)) {
@@ -673,6 +716,7 @@ export function createEnemies(ctx) {
 
         // Cancel active telegraph/windup
         if (enemy.telegraphGroup) enemy.telegraphGroup.visible = false;
+        if (enemy.animNodes?.mouthOrb) enemy.animNodes.mouthOrb.visible = false;
 
         if (enemy.hp > 0) {
           // Hurt state
@@ -754,6 +798,73 @@ export function createEnemies(ctx) {
   });
 
   // ---------------------------------------------------------------- 7. Per-Frame AI Update
+  function startEnemyAttack(enemy, atk, isForced = false) {
+    enemy.state = 'windup';
+    enemy.activeAttack = atk;
+    enemy.stateTimer = atk.windup || 0.5;
+    enemy.lockedHeading = enemy.heading;
+
+    const playerPos = state.player?.position || { x: 1000, y: 0, z: 0 };
+
+    if (atk.id === 'ghostfire') {
+      if (enemy.animNodes.mouthOrb) {
+        enemy.animNodes.mouthOrb.visible = true;
+        enemy.animNodes.mouthOrb.scale.setScalar(0.01);
+      }
+    } else if (atk.id === 'redArrow') {
+      if (enemy.telegraphGroup && enemy.aimLineMesh) {
+        enemy.telegraphGroup.position.set(enemy.pos.x, enemy.pos.y + 0.03, enemy.pos.z);
+        enemy.telegraphGroup.rotation.y = enemy.lockedHeading;
+        if (enemy.chargeLineMesh) enemy.chargeLineMesh.visible = false;
+        enemy.aimLineMesh.visible = true;
+        enemy.telegraphGroup.visible = true;
+      }
+    } else if (atk.id === 'spearCharge') {
+      if (enemy.telegraphGroup && enemy.chargeLineMesh) {
+        enemy.telegraphGroup.position.set(enemy.pos.x, enemy.pos.y + 0.03, enemy.pos.z);
+        enemy.telegraphGroup.rotation.y = enemy.heading;
+        if (enemy.aimLineMesh) enemy.aimLineMesh.visible = false;
+        enemy.chargeLineMesh.visible = true;
+        enemy.telegraphGroup.visible = true;
+      }
+    } else if (atk.id === 'groundSlam') {
+      if (enemy.telegraphGroup) {
+        enemy.telegraphGroup.position.set(enemy.pos.x, enemy.pos.y + 0.03, enemy.pos.z);
+        enemy.telegraphGroup.visible = true;
+        if (enemy.telegraphFill) enemy.telegraphFill.scale.set(0.001, 1, 0.001);
+      }
+    } else if (atk.id === 'boulder') {
+      enemy.lastAttackId = 'boulder';
+      const startPos = {
+        x: enemy.pos.x - Math.sin(enemy.heading) * 0.6,
+        y: enemy.pos.y + 2.2,
+        z: enemy.pos.z - Math.cos(enemy.heading) * 0.6,
+      };
+      const targetPos = { x: playerPos.x, y: playerPos.y, z: playerPos.z };
+      ctx.projectiles?.spawn('boulder', {
+        startPos,
+        targetPos,
+        damage: atk.damage,
+        flightDuration: atk.flightDuration,
+        hitRadius: atk.hitRadius,
+        arcHeight: atk.arcHeight,
+        magic: false,
+      });
+    } else if (atk.id === 'frostRoar') {
+      enemy.lastAttackId = 'frostRoar';
+      bus.emit('sfx', { name: 'frost' });
+      const targetPos = { x: playerPos.x, y: playerPos.y, z: playerPos.z };
+      ctx.projectiles?.spawn('frostRoar', {
+        targetPos,
+        damage: atk.damage,
+        aoeRadius: atk.aoeRadius,
+        eruptDelay: atk.eruptDelay,
+        slow: atk.slow,
+        magic: true,
+      });
+    }
+  }
+
   function update(dt) {
     const isWild = (state.zone === 'wild');
     enemyGroup.visible = isWild;
@@ -762,6 +873,7 @@ export function createEnemies(ctx) {
       // Hide any active telegraphs when leaving wild zone
       for (const e of activeEnemies) {
         if (e.telegraphGroup) e.telegraphGroup.visible = false;
+        if (e.animNodes?.mouthOrb) e.animNodes.mouthOrb.visible = false;
       }
       return;
     }
@@ -896,35 +1008,96 @@ export function createEnemies(ctx) {
         }
       } else if (enemy.state === 'windup') {
         enemy.stateTimer -= dt;
-
-        // Red body pulse
-        const pulse = Math.sin(state.elapsed * 18) * 0.5 + 0.5;
-        for (const mat of enemy.materials) {
-          mat.emissive?.setRGB(0.7 * pulse, 0.05, 0.05);
-          if (mat.emissiveIntensity != null) mat.emissiveIntensity = 0.8;
-        }
-
-        // Update telegraph visual fill
-        const windupTotal = enemy.activeAttack.windup || 0.5;
+        const atk = enemy.activeAttack;
+        const windupTotal = atk?.windup || 0.5;
         const uFill = Math.min(1, 1 - Math.max(0, enemy.stateTimer) / windupTotal);
+        const pulse = Math.sin(state.elapsed * 18) * 0.5 + 0.5;
 
-        if (enemy.kind === 'migoi' && enemy.telegraphFill) {
-          enemy.telegraphFill.scale.set(uFill, 1, uFill);
-        } else if (enemy.kind === 'tsen' && enemy.telegraphFill) {
-          // Pulse brightness along line
-          enemy.telegraphFill.material.opacity = 0.35 + 0.35 * pulse;
+        if (atk?.id === 'ghostfire') {
+          for (const mat of enemy.materials) {
+            mat.emissive?.setRGB(0.05, 0.7 * pulse, 0.15);
+            if (mat.emissiveIntensity != null) mat.emissiveIntensity = 0.85;
+          }
+          if (enemy.animNodes.mouthOrb) {
+            enemy.animNodes.mouthOrb.scale.setScalar(Math.max(0.01, uFill));
+          }
+        } else if (atk?.id === 'redArrow') {
+          for (const mat of enemy.materials) {
+            mat.emissive?.setRGB(0.7 * pulse, 0.05, 0.05);
+            if (mat.emissiveIntensity != null) mat.emissiveIntensity = 0.8;
+          }
+          if (enemy.aimLineMesh) {
+            enemy.aimLineMesh.material.opacity = 0.4 + 0.35 * pulse;
+          }
+        } else if (atk?.id === 'boulder') {
+          if (enemy.animNodes.armL) enemy.animNodes.armL.rotation.x = -1.5 * uFill;
+          if (enemy.animNodes.armR) enemy.animNodes.armR.rotation.x = -1.5 * uFill;
+        } else if (atk?.id === 'frostRoar') {
+          if (enemy.animNodes.armL) enemy.animNodes.armL.rotation.x = -0.7 * uFill;
+          if (enemy.animNodes.armR) enemy.animNodes.armR.rotation.x = -0.7 * uFill;
+        } else {
+          for (const mat of enemy.materials) {
+            mat.emissive?.setRGB(0.7 * pulse, 0.05, 0.05);
+            if (mat.emissiveIntensity != null) mat.emissiveIntensity = 0.8;
+          }
+          if (enemy.kind === 'migoi' && enemy.telegraphFill) {
+            enemy.telegraphFill.scale.set(uFill, 1, uFill);
+          } else if (enemy.kind === 'tsen' && enemy.chargeLineMesh) {
+            enemy.chargeLineMesh.material.opacity = 0.35 + 0.35 * pulse;
+          }
         }
 
         if (enemy.stateTimer <= 0) {
           // Windup complete: hide telegraph and clear emissive
           if (enemy.telegraphGroup) enemy.telegraphGroup.visible = false;
+          if (enemy.animNodes.mouthOrb) enemy.animNodes.mouthOrb.visible = false;
           for (const mat of enemy.materials) {
             mat.emissive?.setHex(0x000000);
             if (mat.emissiveIntensity != null) mat.emissiveIntensity = 0;
           }
 
-          if (enemy.activeAttack.type === 'charge') {
-            // Tsen: launch locked dash
+          if (atk.id === 'ghostfire') {
+            const mouthPos = {
+              x: enemy.pos.x - Math.sin(enemy.heading) * 0.35,
+              y: enemy.pos.y + 1.25,
+              z: enemy.pos.z - Math.cos(enemy.heading) * 0.35,
+            };
+            ctx.projectiles?.spawn('ghostfire', {
+              origin: mouthPos,
+              damage: atk.damage,
+              speed: atk.speed,
+              turnRate: atk.turnRate,
+              lifetime: atk.lifetime,
+              hitRadius: atk.hitRadius,
+              magic: true,
+            });
+            bus.emit('sfx', { name: 'fireball' });
+            enemy.attackCooldowns[atk.id] = atk.cooldown;
+            enemy.state = 'recover';
+            enemy.stateTimer = atk.recover ?? 0.35;
+          } else if (atk.id === 'redArrow') {
+            const lockedHeading = enemy.lockedHeading ?? enemy.heading;
+            const dirX = -Math.sin(lockedHeading);
+            const dirZ = -Math.cos(lockedHeading);
+            const startPos = {
+              x: enemy.pos.x + dirX * 0.5,
+              y: enemy.pos.y + 1.6,
+              z: enemy.pos.z + dirZ * 0.5,
+            };
+            ctx.projectiles?.spawn('redArrow', {
+              origin: startPos,
+              dir: { x: dirX, y: 0, z: dirZ },
+              damage: atk.damage,
+              speed: atk.speed,
+              lifetime: atk.lifetime,
+              hitRadius: atk.hitRadius,
+              magic: false,
+            });
+            bus.emit('sfx', { name: 'arrow' });
+            enemy.attackCooldowns[atk.id] = atk.cooldown;
+            enemy.state = 'recover';
+            enemy.stateTimer = atk.recover ?? 0.35;
+          } else if (atk.id === 'spearCharge') {
             const lockedHeading = enemy.heading;
             const dirX = -Math.sin(lockedHeading);
             const dirZ = -Math.cos(lockedHeading);
@@ -935,36 +1108,43 @@ export function createEnemies(ctx) {
               hasHit: false,
             };
             enemy.state = 'attack';
-          } else if (enemy.activeAttack.type === 'aoe') {
-            // Migoi ground slam
+          } else if (atk.id === 'boulder') {
+            enemy.attackCooldowns[atk.id] = atk.cooldown;
+            enemy.state = 'recover';
+            enemy.stateTimer = atk.recover ?? 0.45;
+          } else if (atk.id === 'frostRoar') {
+            enemy.attackCooldowns[atk.id] = atk.cooldown;
+            enemy.state = 'recover';
+            enemy.stateTimer = atk.recover ?? 0.5;
+          } else if (atk.id === 'groundSlam') {
             if (playerPos) {
               const slamDist = Math.hypot(playerPos.x - enemy.pos.x, playerPos.z - enemy.pos.z);
-              if (slamDist <= (enemy.activeAttack.aoeRadius ?? 3.5)) {
+              if (slamDist <= (atk.aoeRadius ?? 3.5)) {
                 bus.emit('vitals:damage', {
-                  amount: enemy.activeAttack.damage,
+                  amount: atk.damage,
                   type: 'physical',
                   sourcePos: { ...enemy.pos },
                 });
               }
             }
-            enemy.attackCooldowns[enemy.activeAttack.id] = enemy.activeAttack.cooldown;
+            enemy.attackCooldowns[atk.id] = atk.cooldown;
             enemy.state = 'recover';
-            enemy.stateTimer = enemy.activeAttack.recover ?? 0.5;
+            enemy.stateTimer = atk.recover ?? 0.5;
           } else {
-            // Preta claw
+            // Melee claw
             if (playerPos) {
               const clawDist = Math.hypot(playerPos.x - enemy.pos.x, playerPos.z - enemy.pos.z);
-              if (clawDist <= (enemy.activeAttack.hitReach ?? 1.8)) {
+              if (clawDist <= (atk.hitReach ?? 1.8)) {
                 bus.emit('vitals:damage', {
-                  amount: enemy.activeAttack.damage,
+                  amount: atk.damage,
                   type: 'physical',
                   sourcePos: { ...enemy.pos },
                 });
               }
             }
-            enemy.attackCooldowns[enemy.activeAttack.id] = enemy.activeAttack.cooldown;
+            enemy.attackCooldowns[atk.id] = atk.cooldown;
             enemy.state = 'recover';
-            enemy.stateTimer = enemy.activeAttack.recover ?? 0.35;
+            enemy.stateTimer = atk.recover ?? 0.35;
           }
         }
       } else if (enemy.state === 'chase') {
@@ -980,30 +1160,52 @@ export function createEnemies(ctx) {
           // Check if any attack is in range and off cooldown
           let chosenAttack = null;
           const attacks = enemy.kindConfig.attacks || [];
-          for (let a = 0; a < attacks.length; a++) {
-            const atk = attacks[a];
-            const cd = enemy.attackCooldowns[atk.id] || 0;
-            if (cd <= 0 && distToPlayer <= atk.range) {
-              chosenAttack = atk;
-              break;
+
+          // Melee attack priority when in melee range
+          const meleeAtk = attacks.find((a) => a.id === 'claw' || a.id === 'groundSlam');
+          if (meleeAtk && distToPlayer <= meleeAtk.range && (enemy.attackCooldowns[meleeAtk.id] || 0) <= 0) {
+            chosenAttack = meleeAtk;
+          } else {
+            const candidates = [];
+            const activeProjectiles = ctx.projectiles?.count ? ctx.projectiles.count() : 0;
+            const maxProj = config.PROJECTILES?.maxActive ?? 20;
+
+            for (let a = 0; a < attacks.length; a++) {
+              const atk = attacks[a];
+              const cd = enemy.attackCooldowns[atk.id] || 0;
+              if (cd > 0) continue;
+              const minR = atk.minRange ?? 0;
+              if (distToPlayer < minR || distToPlayer > atk.range) continue;
+
+              // Check projectile count limit
+              if ((atk.type === 'ranged' || atk.type === 'magic') && activeProjectiles >= maxProj) {
+                continue;
+              }
+
+              // Migoi: cannot use boulder and frostRoar twice in a row during natural AI
+              if (enemy.kind === 'migoi' && (atk.id === 'boulder' || atk.id === 'frostRoar')) {
+                if (atk.id === enemy.lastAttackId) continue;
+              }
+
+              candidates.push(atk);
+            }
+
+            if (candidates.length > 0) {
+              const totalWeight = candidates.reduce((sum, atk) => sum + (atk.weight || 1.0), 0);
+              let r = Math.random() * totalWeight;
+              for (const atk of candidates) {
+                r -= (atk.weight || 1.0);
+                if (r <= 0) {
+                  chosenAttack = atk;
+                  break;
+                }
+              }
+              if (!chosenAttack) chosenAttack = candidates[0];
             }
           }
 
           if (chosenAttack) {
-            // Begin windup!
-            enemy.state = 'windup';
-            enemy.activeAttack = chosenAttack;
-            enemy.stateTimer = chosenAttack.windup;
-
-            if (enemy.kind === 'migoi' && enemy.telegraphGroup) {
-              enemy.telegraphGroup.position.set(enemy.pos.x, enemy.pos.y + 0.03, enemy.pos.z);
-              enemy.telegraphGroup.visible = true;
-              if (enemy.telegraphFill) enemy.telegraphFill.scale.set(0.001, 1, 0.001);
-            } else if (enemy.kind === 'tsen' && enemy.telegraphGroup) {
-              enemy.telegraphGroup.position.set(enemy.pos.x, enemy.pos.y + 0.03, enemy.pos.z);
-              enemy.telegraphGroup.rotation.y = enemy.heading;
-              enemy.telegraphGroup.visible = true;
-            }
+            startEnemyAttack(enemy, chosenAttack, false);
           } else {
             // Move toward player until stopDistance
             const stopDist = enemy.kindConfig.stopDistance ?? 1.2;
@@ -1184,6 +1386,39 @@ export function createEnemies(ctx) {
       isFrozen = Boolean(bool);
       return isFrozen;
     },
+    forceAttack(enemyIdOrAttackId, maybeAttackId) {
+      let enemy = null;
+      let attackId = null;
+
+      if (maybeAttackId !== undefined) {
+        enemy = activeEnemies.find((e) => e.id === enemyIdOrAttackId);
+        attackId = maybeAttackId;
+      } else {
+        attackId = enemyIdOrAttackId;
+        enemy = activeEnemies.find((e) => e.state !== 'liberated' && e.kindConfig.attacks?.some((a) => a.id === attackId))
+          || activeEnemies.find((e) => e.state !== 'liberated');
+      }
+
+      if (!enemy || enemy.state === 'liberated') return false;
+      const atk = enemy.kindConfig.attacks?.find((a) => a.id === attackId);
+      if (!atk) return false;
+
+      // Cancel any current state/telegraph
+      if (enemy.telegraphGroup) enemy.telegraphGroup.visible = false;
+      if (enemy.animNodes?.mouthOrb) enemy.animNodes.mouthOrb.visible = false;
+      enemy.chargeData = null;
+      enemy.attackCooldowns[attackId] = 0;
+
+      // Face player immediately
+      const playerPos = state.player?.position || { x: 1000, y: 0, z: 0 };
+      const dx = playerPos.x - enemy.pos.x;
+      const dz = playerPos.z - enemy.pos.z;
+      enemy.heading = Math.atan2(-dx, -dz);
+      enemy.group.rotation.y = enemy.heading;
+
+      startEnemyAttack(enemy, atk, true);
+      return true;
+    },
     getActiveEnemies() {
       return activeEnemies;
     },
@@ -1191,6 +1426,9 @@ export function createEnemies(ctx) {
 
   ctx.enemies = api;
   ctx.debug?.register('enemies', api);
+  if (typeof window !== 'undefined' && window.__stupa) {
+    window.__stupa.enemies = api;
+  }
 
   return api;
 }

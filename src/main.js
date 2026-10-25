@@ -30,6 +30,7 @@ import { createMonkeys } from './gameplay/monkeys.js';
 import { createItems } from './gameplay/items.js';
 import { createMantra } from './gameplay/mantra.js';
 import { createEnemies } from './gameplay/enemies.js';
+import { createProjectiles } from './gameplay/projectiles.js';
 import { createPlayer } from './player/player.js';
 import { createCameraRig } from './player/cameraRig.js';
 
@@ -119,6 +120,8 @@ const mantra = createMantra(ctx);
 ctx.mantra = mantra;
 const enemies = createEnemies(ctx);
 ctx.enemies = enemies;
+const projectiles = createProjectiles(ctx);
+ctx.projectiles = projectiles;
 const items = createItems(ctx);
 const lamps = createLamps(ctx);
 const monkeys = createMonkeys(ctx);
@@ -134,7 +137,7 @@ const modules = [
   ctx.input,
   sky, stupa, flags, environment,
   wilderness, zones,
-  player, mantra, enemies, items, lamps, monkeys,
+  player, mantra, enemies, projectiles, items, lamps, monkeys,
   vitals,
   cameraRig,
   merit, interaction, audio, hud,
@@ -184,4 +187,4 @@ function frame() {
 requestAnimationFrame(frame);
 
 // Debug handle (dev only)
-if (import.meta.env.DEV) window.__game = { ctx, modules: { sky, stupa, flags, environment, wilderness, zones, player, mantra, enemies, items, lamps, monkeys, vitals, cameraRig, merit, interaction, audio, hud } };
+if (import.meta.env.DEV) window.__game = { ctx, modules: { sky, stupa, flags, environment, wilderness, zones, player, mantra, enemies, projectiles, items, lamps, monkeys, vitals, cameraRig, merit, interaction, audio, hud } };

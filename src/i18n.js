@@ -121,6 +121,12 @@ const STRINGS = {
     'enemy.tsen': '贊',
     'enemy.migoi': '雪人',
 
+    'attack.ghostfire': '鬼火',
+    'attack.redArrow': '紅箭',
+    'attack.boulder': '投擲巨石',
+    'attack.frostRoar': '寒冰咆哮',
+    'status.slowed': '減速',
+
     'item.sungdu': '加持繩',
     'item.sungdu.effect': '防禦力 +15（持續 120 秒）',
     'item.dungkar': '法螺',
@@ -265,6 +271,12 @@ const STRINGS = {
     'enemy.preta': 'Preta (Hungry Ghost)',
     'enemy.tsen': 'Tsen (Red Rider)',
     'enemy.migoi': 'Migoi (Yeti)',
+
+    'attack.ghostfire': 'Ghostfire',
+    'attack.redArrow': 'Red Arrow',
+    'attack.boulder': 'Boulder Toss',
+    'attack.frostRoar': 'Frost Roar',
+    'status.slowed': 'Slowed',
 
     'item.sungdu': 'Protection Cord',
     'item.sungdu.effect': 'DEF +15 (120s)',

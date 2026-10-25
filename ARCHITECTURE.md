@@ -21,7 +21,8 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/player/player.js` | Gameplay | pilgrim mesh, movement, collision, prostration animation, kora tracking |
 | `src/player/cameraRig.js` | Gameplay | third-person follow camera + intro orbit |
 | `src/gameplay/mantra.js` | Gameplay | Six-Syllable Mantra (六字大明咒) area wave, syllables pool, cooldown & MP handling |
-| `src/gameplay/enemies.js` | Gameplay | enemy models (preta, tsen, migoi), AI state machine, melee/charge attacks, telegraphs, liberation VFX |
+| `src/gameplay/enemies.js` | Gameplay | enemy models (preta, tsen, migoi), AI state machine, melee/ranged/magic attacks, telegraphs, liberation VFX, forceAttack API |
+| `src/gameplay/projectiles.js` | Gameplay | object-pooled projectiles (ghostfire, redArrow, boulder, frostRoar), parabolic/homing flight, collision, mantra dispel |
 | `src/gameplay/items.js` | Gameplay | dropped items, procedural 3D models, pickup detection, pity system |
 | `src/gameplay/lamps.js` | Gameplay | butter-lamp stations (interactable), flames + lights |
 | `src/gameplay/monkeys.js` | Gameplay | monkey meshes, wander AI, feeding (interactable) |
@@ -67,11 +68,12 @@ export function createX(ctx, ...extra) {
 | `input` | input module (created first) |
 | `debug` | `{ enabled, register(name, api) }` |
 | `mantra` | `{ update(dt), cast(), showRadius(bool), getCooldownFraction() }` |
-| `enemies` | `{ update(dt), spawn(kind?, distance?), clear(), list(), freeze(bool) }` |
+| `enemies` | `{ update(dt), spawn(kind?, distance?), clear(), list(), freeze(bool), forceAttack(id?, attackId) }` |
+| `projectiles` | `{ update(dt), spawn(type, params?), clear(), count(), showHitboxes(bool) }` |
 | `items` | `{ update(dt), drop(id?), forceNext(), pityCount(), activeItems }` |
 | `vitals` | `{ update(dt), addExp, spendMp, addBuff, addPermanent, getStats, set, damage, god(bool) }` |
 
-Update order per frame: `input → sky → stupa → flags → environment → wilderness → zones → player → mantra → enemies → items → lamps → monkeys → vitals → cameraRig → merit → interaction → audio → hud`.
+Update order per frame: `input → sky → stupa → flags → environment → wilderness → zones → player → mantra → enemies → projectiles → items → lamps → monkeys → vitals → cameraRig → merit → interaction → audio → hud`.
 
 ### `state`
 
@@ -132,7 +134,7 @@ state.player.slowUntil   // seconds timestamp
 | `achievement` | `{ id }` | merit |
 | `toast` | `{ key, params? }` | anyone → HUD |
 | `prompt` | `{ labelKey, keyHint } \| null` | interaction → HUD |
-| `sfx` | `{ name: 'bowl'\|'bell'\|'light'\|'monkey'\|'wheel'\|'step' }` | anyone → audio |
+| `sfx` | `{ name: 'bowl'\|'bell'\|'light'\|'monkey'\|'wheel'\|'step'\|'pickup'\|'chant'\|'hit'\|'hurt'\|'liberate'\|'arrow'\|'fireball'\|'boulder'\|'frost'\|'dispel' }` | anyone → audio |
 | `vitals:restore` | `{ hp?, mp?, source }` | player / lamps / monkeys / wilderness |
 | `vitals:damage` | `{ amount, type = 'physical'\|'magic', sourcePos?, slow?, ignoreInvuln? }` | anyone → vitals |
 | `vitals:changed` | `{ hp, maxHp, mp, maxMp, exp, maxExp, level, atk, def, buffs, deltaHp, deltaMp, source }` | vitals → HUD |

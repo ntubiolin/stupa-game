@@ -75,6 +75,7 @@ export function createZones(ctx) {
         state.player.heading = W.wildGate.spawnHeading;
         state.player.velocity.set(0, 0, 0);
         state.player.isMoving = false;
+        bus.emit('zone:change', { from: to, to });
       }
       return;
     }
