@@ -249,7 +249,28 @@ export function createPlayer(ctx) {
     wasSlowed = isSlowed;
   }
 
+  let faintAnimTime = 0;
+
+  bus.on('player:faint', () => {
+    faintAnimTime = 0;
+    gesture = null;
+    prostrateTime = -1;
+    chantTimer = 0;
+    hurtTimer = 0;
+    state.player.velocity.set(0, 0, 0);
+    state.player.isMoving = false;
+    state.player.action = 'faint';
+    applyFaintPose(0);
+  });
+
+  bus.on('player:wake', () => {
+    faintAnimTime = 0;
+    resetPose();
+    state.player.action = 'idle';
+  });
+
   bus.on('player:hurt', (payload) => {
+    if (state.player.action === 'faint') return;
     if (payload?.sourcePos && state.player.position) {
       const dx = state.player.position.x - payload.sourcePos.x;
       const dz = state.player.position.z - payload.sourcePos.z;
@@ -270,6 +291,7 @@ export function createPlayer(ctx) {
   });
 
   bus.on('player:chant', (payload) => {
+    if (state.player.action === 'faint') return;
     const dur = payload?.duration ?? (config.MANTRA?.duration ?? 0.5);
     chantTimer = dur;
     chantDuration = dur;
@@ -277,7 +299,7 @@ export function createPlayer(ctx) {
   });
 
   bus.on('player:gesture', (payload) => {
-    if (!payload || state.player.action === 'prostrate') return;
+    if (!payload || state.player.action === 'prostrate' || state.player.action === 'faint') return;
     const { name, target } = payload;
     let targetHeading = state.player.heading;
     if (target) {
@@ -326,8 +348,10 @@ export function createPlayer(ctx) {
       flashTimer = 0;
       restoreFlash();
     }
-    state.player.action = 'idle';
-    resetPose();
+    if (state.player.action !== 'faint') {
+      state.player.action = 'idle';
+      resetPose();
+    }
     lastTheta = Math.atan2(state.player.position.z, state.player.position.x);
     root.position.copy(state.player.position);
     root.rotation.y = state.player.heading;
@@ -507,6 +531,28 @@ export function createPlayer(ctx) {
     auraMat.opacity = 0;
   }
 
+  function applyFaintPose(t) {
+    resetPose();
+    // Phase 1: 0 - 0.4s: knees buckle, lower body drops, torso bows
+    const p1 = smoothstep(0, 0.4, t);
+    // Phase 2: 0.4 - 1.0s: monk collapses forward onto the ground
+    const p2 = smoothstep(0.4, 1.0, t);
+
+    body.position.y = -0.38 * p1 + 0.50 * p2;
+    body.position.z = -0.45 * p2;
+    body.rotation.x = (Math.PI * 0.47) * p2;
+    skirt.scale.y = 1 - 0.38 * p1 + 0.38 * p2;
+
+    torsoPivot.rotation.x = 0.5 * p1 * (1 - p2) + 0.05 * p2;
+    headGroup.rotation.x = 0.3 * p1 * (1 - p2) + 0.2 * p2;
+
+    // Arms drop limply forward/down
+    leftArm.pivot.rotation.set(-0.8 * p1 - 0.4 * p2, 0.4 * (1 - p2) + 0.25 * p2, 0);
+    rightArm.pivot.rotation.set(-0.8 * p1 - 0.4 * p2, -0.4 * (1 - p2) - 0.25 * p2, 0);
+    leftArm.forearmPivot.rotation.set(-0.3 * p1 - 0.2 * p2, 0, 0);
+    rightArm.forearmPivot.rotation.set(-0.3 * p1 - 0.2 * p2, 0, 0);
+  }
+
   /**
    * Full Tibetan prostration (大禮拜) keyframe animation over t in [0, PROSTRATE_DUR]:
    *  0.00 - 0.55s : Turn toward stupa, bring palms together above crown (body)
@@ -660,6 +706,17 @@ export function createPlayer(ctx) {
       resetPose();
       const breathe = Math.sin(state.elapsed * 2.1) * 0.015;
       torsoPivot.position.y = 0.72 + breathe;
+      root.position.copy(state.player.position);
+      root.rotation.y = state.player.heading;
+      return;
+    }
+
+    // 0. Active faint sequence
+    if (state.player.action === 'faint') {
+      faintAnimTime += dt;
+      applyFaintPose(faintAnimTime);
+      state.player.velocity.set(0, 0, 0);
+      state.player.isMoving = false;
       root.position.copy(state.player.position);
       root.rotation.y = state.player.heading;
       return;

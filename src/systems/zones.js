@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { deg, polar } from '../config.js';
 
 /**
  * Zones system — manages active map zone ('stupa' | 'wild'), gate interactables,
@@ -22,7 +23,7 @@ export function createZones(ctx) {
   // ---------------------------------------------------------------- Switch Logic
   function applyZoneSwitch(to, options = {}) {
     const from = state.zone || 'stupa';
-    if (from === to) return;
+    if (from === to && !options.southSpawn) return;
     state.zone = to;
 
     if (ctx.stupaGroup) ctx.stupaGroup.visible = (to === 'stupa');
@@ -34,9 +35,17 @@ export function createZones(ctx) {
       state.player.position.set(sp.x, y, sp.z);
       state.player.heading = W.wildGate.spawnHeading; // 0 (faces north into wilderness)
     } else {
-      const rp = W.stupaGate.returnPos;
-      state.player.position.set(rp.x, 0, rp.z);
-      state.player.heading = W.stupaGate.returnHeading; // Math.PI (faces stupa)
+      if (options.southSpawn) {
+        const startAng = deg(config.PLAYER?.startAngleDeg ?? 90);
+        const startRad = config.PLAYER?.startRadius ?? 30;
+        const pt = polar(startAng, startRad);
+        state.player.position.set(pt.x, 0, pt.z);
+        state.player.heading = 0; // facing north towards stupa
+      } else {
+        const rp = W.stupaGate.returnPos;
+        state.player.position.set(rp.x, 0, rp.z);
+        state.player.heading = W.stupaGate.returnHeading; // Math.PI (faces stupa)
+      }
     }
 
     state.player.velocity.set(0, 0, 0);
@@ -66,7 +75,7 @@ export function createZones(ctx) {
     }, 400);
   }
 
-  function teleport(to) {
+  function teleport(to, options = {}) {
     if ((state.zone || 'stupa') === to) {
       if (to === 'wild') {
         const sp = W.wildGate.teleportPos || W.wildGate.spawnPos;
@@ -76,17 +85,26 @@ export function createZones(ctx) {
         state.player.velocity.set(0, 0, 0);
         state.player.isMoving = false;
         bus.emit('zone:change', { from: to, to });
+      } else if (to === 'stupa' && options.southSpawn) {
+        const startAng = deg(config.PLAYER?.startAngleDeg ?? 90);
+        const startRad = config.PLAYER?.startRadius ?? 30;
+        const pt = polar(startAng, startRad);
+        state.player.position.set(pt.x, 0, pt.z);
+        state.player.heading = 0;
+        state.player.velocity.set(0, 0, 0);
+        state.player.isMoving = false;
+        bus.emit('zone:change', { from: to, to });
       }
       return;
     }
-    if (fadeEl) {
+    if (fadeEl && !options.skipFade) {
       fadeEl.classList.add('is-active');
       void fadeEl.offsetWidth; // force layout
       requestAnimationFrame(() => {
         fadeEl.classList.remove('is-active');
       });
     }
-    applyZoneSwitch(to, { viaTeleport: true });
+    applyZoneSwitch(to, { viaTeleport: true, ...options });
   }
 
   // ---------------------------------------------------------------- Gate Interactables

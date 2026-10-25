@@ -299,6 +299,7 @@ export function createMantra(ctx) {
   const api = {
     update,
     cast() {
+      if (state.player.action === 'faint') return;
       triggerWave(false);
     },
     showRadius(bool = true) {

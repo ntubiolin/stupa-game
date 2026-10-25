@@ -1,6 +1,8 @@
+import { deg, polar } from '../config.js';
+
 /**
  * Vitals system — HP, MP, EXP, Level, ATK, DEF, buffs, and restoration / damage events.
- * Manages stats calculation, damage mitigation formula, and persistence.
+ * Manages stats calculation, damage mitigation formula, faint sequence, and persistence.
  */
 
 const STORAGE_KEY = 'stupa.vitals.v1';
@@ -23,6 +25,11 @@ export function createVitals(ctx) {
     invulnDuration: 0.8,
     knockbackDist: 1.5,
     slowMultiplier: 0.5,
+    faintDuration: 1.8,
+    faintTeleportTime: 1.2,
+    faintInvulnDuration: 3.0,
+    faintHpRatio: 0.5,
+    faintExpLossRatio: 0.1,
     restore: {
       prostrationHp: 25,
       lampMp: 15,
@@ -32,6 +39,11 @@ export function createVitals(ctx) {
       maniInterval: 1.0,
     },
   };
+
+  let invulnTimer = 0;
+  let isFainting = false;
+  let faintTimer = 0;
+  let faintTeleported = false;
 
   // ---------------------------------------------------------------- Persistence
   function loadSaved() {
@@ -147,14 +159,16 @@ export function createVitals(ctx) {
 
   function getStats() {
     const p = state.player;
+    const isMax = (p.level || 1) >= maxLvl;
     return {
       hp: p.hp,
       maxHp: p.maxHp,
       mp: p.mp,
       maxMp: p.maxMp,
-      exp: p.exp,
-      maxExp: getMaxExp(p.level),
+      exp: isMax ? 0 : p.exp,
+      maxExp: isMax ? 0 : getMaxExp(p.level),
       level: p.level,
+      isMaxLevel: isMax,
       atk: p.atk,
       def: p.def,
       buffs: Array.isArray(p.buffs) ? [...p.buffs] : [],
@@ -188,9 +202,16 @@ export function createVitals(ctx) {
   function addExp(n) {
     if (typeof n !== 'number' || n <= 0) return;
     const p = state.player;
+    if (p.level >= maxLvl) return;
+
     p.exp = (p.exp || 0) + Math.floor(n);
 
     let leveledUp = false;
+    const prevLevel = p.level;
+    const oldMaxHp = p.maxHp;
+    const oldMaxMp = p.maxMp;
+    const oldAtk = p.atk;
+
     while (p.level < maxLvl) {
       const needed = getMaxExp(p.level);
       if (p.exp >= needed) {
@@ -211,11 +232,27 @@ export function createVitals(ctx) {
       recalcDerived();
       p.hp = p.maxHp;
       p.mp = p.maxMp;
+
+      const deltaMaxHp = p.maxHp - oldMaxHp;
+      const deltaMaxMp = p.maxMp - oldMaxMp;
+      const deltaAtk = p.atk - oldAtk;
+
+      bus.emit('level:up', {
+        level: p.level,
+        prevLevel,
+        maxHp: p.maxHp,
+        maxMp: p.maxMp,
+        atk: p.atk,
+        deltaMaxHp,
+        deltaMaxMp,
+        deltaAtk,
+      });
+
       bus.emit('toast', {
         key: 'toast.levelUp',
         params: { level: p.level },
       });
-      bus.emit('sfx', { name: 'bell' });
+      bus.emit('sfx', { name: 'levelup' });
     }
 
     save();
@@ -294,6 +331,7 @@ export function createVitals(ctx) {
       p.exp = Math.max(0, Math.floor(Number(patch.exp)));
     }
 
+    invulnTimer = 0;
     p.invulnUntil = 0;
     save();
     emitChanged();
@@ -318,17 +356,33 @@ export function createVitals(ctx) {
     emitChanged({ deltaHp, deltaMp, source: payload.source });
   }
 
+  function triggerFaint() {
+    if (isFainting) return;
+    isFainting = true;
+    faintTimer = 0;
+    faintTeleported = false;
+    const p = state.player;
+    p.hp = 0;
+    p.action = 'faint';
+    p.velocity.set(0, 0, 0);
+    p.isMoving = false;
+    bus.emit('sfx', { name: 'faint' });
+    bus.emit('player:faint', {});
+  }
+
   function applyDamage(amount, type = 'physical', extra = {}) {
     const p = state.player;
+    if (isFainting) return 0;
     if (typeof amount !== 'number' || amount <= 0) return 0;
     if (p.hp <= 0) return 0;
 
-    if (state.elapsed < (p.invulnUntil || 0) && !extra.ignoreInvuln) {
+    if ((invulnTimer > 0 || state.elapsed < (p.invulnUntil || 0)) && !extra.ignoreInvuln) {
       return 0;
     }
 
     if (state.vitals?.god) {
-      p.invulnUntil = state.elapsed + (V.invulnDuration ?? 0.8);
+      invulnTimer = V.invulnDuration ?? 0.8;
+      p.invulnUntil = state.elapsed + invulnTimer;
       bus.emit('player:hurt', { amount: 0, type, sourcePos: extra.sourcePos });
       bus.emit('player:damaged', { amount: 0, type, sourcePos: extra.sourcePos });
       return 0;
@@ -346,7 +400,8 @@ export function createVitals(ctx) {
     }
 
     p.hp = Math.max(0, p.hp - dmg);
-    p.invulnUntil = state.elapsed + (V.invulnDuration ?? 0.8);
+    invulnTimer = V.invulnDuration ?? 0.8;
+    p.invulnUntil = state.elapsed + invulnTimer;
 
     if (extra.slow && extra.slow > 0) {
       p.slowUntil = Math.max(p.slowUntil || 0, state.elapsed + extra.slow);
@@ -359,7 +414,7 @@ export function createVitals(ctx) {
     emitChanged({ deltaHp: -dmg, type, source: extra.source });
 
     if (p.hp === 0) {
-      bus.emit('player:faint', {});
+      triggerFaint();
     }
 
     return dmg;
@@ -386,8 +441,12 @@ export function createVitals(ctx) {
     p.exp = 0;
     p.permanent = { atk: 0, def: 0 };
     p.buffs = [];
+    invulnTimer = 0;
     p.invulnUntil = 0;
     p.slowUntil = 0;
+    isFainting = false;
+    faintTimer = 0;
+    faintTeleported = false;
 
     recalcDerived();
     p.hp = p.maxHp;
@@ -403,6 +462,62 @@ export function createVitals(ctx) {
   const api = {
     update(dt) {
       const p = state.player;
+
+      // Faint sequence handling
+      if (isFainting) {
+        faintTimer += dt;
+        const teleportTime = V.faintTeleportTime ?? 1.2;
+        const faintDur = V.faintDuration ?? 1.8;
+
+        if (!faintTeleported && faintTimer >= teleportTime) {
+          faintTeleported = true;
+          if (ctx.zones?.teleport) {
+            ctx.zones.teleport('stupa', { southSpawn: true, skipFade: true });
+          } else {
+            const startAng = deg(config.PLAYER?.startAngleDeg ?? 90);
+            const startRad = config.PLAYER?.startRadius ?? 30;
+            const pt = polar(startAng, startRad);
+            state.player.position.set(pt.x, 0, pt.z);
+            state.player.heading = 0;
+            state.player.velocity.set(0, 0, 0);
+            state.player.isMoving = false;
+            state.zone = 'stupa';
+          }
+
+          p.hp = Math.round(p.maxHp * (V.faintHpRatio ?? 0.5));
+          p.exp = Math.floor(p.exp * (1 - (V.faintExpLossRatio ?? 0.1)));
+          p.buffs = [];
+          p.slowUntil = 0;
+          recalcDerived();
+
+          invulnTimer = V.faintInvulnDuration ?? 3.0;
+          p.invulnUntil = state.elapsed + invulnTimer;
+          save();
+          emitChanged({ source: 'faint' });
+        }
+
+        // Keep invulnerability active through the remaining faint sequence
+        if (faintTeleported && faintTimer < faintDur) {
+          invulnTimer = V.faintInvulnDuration ?? 3.0;
+          p.invulnUntil = state.elapsed + (V.faintInvulnDuration ?? 3.0);
+        }
+
+        if (faintTimer >= faintDur) {
+          isFainting = false;
+          faintTimer = 0;
+          faintTeleported = false;
+          p.action = 'idle';
+          invulnTimer = V.faintInvulnDuration ?? 3.0;
+          p.invulnUntil = state.elapsed + (V.faintInvulnDuration ?? 3.0);
+          bus.emit('player:wake', {});
+        }
+      } else {
+        if (invulnTimer > 0) {
+          invulnTimer = Math.max(0, invulnTimer - dt);
+        }
+      }
+
+      // Buffs decay
       if (!Array.isArray(p.buffs) || p.buffs.length === 0) {
         buffEmitTimer = 0;
         return;
@@ -434,13 +549,20 @@ export function createVitals(ctx) {
     addPermanent,
     getStats,
     set,
+    faint() {
+      if (isFainting) return;
+      triggerFaint();
+    },
+    isFainting() {
+      return isFainting;
+    },
     god(bool) {
       if (!state.vitals) state.vitals = {};
       state.vitals.god = Boolean(bool);
       return state.vitals.god;
     },
     damage(amount, type = 'physical', extra = {}) {
-      return bus.emit('vitals:damage', { amount, type, ...extra });
+      return applyDamage(amount, type, extra);
     },
   };
 
@@ -449,9 +571,11 @@ export function createVitals(ctx) {
   ctx.debug?.register('vitals', {
     set: (patch) => api.set(patch),
     damage: (amount, type = 'physical', extra = {}) =>
-      bus.emit('vitals:damage', { amount, type, ...extra }),
+      api.damage(amount, type, extra),
     god: (bool) => api.god(bool),
     get: () => api.getStats(),
+    addExp: (n) => api.addExp(n),
+    faint: () => api.faint(),
   });
 
   return api;

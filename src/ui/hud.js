@@ -159,7 +159,7 @@ export function createHud(ctx) {
             <!-- EXP Bar -->
             <div class="vitals-bar-wrap vitals-bar-wrap--exp" id="exp-bar-wrap">
               <div class="vitals-bar-track vitals-bar-track--exp">
-                <div id="stat-exp-bar" class="vitals-bar-fill vitals-bar-fill--exp" style="width: 0%;"></div>
+                <div id="stat-exp-fill" class="vitals-bar-fill vitals-bar-fill--exp" style="width: 0%;"></div>
               </div>
               <div class="vitals-bar-meta">
                 <span class="vitals-bar-label" data-i18n="hud.exp">EXP</span>
@@ -381,6 +381,24 @@ export function createHud(ctx) {
         </footer>
       </div>
     </div>
+
+    <!-- LEVEL UP BANNER -->
+    <div id="levelup-banner" class="levelup-banner is-hidden" aria-live="polite">
+      <div class="levelup-burst" aria-hidden="true"></div>
+      <div class="levelup-card glass-panel">
+        <div class="levelup-crown" aria-hidden="true">☸</div>
+        <div class="levelup-title" id="levelup-title"></div>
+        <div class="levelup-stats" id="levelup-stats"></div>
+      </div>
+    </div>
+
+    <!-- FAINT OVERLAY -->
+    <div id="faint-overlay" class="faint-overlay" aria-live="assertive">
+      <div class="faint-content">
+        <div class="faint-icon" aria-hidden="true">☸</div>
+        <div id="faint-message" class="faint-message" data-i18n="hud.faintMessage"></div>
+      </div>
+    </div>
   `;
 
   // ---------------------------------------------------------------- element references
@@ -399,9 +417,16 @@ export function createHud(ctx) {
   const statMpBar = root.querySelector('#stat-mp-bar');
   const statMpText = root.querySelector('#stat-mp-text');
   const mpPopupAnchor = root.querySelector('#mp-popup-anchor');
-  const statExpBar = root.querySelector('#stat-exp-bar');
+  const statExpFill = root.querySelector('#stat-exp-fill') || root.querySelector('#stat-exp-bar');
+  const statExpBar = statExpFill;
   const statExpText = root.querySelector('#stat-exp-text');
   const vitalsBuffs = root.querySelector('#vitals-buffs');
+
+  const levelupBanner = root.querySelector('#levelup-banner');
+  const levelupTitle = root.querySelector('#levelup-title');
+  const levelupStats = root.querySelector('#levelup-stats');
+  const faintOverlay = root.querySelector('#faint-overlay');
+  const faintMessage = root.querySelector('#faint-message');
 
   const koraRingFill = root.querySelector('#kora-ring-fill');
   const statKoraLaps = root.querySelector('#stat-kora-laps');
@@ -547,6 +572,12 @@ export function createHud(ctx) {
 
     renderMuteButton();
     renderAchievementsModal();
+    if (ctx.vitals?.getStats) {
+      const vs = ctx.vitals.getStats();
+      if ((vs.level >= 30 || vs.isMaxLevel) && statExpText) {
+        statExpText.textContent = i18n.t('hud.max') || 'MAX';
+      }
+    }
     if (state.player?.buffs) {
       renderBuffs(state.player.buffs);
     }
@@ -950,12 +981,17 @@ export function createHud(ctx) {
       statMpText.textContent = `${mp} / ${maxMp}`;
     }
 
-    if (statExpBar && maxExp > 0 && exp != null) {
-      const pct = Math.max(0, Math.min(100, (exp / maxExp) * 100));
-      statExpBar.style.width = `${pct}%`;
-    }
-    if (statExpText && exp != null && maxExp != null) {
-      statExpText.textContent = `${exp} / ${maxExp}`;
+    if (level != null && level >= 30) {
+      if (statExpFill) statExpFill.style.width = '100%';
+      if (statExpText) statExpText.textContent = i18n.t('hud.max') || 'MAX';
+    } else {
+      if (statExpFill && maxExp > 0 && exp != null) {
+        const pct = Math.max(0, Math.min(100, (exp / maxExp) * 100));
+        statExpFill.style.width = `${pct}%`;
+      }
+      if (statExpText && exp != null && maxExp != null) {
+        statExpText.textContent = `${exp} / ${maxExp}`;
+      }
     }
 
     if (buffs) {
@@ -969,6 +1005,52 @@ export function createHud(ctx) {
       spawnVitalsPopup('mp', deltaMp);
     }
   }
+
+  let levelupTimer = null;
+  function showLevelUpBanner(payload) {
+    if (!levelupBanner) return;
+    const level = payload.level ?? 1;
+    const deltaMaxHp = payload.deltaMaxHp ?? 0;
+    const deltaMaxMp = payload.deltaMaxMp ?? 0;
+    const deltaAtk = payload.deltaAtk ?? 0;
+
+    if (levelupTitle) {
+      levelupTitle.textContent = i18n.t('hud.levelUpBanner', { level });
+    }
+    if (levelupStats) {
+      levelupStats.textContent = i18n.t('hud.levelUpStats', { deltaMaxHp, deltaMaxMp, deltaAtk });
+    }
+
+    levelupBanner.classList.remove('is-hidden');
+    levelupBanner.classList.add('is-active');
+
+    if (levelupTimer) clearTimeout(levelupTimer);
+    levelupTimer = setTimeout(() => {
+      levelupBanner.classList.remove('is-active');
+      levelupBanner.classList.add('is-hidden');
+      levelupTimer = null;
+    }, 2800);
+  }
+
+  bus.on('level:up', (payload) => {
+    if (!payload) return;
+    showLevelUpBanner(payload);
+  });
+
+  bus.on('player:faint', () => {
+    if (faintOverlay) {
+      if (faintMessage) {
+        faintMessage.textContent = i18n.t('hud.faintMessage');
+      }
+      faintOverlay.classList.add('is-active');
+    }
+  });
+
+  bus.on('player:wake', () => {
+    if (faintOverlay) {
+      faintOverlay.classList.remove('is-active');
+    }
+  });
 
   bus.on('vitals:changed', (payload) => {
     updateVitals(payload);

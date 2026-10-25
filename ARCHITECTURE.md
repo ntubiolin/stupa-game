@@ -71,7 +71,8 @@ export function createX(ctx, ...extra) {
 | `enemies` | `{ update(dt), spawn(kind?, distance?), clear(), list(), freeze(bool), forceAttack(id?, attackId) }` |
 | `projectiles` | `{ update(dt), spawn(type, params?), clear(), count(), showHitboxes(bool) }` |
 | `items` | `{ update(dt), drop(id?), forceNext(), pityCount(), activeItems }` |
-| `vitals` | `{ update(dt), addExp, spendMp, addBuff, addPermanent, getStats, set, damage, god(bool) }` |
+| `vitals` | `{ update(dt), addExp, spendMp, addBuff, addPermanent, getStats, set, damage, faint, god(bool) }` |
+| `merit` | `{ update(dt), reset, getStats, getAchievementsList }` |
 
 Update order per frame: `input → sky → stupa → flags → environment → wilderness → zones → player → mantra → enemies → projectiles → items → lamps → monkeys → vitals → cameraRig → merit → interaction → audio → hud`.
 
@@ -91,7 +92,7 @@ state.player.position // THREE.Vector3 — player writes
 state.player.heading  // radians
 state.player.velocity // THREE.Vector3
 state.player.isMoving // bool
-state.player.action   // 'idle'|'walk'|'run'|'prostrate'|'light'|'feed'|'chant'
+state.player.action   // 'idle'|'walk'|'run'|'prostrate'|'light'|'feed'|'chant'|'hurt'|'faint'
 state.player.level    // 1..30
 state.player.exp      // 0..maxExp
 state.player.hp       // 0..maxHp
@@ -134,13 +135,15 @@ state.player.slowUntil   // seconds timestamp
 | `achievement` | `{ id }` | merit |
 | `toast` | `{ key, params? }` | anyone → HUD |
 | `prompt` | `{ labelKey, keyHint } \| null` | interaction → HUD |
-| `sfx` | `{ name: 'bowl'\|'bell'\|'light'\|'monkey'\|'wheel'\|'step'\|'pickup'\|'chant'\|'hit'\|'hurt'\|'liberate'\|'arrow'\|'fireball'\|'boulder'\|'frost'\|'dispel' }` | anyone → audio |
+| `sfx` | `{ name: 'bowl'\|'bell'\|'light'\|'monkey'\|'wheel'\|'step'\|'pickup'\|'chant'\|'hit'\|'hurt'\|'liberate'\|'arrow'\|'fireball'\|'boulder'\|'frost'\|'dispel'\|'levelup'\|'faint' }` | anyone → audio |
 | `vitals:restore` | `{ hp?, mp?, source }` | player / lamps / monkeys / wilderness |
 | `vitals:damage` | `{ amount, type = 'physical'\|'magic', sourcePos?, slow?, ignoreInvuln? }` | anyone → vitals |
 | `vitals:changed` | `{ hp, maxHp, mp, maxMp, exp, maxExp, level, atk, def, buffs, deltaHp, deltaMp, source }` | vitals → HUD |
+| `level:up` | `{ level, prevLevel, maxHp, maxMp, atk, deltaMaxHp, deltaMaxMp, deltaAtk }` | vitals → HUD / merit |
 | `monkey:fed` | `{ position }` | monkeys |
 | `item:pickup` | `{ id, permanent }` | items |
-| `player:faint` | `{}` | vitals |
+| `player:faint` | `{}` | vitals → player / HUD |
+| `player:wake` | `{}` | vitals → player / HUD |
 | `player:hurt` | `{ amount, type, sourcePos }` | vitals |
 | `player:damaged` | `{ amount, type, sourcePos }` | vitals |
 | `player:chant` | `{ duration }` | mantra |
@@ -148,6 +151,37 @@ state.player.slowUntil   // seconds timestamp
 | `mantra:nomp` | – | mantra |
 | `enemy:hit` | `{ id, kind, damage, type, position }` | enemies |
 | `enemy:liberated` | `{ id, kind, exp, position }` | enemies |
+
+## Progression & Faint Mechanics
+
+### Leveling
+- EXP curve: `Math.floor(20 * Math.pow(level, 1.5))` (`Lv1->2: 20`, `Lv2->3: 56`, etc.).
+- Multi-leveling & EXP carryover supported in `addExp(n)`.
+- Max level: 30 (`p.exp = 0`, `isMaxLevel = true`, EXP bar displays `MAX`).
+- On level up: full HP/MP restore, ATK derived recalculation, emits `level:up`, plays `sfx: 'levelup'`, displays `#levelup-banner`.
+
+### Faint Sequence (`vitals.faint()`)
+1. `0.0s`: `isFainting = true`, `p.hp = 0`, `action = 'faint'`, collapse animation, full-screen `#faint-overlay` fades in, plays `sfx: 'faint'`, duplicate damage while fainting is discarded (returns 0).
+2. `1.2s`: Teleport to Stupa south spawn `(0, 0, 30)` facing 0, `hp = 50% maxHp`, lose 10% current exp (`floor(exp * 0.9)`), clear buffs and slow, grant 3.0s invulnerability.
+3. `1.8s`: `isFainting = false`, `action = 'idle'`, emits `player:wake`, `#faint-overlay` fades out, player retains full 3.0s invulnerability after waking.
+
+### Combat Achievements
+- `firstLiberation`: First enemy liberated (`totalLiberated >= 1`)
+- `liberatePreta50`: Liberate 50 Pretass (`preta >= 50`)
+- `liberateTsen`: First Tsen liberated (`tsen >= 1`)
+- `liberateMigoi`: First Migoi liberated (`migoi >= 1`)
+- `level10`: Reach Level 10 (`state.player.level >= 10`)
+- `fullDorje`: Permanent Vajra ATK cap reached (`permanent.atk >= 20`)
+- `compassion`: Chant the Six-Syllable Mantra 1008 times (`mantraCasts >= 1008`)
+
+### Console Inspection API (`window.__stupa`)
+- `__stupa.vitals.addExp(n)`: Grant EXP and trigger level checks
+- `__stupa.vitals.faint()`: Trigger faint sequence
+- `__stupa.vitals.damage(amount, type, extra)`: Apply damage to player
+- `__stupa.vitals.god(bool)`: Toggle invincibility
+- `__stupa.vitals.get()`: Snapshot stats
+- `__stupa.merit.stats()`: Returns tracking stats including combat counts and achievements
+- `__stupa.merit.reset()`: Reset merit progress
 
 ## Rendering notes
 
