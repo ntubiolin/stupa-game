@@ -439,7 +439,7 @@ export function createStupa(ctx) {
 
   const root = new THREE.Group();
   root.name = 'BoudhanathStupa';
-  scene.add(root);
+  (ctx.stupaGroup || scene).add(root);
 
   // Push circular stupa boundary collider
   colliders.push({
@@ -447,6 +447,7 @@ export function createStupa(ctx) {
     x: 0,
     z: 0,
     r: config.WORLD.stupaColliderRadius,
+    zone: 'stupa',
   });
 
   // ---------------------------------------------------------------- Materials
@@ -1025,6 +1026,8 @@ export function createStupa(ctx) {
   let lastWheelSfxAt = -10;
 
   function update(dt) {
+    if (state.zone && state.zone !== 'stupa') return;
+
     // 1. Update night string-light bulb emissive brightness (blooms when > 0.85)
     const nf = state.time.nightFactor;
     const glow = Math.pow(THREE.MathUtils.clamp((nf - 0.18) / 0.65, 0, 1), 1.4);

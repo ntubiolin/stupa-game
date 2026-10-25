@@ -13,13 +13,15 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/world/sky.js` | World | sky dome, sun/moon, stars, lights, fog, exposure — writes `state.time.sunDir/nightFactor` |
 | `src/world/stupa.js` | World | stupa, wall, prayer wheels, night string lights; exports `flagAnchors` |
 | `src/world/prayerFlags.js` | World | wind-animated five-color flags (vertex shader) |
-| `src/world/environment.js` | World | plaza ground, surrounding buildings, hills, pigeons, lit windows at night |
+| `src/world/environment.js` | World | plaza ground, surrounding buildings, hills, pigeons, lit windows at night, north monastery gate |
+| `src/world/wilderness.js` | World | highland steppe terrain, chorten, mani stones, boulders, peaks, return gate |
 | `src/core/input.js` | Gameplay | keyboard / mouse-drag / touch joystick → action state |
 | `src/i18n.js` | Gameplay | zh-Hant / en strings |
 | `src/player/player.js` | Gameplay | pilgrim mesh, movement, collision, prostration animation, kora tracking |
 | `src/player/cameraRig.js` | Gameplay | third-person follow camera + intro orbit |
 | `src/gameplay/lamps.js` | Gameplay | butter-lamp stations (interactable), flames + lights |
 | `src/gameplay/monkeys.js` | Gameplay | monkey meshes, wander AI, feeding (interactable) |
+| `src/systems/zones.js` | Gameplay | zone manager ('stupa' | 'wild'), gate transitions, teleport API |
 | `src/systems/interaction.js` | Gameplay | nearest-interactable selection, prompt, dispatch |
 | `src/systems/merit.js` | Gameplay | counters, achievements, persistence (localStorage) |
 | `src/systems/audio.js` | Gameplay | Web Audio synthesized singing bowl, wind, bells, chant drone |
@@ -33,7 +35,8 @@ Subagents edit **only** files they own. If a contract change is needed, report i
 - `θ = Math.atan2(z, x)`. **Clockwise kora (stupa on the right shoulder) ⇔ θ increasing.**
 - `state.player.heading`: yaw, 0 faces −Z, positive = counter-clockwise rotation about +Y (Three.js `rotation.y`).
 - Walkable plaza: ring `WORLD.stupaColliderRadius (19.9) < r < WORLD.walkRadius (38)`, ground y = 0.
-- Layout numbers live in `src/config.js` (`CONFIG.STUPA`, `WALL`, `WORLD`, `LAMPS`, …). Never hardcode duplicates.
+- Wilderness zone: centered at `CONFIG.WILD.origin` (`x = 1000, z = 0`), walkable radius 70m, terrain height $y = \text{getHeight}(x, z)$.
+- Layout numbers live in `src/config.js` (`CONFIG.STUPA`, `WALL`, `WORLD`, `LAMPS`, `WILD`, …). Never hardcode duplicates.
 
 ## Module contract
 
@@ -49,20 +52,22 @@ export function createX(ctx, ...extra) {
 | Field | Description |
 |---|---|
 | `THREE, scene, camera, renderer` | Three.js objects (camera is moved only by `cameraRig`) |
+| `stupaGroup, wildGroup` | Three.js Groups toggled by active zone for culling |
 | `bus` | `{ on(type, fn) → unsubscribe, emit(type, payload) }` |
 | `state` | shared mutable game state (below) |
 | `config` | `CONFIG` |
 | `i18n` | `{ t(key, params?), lang, setLang(lang), onChange(fn) }` |
-| `colliders` | array; push `{type:'circle',x,z,r}` or `{type:'box',minX,maxX,minZ,maxZ}` |
+| `colliders` | array; push `{type:'circle',x,z,r,zone?:'stupa'\|'wild'}` or `{type:'box',minX,maxX,minZ,maxZ,zone?:'stupa'\|'wild'}` |
 | `interactables` | array of Interactable (below) |
 | `input` | input module (created first) |
 
-Update order per frame: `input → sky → stupa → flags → environment → player → lamps → monkeys → cameraRig → merit → interaction → audio → hud`.
+Update order per frame: `input → sky → stupa → flags → environment → wilderness → zones → player → lamps → monkeys → cameraRig → merit → interaction → audio → hud`.
 
 ### `state`
 
 ```js
 state.mode            // 'intro' | 'play'   (main sets 'play' on bus 'game:start')
+state.zone            // 'stupa' | 'wild'   (zones system manages)
 state.elapsed         // seconds since load
 state.time.t          // 0..1 (0 midnight, .25 sunrise, .5 noon, .75 sunset) — main advances; HUD slider may set
 state.time.speed      // multiplier (0 = paused) — HUD may set
@@ -82,7 +87,8 @@ state.player.action   // 'idle'|'walk'|'run'|'prostrate'|'light'|'feed'
 ```js
 {
   id: 'lamp-0',
-  kind: 'lamp' | 'monkey' | 'wheel' | string,
+  kind: 'lamp' | 'monkey' | 'wheel' | 'gate' | string,
+  zone: 'stupa' | 'wild',          // only scored/triggered in matching state.zone
   getPosition(): THREE.Vector3,    // world position
   radius: number,                  // max interaction distance
   action: 'interact' | 'feed',     // which input action triggers it (E / F)
@@ -97,6 +103,7 @@ state.player.action   // 'idle'|'walk'|'run'|'prostrate'|'light'|'feed'
 | Event | Payload | Emitted by |
 |---|---|---|
 | `game:start` | – | HUD (title button) |
+| `zone:change` | `{ from: 'stupa'\|'wild', to: 'stupa'\|'wild' }` | zones |
 | `merit` | `{ type: 'kora'\|'prostration'\|'lamp'\|'monkey'\|'wheel' }` | player / lamps / monkeys / stupa |
 | `kora:progress` | `{ fraction: 0..1, laps }` | player |
 | `kora:wrongway` | – | player (walking counter-clockwise for a while) |

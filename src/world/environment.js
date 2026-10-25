@@ -117,12 +117,12 @@ function seededRandom(seed) {
 }
 
 export function createEnvironment(ctx) {
-  const { scene, state, config } = ctx;
+  const { scene, state, config, colliders } = ctx;
   const W = config.WORLD;
 
   const root = new THREE.Group();
   root.name = 'Environment';
-  scene.add(root);
+  (ctx.stupaGroup || scene).add(root);
 
   // ---------------------------------------------------------------- 1. Ground & Circular Kora Flagstone Plaza
   const outerGroundGeo = new THREE.CircleGeometry(W.groundRadius, 64);
@@ -379,6 +379,147 @@ export function createEnvironment(ctx) {
   lanternInstanced.instanceMatrix.needsUpdate = true;
   root.add(lanternInstanced);
 
+  // ---------------------------------------------------------------- 2b. North Monastery Mountain Gate Archway (北側山門牌樓)
+  const gateGroup = new THREE.Group();
+  gateGroup.name = 'NorthMountainGate';
+  gateGroup.position.set(0, 0, -37.2);
+
+  const plasterMat = new THREE.MeshStandardMaterial({ color: 0xede7dc, roughness: 0.90 });
+  const maroonTrimMat = new THREE.MeshStandardMaterial({ color: 0x7c1e19, roughness: 0.72 });
+  const gateWoodMat = new THREE.MeshStandardMaterial({ color: 0x3d2417, roughness: 0.80 });
+  const gateTileMat = new THREE.MeshStandardMaterial({ color: 0x48413b, roughness: 0.76 });
+  const gateGoldMat = new THREE.MeshStandardMaterial({ color: 0xf5bf42, roughness: 0.28, metalness: 0.84 });
+
+  const gatePlasterGeos = [];
+  const gateMaroonGeos = [];
+  const gateWoodGeos = [];
+  const gateTileGeos = [];
+  const gateGoldGeos = [];
+
+  const pillarX = 2.2;
+  const pillarH = 3.4;
+
+  // Twin pillars (left & right)
+  for (const s of [-1, 1]) {
+    const px = s * pillarX;
+    // Base stone plinth
+    const base = new THREE.BoxGeometry(0.88, 0.45, 0.88);
+    base.translate(px, 0.225, 0);
+    gatePlasterGeos.push(base);
+
+    // Maroon base band
+    const baseBand = new THREE.BoxGeometry(0.82, 0.12, 0.82);
+    baseBand.translate(px, 0.51, 0);
+    gateMaroonGeos.push(baseBand);
+
+    // Whitewashed pillar shaft
+    const shaft = new THREE.BoxGeometry(0.68, pillarH - 0.7, 0.68);
+    shaft.translate(px, 0.57 + (pillarH - 0.7) * 0.5, 0);
+    gatePlasterGeos.push(shaft);
+
+    // Maroon capital necking
+    const capBand = new THREE.BoxGeometry(0.78, 0.14, 0.78);
+    capBand.translate(px, pillarH - 0.07, 0);
+    gateMaroonGeos.push(capBand);
+
+    // Golden lotus capital
+    const cap = new THREE.BoxGeometry(0.86, 0.12, 0.86);
+    cap.translate(px, pillarH + 0.06, 0);
+    gateGoldGeos.push(cap);
+
+    // Colliders for the two archway pillars
+    if (colliders) {
+      colliders.push({
+        type: 'circle',
+        x: px,
+        z: -37.2,
+        r: 0.55,
+        zone: 'stupa',
+      });
+    }
+  }
+
+  // Heavy carved timber lintel spanning both pillars
+  const lintel = new THREE.BoxGeometry(5.6, 0.36, 0.76);
+  lintel.translate(0, pillarH + 0.30, 0);
+  gateWoodGeos.push(lintel);
+
+  // Tibetan bracket cluster tier (Dou-gong style)
+  const bracketTier = new THREE.BoxGeometry(5.8, 0.26, 0.92);
+  bracketTier.translate(0, pillarH + 0.61, 0);
+  gateMaroonGeos.push(bracketTier);
+
+  // Signboard / entrance inscription plaque facing south (+Z toward stupa)
+  const plaque = new THREE.BoxGeometry(2.4, 0.55, 0.12);
+  plaque.translate(0, pillarH + 0.30, 0.42);
+  gateMaroonGeos.push(plaque);
+
+  const plaqueRim = new THREE.BoxGeometry(2.48, 0.62, 0.08);
+  plaqueRim.translate(0, pillarH + 0.30, 0.40);
+  gateGoldGeos.push(plaqueRim);
+
+  // Sloped tile eave roof
+  const roofLower = new THREE.BoxGeometry(6.4, 0.20, 1.45);
+  roofLower.translate(0, pillarH + 0.84, 0);
+  gateTileGeos.push(roofLower);
+
+  const roofUpper = new THREE.BoxGeometry(5.0, 0.28, 1.15);
+  roofUpper.translate(0, pillarH + 1.08, 0);
+  gateTileGeos.push(roofUpper);
+
+  // Golden Dharmachakra (Wheel of Dharma) at crest center
+  const wheelCrest = new THREE.CylinderGeometry(0.36, 0.36, 0.10, 16);
+  wheelCrest.rotateX(Math.PI / 2);
+  wheelCrest.translate(0, pillarH + 1.55, 0);
+  gateGoldGeos.push(wheelCrest);
+
+  const wheelHub = new THREE.SphereGeometry(0.12, 10, 8);
+  wheelHub.translate(0, pillarH + 1.55, 0);
+  gateGoldGeos.push(wheelHub);
+
+  // Golden flanking kneeling deer (left & right)
+  for (const s of [-1, 1]) {
+    const deerBody = new THREE.BoxGeometry(0.38, 0.24, 0.16);
+    deerBody.translate(s * 0.68, pillarH + 1.36, 0);
+    gateGoldGeos.push(deerBody);
+
+    const deerHead = new THREE.BoxGeometry(0.14, 0.22, 0.14);
+    deerHead.translate(s * 0.52, pillarH + 1.54, 0);
+    gateGoldGeos.push(deerHead);
+  }
+
+  if (gatePlasterGeos.length) {
+    const m = new THREE.Mesh(mergeGeometries(gatePlasterGeos, false), plasterMat);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    gateGroup.add(m);
+  }
+  if (gateMaroonGeos.length) {
+    const m = new THREE.Mesh(mergeGeometries(gateMaroonGeos, false), maroonTrimMat);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    gateGroup.add(m);
+  }
+  if (gateWoodGeos.length) {
+    const m = new THREE.Mesh(mergeGeometries(gateWoodGeos, false), gateWoodMat);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    gateGroup.add(m);
+  }
+  if (gateTileGeos.length) {
+    const m = new THREE.Mesh(mergeGeometries(gateTileGeos, false), gateTileMat);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    gateGroup.add(m);
+  }
+  if (gateGoldGeos.length) {
+    const m = new THREE.Mesh(mergeGeometries(gateGoldGeos, false), gateGoldMat);
+    m.castShadow = true;
+    gateGroup.add(m);
+  }
+
+  root.add(gateGroup);
+
   // ---------------------------------------------------------------- 3. Kathmandu Valley Hills & Distant Himalayan Peaks
   const hillSegs = 96;
   const hillInnerR = 112;
@@ -546,6 +687,8 @@ export function createEnvironment(ctx) {
 
   // ---------------------------------------------------------------- Update Loop (Windows, Lanterns, Pigeons)
   function update(dt) {
+    if (state.zone && state.zone !== 'stupa') return;
+
     const t = state.elapsed;
     const nf = state.time.nightFactor;
 

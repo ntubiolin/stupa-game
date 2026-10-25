@@ -253,12 +253,91 @@ export function createPlayer(ctx) {
     ccwWindowAccum = 0;
   });
 
+  bus.on('zone:change', () => {
+    lastTheta = Math.atan2(state.player.position.z, state.player.position.x);
+    root.position.copy(state.player.position);
+    root.rotation.y = state.player.heading;
+  });
+
   const camForward = new THREE.Vector3();
   const camRight = new THREE.Vector3();
 
   // ---------------------------------------------------------------- collision resolution
   function resolveCollisions(pos) {
     const pr = P.radius;
+    const currentZone = state.zone || 'stupa';
+
+    if (currentZone === 'wild') {
+      const wOrigin = config.WILD?.origin || { x: 1000, z: 0 };
+      const maxWildR = (config.WILD?.walkRadius || 70) - pr;
+      let dx = pos.x - wOrigin.x;
+      let dz = pos.z - wOrigin.z;
+      let r = Math.hypot(dx, dz);
+      if (r > maxWildR) {
+        const s = maxWildR / (r || 1);
+        pos.x = wOrigin.x + dx * s;
+        pos.z = wOrigin.z + dz * s;
+      }
+
+      const colliders = ctx.colliders;
+      if (Array.isArray(colliders)) {
+        for (let i = 0; i < colliders.length; i++) {
+          const c = colliders[i];
+          if (!c) continue;
+          if ((c.zone || 'stupa') !== 'wild') continue;
+          if (c.type === 'circle') {
+            const cdx = pos.x - c.x;
+            const cdz = pos.z - c.z;
+            const minDist = (c.r || 0) + pr;
+            const d2 = cdx * cdx + cdz * cdz;
+            if (d2 < minDist * minDist) {
+              if (d2 > 1e-6) {
+                const d = Math.sqrt(d2);
+                const push = (minDist - d) / d;
+                pos.x += cdx * push;
+                pos.z += cdz * push;
+              } else {
+                pos.x = c.x + minDist;
+              }
+            }
+          } else if (c.type === 'box') {
+            const cx = Math.max(c.minX, Math.min(c.maxX, pos.x));
+            const cz = Math.max(c.minZ, Math.min(c.maxZ, pos.z));
+            const cdx = pos.x - cx;
+            const cdz = pos.z - cz;
+            const d2 = cdx * cdx + cdz * cdz;
+            if (d2 < pr * pr) {
+              if (d2 > 1e-6) {
+                const d = Math.sqrt(d2);
+                pos.x = cx + (cdx / d) * pr;
+                pos.z = cz + (cdz / d) * pr;
+              } else {
+                const dl = Math.abs(pos.x - c.minX);
+                const dr = Math.abs(c.maxX - pos.x);
+                const dtb = Math.abs(pos.z - c.minZ);
+                const dbb = Math.abs(c.maxZ - pos.z);
+                const m = Math.min(dl, dr, dtb, dbb);
+                if (m === dl) pos.x = c.minX - pr;
+                else if (m === dr) pos.x = c.maxX + pr;
+                else if (m === dtb) pos.z = c.minZ - pr;
+                else pos.z = c.maxZ + pr;
+              }
+            }
+          }
+        }
+      }
+
+      dx = pos.x - wOrigin.x;
+      dz = pos.z - wOrigin.z;
+      r = Math.hypot(dx, dz);
+      if (r > maxWildR) {
+        const s = maxWildR / (r || 1);
+        pos.x = wOrigin.x + dx * s;
+        pos.z = wOrigin.z + dz * s;
+      }
+      pos.y = ctx.wilderness ? ctx.wilderness.getHeight(pos.x, pos.z) : 0;
+      return;
+    }
 
     // 1. Stupa inner boundary
     const minR = W.stupaColliderRadius + pr;
@@ -285,6 +364,7 @@ export function createPlayer(ctx) {
       for (let i = 0; i < colliders.length; i++) {
         const c = colliders[i];
         if (!c) continue;
+        if ((c.zone || 'stupa') !== 'stupa') continue;
         if (c.type === 'circle') {
           const dx = pos.x - c.x;
           const dz = pos.z - c.z;
@@ -548,8 +628,13 @@ export function createPlayer(ctx) {
     if (input && input.pressed('prostrate')) {
       prostrateTime = 0;
       prostrateStartHeading = state.player.heading;
-      // Face the stupa at (0, 0): vector from player to stupa is (-x, -z) => heading = atan2(x, z)
-      prostrateTargetHeading = Math.atan2(state.player.position.x, state.player.position.z);
+      if (state.zone === 'wild') {
+        const wOrigin = config.WILD?.origin || { x: 1000, z: 0 };
+        prostrateTargetHeading = Math.atan2(state.player.position.x - wOrigin.x, state.player.position.z - wOrigin.z);
+      } else {
+        // Face the stupa at (0, 0): vector from player to stupa is (-x, -z) => heading = atan2(x, z)
+        prostrateTargetHeading = Math.atan2(state.player.position.x, state.player.position.z);
+      }
       state.player.velocity.set(0, 0, 0);
       state.player.isMoving = false;
       state.player.action = 'prostrate';
@@ -638,8 +723,10 @@ export function createPlayer(ctx) {
     root.position.copy(state.player.position);
     root.rotation.y = state.player.heading;
 
-    // 6. Kora angle tracking
-    updateKora(dt);
+    // 6. Kora angle tracking (only active in stupa plaza)
+    if ((state.zone || 'stupa') === 'stupa') {
+      updateKora(dt);
+    }
   }
 
   return {

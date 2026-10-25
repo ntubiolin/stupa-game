@@ -77,6 +77,8 @@ const STRINGS = {
     'prompt.lightLamp': '點亮酥油燈',
     'prompt.feedMonkey': '餵猴子',
     'prompt.spinWheel': '轉動經輪',
+    'prompt.enterWild': '前往原野',
+    'prompt.returnStupa': '返回大佛塔',
     'prompt.interact': '互動',
 
     'mobile.prostrate': '禮拜',
@@ -97,6 +99,8 @@ const STRINGS = {
     'toast.timeResumed': '時間繼續流動',
     'toast.hudHidden': '介面已隱藏 · 按 H 顯示',
     'toast.reset': '進度已重設',
+    'toast.enterWild': '踏入蒼茫的高原原野',
+    'toast.returnStupa': '回到博達哈大佛塔廣場',
 
     'ach.firstKora': '初次繞塔',
     'ach.firstKora.desc': '完成第一圈繞塔',
@@ -190,6 +194,8 @@ const STRINGS = {
     'prompt.lightLamp': 'Light a butter lamp',
     'prompt.feedMonkey': 'Feed the monkey',
     'prompt.spinWheel': 'Spin the prayer wheel',
+    'prompt.enterWild': 'Enter the Wilderness',
+    'prompt.returnStupa': 'Return to the Great Stupa',
     'prompt.interact': 'Interact',
 
     'mobile.prostrate': 'Bow',
@@ -210,6 +216,8 @@ const STRINGS = {
     'toast.timeResumed': 'Time flows again',
     'toast.hudHidden': 'Interface hidden · press H to show',
     'toast.reset': 'Progress reset',
+    'toast.enterWild': 'Entered the vast highland wilderness',
+    'toast.returnStupa': 'Returned to Boudhanath Stupa plaza',
 
     'ach.firstKora': 'First Circle',
     'ach.firstKora.desc': 'Complete your first kora',

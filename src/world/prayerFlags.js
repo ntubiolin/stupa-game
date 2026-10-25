@@ -99,7 +99,7 @@ export function createPrayerFlags(ctx, anchors) {
 
   const group = new THREE.Group();
   group.name = 'PrayerFlags';
-  scene.add(group);
+  (ctx.stupaGroup || scene).add(group);
 
   // Fallback anchors if stupa returned null
   const lines = anchors?.lines ? [...anchors.lines] : [];
@@ -134,6 +134,7 @@ export function createPrayerFlags(ctx, anchors) {
       x: d.x,
       z: d.z,
       r: 0.75,
+      zone: 'stupa',
     });
 
     // Stepped stone/whitewashed pedestal
@@ -505,6 +506,8 @@ export function createPrayerFlags(ctx, anchors) {
 
   return {
     update(dt) {
+      if (state.zone && state.zone !== 'stupa') return;
+
       // Smooth wind strength slightly and integrate phase incrementally so speed changes never
       // get multiplied by a huge `elapsed` timestamp (which caused violent jitter after ~1 min).
       smoothStrength += (state.wind.strength - smoothStrength) * Math.min(1, dt * 3.5);
