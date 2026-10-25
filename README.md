@@ -8,6 +8,15 @@
 
 A serene procedural 3D pilgrimage game in the Himalayan valley of Kathmandu. Circumambulate (kora) around Boudhanath Stupa, offer full prostrations, light butter lamps, and feed mischievous macaques. Venture beyond the north monastery gate into the rugged highland wilderness to chant the Great Six-Syllable Mantra (*Om Mani Padme Hum*), dispel dark spirits, and liberate wandering beings.
 
+![博達哈大佛塔晨曦 / Boudhanath Stupa at Dawn](./docs/screenshots/stupa-cover.png)
+
+## 📸 遊戲畫面 / Screenshots
+
+| 黃昏點燈與五體投地禮拜 / Dusk Butter Lamps & Prostration | 雪域荒野與六字大明咒除障 / Highland Wilderness & Mantra Combat |
+| :---: | :---: |
+| ![Dusk Prostration](./docs/screenshots/stupa-dusk.png) | ![Wilderness Combat](./docs/screenshots/wilderness-combat.png) |
+| 暮色中點亮環塔酥油燈，於佛塔前行五體投地大禮拜 | 踏入北方雪域荒野，誦念「唵嘛呢叭咪吽」綻放金蓮咒輪超度魔障 |
+
 ---
 
 ## 🎮 控制方式 / Controls
