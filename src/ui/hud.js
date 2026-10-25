@@ -10,6 +10,7 @@
  *  - Touch/mobile action buttons (prostrate, interact, feed)
  *  - Zero per-frame DOM thrash: updates text/attributes only when values change
  */
+import { Vector3 } from 'three';
 import { ACHIEVEMENTS } from '../systems/merit.js';
 
 const RING_RADIUS = 24;
@@ -303,6 +304,13 @@ export function createHud(ctx) {
       <span>H</span>
     </button>
 
+    <!-- Red Damage Vignette Overlay -->
+    <div id="damage-vignette" class="damage-vignette" aria-hidden="true"></div>
+
+    <!-- 3D Overlays: Enemy Overhead Health Bars & Floating Damage Numbers -->
+    <div id="enemy-health-bars" class="enemy-health-bars" aria-hidden="true"></div>
+    <div id="damage-numbers" class="damage-numbers" aria-hidden="true"></div>
+
     <!-- Toast Notification Stack -->
     <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
 
@@ -440,6 +448,9 @@ export function createHud(ctx) {
   const btnMobileFeed = root.querySelector('#btn-mobile-feed');
 
   const toastStack = root.querySelector('#toast-stack');
+  const damageVignette = root.querySelector('#damage-vignette');
+  const enemyHpContainer = root.querySelector('#enemy-health-bars');
+  const damageNumbersContainer = root.querySelector('#damage-numbers');
   const helpModal = root.querySelector('#help-modal');
   const btnHelpClose = root.querySelector('#btn-help-close');
   const btnHelpCloseBottom = root.querySelector('#btn-help-close-bottom');
@@ -742,6 +753,107 @@ export function createHud(ctx) {
     }, 950);
   }
 
+  // ---------------------------------------------------------------- 3D Overlays (Health Bars, Damage Numbers, Vignette)
+  const projVec = new Vector3();
+  function toScreen(pos) {
+    if (!ctx.camera) return null;
+    projVec.set(pos.x, pos.y, pos.z);
+    projVec.project(ctx.camera);
+    if (projVec.z > 1 || projVec.z < -1) return null;
+    const x = (projVec.x * 0.5 + 0.5) * window.innerWidth;
+    const y = (-projVec.y * 0.5 + 0.5) * window.innerHeight;
+    if (x < -80 || x > window.innerWidth + 80 || y < -80 || y > window.innerHeight + 80) {
+      return null;
+    }
+    return { x, y };
+  }
+
+  let vignetteTimer = null;
+  bus.on('player:hurt', () => {
+    if (!damageVignette) return;
+    damageVignette.classList.remove('is-active');
+    void damageVignette.offsetWidth;
+    damageVignette.classList.add('is-active');
+    if (vignetteTimer) clearTimeout(vignetteTimer);
+    vignetteTimer = setTimeout(() => {
+      damageVignette.classList.remove('is-active');
+      vignetteTimer = null;
+    }, 350);
+  });
+
+  bus.on('enemy:hit', (payload) => {
+    if (!payload || !payload.position || !damageNumbersContainer) return;
+    const pt = toScreen(payload.position);
+    if (!pt) return;
+
+    const el = document.createElement('div');
+    el.className = `floating-damage ${payload.type === 'magic' ? 'floating-damage--magic' : ''}`;
+    el.textContent = `-${payload.damage}`;
+    const jitterX = (Math.random() - 0.5) * 20;
+    el.style.left = `${pt.x + jitterX}px`;
+    el.style.top = `${pt.y}px`;
+    damageNumbersContainer.appendChild(el);
+
+    setTimeout(() => {
+      if (el.parentNode) el.parentNode.removeChild(el);
+    }, 850);
+  });
+
+  const enemyBars = new Map();
+  function updateEnemyHealthBars() {
+    if (!enemyHpContainer) return;
+    if (state.zone !== 'wild' || hudHidden || !ctx.enemies) {
+      enemyHpContainer.style.display = 'none';
+      return;
+    }
+    enemyHpContainer.style.display = '';
+
+    const enemies = ctx.enemies.getActiveEnemies ? ctx.enemies.getActiveEnemies() : [];
+    const activeIds = new Set();
+
+    for (let i = 0; i < enemies.length; i++) {
+      const e = enemies[i];
+      activeIds.add(e.id);
+
+      if (e.hp <= 0 || e.hp >= e.maxHp || e.state === 'liberated') {
+        const bar = enemyBars.get(e.id);
+        if (bar) bar.wrap.style.display = 'none';
+        continue;
+      }
+
+      const pt = toScreen({ x: e.pos.x, y: e.pos.y + e.height + 0.35, z: e.pos.z });
+      if (!pt) {
+        const bar = enemyBars.get(e.id);
+        if (bar) bar.wrap.style.display = 'none';
+        continue;
+      }
+
+      let bar = enemyBars.get(e.id);
+      if (!bar) {
+        const wrap = document.createElement('div');
+        wrap.className = 'enemy-hp-wrap';
+        wrap.innerHTML = `<div class="enemy-hp-track"><div class="enemy-hp-fill"></div></div>`;
+        const fill = wrap.querySelector('.enemy-hp-fill');
+        enemyHpContainer.appendChild(wrap);
+        bar = { wrap, fill };
+        enemyBars.set(e.id, bar);
+      }
+
+      bar.wrap.style.display = '';
+      bar.wrap.style.left = `${pt.x}px`;
+      bar.wrap.style.top = `${pt.y}px`;
+      const pct = Math.max(0, Math.min(100, (e.hp / e.maxHp) * 100));
+      bar.fill.style.width = `${pct}%`;
+    }
+
+    for (const [id, bar] of enemyBars.entries()) {
+      if (!activeIds.has(id)) {
+        if (bar.wrap.parentNode) bar.wrap.parentNode.removeChild(bar.wrap);
+        enemyBars.delete(id);
+      }
+    }
+  }
+
   const BUFF_ICONS = {
     sungdu: '🪢',
     dungkar: '🐚',
@@ -950,6 +1062,9 @@ export function createHud(ctx) {
         btnMobileChant.classList.toggle('is-cooldown', cdFrac > 0.001);
       }
     }
+
+    // 6. Update enemy overhead health bars
+    updateEnemyHealthBars();
   }
 
   return {

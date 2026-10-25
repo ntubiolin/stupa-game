@@ -21,6 +21,7 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/player/player.js` | Gameplay | pilgrim mesh, movement, collision, prostration animation, kora tracking |
 | `src/player/cameraRig.js` | Gameplay | third-person follow camera + intro orbit |
 | `src/gameplay/mantra.js` | Gameplay | Six-Syllable Mantra (六字大明咒) area wave, syllables pool, cooldown & MP handling |
+| `src/gameplay/enemies.js` | Gameplay | enemy models (preta, tsen, migoi), AI state machine, melee/charge attacks, telegraphs, liberation VFX |
 | `src/gameplay/items.js` | Gameplay | dropped items, procedural 3D models, pickup detection, pity system |
 | `src/gameplay/lamps.js` | Gameplay | butter-lamp stations (interactable), flames + lights |
 | `src/gameplay/monkeys.js` | Gameplay | monkey meshes, wander AI, feeding (interactable) |
@@ -66,10 +67,11 @@ export function createX(ctx, ...extra) {
 | `input` | input module (created first) |
 | `debug` | `{ enabled, register(name, api) }` |
 | `mantra` | `{ update(dt), cast(), showRadius(bool), getCooldownFraction() }` |
+| `enemies` | `{ update(dt), spawn(kind?, distance?), clear(), list(), freeze(bool) }` |
 | `items` | `{ update(dt), drop(id?), forceNext(), pityCount(), activeItems }` |
-| `vitals` | `{ update(dt), addExp, spendMp, addBuff, addPermanent, getStats, set, damage }` |
+| `vitals` | `{ update(dt), addExp, spendMp, addBuff, addPermanent, getStats, set, damage, god(bool) }` |
 
-Update order per frame: `input → sky → stupa → flags → environment → wilderness → zones → player → mantra → items → lamps → monkeys → vitals → cameraRig → merit → interaction → audio → hud`.
+Update order per frame: `input → sky → stupa → flags → environment → wilderness → zones → player → mantra → enemies → items → lamps → monkeys → vitals → cameraRig → merit → interaction → audio → hud`.
 
 ### `state`
 
@@ -137,9 +139,13 @@ state.player.slowUntil   // seconds timestamp
 | `monkey:fed` | `{ position }` | monkeys |
 | `item:pickup` | `{ id, permanent }` | items |
 | `player:faint` | `{}` | vitals |
+| `player:hurt` | `{ amount, type, sourcePos }` | vitals |
+| `player:damaged` | `{ amount, type, sourcePos }` | vitals |
 | `player:chant` | `{ duration }` | mantra |
 | `mantra:cast` | `{ origin, radius, power }` | mantra |
 | `mantra:nomp` | – | mantra |
+| `enemy:hit` | `{ id, kind, damage, type, position }` | enemies |
+| `enemy:liberated` | `{ id, kind, exp, position }` | enemies |
 
 ## Rendering notes
 

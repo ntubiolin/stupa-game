@@ -216,6 +216,51 @@ export function createPlayer(ctx) {
   let chantTimer = 0;
   let chantDuration = 0.5;
 
+  // Hurt & flash state
+  let hurtTimer = 0;
+  let flashTimer = 0;
+  const flashMats = [robeMaroon, robeSaffron, trimGold, skinMat, bootMat];
+  const originalEmissives = flashMats.map((m) => ({
+    mat: m,
+    color: m.emissive.clone(),
+    intensity: m.emissiveIntensity,
+  }));
+
+  function flashHurt() {
+    flashTimer = 0.2;
+    for (const item of originalEmissives) {
+      item.mat.emissive.setHex(0xff1818);
+      item.mat.emissiveIntensity = 0.85;
+    }
+  }
+
+  function restoreFlash() {
+    for (const item of originalEmissives) {
+      item.mat.emissive.copy(item.color);
+      item.mat.emissiveIntensity = item.intensity;
+    }
+  }
+
+  bus.on('player:hurt', (payload) => {
+    if (payload?.sourcePos && state.player.position) {
+      const dx = state.player.position.x - payload.sourcePos.x;
+      const dz = state.player.position.z - payload.sourcePos.z;
+      const d = Math.hypot(dx, dz);
+      const kb = config.ENEMIES?.playerKnockback ?? 1.5;
+      if (d > 1e-4) {
+        state.player.position.x += (dx / d) * kb;
+        state.player.position.z += (dz / d) * kb;
+        resolveCollisions(state.player.position);
+      }
+    }
+    flashHurt();
+    if (state.player.hp > 0) {
+      hurtTimer = 0.3;
+      state.player.action = 'hurt';
+    }
+    bus.emit('sfx', { name: 'hurt' });
+  });
+
   bus.on('player:chant', (payload) => {
     const dur = payload?.duration ?? (config.MANTRA?.duration ?? 0.5);
     chantTimer = dur;
@@ -268,6 +313,11 @@ export function createPlayer(ctx) {
     gesture = null;
     prostrateTime = -1;
     chantTimer = 0;
+    hurtTimer = 0;
+    if (flashTimer > 0) {
+      flashTimer = 0;
+      restoreFlash();
+    }
     state.player.action = 'idle';
     resetPose();
     lastTheta = Math.atan2(state.player.position.z, state.player.position.x);
@@ -702,8 +752,20 @@ export function createPlayer(ctx) {
     state.player.position.z += state.player.velocity.z * dt;
     resolveCollisions(state.player.position);
 
+    if (flashTimer > 0) {
+      flashTimer = Math.max(0, flashTimer - dt);
+      if (flashTimer === 0) {
+        restoreFlash();
+      }
+    }
+
     state.player.isMoving = speed > 0.12;
     state.player.action = state.player.isMoving ? (isRun ? 'run' : 'walk') : 'idle';
+
+    if (hurtTimer > 0) {
+      hurtTimer = Math.max(0, hurtTimer - dt);
+      state.player.action = 'hurt';
+    }
 
     if (chantTimer > 0) {
       chantTimer = Math.max(0, chantTimer - dt);
@@ -761,6 +823,14 @@ export function createPlayer(ctx) {
 
       const chantProgress = chantDuration > 0 ? chantTimer / chantDuration : 0;
       auraMat.opacity = Math.sin(chantProgress * Math.PI) * 0.75;
+    }
+
+    if (hurtTimer > 0) {
+      torsoPivot.rotation.x = -0.22;
+      headGroup.rotation.x = -0.15;
+      body.position.y = -0.04;
+      leftArm.pivot.rotation.set(-0.35, 0.2, 0.45);
+      rightArm.pivot.rotation.set(-0.35, -0.2, -0.45);
     }
 
     root.position.copy(state.player.position);

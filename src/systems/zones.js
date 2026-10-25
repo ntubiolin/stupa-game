@@ -20,7 +20,7 @@ export function createZones(ctx) {
   }
 
   // ---------------------------------------------------------------- Switch Logic
-  function applyZoneSwitch(to) {
+  function applyZoneSwitch(to, options = {}) {
     const from = state.zone || 'stupa';
     if (from === to) return;
     state.zone = to;
@@ -29,7 +29,7 @@ export function createZones(ctx) {
     if (ctx.wildGroup) ctx.wildGroup.visible = (to === 'wild');
 
     if (to === 'wild') {
-      const sp = W.wildGate.spawnPos;
+      const sp = (options.viaTeleport && W.wildGate.teleportPos) ? W.wildGate.teleportPos : W.wildGate.spawnPos;
       const y = ctx.wilderness ? ctx.wilderness.getHeight(sp.x, sp.z) : 0;
       state.player.position.set(sp.x, y, sp.z);
       state.player.heading = W.wildGate.spawnHeading; // 0 (faces north into wilderness)
@@ -56,7 +56,7 @@ export function createZones(ctx) {
     }
 
     setTimeout(() => {
-      applyZoneSwitch(to);
+      applyZoneSwitch(to, { viaTeleport: false });
       if (fadeEl) {
         fadeEl.classList.remove('is-active');
       }
@@ -67,7 +67,17 @@ export function createZones(ctx) {
   }
 
   function teleport(to) {
-    if ((state.zone || 'stupa') === to) return;
+    if ((state.zone || 'stupa') === to) {
+      if (to === 'wild') {
+        const sp = W.wildGate.teleportPos || W.wildGate.spawnPos;
+        const y = ctx.wilderness ? ctx.wilderness.getHeight(sp.x, sp.z) : 0;
+        state.player.position.set(sp.x, y, sp.z);
+        state.player.heading = W.wildGate.spawnHeading;
+        state.player.velocity.set(0, 0, 0);
+        state.player.isMoving = false;
+      }
+      return;
+    }
     if (fadeEl) {
       fadeEl.classList.add('is-active');
       void fadeEl.offsetWidth; // force layout
@@ -75,7 +85,7 @@ export function createZones(ctx) {
         fadeEl.classList.remove('is-active');
       });
     }
-    applyZoneSwitch(to);
+    applyZoneSwitch(to, { viaTeleport: true });
   }
 
   // ---------------------------------------------------------------- Gate Interactables
