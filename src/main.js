@@ -27,6 +27,7 @@ import { createWilderness } from './world/wilderness.js';
 
 import { createLamps } from './gameplay/lamps.js';
 import { createMonkeys } from './gameplay/monkeys.js';
+import { createItems } from './gameplay/items.js';
 import { createPlayer } from './player/player.js';
 import { createCameraRig } from './player/cameraRig.js';
 
@@ -112,6 +113,7 @@ const wilderness = createWilderness(ctx);
 const zones = createZones(ctx);
 
 const player = createPlayer(ctx);
+const items = createItems(ctx);
 const lamps = createLamps(ctx);
 const monkeys = createMonkeys(ctx);
 const vitals = createVitals(ctx);
@@ -126,7 +128,7 @@ const modules = [
   ctx.input,
   sky, stupa, flags, environment,
   wilderness, zones,
-  player, lamps, monkeys,
+  player, items, lamps, monkeys,
   vitals,
   cameraRig,
   merit, interaction, audio, hud,
@@ -176,4 +178,4 @@ function frame() {
 requestAnimationFrame(frame);
 
 // Debug handle (dev only)
-if (import.meta.env.DEV) window.__game = { ctx, modules: { sky, stupa, flags, environment, wilderness, zones, lamps, monkeys, player, vitals, cameraRig, merit, interaction, audio, hud } };
+if (import.meta.env.DEV) window.__game = { ctx, modules: { sky, stupa, flags, environment, wilderness, zones, player, items, lamps, monkeys, vitals, cameraRig, merit, interaction, audio, hud } };

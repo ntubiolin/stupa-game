@@ -163,6 +163,27 @@ export const CONFIG = {
       maniInterval: 1.0,
     },
   },
+
+  ITEMS: {
+    dropChance: 0.3,
+    pityThreshold: 5,
+    despawnSec: 60,
+    pickupRadius: 1.2,
+    permanentCap: 20,
+    flightDur: 0.55,
+    dropFlightDur: 0.35,
+    arcHeight: 1.6,
+    dropArcHeight: 1.1,
+    bobAmp: 0.06,
+    bobFreq: 2.2,
+    rotSpeed: 1.2,
+    table: {
+      sungdu: { id: 'sungdu', permanent: false, weight: 35, duration: 120, stats: { defAdd: 15 } },
+      dungkar: { id: 'dungkar', permanent: false, weight: 35, duration: 90, stats: { atkMult: 1.5 } },
+      gau: { id: 'gau', permanent: true, weight: 15, stat: 'def', amount: 2, cap: 20 },
+      dorje: { id: 'dorje', permanent: true, weight: 15, stat: 'atk', amount: 2, cap: 20 },
+    },
+  },
 };
 
 export const deg = (d) => (d * Math.PI) / 180;

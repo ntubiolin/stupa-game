@@ -309,6 +309,31 @@ export function createAudio(ctx) {
     src.stop(now + 0.095);
   }
 
+  function playItemPickup() {
+    const context = ensureContext();
+    if (!context || muted) return;
+    const now = context.currentTime;
+
+    // Crisp, bright Tibetan crystal chime chord (E5, B5, E6, G#6)
+    const notes = [659.25, 987.77, 1318.51, 1661.22];
+    for (let i = 0; i < notes.length; i++) {
+      const t0 = now + i * 0.032;
+      const osc = context.createOscillator();
+      const gain = context.createGain();
+      osc.type = i % 2 === 0 ? 'sine' : 'triangle';
+      osc.frequency.value = notes[i];
+
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.linearRampToValueAtTime(0.12 / (i + 1), t0 + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.2);
+
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start(t0);
+      osc.stop(t0 + 1.25);
+    }
+  }
+
   function playCricketChirp(nightFactor) {
     if (!ac || muted || nightFactor < 0.25) return;
     const now = ac.currentTime;
@@ -359,6 +384,9 @@ export function createAudio(ctx) {
         break;
       case 'step':
         playFootstep();
+        break;
+      case 'pickup':
+        playItemPickup();
         break;
       default:
         break;

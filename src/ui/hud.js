@@ -512,6 +512,9 @@ export function createHud(ctx) {
 
     renderMuteButton();
     renderAchievementsModal();
+    if (state.player?.buffs) {
+      renderBuffs(state.player.buffs);
+    }
   }
 
   i18n.onChange(applyTranslations);
@@ -699,20 +702,45 @@ export function createHud(ctx) {
     }, 950);
   }
 
+  const BUFF_ICONS = {
+    sungdu: '🪢',
+    dungkar: '🐚',
+  };
+  let lastBuffKey = '';
+
   function renderBuffs(buffs) {
     if (!vitalsBuffs) return;
     if (!buffs || buffs.length === 0) {
-      vitalsBuffs.innerHTML = '';
-      vitalsBuffs.style.display = 'none';
+      if (lastBuffKey !== '') {
+        lastBuffKey = '';
+        vitalsBuffs.innerHTML = '';
+        vitalsBuffs.style.display = 'none';
+      }
       return;
     }
+
+    const key = buffs
+      .map((b) => `${b.id}:${Math.ceil(Math.max(0, b.remaining || 0))}`)
+      .join(';') + `:${i18n.lang}`;
+
+    if (key === lastBuffKey) return;
+    lastBuffKey = key;
+
     vitalsBuffs.style.display = 'flex';
-    vitalsBuffs.innerHTML = buffs.map((b) => `
-      <div class="vitals-buff-chip" title="${b.id || ''}">
-        <span class="vitals-buff-icon">✦</span>
-        <span class="vitals-buff-time">${Math.ceil(b.remaining || 0)}s</span>
-      </div>
-    `).join('');
+    vitalsBuffs.innerHTML = buffs
+      .map((b) => {
+        const icon = BUFF_ICONS[b.id] || '✦';
+        const name = i18n.t('item.' + b.id);
+        const secs = Math.ceil(Math.max(0, b.remaining || 0)) + 's';
+        return `
+          <div class="vitals-buff-chip" title="${name}">
+            <span class="vitals-buff-icon">${icon}</span>
+            <span class="vitals-buff-name">${name}</span>
+            <span class="vitals-buff-time">${secs}</span>
+          </div>
+        `;
+      })
+      .join('');
   }
 
   function updateVitals(payload) {
@@ -866,6 +894,11 @@ export function createHud(ctx) {
     if (canFeed !== lastFeedAvailable) {
       lastFeedAvailable = canFeed;
       btnMobileFeed.classList.toggle('is-ready', canFeed);
+    }
+
+    // 4. Update buff chips if active
+    if (state.player?.buffs) {
+      renderBuffs(state.player.buffs);
     }
   }
 

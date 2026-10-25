@@ -492,26 +492,44 @@ kbd {
   }
 }
 
-/* Buff icon strip (reserved for #4) */
+/* Buff icon strip (#4) */
 .vitals-buffs {
   display: none;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 5px;
   margin-top: 6px;
-  padding-top: 4px;
-  border-top: 1px solid rgba(238, 195, 108, 0.12);
+  padding-top: 5px;
+  border-top: 1px solid rgba(238, 195, 108, 0.15);
 }
 
 .vitals-buff-chip {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: rgba(238, 195, 108, 0.15);
-  border: 1px solid rgba(238, 195, 108, 0.3);
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(238, 195, 108, 0.16);
+  border: 1px solid rgba(238, 195, 108, 0.38);
   font-size: 0.68rem;
   color: var(--col-gold);
+  line-height: 1.2;
+}
+
+.vitals-buff-icon {
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+.vitals-buff-name {
+  font-weight: 600;
+  color: #fffaf0;
+  letter-spacing: 0.02em;
+}
+
+.vitals-buff-time {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+  color: #fce7b2;
 }
 
 /* Top-Left Merit & Kora Panel */

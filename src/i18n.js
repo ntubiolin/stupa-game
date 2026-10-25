@@ -109,6 +109,16 @@ const STRINGS = {
     'toast.returnStupa': '回到博達哈大佛塔廣場',
     'toast.noProstrateWild': '原野危機四伏，請回佛塔廣場行大禮拜',
     'toast.levelUp': '修為提升至等級 {level}',
+    'toast.itemPickup': '獲得 {name}：{effect}',
+
+    'item.sungdu': '加持繩',
+    'item.sungdu.effect': '防禦力 +15（持續 120 秒）',
+    'item.dungkar': '法螺',
+    'item.dungkar.effect': '攻擊力 ×1.5（持續 90 秒）',
+    'item.gau': '嘎烏護身盒',
+    'item.gau.effect': '防禦力永久 +2',
+    'item.dorje': '金剛杵',
+    'item.dorje.effect': '攻擊力永久 +2',
 
     'ach.firstKora': '初次繞塔',
     'ach.firstKora.desc': '完成第一圈繞塔',
@@ -234,6 +244,16 @@ const STRINGS = {
     'toast.returnStupa': 'Returned to Boudhanath Stupa plaza',
     'toast.noProstrateWild': 'Too dangerous here — return to the Stupa plaza to prostrate',
     'toast.levelUp': 'Reached Level {level}',
+    'toast.itemPickup': 'Obtained {name}: {effect}',
+
+    'item.sungdu': 'Protection Cord',
+    'item.sungdu.effect': 'DEF +15 (120s)',
+    'item.dungkar': 'Conch Shell',
+    'item.dungkar.effect': 'ATK ×1.5 (90s)',
+    'item.gau': 'Gau Amulet Box',
+    'item.gau.effect': 'Permanent DEF +2',
+    'item.dorje': 'Golden Vajra',
+    'item.dorje.effect': 'Permanent ATK +2',
 
     'ach.firstKora': 'First Circle',
     'ach.firstKora.desc': 'Complete your first kora',

@@ -256,7 +256,9 @@ export function createVitals(ctx) {
   function addPermanent(stat, n) {
     const p = state.player;
     if (!p.permanent) p.permanent = { atk: 0, def: 0 };
-    p.permanent[stat] = (p.permanent[stat] || 0) + (Number(n) || 0);
+    const cap = config.ITEMS?.permanentCap ?? 20;
+    const currentVal = p.permanent[stat] || 0;
+    p.permanent[stat] = Math.min(cap, currentVal + (Number(n) || 0));
     recalcDerived();
     save();
     emitChanged();
@@ -395,10 +397,15 @@ export function createVitals(ctx) {
   });
 
   // ---------------------------------------------------------------- API & exports
+  let buffEmitTimer = 0;
+
   const api = {
     update(dt) {
       const p = state.player;
-      if (!Array.isArray(p.buffs) || p.buffs.length === 0) return;
+      if (!Array.isArray(p.buffs) || p.buffs.length === 0) {
+        buffEmitTimer = 0;
+        return;
+      }
 
       let expired = false;
       for (let i = p.buffs.length - 1; i >= 0; i--) {
@@ -410,8 +417,13 @@ export function createVitals(ctx) {
         }
       }
 
+      buffEmitTimer += dt;
       if (expired) {
+        buffEmitTimer = 0;
         recalcDerived();
+        emitChanged();
+      } else if (buffEmitTimer >= 1.0) {
+        buffEmitTimer = 0;
         emitChanged();
       }
     },
