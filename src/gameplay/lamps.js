@@ -34,7 +34,7 @@ export function createLamps(ctx) {
 
   const group = new THREE.Group();
   group.name = 'ButterLampStations';
-  scene.add(group);
+  (ctx.stupaGroup || scene).add(group);
 
   // ---------------------------------------------------------------- shared materials
   const stoneMat = new THREE.MeshStandardMaterial({
@@ -322,6 +322,7 @@ export function createLamps(ctx) {
       x: pos.x,
       z: pos.z,
       r: 0.88,
+      zone: 'stupa',
     });
 
     const worldPos = new THREE.Vector3(pos.x, 1.0, pos.z);
@@ -349,6 +350,7 @@ export function createLamps(ctx) {
     ctx.interactables.push({
       id: station.id,
       kind: 'lamp',
+      zone: 'stupa',
       getPosition: () => station.worldPos,
       radius: L.interactRadius || 2.2,
       action: 'interact',
@@ -385,6 +387,8 @@ export function createLamps(ctx) {
 
   // ---------------------------------------------------------------- update
   function update(dt) {
+    if (state.zone && state.zone !== 'stupa') return;
+
     flameUniforms.uTime.value = state.elapsed;
     flameUniforms.uWindDir.value.copy(state.wind.dir);
     flameUniforms.uWindStrength.value = state.wind.strength;

@@ -26,7 +26,7 @@ export function createMonkeys(ctx) {
 
   const group = new THREE.Group();
   group.name = 'Monkeys';
-  scene.add(group);
+  (ctx.stupaGroup || scene).add(group);
 
   // ---------------------------------------------------------------- shared materials & geometries
   const furMat = new THREE.MeshStandardMaterial({
@@ -239,6 +239,7 @@ export function createMonkeys(ctx) {
     ctx.interactables.push({
       id: m.id,
       kind: 'monkey',
+      zone: 'stupa',
       getPosition: () => m.position,
       radius: M.interactRadius || 5,
       action: 'feed',
@@ -324,6 +325,7 @@ export function createMonkeys(ctx) {
     const colliders = ctx.colliders || [];
     for (let i = 0; i < colliders.length; i++) {
       const c = colliders[i];
+      if (!c || (c.zone || 'stupa') !== 'stupa') continue;
       if (c && c.type === 'circle') {
         const dx = pos.x - c.x;
         const dz = pos.z - c.z;
@@ -417,6 +419,8 @@ export function createMonkeys(ctx) {
 
   // ---------------------------------------------------------------- update
   function update(dt) {
+    if (state.zone && state.zone !== 'stupa') return;
+
     const nightFactor = state.time.nightFactor ?? 0;
 
     for (let i = 0; i < monkeys.length; i++) {

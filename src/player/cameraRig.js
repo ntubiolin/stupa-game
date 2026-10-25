@@ -46,6 +46,37 @@ export function createCameraRig(ctx) {
     targetDistance = 6.8;
   });
 
+  bus.on('zone:change', () => {
+    yaw = state.player.heading || 0;
+    const pPos = state.player.position;
+    const isWild = (state.zone === 'wild');
+    const lookHeight = 1.45;
+    desiredLook.set(pPos.x, pPos.y + lookHeight, pPos.z);
+    if (!isWild) {
+      const toStupaDist = Math.hypot(pPos.x, pPos.z);
+      if (toStupaDist > 1) {
+        desiredLook.x += (-pPos.x / toStupaDist) * 1.25;
+        desiredLook.z += (-pPos.z / toStupaDist) * 1.25;
+        desiredLook.y += 1.65;
+      }
+    }
+    const cosP = Math.cos(pitch);
+    const sinP = Math.sin(pitch);
+    desiredPos.set(
+      pPos.x + Math.sin(yaw) * cosP * distance,
+      pPos.y + 1.35 + sinP * distance,
+      pPos.z + Math.cos(yaw) * cosP * distance
+    );
+    if (isWild) {
+      const terrainY = ctx.wilderness ? ctx.wilderness.getHeight(desiredPos.x, desiredPos.z) : 0;
+      desiredPos.y = Math.max(terrainY + 0.65, desiredPos.y);
+    }
+    currentPos.copy(desiredPos);
+    currentLook.copy(desiredLook);
+    camera.position.copy(currentPos);
+    camera.lookAt(currentLook);
+  });
+
   function computeIntroCamera(elapsed) {
     // Slow clockwise panoramic orbit inside the plaza ring framing the Buddha eyes & spire
     const angle = elapsed * 0.14 + 0.9;
@@ -121,15 +152,18 @@ export function createCameraRig(ctx) {
       lookHeight = 0.95;
     }
 
+    const isWild = (state.zone === 'wild');
     const pPos = state.player.position;
     desiredLook.set(pPos.x, pPos.y + lookHeight, pPos.z);
 
-    // Bias look target toward the stupa dome & Buddha eyes when facing inward for grander framing
-    const toStupaDist = Math.hypot(pPos.x, pPos.z);
-    if (toStupaDist > 1 && state.player.action !== 'prostrate') {
-      desiredLook.x += (-pPos.x / toStupaDist) * 1.25;
-      desiredLook.z += (-pPos.z / toStupaDist) * 1.25;
-      desiredLook.y += 1.65;
+    if (!isWild) {
+      // Bias look target toward the stupa dome & Buddha eyes when facing inward for grander framing
+      const toStupaDist = Math.hypot(pPos.x, pPos.z);
+      if (toStupaDist > 1 && state.player.action !== 'prostrate') {
+        desiredLook.x += (-pPos.x / toStupaDist) * 1.25;
+        desiredLook.z += (-pPos.z / toStupaDist) * 1.25;
+        desiredLook.y += 1.65;
+      }
     }
 
     const cosP = Math.cos(activePitch);
@@ -140,21 +174,37 @@ export function createCameraRig(ctx) {
       pPos.z + Math.cos(activeYaw) * cosP * activeDist
     );
 
-    // 4. Keep camera outside stupa collider (r > ~20.5) and above plaza ground
-    const minCamR = Math.max(20.5, config.WORLD.stupaColliderRadius + 0.6);
-    const maxCamR = config.WORLD.buildingsInnerRadius - 0.6;
-    const camR = Math.hypot(desiredPos.x, desiredPos.z);
-    if (camR < minCamR && camR > 1e-4) {
-      const scale = minCamR / camR;
-      desiredPos.x *= scale;
-      desiredPos.z *= scale;
-      desiredPos.y = Math.max(desiredPos.y, 2.2);
-    } else if (camR > maxCamR) {
-      const scale = maxCamR / camR;
-      desiredPos.x *= scale;
-      desiredPos.z *= scale;
+    if (!isWild) {
+      // 4. Keep camera outside stupa collider (r > ~20.5) and above plaza ground
+      const minCamR = Math.max(20.5, config.WORLD.stupaColliderRadius + 0.6);
+      const maxCamR = config.WORLD.buildingsInnerRadius - 0.6;
+      const camR = Math.hypot(desiredPos.x, desiredPos.z);
+      if (camR < minCamR && camR > 1e-4) {
+        const scale = minCamR / camR;
+        desiredPos.x *= scale;
+        desiredPos.z *= scale;
+        desiredPos.y = Math.max(desiredPos.y, 2.2);
+      } else if (camR > maxCamR) {
+        const scale = maxCamR / camR;
+        desiredPos.x *= scale;
+        desiredPos.z *= scale;
+      }
+      desiredPos.y = Math.max(0.65, desiredPos.y);
+    } else {
+      // Wilderness camera constraints: clamp horizontal distance from origin to walkRadius + 10
+      const wOrigin = config.WILD?.origin || { x: 1000, z: 0 };
+      const cdx = desiredPos.x - wOrigin.x;
+      const cdz = desiredPos.z - wOrigin.z;
+      const camWildDist = Math.hypot(cdx, cdz);
+      const maxCamWildDist = (config.WILD?.walkRadius || 70) + 10;
+      if (camWildDist > maxCamWildDist) {
+        const s = maxCamWildDist / (camWildDist || 1);
+        desiredPos.x = wOrigin.x + cdx * s;
+        desiredPos.z = wOrigin.z + cdz * s;
+      }
+      const terrainY = ctx.wilderness ? ctx.wilderness.getHeight(desiredPos.x, desiredPos.z) : 0;
+      desiredPos.y = Math.max(terrainY + 0.65, desiredPos.y);
     }
-    desiredPos.y = Math.max(0.65, desiredPos.y);
 
     // 5. Smooth damping (and blend from intro orbit right after game:start)
     const followFactor = 1 - Math.exp(-dt * (state.player.action === 'prostrate' ? 4.5 : 9.0));
@@ -168,13 +218,29 @@ export function createCameraRig(ctx) {
       currentLook.lerp(desiredLook, followFactor);
     }
 
-    // Re-enforce ground & stupa clearance on interpolated position
-    const curR = Math.hypot(currentPos.x, currentPos.z);
-    if (curR < minCamR && curR > 1e-4 && introBlend >= 0.99) {
-      currentPos.x *= minCamR / curR;
-      currentPos.z *= minCamR / curR;
+    // Re-enforce ground & stupa/terrain clearance on interpolated position
+    if (!isWild) {
+      const minCamR = Math.max(20.5, config.WORLD.stupaColliderRadius + 0.6);
+      const curR = Math.hypot(currentPos.x, currentPos.z);
+      if (curR < minCamR && curR > 1e-4 && introBlend >= 0.99) {
+        currentPos.x *= minCamR / curR;
+        currentPos.z *= minCamR / curR;
+      }
+      if (currentPos.y < 0.55) currentPos.y = 0.55;
+    } else {
+      const wOrigin = config.WILD?.origin || { x: 1000, z: 0 };
+      const cdx = currentPos.x - wOrigin.x;
+      const cdz = currentPos.z - wOrigin.z;
+      const curWildDist = Math.hypot(cdx, cdz);
+      const maxCamWildDist = (config.WILD?.walkRadius || 70) + 10;
+      if (curWildDist > maxCamWildDist) {
+        const s = maxCamWildDist / (curWildDist || 1);
+        currentPos.x = wOrigin.x + cdx * s;
+        currentPos.z = wOrigin.z + cdz * s;
+      }
+      const curTerrainY = ctx.wilderness ? ctx.wilderness.getHeight(currentPos.x, currentPos.z) : 0;
+      if (currentPos.y < curTerrainY + 0.65) currentPos.y = curTerrainY + 0.65;
     }
-    if (currentPos.y < 0.55) currentPos.y = 0.55;
 
     camera.position.copy(currentPos);
     camera.lookAt(currentLook);

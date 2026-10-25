@@ -17,6 +17,9 @@ export function createInteraction(ctx) {
 
   function scoreItem(item, px, pz, fwdX, fwdZ) {
     if (!item || typeof item.getPosition !== 'function') return Infinity;
+    const currentZone = state.zone || 'stupa';
+    const itemZone = item.zone || 'stupa';
+    if (itemZone !== currentZone) return Infinity;
     if (typeof item.isAvailable === 'function' && !item.isAvailable()) return Infinity;
 
     const pos = item.getPosition();

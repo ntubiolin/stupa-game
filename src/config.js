@@ -73,6 +73,70 @@ export const CONFIG = {
     bloom: { strength: 0.34, radius: 0.4, threshold: 1.05 },
     shadowMapSize: 2048,
   },
+
+  /** Highland wilderness zone (accessible via north monastery gate). */
+  WILD: {
+    origin: { x: 1000, z: 0 },
+    walkRadius: 70,
+    stupaGate: {
+      x: 0,
+      z: -37.0,
+      radius: 3.2,
+      returnPos: { x: 0, z: -34.2 },
+      returnHeading: Math.PI, // faces stupa at (0, 0)
+    },
+    wildGate: {
+      x: 1000,
+      z: 62,
+      radius: 3.5,
+      spawnPos: { x: 1000, z: 57 },
+      spawnHeading: 0, // faces north into wilderness (-Z)
+    },
+    safeZoneRadius: 10,
+    SafeZoneRadius: 10,
+    maniStones: [
+      { x: 988, z: 28, radius: 4 },
+      { x: 1018, z: 5, radius: 4 },
+      { x: 992, z: -24, radius: 4 },
+    ],
+    zones: [
+      { id: 'near', minR: 8, maxR: 26 },
+      { id: 'mid', minR: 26, maxR: 46 },
+      { id: 'deep', minR: 46, maxR: 65 },
+    ],
+    terrain: {
+      size: 180,
+      segments: 96,
+      wave1FreqX: 0.052,
+      wave1FreqZ: 0.048,
+      wave1Amp: 2.2,
+      wave2FreqX: 0.11,
+      wave2FreqZ: 0.08,
+      wave2Amp: 1.1,
+      wave3FreqX: 0.025,
+      wave3FreqZ: 0.035,
+      wave3Amp: 1.5,
+      rimRadius: 58,
+      rimAmp: 14,
+    },
+    chorten: {
+      x: 1000,
+      z: 0,
+      colliderRadius: 1.8,
+    },
+    boulders: {
+      count: 22,
+      minRadius: 1.1,
+      maxRadius: 2.3,
+    },
+    mountains: {
+      count: 24,
+      innerRadius: 125,
+      outerRadius: 180,
+      minHeight: 38,
+      maxHeight: 75,
+    },
+  },
 };
 
 export const deg = (d) => (d * Math.PI) / 180;

@@ -22,12 +22,14 @@ import { createSky } from './world/sky.js';
 import { createStupa } from './world/stupa.js';
 import { createPrayerFlags } from './world/prayerFlags.js';
 import { createEnvironment } from './world/environment.js';
+import { createWilderness } from './world/wilderness.js';
 
 import { createLamps } from './gameplay/lamps.js';
 import { createMonkeys } from './gameplay/monkeys.js';
 import { createPlayer } from './player/player.js';
 import { createCameraRig } from './player/cameraRig.js';
 
+import { createZones } from './systems/zones.js';
 import { createInteraction } from './systems/interaction.js';
 import { createMerit } from './systems/merit.js';
 import { createAudio } from './systems/audio.js';
@@ -43,6 +45,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.info.autoReset = false;
 container.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -51,6 +54,7 @@ const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerH
 // ---------------------------------------------------------------- shared state
 const state = {
   mode: 'intro',                 // 'intro' (title screen, orbit camera) | 'play'
+  zone: 'stupa',                 // 'stupa' | 'wild'
   elapsed: 0,
   time: {
     t: CONFIG.TIME.start,        // 0..1, 0 = midnight
@@ -68,11 +72,22 @@ const state = {
   },
 };
 
+const stupaGroup = new THREE.Group();
+stupaGroup.name = 'StupaZone';
+scene.add(stupaGroup);
+
+const wildGroup = new THREE.Group();
+wildGroup.name = 'WildZone';
+wildGroup.visible = false;
+scene.add(wildGroup);
+
 const ctx = {
   THREE,
   scene,
   camera,
   renderer,
+  stupaGroup,
+  wildGroup,
   bus: createBus(),
   state,
   config: CONFIG,
@@ -90,10 +105,12 @@ const sky = createSky(ctx);
 const stupa = createStupa(ctx);
 const flags = createPrayerFlags(ctx, stupa.flagAnchors);
 const environment = createEnvironment(ctx);
+const wilderness = createWilderness(ctx);
+const zones = createZones(ctx);
 
+const player = createPlayer(ctx);
 const lamps = createLamps(ctx);
 const monkeys = createMonkeys(ctx);
-const player = createPlayer(ctx);
 const cameraRig = createCameraRig(ctx);
 
 const merit = createMerit(ctx);
@@ -104,6 +121,7 @@ const hud = createHud(ctx);
 const modules = [
   ctx.input,
   sky, stupa, flags, environment,
+  wilderness, zones,
   player, lamps, monkeys,
   cameraRig,
   merit, interaction, audio, hud,
@@ -146,10 +164,11 @@ function frame() {
 
   for (const m of modules) m.update(dt);
 
+  renderer.info.reset();
   composer.render(dt);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 
 // Debug handle (dev only)
-if (import.meta.env.DEV) window.__game = { ctx, modules: { sky, stupa, flags, environment, lamps, monkeys, player, cameraRig, merit, interaction, audio, hud } };
+if (import.meta.env.DEV) window.__game = { ctx, modules: { sky, stupa, flags, environment, wilderness, zones, lamps, monkeys, player, cameraRig, merit, interaction, audio, hud } };

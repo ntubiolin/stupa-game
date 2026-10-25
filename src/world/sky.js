@@ -275,6 +275,8 @@ export function createSky(ctx) {
     return t * t * (3 - 2 * t);
   };
 
+  let currentShadowFrustumD = 46;
+
   function updateSkyState(dt) {
     const t = ((state.time.t % 1) + 1) % 1;
     // t = 0 midnight, 0.25 sunrise, 0.5 noon, 0.75 sunset
@@ -332,25 +334,44 @@ export function createSky(ctx) {
 
     scene.fog.color.lerpColors(pA.fog, pB.fog, blend);
 
-    // Sun directional light
+    // Sun directional light & target placement per zone
+    const isWild = (state.zone === 'wild');
+    const wildOrigin = config.WILD?.origin || { x: 1000, z: 0 };
+    const centerX = isWild ? wildOrigin.x : 0;
+    const centerZ = isWild ? wildOrigin.z : 0;
+
+    const targetD = isWild ? 72 : 46;
+    if (targetD !== currentShadowFrustumD) {
+      currentShadowFrustumD = targetD;
+      sunLight.shadow.camera.left = -targetD;
+      sunLight.shadow.camera.right = targetD;
+      sunLight.shadow.camera.top = targetD;
+      sunLight.shadow.camera.bottom = -targetD;
+      sunLight.shadow.camera.updateProjectionMatrix();
+    }
+
+    hemiLight.position.set(centerX, 50, centerZ);
+
     const dayStrength = smoothstep(-0.04, 0.25, sunY);
     sunLight.intensity = dayStrength * 1.65;
     sunLight.color.copy(uniforms.uSunColor.value);
+    sunLight.target.position.set(centerX, 0, centerZ);
     const sunDist = 75;
     sunLight.position.set(
-      state.time.sunDir.x * sunDist,
+      centerX + state.time.sunDir.x * sunDist,
       Math.max(6, state.time.sunDir.y * sunDist),
-      state.time.sunDir.z * sunDist
+      centerZ + state.time.sunDir.z * sunDist
     );
     sunLight.visible = sunLight.intensity > 0.01;
 
     // Moon directional light (readable cool blue at night)
     const moonDir = uniforms.uMoonDir.value;
     moonLight.intensity = nightFactor * 0.62;
+    moonLight.target.position.set(centerX, 0, centerZ);
     moonLight.position.set(
-      moonDir.x * 60,
+      centerX + moonDir.x * 60,
       Math.max(22, moonDir.y * 60),
-      moonDir.z * 60
+      centerZ + moonDir.z * 60
     );
     moonLight.visible = moonLight.intensity > 0.01;
 
