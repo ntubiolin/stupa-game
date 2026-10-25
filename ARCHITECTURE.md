@@ -20,6 +20,7 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/i18n.js` | Gameplay | zh-Hant / en strings |
 | `src/player/player.js` | Gameplay | pilgrim mesh, movement, collision, prostration animation, kora tracking |
 | `src/player/cameraRig.js` | Gameplay | third-person follow camera + intro orbit |
+| `src/gameplay/items.js` | Gameplay | dropped items, procedural 3D models, pickup detection, pity system |
 | `src/gameplay/lamps.js` | Gameplay | butter-lamp stations (interactable), flames + lights |
 | `src/gameplay/monkeys.js` | Gameplay | monkey meshes, wander AI, feeding (interactable) |
 | `src/systems/zones.js` | Gameplay | zone manager ('stupa' | 'wild'), gate transitions, teleport API |
@@ -63,9 +64,10 @@ export function createX(ctx, ...extra) {
 | `interactables` | array of Interactable (below) |
 | `input` | input module (created first) |
 | `debug` | `{ enabled, register(name, api) }` |
+| `items` | `{ update(dt), drop(id?), forceNext(), pityCount(), activeItems }` |
 | `vitals` | `{ update(dt), addExp, spendMp, addBuff, addPermanent, getStats, set, damage }` |
 
-Update order per frame: `input → sky → stupa → flags → environment → wilderness → zones → player → lamps → monkeys → vitals → cameraRig → merit → interaction → audio → hud`.
+Update order per frame: `input → sky → stupa → flags → environment → wilderness → zones → player → items → lamps → monkeys → vitals → cameraRig → merit → interaction → audio → hud`.
 
 ### `state`
 
@@ -131,6 +133,7 @@ state.player.slowUntil   // seconds timestamp
 | `vitals:damage` | `{ amount, type = 'physical'\|'magic', sourcePos?, slow?, ignoreInvuln? }` | anyone → vitals |
 | `vitals:changed` | `{ hp, maxHp, mp, maxMp, exp, maxExp, level, atk, def, buffs, deltaHp, deltaMp, source }` | vitals → HUD |
 | `monkey:fed` | `{ position }` | monkeys |
+| `item:pickup` | `{ id, permanent }` | items |
 | `player:faint` | `{}` | vitals |
 
 ## Rendering notes
