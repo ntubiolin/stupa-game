@@ -530,6 +530,182 @@ export function createAudio(ctx) {
     }
   }
 
+  function playArrow() {
+    const context = ensureContext();
+    if (!context || muted) return;
+    const now = context.currentTime;
+
+    const osc = context.createOscillator();
+    const g = context.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(420, now);
+    osc.frequency.exponentialRampToValueAtTime(110, now + 0.12);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.linearRampToValueAtTime(0.24, now + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+    osc.connect(g);
+    g.connect(masterGain);
+    osc.start(now);
+    osc.stop(now + 0.15);
+
+    if (noiseBuffer) {
+      const noise = context.createBufferSource();
+      noise.buffer = noiseBuffer;
+      const flt = context.createBiquadFilter();
+      flt.type = 'bandpass';
+      flt.frequency.setValueAtTime(1800, now);
+      flt.frequency.exponentialRampToValueAtTime(450, now + 0.16);
+      flt.Q.value = 3.5;
+      const ng = context.createGain();
+      ng.gain.setValueAtTime(0.0001, now);
+      ng.gain.linearRampToValueAtTime(0.18, now + 0.01);
+      ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+      noise.connect(flt);
+      flt.connect(ng);
+      ng.connect(masterGain);
+      noise.start(now, Math.random() * 2);
+      noise.stop(now + 0.18);
+    }
+  }
+
+  function playFireball() {
+    const context = ensureContext();
+    if (!context || muted) return;
+    const now = context.currentTime;
+
+    const osc = context.createOscillator();
+    const g = context.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(280, now);
+    osc.frequency.exponentialRampToValueAtTime(140, now + 0.35);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.linearRampToValueAtTime(0.15, now + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
+    osc.connect(g);
+    g.connect(masterGain);
+    osc.start(now);
+    osc.stop(now + 0.4);
+
+    if (noiseBuffer) {
+      const noise = context.createBufferSource();
+      noise.buffer = noiseBuffer;
+      const flt = context.createBiquadFilter();
+      flt.type = 'bandpass';
+      flt.frequency.setValueAtTime(320, now);
+      flt.frequency.linearRampToValueAtTime(680, now + 0.15);
+      flt.frequency.exponentialRampToValueAtTime(180, now + 0.36);
+      flt.Q.value = 2.0;
+      const ng = context.createGain();
+      ng.gain.setValueAtTime(0.0001, now);
+      ng.gain.linearRampToValueAtTime(0.2, now + 0.02);
+      ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.36);
+      noise.connect(flt);
+      flt.connect(ng);
+      ng.connect(masterGain);
+      noise.start(now, Math.random() * 2);
+      noise.stop(now + 0.38);
+    }
+  }
+
+  function playBoulder() {
+    const context = ensureContext();
+    if (!context || muted) return;
+    const now = context.currentTime;
+
+    const osc = context.createOscillator();
+    const g = context.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(85, now);
+    osc.frequency.exponentialRampToValueAtTime(32, now + 0.28);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.linearRampToValueAtTime(0.45, now + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.36);
+    osc.connect(g);
+    g.connect(masterGain);
+    osc.start(now);
+    osc.stop(now + 0.38);
+
+    if (noiseBuffer) {
+      const noise = context.createBufferSource();
+      noise.buffer = noiseBuffer;
+      const flt = context.createBiquadFilter();
+      flt.type = 'lowpass';
+      flt.frequency.setValueAtTime(140, now);
+      flt.frequency.exponentialRampToValueAtTime(50, now + 0.32);
+      const ng = context.createGain();
+      ng.gain.setValueAtTime(0.0001, now);
+      ng.gain.linearRampToValueAtTime(0.35, now + 0.015);
+      ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+      noise.connect(flt);
+      flt.connect(ng);
+      ng.connect(masterGain);
+      noise.start(now, Math.random() * 2);
+      noise.stop(now + 0.38);
+    }
+  }
+
+  function playFrost() {
+    const context = ensureContext();
+    if (!context || muted) return;
+    const now = context.currentTime;
+
+    const freqs = [880, 1174, 1568];
+    for (const f of freqs) {
+      const osc = context.createOscillator();
+      const g = context.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(f, now);
+      osc.frequency.exponentialRampToValueAtTime(f * 0.95, now + 0.45);
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.linearRampToValueAtTime(0.08, now + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+      osc.connect(g);
+      g.connect(masterGain);
+      osc.start(now);
+      osc.stop(now + 0.48);
+    }
+
+    if (noiseBuffer) {
+      const noise = context.createBufferSource();
+      noise.buffer = noiseBuffer;
+      const flt = context.createBiquadFilter();
+      flt.type = 'highpass';
+      flt.frequency.setValueAtTime(1200, now);
+      const ng = context.createGain();
+      ng.gain.setValueAtTime(0.0001, now);
+      ng.gain.linearRampToValueAtTime(0.12, now + 0.04);
+      ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
+      noise.connect(flt);
+      flt.connect(ng);
+      ng.connect(masterGain);
+      noise.start(now, Math.random() * 2);
+      noise.stop(now + 0.42);
+    }
+  }
+
+  function playDispel() {
+    const context = ensureContext();
+    if (!context || muted) return;
+    const now = context.currentTime;
+
+    const freqs = [1320, 1980, 2640];
+    for (let i = 0; i < freqs.length; i++) {
+      const osc = context.createOscillator();
+      const g = context.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freqs[i], now);
+      osc.frequency.exponentialRampToValueAtTime(freqs[i] * 1.08, now + 0.2);
+      osc.frequency.exponentialRampToValueAtTime(freqs[i], now + 0.55);
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.linearRampToValueAtTime(0.12 / (i + 1), now + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
+      osc.connect(g);
+      g.connect(masterGain);
+      osc.start(now);
+      osc.stop(now + 0.65);
+    }
+  }
+
   // ---------------------------------------------------------------- bus listeners
   bus.on('game:start', () => {
     ensureContext();
@@ -572,6 +748,21 @@ export function createAudio(ctx) {
         break;
       case 'liberate':
         playLiberate();
+        break;
+      case 'arrow':
+        playArrow();
+        break;
+      case 'fireball':
+        playFireball();
+        break;
+      case 'boulder':
+        playBoulder();
+        break;
+      case 'frost':
+        playFrost();
+        break;
+      case 'dispel':
+        playDispel();
         break;
       default:
         break;

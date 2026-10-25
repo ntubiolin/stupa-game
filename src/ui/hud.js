@@ -736,7 +736,7 @@ export function createHud(ctx) {
   });
 
   // ---------------------------------------------------------------- vitals & floating popups
-  function spawnVitalsPopup(type, delta) {
+  function spawnVitalsPopup(type, delta, dmgType = 'physical') {
     const anchor = type === 'hp' ? hpPopupAnchor : mpPopupAnchor;
     if (!anchor) return;
     const el = document.createElement('div');
@@ -745,7 +745,8 @@ export function createHud(ctx) {
     const kind = type === 'hp'
       ? (isPos ? 'vitals-popup--heal' : 'vitals-popup--damage')
       : (isPos ? 'vitals-popup--mp-gain' : 'vitals-popup--mp-spend');
-    el.className = `vitals-popup ${kind}`;
+    const typeClass = dmgType === 'magic' ? 'is-magic floating-damage--magic' : 'is-physical floating-damage--physical';
+    el.className = `vitals-popup ${kind} ${typeClass}`;
     el.textContent = `${sign}${delta}`;
     anchor.appendChild(el);
     setTimeout(() => {
@@ -768,17 +769,46 @@ export function createHud(ctx) {
     return { x, y };
   }
 
+  const slowIcon = document.createElement('div');
+  slowIcon.id = 'player-slow-icon';
+  slowIcon.className = 'player-slow-icon';
+  slowIcon.textContent = '❄️';
+  slowIcon.style.display = 'none';
+  if (playHud) playHud.appendChild(slowIcon);
+
   let vignetteTimer = null;
-  bus.on('player:hurt', () => {
-    if (!damageVignette) return;
-    damageVignette.classList.remove('is-active');
-    void damageVignette.offsetWidth;
-    damageVignette.classList.add('is-active');
-    if (vignetteTimer) clearTimeout(vignetteTimer);
-    vignetteTimer = setTimeout(() => {
+  bus.on('player:hurt', (payload) => {
+    if (damageVignette) {
       damageVignette.classList.remove('is-active');
-      vignetteTimer = null;
-    }, 350);
+      void damageVignette.offsetWidth;
+      damageVignette.classList.add('is-active');
+      if (vignetteTimer) clearTimeout(vignetteTimer);
+      vignetteTimer = setTimeout(() => {
+        damageVignette.classList.remove('is-active');
+        vignetteTimer = null;
+      }, 350);
+    }
+
+    if (payload && typeof payload.amount === 'number' && payload.amount > 0 && damageNumbersContainer) {
+      const playerPos = state.player?.position;
+      if (playerPos) {
+        const pt = toScreen({ x: playerPos.x, y: playerPos.y + 1.85, z: playerPos.z });
+        if (pt) {
+          const el = document.createElement('div');
+          const isMagic = payload.type === 'magic';
+          el.className = `floating-damage ${isMagic ? 'floating-damage--magic is-magic' : 'floating-damage--physical is-physical'}`;
+          el.textContent = `-${payload.amount}`;
+          const jitterX = (Math.random() - 0.5) * 16;
+          el.style.left = `${pt.x + jitterX}px`;
+          el.style.top = `${pt.y}px`;
+          damageNumbersContainer.appendChild(el);
+
+          setTimeout(() => {
+            if (el.parentNode) el.parentNode.removeChild(el);
+          }, 850);
+        }
+      }
+    }
   });
 
   bus.on('enemy:hit', (payload) => {
@@ -787,7 +817,8 @@ export function createHud(ctx) {
     if (!pt) return;
 
     const el = document.createElement('div');
-    el.className = `floating-damage ${payload.type === 'magic' ? 'floating-damage--magic' : ''}`;
+    const isMagic = payload.type === 'magic';
+    el.className = `floating-damage ${isMagic ? 'floating-damage--magic is-magic' : 'floating-damage--physical is-physical'}`;
     el.textContent = `-${payload.damage}`;
     const jitterX = (Math.random() - 0.5) * 20;
     el.style.left = `${pt.x + jitterX}px`;
@@ -932,7 +963,7 @@ export function createHud(ctx) {
     }
 
     if (deltaHp && deltaHp !== 0) {
-      spawnVitalsPopup('hp', deltaHp);
+      spawnVitalsPopup('hp', deltaHp, payload.type);
     }
     if (deltaMp && deltaMp !== 0) {
       spawnVitalsPopup('mp', deltaMp);
@@ -1065,6 +1096,21 @@ export function createHud(ctx) {
 
     // 6. Update enemy overhead health bars
     updateEnemyHealthBars();
+
+    // 7. Update player slow status icon
+    const isSlowed = state.elapsed < (state.player?.slowUntil || 0);
+    if (isSlowed && state.player?.position && !hudHidden) {
+      const pt = toScreen({ x: state.player.position.x, y: state.player.position.y + 2.1, z: state.player.position.z });
+      if (pt) {
+        slowIcon.style.display = 'block';
+        slowIcon.style.left = `${pt.x}px`;
+        slowIcon.style.top = `${pt.y}px`;
+      } else {
+        slowIcon.style.display = 'none';
+      }
+    } else {
+      slowIcon.style.display = 'none';
+    }
   }
 
   return {

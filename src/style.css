@@ -482,6 +482,18 @@ kbd {
   color: #f87171;
 }
 
+.vitals-popup--damage.is-physical,
+.vitals-popup--damage.floating-damage--physical {
+  color: #ffffff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9), 0 0 8px rgba(255, 255, 255, 0.85);
+}
+
+.vitals-popup--damage.is-magic,
+.vitals-popup--damage.floating-damage--magic {
+  color: #c084fc;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9), 0 0 10px rgba(192, 132, 252, 0.9);
+}
+
 .vitals-popup--mp-gain {
   color: #38bdf8;
 }
@@ -1399,9 +1411,39 @@ kbd {
   will-change: transform, opacity;
 }
 
-.floating-damage--magic {
+.floating-damage--physical,
+.floating-damage.is-physical {
   color: #ffffff;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9), 0 0 12px rgba(255, 220, 100, 0.85);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9), 0 0 10px rgba(255, 255, 255, 0.85);
+}
+
+.floating-damage--magic,
+.floating-damage.is-magic {
+  color: #d8b4fe;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9), 0 0 12px rgba(192, 132, 252, 0.95), 0 0 20px rgba(168, 85, 247, 0.7);
+}
+
+.player-slow-icon {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 26px;
+  color: #38bdf8;
+  text-shadow: 0 0 10px rgba(56, 189, 248, 0.95), 0 0 20px rgba(14, 165, 233, 0.8);
+  pointer-events: none;
+  z-index: 55;
+  animation: slow-icon-pulse 1s ease-in-out infinite alternate;
+  will-change: transform, opacity;
+}
+
+@keyframes slow-icon-pulse {
+  0% {
+    transform: translate(-50%, -50%) scale(0.92);
+    opacity: 0.85;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.15);
+    opacity: 1;
+  }
 }
 
 @keyframes float-damage-anim {
