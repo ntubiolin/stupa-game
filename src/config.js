@@ -137,6 +137,32 @@ export const CONFIG = {
       maxHeight: 75,
     },
   },
+
+  VITALS: {
+    baseHp: 100,
+    hpPerLevel: 10,
+    baseMp: 60,
+    mpPerLevel: 5,
+    baseAtk: 10,
+    atkPerLevel: 4,
+    baseDef: 0,
+    expBase: 20,
+    expExponent: 1.5,
+    maxLevel: 30,
+    defConstant: 50,
+    magicDefFactor: 0.5,
+    invulnDuration: 0.8,
+    knockbackDist: 1.5,
+    slowMultiplier: 0.5,
+    restore: {
+      prostrationHp: 25,
+      lampMp: 15,
+      monkeyMp: 10,
+      maniMp: 1,
+      maniRadius: 4,
+      maniInterval: 1.0,
+    },
+  },
 };
 
 export const deg = (d) => (d * Math.PI) / 180;

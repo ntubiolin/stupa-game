@@ -254,6 +254,10 @@ export function createPlayer(ctx) {
   });
 
   bus.on('zone:change', () => {
+    gesture = null;
+    prostrateTime = -1;
+    state.player.action = 'idle';
+    resetPose();
     lastTheta = Math.atan2(state.player.position.z, state.player.position.x);
     root.position.copy(state.player.position);
     root.rotation.y = state.player.heading;
@@ -599,6 +603,10 @@ export function createPlayer(ctx) {
         resetPose();
         state.player.action = 'idle';
         bus.emit('merit', { type: 'prostration' });
+        bus.emit('vitals:restore', {
+          hp: config.VITALS?.restore?.prostrationHp ?? 25,
+          source: 'prostration',
+        });
         bus.emit('sfx', { name: 'bowl' });
       } else {
         applyProstrationPose(prostrateTime);
@@ -626,15 +634,14 @@ export function createPlayer(ctx) {
 
     // 3. Start prostration if requested
     if (input && input.pressed('prostrate')) {
+      if (state.zone === 'wild') {
+        bus.emit('toast', { key: 'toast.noProstrateWild', kind: 'warning' });
+        return;
+      }
       prostrateTime = 0;
       prostrateStartHeading = state.player.heading;
-      if (state.zone === 'wild') {
-        const wOrigin = config.WILD?.origin || { x: 1000, z: 0 };
-        prostrateTargetHeading = Math.atan2(state.player.position.x - wOrigin.x, state.player.position.z - wOrigin.z);
-      } else {
-        // Face the stupa at (0, 0): vector from player to stupa is (-x, -z) => heading = atan2(x, z)
-        prostrateTargetHeading = Math.atan2(state.player.position.x, state.player.position.z);
-      }
+      // Face the stupa at (0, 0): vector from player to stupa is (-x, -z) => heading = atan2(x, z)
+      prostrateTargetHeading = Math.atan2(state.player.position.x, state.player.position.z);
       state.player.velocity.set(0, 0, 0);
       state.player.isMoving = false;
       state.player.action = 'prostrate';
@@ -657,7 +664,10 @@ export function createPlayer(ctx) {
     // Right vector on XZ plane: forward × up(0,1,0) = (-camForward.z, 0, camForward.x)
     camRight.set(-camForward.z, 0, camForward.x);
 
-    const targetSpeed = moveMag > 0.02 ? (isRun ? P.runSpeed : P.walkSpeed) * moveMag : 0;
+    let targetSpeed = moveMag > 0.02 ? (isRun ? P.runSpeed : P.walkSpeed) * moveMag : 0;
+    if (state.elapsed < (state.player.slowUntil || 0)) {
+      targetSpeed *= (config.VITALS?.slowMultiplier ?? 0.5);
+    }
     const desiredVx = (camRight.x * mx + camForward.x * my) * (moveMag > 0 ? targetSpeed / moveMag : 0);
     const desiredVz = (camRight.z * mx + camForward.z * my) * (moveMag > 0 ? targetSpeed / moveMag : 0);
 

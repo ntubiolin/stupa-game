@@ -374,6 +374,10 @@ export function createLamps(ctx) {
 
         bus.emit('sfx', { name: 'light' });
         bus.emit('merit', { type: 'lamp' });
+        bus.emit('vitals:restore', {
+          mp: config.VITALS?.restore?.lampMp ?? 15,
+          source: 'lamp',
+        });
 
         if (!station.findNextUnlit()) {
           bus.emit('toast', { key: 'toast.allLit' });

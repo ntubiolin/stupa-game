@@ -103,60 +103,123 @@ export function createHud(ctx) {
 
     <!-- PLAY HUD -->
     <div id="play-hud" class="play-hud is-hidden">
-      <!-- Top-Left: Merit & Kora Progress -->
-      <aside id="merit-panel" class="merit-panel glass-panel" aria-label="Merit and kora progress">
-        <div class="merit-header">
-          <div class="kora-ring-wrap" id="kora-ring-wrap">
-            <svg class="kora-ring" width="60" height="60" viewBox="0 0 60 60">
-              <circle class="kora-ring__track" cx="30" cy="30" r="${RING_RADIUS}" />
-              <circle id="kora-ring-fill" class="kora-ring__fill" cx="30" cy="30" r="${RING_RADIUS}"
-                stroke-dasharray="${RING_CIRC.toFixed(2)}"
-                stroke-dashoffset="${RING_CIRC.toFixed(2)}" />
-            </svg>
-            <div class="kora-ring__center">
-              <span id="stat-kora-laps" class="kora-ring__laps">0</span>
-              <span class="kora-ring__unit" data-i18n="hud.laps"></span>
+      <!-- Top-Left: Stacked Vitals & Merit Panels -->
+      <div class="hud-left-stack">
+        <!-- Vitals Panel -->
+        <aside id="vitals-panel" class="vitals-panel glass-panel" aria-label="Player vitals">
+          <div class="vitals-header">
+            <div class="vitals-level-wrap">
+              <span class="vitals-level-prefix" data-i18n="hud.level">Lv</span>
+              <span id="stat-level" class="vitals-level-val">1</span>
+            </div>
+            <div class="vitals-combat-stats">
+              <div class="vitals-stat-chip">
+                <span class="vitals-stat-label" data-i18n="hud.atk">ATK</span>
+                <span id="stat-atk" class="vitals-stat-val">10</span>
+              </div>
+              <div class="vitals-stat-chip">
+                <span class="vitals-stat-label" data-i18n="hud.def">DEF</span>
+                <span id="stat-def" class="vitals-stat-val">0</span>
+              </div>
             </div>
           </div>
 
-          <div class="merit-summary">
-            <div class="merit-summary__label" data-i18n="hud.merit"></div>
-            <div id="stat-total-points" class="merit-summary__points">0</div>
-            <div id="stat-kora-pct" class="merit-summary__sub"></div>
-          </div>
-        </div>
+          <div class="vitals-bars">
+            <!-- HP Bar -->
+            <div class="vitals-bar-wrap" id="hp-bar-wrap">
+              <div class="vitals-bar-track vitals-bar-track--hp">
+                <div id="stat-hp-bar" class="vitals-bar-fill vitals-bar-fill--hp" style="width: 100%;"></div>
+              </div>
+              <div class="vitals-bar-meta">
+                <span class="vitals-bar-label" data-i18n="hud.hp">HP</span>
+                <span id="stat-hp-text" class="vitals-bar-text">100 / 100</span>
+              </div>
+              <div id="hp-popup-anchor" class="vitals-popup-anchor"></div>
+            </div>
 
-        <div class="merit-grid">
-          <div class="merit-item" id="merit-item-prostration">
-            <span class="merit-item__icon" aria-hidden="true">🙏</span>
-            <div class="merit-item__body">
-              <span class="merit-item__label" data-i18n="hud.prostrations"></span>
-              <span id="stat-prostrations" class="merit-item__value">0</span>
+            <!-- MP Bar -->
+            <div class="vitals-bar-wrap" id="mp-bar-wrap">
+              <div class="vitals-bar-track vitals-bar-track--mp">
+                <div id="stat-mp-bar" class="vitals-bar-fill vitals-bar-fill--mp" style="width: 100%;"></div>
+              </div>
+              <div class="vitals-bar-meta">
+                <span class="vitals-bar-label" data-i18n="hud.mp">MP</span>
+                <span id="stat-mp-text" class="vitals-bar-text">60 / 60</span>
+              </div>
+              <div id="mp-popup-anchor" class="vitals-popup-anchor"></div>
+            </div>
+
+            <!-- EXP Bar -->
+            <div class="vitals-bar-wrap vitals-bar-wrap--exp" id="exp-bar-wrap">
+              <div class="vitals-bar-track vitals-bar-track--exp">
+                <div id="stat-exp-bar" class="vitals-bar-fill vitals-bar-fill--exp" style="width: 0%;"></div>
+              </div>
+              <div class="vitals-bar-meta">
+                <span class="vitals-bar-label" data-i18n="hud.exp">EXP</span>
+                <span id="stat-exp-text" class="vitals-bar-text">0 / 20</span>
+              </div>
             </div>
           </div>
-          <div class="merit-item" id="merit-item-lamps">
-            <span class="merit-item__icon" aria-hidden="true">🪔</span>
-            <div class="merit-item__body">
-              <span class="merit-item__label" data-i18n="hud.lamps"></span>
-              <span id="stat-lamps" class="merit-item__value">0</span>
+
+          <!-- Reserved buff icon strip for #4 -->
+          <div id="vitals-buffs" class="vitals-buffs"></div>
+        </aside>
+
+        <!-- Merit & Kora Progress -->
+        <aside id="merit-panel" class="merit-panel glass-panel" aria-label="Merit and kora progress">
+          <div class="merit-header">
+            <div class="kora-ring-wrap" id="kora-ring-wrap">
+              <svg class="kora-ring" width="60" height="60" viewBox="0 0 60 60">
+                <circle class="kora-ring__track" cx="30" cy="30" r="${RING_RADIUS}" />
+                <circle id="kora-ring-fill" class="kora-ring__fill" cx="30" cy="30" r="${RING_RADIUS}"
+                  stroke-dasharray="${RING_CIRC.toFixed(2)}"
+                  stroke-dashoffset="${RING_CIRC.toFixed(2)}" />
+              </svg>
+              <div class="kora-ring__center">
+                <span id="stat-kora-laps" class="kora-ring__laps">0</span>
+                <span class="kora-ring__unit" data-i18n="hud.laps"></span>
+              </div>
+            </div>
+
+            <div class="merit-summary">
+              <div class="merit-summary__label" data-i18n="hud.merit"></div>
+              <div id="stat-total-points" class="merit-summary__points">0</div>
+              <div id="stat-kora-pct" class="merit-summary__sub"></div>
             </div>
           </div>
-          <div class="merit-item" id="merit-item-monkeys">
-            <span class="merit-item__icon" aria-hidden="true">🐒</span>
-            <div class="merit-item__body">
-              <span class="merit-item__label" data-i18n="hud.monkeys"></span>
-              <span id="stat-monkeys" class="merit-item__value">0</span>
+
+          <div class="merit-grid">
+            <div class="merit-item" id="merit-item-prostration">
+              <span class="merit-item__icon" aria-hidden="true">🙏</span>
+              <div class="merit-item__body">
+                <span class="merit-item__label" data-i18n="hud.prostrations"></span>
+                <span id="stat-prostrations" class="merit-item__value">0</span>
+              </div>
+            </div>
+            <div class="merit-item" id="merit-item-lamps">
+              <span class="merit-item__icon" aria-hidden="true">🪔</span>
+              <div class="merit-item__body">
+                <span class="merit-item__label" data-i18n="hud.lamps"></span>
+                <span id="stat-lamps" class="merit-item__value">0</span>
+              </div>
+            </div>
+            <div class="merit-item" id="merit-item-monkeys">
+              <span class="merit-item__icon" aria-hidden="true">🐒</span>
+              <div class="merit-item__body">
+                <span class="merit-item__label" data-i18n="hud.monkeys"></span>
+                <span id="stat-monkeys" class="merit-item__value">0</span>
+              </div>
+            </div>
+            <div class="merit-item" id="merit-item-wheels">
+              <span class="merit-item__icon" aria-hidden="true">☸</span>
+              <div class="merit-item__body">
+                <span class="merit-item__label" data-i18n="hud.wheels"></span>
+                <span id="stat-wheels" class="merit-item__value">0</span>
+              </div>
             </div>
           </div>
-          <div class="merit-item" id="merit-item-wheels">
-            <span class="merit-item__icon" aria-hidden="true">☸</span>
-            <div class="merit-item__body">
-              <span class="merit-item__label" data-i18n="hud.wheels"></span>
-              <span id="stat-wheels" class="merit-item__value">0</span>
-            </div>
-          </div>
-        </div>
-      </aside>
+        </aside>
+      </div>
 
       <!-- Top-Right: Celestial Clock, Time Slider & Utility Buttons -->
       <aside id="top-controls" class="top-controls">
@@ -296,6 +359,19 @@ export function createHud(ctx) {
   const btnBegin = root.querySelector('#btn-begin');
   const titleLangZh = root.querySelector('#title-lang-zh');
   const titleLangEn = root.querySelector('#title-lang-en');
+
+  const statLevel = root.querySelector('#stat-level');
+  const statAtk = root.querySelector('#stat-atk');
+  const statDef = root.querySelector('#stat-def');
+  const statHpBar = root.querySelector('#stat-hp-bar');
+  const statHpText = root.querySelector('#stat-hp-text');
+  const hpPopupAnchor = root.querySelector('#hp-popup-anchor');
+  const statMpBar = root.querySelector('#stat-mp-bar');
+  const statMpText = root.querySelector('#stat-mp-text');
+  const mpPopupAnchor = root.querySelector('#mp-popup-anchor');
+  const statExpBar = root.querySelector('#stat-exp-bar');
+  const statExpText = root.querySelector('#stat-exp-text');
+  const vitalsBuffs = root.querySelector('#vitals-buffs');
 
   const koraRingFill = root.querySelector('#kora-ring-fill');
   const statKoraLaps = root.querySelector('#stat-kora-laps');
@@ -604,6 +680,92 @@ export function createHud(ctx) {
       renderAchievementsModal();
     }
   });
+
+  // ---------------------------------------------------------------- vitals & floating popups
+  function spawnVitalsPopup(type, delta) {
+    const anchor = type === 'hp' ? hpPopupAnchor : mpPopupAnchor;
+    if (!anchor) return;
+    const el = document.createElement('div');
+    const isPos = delta > 0;
+    const sign = isPos ? '+' : '';
+    const kind = type === 'hp'
+      ? (isPos ? 'vitals-popup--heal' : 'vitals-popup--damage')
+      : (isPos ? 'vitals-popup--mp-gain' : 'vitals-popup--mp-spend');
+    el.className = `vitals-popup ${kind}`;
+    el.textContent = `${sign}${delta}`;
+    anchor.appendChild(el);
+    setTimeout(() => {
+      el.remove();
+    }, 950);
+  }
+
+  function renderBuffs(buffs) {
+    if (!vitalsBuffs) return;
+    if (!buffs || buffs.length === 0) {
+      vitalsBuffs.innerHTML = '';
+      vitalsBuffs.style.display = 'none';
+      return;
+    }
+    vitalsBuffs.style.display = 'flex';
+    vitalsBuffs.innerHTML = buffs.map((b) => `
+      <div class="vitals-buff-chip" title="${b.id || ''}">
+        <span class="vitals-buff-icon">✦</span>
+        <span class="vitals-buff-time">${Math.ceil(b.remaining || 0)}s</span>
+      </div>
+    `).join('');
+  }
+
+  function updateVitals(payload) {
+    if (!payload) return;
+    const { hp, maxHp, mp, maxMp, exp, maxExp, level, atk, def, buffs, deltaHp, deltaMp } = payload;
+
+    if (statLevel && level != null) statLevel.textContent = String(level);
+    if (statAtk && atk != null) statAtk.textContent = String(atk);
+    if (statDef && def != null) statDef.textContent = String(def);
+
+    if (statHpBar && maxHp > 0 && hp != null) {
+      const pct = Math.max(0, Math.min(100, (hp / maxHp) * 100));
+      statHpBar.style.width = `${pct}%`;
+    }
+    if (statHpText && hp != null && maxHp != null) {
+      statHpText.textContent = `${hp} / ${maxHp}`;
+    }
+
+    if (statMpBar && maxMp > 0 && mp != null) {
+      const pct = Math.max(0, Math.min(100, (mp / maxMp) * 100));
+      statMpBar.style.width = `${pct}%`;
+    }
+    if (statMpText && mp != null && maxMp != null) {
+      statMpText.textContent = `${mp} / ${maxMp}`;
+    }
+
+    if (statExpBar && maxExp > 0 && exp != null) {
+      const pct = Math.max(0, Math.min(100, (exp / maxExp) * 100));
+      statExpBar.style.width = `${pct}%`;
+    }
+    if (statExpText && exp != null && maxExp != null) {
+      statExpText.textContent = `${exp} / ${maxExp}`;
+    }
+
+    if (buffs) {
+      renderBuffs(buffs);
+    }
+
+    if (deltaHp && deltaHp !== 0) {
+      spawnVitalsPopup('hp', deltaHp);
+    }
+    if (deltaMp && deltaMp !== 0) {
+      spawnVitalsPopup('mp', deltaMp);
+    }
+  }
+
+  bus.on('vitals:changed', (payload) => {
+    updateVitals(payload);
+  });
+
+  if (ctx.vitals?.getStats) {
+    updateVitals(ctx.vitals.getStats());
+  }
 
   // Initial translation pass
   applyTranslations();

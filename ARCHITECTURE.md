@@ -10,6 +10,7 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/main.js` | **Architect** | renderer, ctx/state, module wiring, game loop, bloom |
 | `src/config.js` | **Architect** | layout constants — read-only for subagents |
 | `src/core/events.js` | **Architect** | event bus |
+| `src/core/debug.js` | **Architect** | console inspection & debug API (`window.__stupa`) |
 | `src/world/sky.js` | World | sky dome, sun/moon, stars, lights, fog, exposure — writes `state.time.sunDir/nightFactor` |
 | `src/world/stupa.js` | World | stupa, wall, prayer wheels, night string lights; exports `flagAnchors` |
 | `src/world/prayerFlags.js` | World | wind-animated five-color flags (vertex shader) |
@@ -22,6 +23,7 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/gameplay/lamps.js` | Gameplay | butter-lamp stations (interactable), flames + lights |
 | `src/gameplay/monkeys.js` | Gameplay | monkey meshes, wander AI, feeding (interactable) |
 | `src/systems/zones.js` | Gameplay | zone manager ('stupa' | 'wild'), gate transitions, teleport API |
+| `src/systems/vitals.js` | Gameplay | vitals system (HP/MP/EXP/ATK/DEF), level curve, damage mitigation, buffs |
 | `src/systems/interaction.js` | Gameplay | nearest-interactable selection, prompt, dispatch |
 | `src/systems/merit.js` | Gameplay | counters, achievements, persistence (localStorage) |
 | `src/systems/audio.js` | Gameplay | Web Audio synthesized singing bowl, wind, bells, chant drone |
@@ -60,8 +62,10 @@ export function createX(ctx, ...extra) {
 | `colliders` | array; push `{type:'circle',x,z,r,zone?:'stupa'\|'wild'}` or `{type:'box',minX,maxX,minZ,maxZ,zone?:'stupa'\|'wild'}` |
 | `interactables` | array of Interactable (below) |
 | `input` | input module (created first) |
+| `debug` | `{ enabled, register(name, api) }` |
+| `vitals` | `{ update(dt), addExp, spendMp, addBuff, addPermanent, getStats, set, damage }` |
 
-Update order per frame: `input → sky → stupa → flags → environment → wilderness → zones → player → lamps → monkeys → cameraRig → merit → interaction → audio → hud`.
+Update order per frame: `input → sky → stupa → flags → environment → wilderness → zones → player → lamps → monkeys → vitals → cameraRig → merit → interaction → audio → hud`.
 
 ### `state`
 
@@ -80,6 +84,18 @@ state.player.heading  // radians
 state.player.velocity // THREE.Vector3
 state.player.isMoving // bool
 state.player.action   // 'idle'|'walk'|'run'|'prostrate'|'light'|'feed'
+state.player.level    // 1..30
+state.player.exp      // 0..maxExp
+state.player.hp       // 0..maxHp
+state.player.maxHp    // derived
+state.player.mp       // 0..maxMp
+state.player.maxMp    // derived
+state.player.atk      // derived
+state.player.def      // derived
+state.player.buffs    // array of { id, remaining, duration, stats }
+state.player.permanent// { atk, def }
+state.player.invulnUntil // seconds timestamp
+state.player.slowUntil   // seconds timestamp
 ```
 
 ### Interactable
@@ -111,6 +127,11 @@ state.player.action   // 'idle'|'walk'|'run'|'prostrate'|'light'|'feed'
 | `toast` | `{ key, params? }` | anyone → HUD |
 | `prompt` | `{ labelKey, keyHint } \| null` | interaction → HUD |
 | `sfx` | `{ name: 'bowl'\|'bell'\|'light'\|'monkey'\|'wheel'\|'step' }` | anyone → audio |
+| `vitals:restore` | `{ hp?, mp?, source }` | player / lamps / monkeys / wilderness |
+| `vitals:damage` | `{ amount, type = 'physical'\|'magic', sourcePos?, slow?, ignoreInvuln? }` | anyone → vitals |
+| `vitals:changed` | `{ hp, maxHp, mp, maxMp, exp, maxExp, level, atk, def, buffs, deltaHp, deltaMp, source }` | vitals → HUD |
+| `monkey:fed` | `{ position }` | monkeys |
+| `player:faint` | `{}` | vitals |
 
 ## Rendering notes
 
