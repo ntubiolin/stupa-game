@@ -425,6 +425,111 @@ export function createAudio(ctx) {
     shimmerGain.connect(masterGain);
   }
 
+  function playHit() {
+    const context = ensureContext();
+    if (!context || muted) return;
+    const now = context.currentTime;
+
+    // Snappy impact punch
+    const osc = context.createOscillator();
+    const g = context.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(420, now);
+    osc.frequency.exponentialRampToValueAtTime(140, now + 0.08);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.linearRampToValueAtTime(0.24, now + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+    osc.connect(g);
+    g.connect(masterGain);
+    osc.start(now);
+    osc.stop(now + 0.14);
+
+    // Resonant mantra crystal chime
+    const freqs = [880, 1320];
+    for (const f of freqs) {
+      const chime = context.createOscillator();
+      const chimeG = context.createGain();
+      chime.type = 'sine';
+      chime.frequency.setValueAtTime(f, now);
+      chimeG.gain.setValueAtTime(0.0001, now);
+      chimeG.gain.linearRampToValueAtTime(0.12, now + 0.01);
+      chimeG.gain.exponentialRampToValueAtTime(0.0001, now + 0.38);
+      chime.connect(chimeG);
+      chimeG.connect(masterGain);
+      chime.start(now);
+      chime.stop(now + 0.4);
+    }
+  }
+
+  function playHurt() {
+    const context = ensureContext();
+    if (!context || muted) return;
+    const now = context.currentTime;
+
+    // Low thud punch
+    const thud = context.createOscillator();
+    const thudG = context.createGain();
+    thud.type = 'sine';
+    thud.frequency.setValueAtTime(130, now);
+    thud.frequency.exponentialRampToValueAtTime(48, now + 0.14);
+    thudG.gain.setValueAtTime(0.0001, now);
+    thudG.gain.linearRampToValueAtTime(0.36, now + 0.008);
+    thudG.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+    thud.connect(thudG);
+    thudG.connect(masterGain);
+    thud.start(now);
+    thud.stop(now + 0.24);
+
+    // Grunt-like filtered noise pulse
+    if (noiseBuffer) {
+      const noise = context.createBufferSource();
+      noise.buffer = noiseBuffer;
+      const flt = context.createBiquadFilter();
+      flt.type = 'bandpass';
+      flt.frequency.setValueAtTime(240, now);
+      flt.Q.value = 2.2;
+      const nGain = context.createGain();
+      nGain.gain.setValueAtTime(0.0001, now);
+      nGain.gain.linearRampToValueAtTime(0.18, now + 0.01);
+      nGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+      noise.connect(flt);
+      flt.connect(nGain);
+      nGain.connect(masterGain);
+      noise.start(now, Math.random() * 2);
+      noise.stop(now + 0.18);
+    }
+  }
+
+  function playLiberate() {
+    const context = ensureContext();
+    if (!context || muted) return;
+    const now = context.currentTime;
+
+    // High pure Tibetan singing bowl / tingsha bell shimmer
+    const partials = [
+      { f: 1760, a: 0.16, decay: 1.8 },
+      { f: 2640, a: 0.10, decay: 2.1 },
+      { f: 3520, a: 0.06, decay: 1.4 },
+      { f: 5280, a: 0.03, decay: 1.0 },
+    ];
+
+    for (const p of partials) {
+      const osc = context.createOscillator();
+      const g = context.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(p.f, now);
+
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.linearRampToValueAtTime(p.a, now + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + p.decay);
+
+      osc.connect(g);
+      g.connect(masterGain);
+      osc.start(now);
+      osc.stop(now + p.decay + 0.05);
+    }
+  }
+
   // ---------------------------------------------------------------- bus listeners
   bus.on('game:start', () => {
     ensureContext();
@@ -458,6 +563,15 @@ export function createAudio(ctx) {
         break;
       case 'chant':
         playMantraChant();
+        break;
+      case 'hit':
+        playHit();
+        break;
+      case 'hurt':
+        playHurt();
+        break;
+      case 'liberate':
+        playLiberate();
         break;
       default:
         break;

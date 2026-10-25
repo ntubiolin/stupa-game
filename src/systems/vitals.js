@@ -128,6 +128,8 @@ export function createVitals(ctx) {
   state.player.buffs = [];
   state.player.invulnUntil = 0;
   state.player.slowUntil = 0;
+  state.vitals = state.vitals || {};
+  state.vitals.god = false;
 
   recalcDerived();
 
@@ -325,6 +327,13 @@ export function createVitals(ctx) {
       return 0;
     }
 
+    if (state.vitals?.god) {
+      p.invulnUntil = state.elapsed + (V.invulnDuration ?? 0.8);
+      bus.emit('player:hurt', { amount: 0, type, sourcePos: extra.sourcePos });
+      bus.emit('player:damaged', { amount: 0, type, sourcePos: extra.sourcePos });
+      return 0;
+    }
+
     const defConst = V.defConstant ?? 50;
     const magicFactor = V.magicDefFactor ?? 0.5;
     const currentDef = Math.max(0, p.def ?? 0);
@@ -343,16 +352,8 @@ export function createVitals(ctx) {
       p.slowUntil = Math.max(p.slowUntil || 0, state.elapsed + extra.slow);
     }
 
-    if (extra.sourcePos && p.position) {
-      const dx = p.position.x - extra.sourcePos.x;
-      const dz = p.position.z - extra.sourcePos.z;
-      const d = Math.hypot(dx, dz);
-      const kb = V.knockbackDist ?? 1.5;
-      if (d > 1e-4) {
-        p.position.x += (dx / d) * kb;
-        p.position.z += (dz / d) * kb;
-      }
-    }
+    bus.emit('player:hurt', { amount: dmg, type, sourcePos: extra.sourcePos });
+    bus.emit('player:damaged', { amount: dmg, type, sourcePos: extra.sourcePos });
 
     save();
     emitChanged({ deltaHp: -dmg, type, source: extra.source });
@@ -433,6 +434,11 @@ export function createVitals(ctx) {
     addPermanent,
     getStats,
     set,
+    god(bool) {
+      if (!state.vitals) state.vitals = {};
+      state.vitals.god = Boolean(bool);
+      return state.vitals.god;
+    },
     damage(amount, type = 'physical', extra = {}) {
       return bus.emit('vitals:damage', { amount, type, ...extra });
     },
@@ -444,6 +450,7 @@ export function createVitals(ctx) {
     set: (patch) => api.set(patch),
     damage: (amount, type = 'physical', extra = {}) =>
       bus.emit('vitals:damage', { amount, type, ...extra }),
+    god: (bool) => api.god(bool),
     get: () => api.getStats(),
   });
 

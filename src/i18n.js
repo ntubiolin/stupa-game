@@ -115,6 +115,11 @@ const STRINGS = {
     'toast.noMp': '真氣不足，無法誦念六字大明咒',
     'toast.levelUp': '修為提升至等級 {level}',
     'toast.itemPickup': '獲得 {name}：{effect}',
+    'toast.enemyLiberated': '超度了 {name} +{exp} EXP',
+
+    'enemy.preta': '餓鬼',
+    'enemy.tsen': '贊',
+    'enemy.migoi': '雪人',
 
     'item.sungdu': '加持繩',
     'item.sungdu.effect': '防禦力 +15（持續 120 秒）',
@@ -255,6 +260,11 @@ const STRINGS = {
     'toast.noMp': 'Not enough MP to chant the Great Six-Syllable Mantra',
     'toast.levelUp': 'Reached Level {level}',
     'toast.itemPickup': 'Obtained {name}: {effect}',
+    'toast.enemyLiberated': 'Liberated {name} +{exp} EXP',
+
+    'enemy.preta': 'Preta (Hungry Ghost)',
+    'enemy.tsen': 'Tsen (Red Rider)',
+    'enemy.migoi': 'Migoi (Yeti)',
 
     'item.sungdu': 'Protection Cord',
     'item.sungdu.effect': 'DEF +15 (120s)',

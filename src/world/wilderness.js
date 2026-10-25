@@ -552,8 +552,9 @@ export function createWilderness(ctx) {
     const bx = origin.x + Math.cos(a) * rad;
     const bz = origin.z + Math.sin(a) * rad;
 
-    // Reject if too close to gate
+    // Reject if too close to gate or central north-south corridor from gate
     if (Math.hypot(bx - gateX, bz - gateZ) < 14) continue;
+    if (Math.abs(bx - gateX) < 5.5 && bz > 12) continue;
     // Reject if too close to chorten
     if (Math.hypot(bx - chortenX, bz - chortenZ) < 8) continue;
 
@@ -697,11 +698,72 @@ export function createWilderness(ctx) {
   const spawnPoint = new THREE.Vector3(W.wildGate.spawnPos.x, getHeight(W.wildGate.spawnPos.x, W.wildGate.spawnPos.z), W.wildGate.spawnPos.z);
   const gatePosition = new THREE.Vector3(W.wildGate.x, getHeight(W.wildGate.x, W.wildGate.z), W.wildGate.z);
 
+  function sampleRingPoint(ringId, options = {}) {
+    const zCfg = (W.zones || []).find((z) => z.id === ringId) || (W.zones && W.zones[0]) || { minR: 10, maxR: 25 };
+    const minR = zCfg.minR;
+    const maxR = zCfg.maxR;
+    const minDistFromGate = options.minDistFromGate ?? 12;
+    const minDistFromPlayer = options.minDistFromPlayer ?? 0;
+    const gate = W.wildGate;
+    const playerPos = state.player?.position;
+
+    // Up to 30 randomized samples
+    for (let attempt = 0; attempt < 30; attempt++) {
+      const theta = Math.random() * Math.PI * 2;
+      const r = Math.sqrt(Math.random() * (maxR * maxR - minR * minR) + minR * minR);
+      const x = origin.x + Math.cos(theta) * r;
+      const z = origin.z + Math.sin(theta) * r;
+
+      // Gate distance
+      if (Math.hypot(x - gate.x, z - gate.z) < minDistFromGate) continue;
+
+      // Player distance
+      if (minDistFromPlayer > 0 && playerPos) {
+        if (Math.hypot(x - playerPos.x, z - playerPos.z) < minDistFromPlayer) continue;
+      }
+
+      // Check colliders
+      let insideCollider = false;
+      if (Array.isArray(colliders)) {
+        for (let i = 0; i < colliders.length; i++) {
+          const c = colliders[i];
+          if (!c || (c.zone || 'stupa') !== 'wild') continue;
+          if (c.type === 'circle') {
+            if (Math.hypot(x - c.x, z - c.z) < (c.r || 1) + 1.0) {
+              insideCollider = true;
+              break;
+            }
+          }
+        }
+      }
+      if (insideCollider) continue;
+
+      return { x, y: getHeight(x, z), z };
+    }
+
+    // Fallback: point directly opposite to player, mid-radius
+    let fallbackTheta = Math.PI * 0.5;
+    if (playerPos) {
+      const pAngle = Math.atan2(playerPos.z - origin.z, playerPos.x - origin.x);
+      fallbackTheta = pAngle + Math.PI;
+    }
+    const midR = (minR + maxR) * 0.5;
+    let fx = origin.x + Math.cos(fallbackTheta) * midR;
+    let fz = origin.z + Math.sin(fallbackTheta) * midR;
+    if (Math.hypot(fx - gate.x, fz - gate.z) < minDistFromGate) {
+      fallbackTheta += 0.8;
+      fx = origin.x + Math.cos(fallbackTheta) * midR;
+      fz = origin.z + Math.sin(fallbackTheta) * midR;
+    }
+    return { x: fx, y: getHeight(fx, fz), z: fz };
+  }
+
   const api = {
     group,
     getHeight,
     spawnPoint,
     gatePosition,
+    sampleRingPoint,
     maniStones: maniStonesData,
     zones: W.zones,
     update(dt) {
