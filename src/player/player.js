@@ -212,6 +212,17 @@ export function createPlayer(ctx) {
   // Gesture state ('light' | 'feed')
   let gesture = null; // { name, timer, duration, targetHeading }
 
+  // Mantra chant state
+  let chantTimer = 0;
+  let chantDuration = 0.5;
+
+  bus.on('player:chant', (payload) => {
+    const dur = payload?.duration ?? (config.MANTRA?.duration ?? 0.5);
+    chantTimer = dur;
+    chantDuration = dur;
+    state.player.action = 'chant';
+  });
+
   bus.on('player:gesture', (payload) => {
     if (!payload || state.player.action === 'prostrate') return;
     const { name, target } = payload;
@@ -256,6 +267,7 @@ export function createPlayer(ctx) {
   bus.on('zone:change', () => {
     gesture = null;
     prostrateTime = -1;
+    chantTimer = 0;
     state.player.action = 'idle';
     resetPose();
     lastTheta = Math.atan2(state.player.position.z, state.player.position.x);
@@ -638,6 +650,7 @@ export function createPlayer(ctx) {
         bus.emit('toast', { key: 'toast.noProstrateWild', kind: 'warning' });
         return;
       }
+      chantTimer = 0;
       prostrateTime = 0;
       prostrateStartHeading = state.player.heading;
       // Face the stupa at (0, 0): vector from player to stupa is (-x, -z) => heading = atan2(x, z)
@@ -668,6 +681,9 @@ export function createPlayer(ctx) {
     if (state.elapsed < (state.player.slowUntil || 0)) {
       targetSpeed *= (config.VITALS?.slowMultiplier ?? 0.5);
     }
+    if (chantTimer > 0) {
+      targetSpeed *= (config.MANTRA?.moveSpeedMult ?? 0.6);
+    }
     const desiredVx = (camRight.x * mx + camForward.x * my) * (moveMag > 0 ? targetSpeed / moveMag : 0);
     const desiredVz = (camRight.z * mx + camForward.z * my) * (moveMag > 0 ? targetSpeed / moveMag : 0);
 
@@ -688,6 +704,11 @@ export function createPlayer(ctx) {
 
     state.player.isMoving = speed > 0.12;
     state.player.action = state.player.isMoving ? (isRun ? 'run' : 'walk') : 'idle';
+
+    if (chantTimer > 0) {
+      chantTimer = Math.max(0, chantTimer - dt);
+      state.player.action = 'chant';
+    }
 
     if (state.player.isMoving) {
       const targetHeading = Math.atan2(-state.player.velocity.x, -state.player.velocity.z);
@@ -728,6 +749,18 @@ export function createPlayer(ctx) {
       leftArm.pivot.rotation.z = 0.07 + breathe * 0.015;
       rightArm.pivot.rotation.z = -0.07 - breathe * 0.015;
       stepAccum = 0;
+    }
+
+    if (chantTimer > 0) {
+      // Posed upper body with joined palms in Anjali Mudra at heart/chest
+      torsoPivot.rotation.x = isRun ? 0.08 : 0.04;
+      leftArm.pivot.rotation.set(-0.75, 0.45, 0);
+      rightArm.pivot.rotation.set(-0.75, -0.45, 0);
+      leftArm.forearmPivot.rotation.set(-1.1, 0, -0.35);
+      rightArm.forearmPivot.rotation.set(-1.1, 0, 0.35);
+
+      const chantProgress = chantDuration > 0 ? chantTimer / chantDuration : 0;
+      auraMat.opacity = Math.sin(chantProgress * Math.PI) * 0.75;
     }
 
     root.position.copy(state.player.position);

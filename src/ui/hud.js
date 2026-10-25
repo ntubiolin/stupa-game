@@ -14,6 +14,8 @@ import { ACHIEVEMENTS } from '../systems/merit.js';
 
 const RING_RADIUS = 24;
 const RING_CIRC = 2 * Math.PI * RING_RADIUS;
+const CHANT_RING_RADIUS = 30;
+const CHANT_RING_CIRC = 2 * Math.PI * CHANT_RING_RADIUS;
 
 function formatClock(t) {
   const totalMinutes = Math.floor(((t % 1) + 1) % 1 * 24 * 60);
@@ -84,6 +86,10 @@ export function createHud(ctx) {
           <div class="control-chip">
             <kbd>Shift</kbd>
             <span data-i18n="controls.run"></span>
+          </div>
+          <div class="control-chip">
+            <kbd>R / Space</kbd>
+            <span data-i18n="controls.chant"></span>
           </div>
           <div class="control-chip">
             <kbd>Q</kbd>
@@ -263,6 +269,17 @@ export function createHud(ctx) {
 
       <!-- Bottom-Right: Mobile / On-Screen Action Buttons -->
       <div id="mobile-actions" class="mobile-actions">
+        <button id="btn-mobile-chant" type="button" class="action-fab action-fab--chant glass-panel">
+          <svg class="cooldown-ring" width="68" height="68" viewBox="0 0 68 68">
+            <circle class="cooldown-ring__track" cx="34" cy="34" r="${CHANT_RING_RADIUS}" />
+            <circle id="chant-cooldown-fill" class="cooldown-ring__fill" cx="34" cy="34" r="${CHANT_RING_RADIUS}"
+              stroke-dasharray="${CHANT_RING_CIRC.toFixed(2)}"
+              stroke-dashoffset="${CHANT_RING_CIRC.toFixed(2)}" />
+          </svg>
+          <span class="action-fab__syllable" aria-hidden="true">ཨོཾ</span>
+          <span class="action-fab__label" data-i18n="mobile.chant"></span>
+          <kbd class="action-fab__key">R</kbd>
+        </button>
         <button id="btn-mobile-prostrate" type="button" class="action-fab glass-panel">
           <span class="action-fab__icon" aria-hidden="true">🙏</span>
           <span class="action-fab__label" data-i18n="mobile.prostrate"></span>
@@ -321,6 +338,10 @@ export function createHud(ctx) {
                 <div class="practice-card__title">📿 <span data-i18n="help.wheel.title"></span></div>
                 <p class="practice-card__desc" data-i18n="help.wheel.desc"></p>
               </div>
+              <div class="practice-card">
+                <div class="practice-card__title">✨ <span data-i18n="help.mantra.title"></span></div>
+                <p class="practice-card__desc" data-i18n="help.mantra.desc"></p>
+              </div>
             </div>
           </section>
 
@@ -329,6 +350,7 @@ export function createHud(ctx) {
             <div class="controls-table" id="help-controls-table">
               <div class="controls-row"><span data-i18n="controls.move"></span><kbd>WASD / ↑←↓→</kbd></div>
               <div class="controls-row"><span data-i18n="controls.run"></span><kbd>Shift</kbd></div>
+              <div class="controls-row"><span data-i18n="controls.chant"></span><kbd>R / Space</kbd></div>
               <div class="controls-row"><span data-i18n="controls.look"></span><kbd data-i18n="keys.drag"></kbd></div>
               <div class="controls-row"><span data-i18n="controls.zoom"></span><kbd data-i18n="keys.wheel"></kbd></div>
               <div class="controls-row"><span data-i18n="controls.prostrate"></span><kbd>Q / 1</kbd></div>
@@ -411,6 +433,8 @@ export function createHud(ctx) {
   const promptKey = root.querySelector('#prompt-key');
   const promptLabel = root.querySelector('#prompt-label');
 
+  const btnMobileChant = root.querySelector('#btn-mobile-chant');
+  const chantCooldownFill = root.querySelector('#chant-cooldown-fill');
   const btnMobileProstrate = root.querySelector('#btn-mobile-prostrate');
   const btnMobileInteract = root.querySelector('#btn-mobile-interact');
   const btnMobileFeed = root.querySelector('#btn-mobile-feed');
@@ -657,9 +681,25 @@ export function createHud(ctx) {
   }
 
   // Mobile / on-screen action buttons
+  btnMobileChant?.addEventListener('click', () => ctx.input?.trigger('chant'));
   btnMobileProstrate.addEventListener('click', () => ctx.input?.trigger('prostrate'));
   btnMobileInteract.addEventListener('click', () => ctx.input?.trigger('interact'));
   btnMobileFeed.addEventListener('click', () => ctx.input?.trigger('feed'));
+
+  // Flash MP bar on insufficient MP
+  const mpBarTrack = statMpBar?.parentElement;
+  let noMpTimer = null;
+  bus.on('mantra:nomp', () => {
+    if (!mpBarTrack) return;
+    mpBarTrack.classList.remove('is-nomp-flash');
+    void mpBarTrack.offsetWidth;
+    mpBarTrack.classList.add('is-nomp-flash');
+    if (noMpTimer) clearTimeout(noMpTimer);
+    noMpTimer = setTimeout(() => {
+      mpBarTrack.classList.remove('is-nomp-flash');
+      noMpTimer = null;
+    }, 500);
+  });
 
   // Pulse animation on merit counter cards
   function pulseElement(el) {
@@ -899,6 +939,16 @@ export function createHud(ctx) {
     // 4. Update buff chips if active
     if (state.player?.buffs) {
       renderBuffs(state.player.buffs);
+    }
+
+    // 5. Update mobile chant button cooldown ring
+    if (chantCooldownFill) {
+      const cdFrac = ctx.mantra ? ctx.mantra.getCooldownFraction() : 0;
+      const offset = CHANT_RING_CIRC * (1 - cdFrac);
+      chantCooldownFill.setAttribute('stroke-dashoffset', offset.toFixed(2));
+      if (btnMobileChant) {
+        btnMobileChant.classList.toggle('is-cooldown', cdFrac > 0.001);
+      }
     }
   }
 

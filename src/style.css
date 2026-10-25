@@ -387,6 +387,23 @@ kbd {
   background: rgba(0, 0, 0, 0.45);
   border: 1px solid rgba(255, 255, 255, 0.08);
   overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.vitals-bar-track.is-nomp-flash {
+  animation: nompFlash 0.5s ease-in-out;
+}
+
+@keyframes nompFlash {
+  0%, 100% {
+    box-shadow: 0 0 0 rgba(239, 68, 68, 0);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+  30%, 70% {
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.95);
+    border-color: rgba(239, 68, 68, 0.95);
+    background: rgba(239, 68, 68, 0.3);
+  }
 }
 
 .vitals-bar-track--exp {
@@ -971,6 +988,59 @@ kbd {
   right: -5px;
   font-size: 0.62rem;
   padding: 1px 5px;
+}
+
+.action-fab--chant {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  border-color: rgba(240, 190, 80, 0.55);
+  background: radial-gradient(circle at center, rgba(72, 34, 24, 0.82), rgba(22, 12, 18, 0.92));
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45), 0 0 14px rgba(240, 180, 60, 0.3);
+  overflow: visible;
+}
+
+.action-fab--chant:hover {
+  border-color: var(--col-gold);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.5), 0 0 20px rgba(240, 180, 60, 0.5);
+}
+
+.action-fab--chant.is-cooldown {
+  opacity: 0.72;
+}
+
+.action-fab__syllable {
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff4d0;
+  text-shadow: 0 0 10px rgba(240, 180, 60, 0.85);
+  margin-top: -2px;
+}
+
+.cooldown-ring {
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  transform: rotate(-90deg);
+  width: calc(100% + 2px);
+  height: calc(100% + 2px);
+}
+
+.cooldown-ring__track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 3.5;
+}
+
+.cooldown-ring__fill {
+  fill: none;
+  stroke: #fcd34d;
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.8));
+  transition: stroke-dashoffset 0.08s linear;
 }
 
 /* Touch virtual joystick created by input.js */

@@ -20,6 +20,7 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/i18n.js` | Gameplay | zh-Hant / en strings |
 | `src/player/player.js` | Gameplay | pilgrim mesh, movement, collision, prostration animation, kora tracking |
 | `src/player/cameraRig.js` | Gameplay | third-person follow camera + intro orbit |
+| `src/gameplay/mantra.js` | Gameplay | Six-Syllable Mantra (六字大明咒) area wave, syllables pool, cooldown & MP handling |
 | `src/gameplay/items.js` | Gameplay | dropped items, procedural 3D models, pickup detection, pity system |
 | `src/gameplay/lamps.js` | Gameplay | butter-lamp stations (interactable), flames + lights |
 | `src/gameplay/monkeys.js` | Gameplay | monkey meshes, wander AI, feeding (interactable) |
@@ -64,10 +65,11 @@ export function createX(ctx, ...extra) {
 | `interactables` | array of Interactable (below) |
 | `input` | input module (created first) |
 | `debug` | `{ enabled, register(name, api) }` |
+| `mantra` | `{ update(dt), cast(), showRadius(bool), getCooldownFraction() }` |
 | `items` | `{ update(dt), drop(id?), forceNext(), pityCount(), activeItems }` |
 | `vitals` | `{ update(dt), addExp, spendMp, addBuff, addPermanent, getStats, set, damage }` |
 
-Update order per frame: `input → sky → stupa → flags → environment → wilderness → zones → player → items → lamps → monkeys → vitals → cameraRig → merit → interaction → audio → hud`.
+Update order per frame: `input → sky → stupa → flags → environment → wilderness → zones → player → mantra → items → lamps → monkeys → vitals → cameraRig → merit → interaction → audio → hud`.
 
 ### `state`
 
@@ -85,7 +87,7 @@ state.player.position // THREE.Vector3 — player writes
 state.player.heading  // radians
 state.player.velocity // THREE.Vector3
 state.player.isMoving // bool
-state.player.action   // 'idle'|'walk'|'run'|'prostrate'|'light'|'feed'
+state.player.action   // 'idle'|'walk'|'run'|'prostrate'|'light'|'feed'|'chant'
 state.player.level    // 1..30
 state.player.exp      // 0..maxExp
 state.player.hp       // 0..maxHp
@@ -135,6 +137,9 @@ state.player.slowUntil   // seconds timestamp
 | `monkey:fed` | `{ position }` | monkeys |
 | `item:pickup` | `{ id, permanent }` | items |
 | `player:faint` | `{}` | vitals |
+| `player:chant` | `{ duration }` | mantra |
+| `mantra:cast` | `{ origin, radius, power }` | mantra |
+| `mantra:nomp` | – | mantra |
 
 ## Rendering notes
 

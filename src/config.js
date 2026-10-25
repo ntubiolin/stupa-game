@@ -184,6 +184,26 @@ export const CONFIG = {
       dorje: { id: 'dorje', permanent: true, weight: 15, stat: 'atk', amount: 2, cap: 20 },
     },
   },
+
+  MANTRA: {
+    mpCost: 8,
+    cooldown: 0.9,
+    stupaCooldown: 0.45,
+    radius: 6.0,
+    startRadius: 0.5,
+    stupaRadius: 1.5,
+    duration: 0.5,
+    moveSpeedMult: 0.6,
+    poolSize: 6,
+    syllables: ['ཨོཾ', 'མ', 'ཎི', 'པ', 'དྨེ', 'ཧཱུྃ'],
+    ringSegments: 64,
+    ringInnerRatio: 0.88,
+    innerRingRadius: 2.8,
+    innerRingInnerRatio: 0.84,
+    spriteHeight: 0.85,
+    spriteScale: 0.85,
+    rotationSpeed: Math.PI * 0.75,
+  },
 };
 
 export const deg = (d) => (d * Math.PI) / 180;

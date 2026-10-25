@@ -22,6 +22,8 @@ const ACTION_KEYS = {
   KeyQ: 'prostrate',
   Digit1: 'prostrate',
   Numpad1: 'prostrate',
+  KeyR: 'chant',
+  Space: 'chant',
   KeyH: 'toggleHud',
   KeyP: 'pause',
 };
