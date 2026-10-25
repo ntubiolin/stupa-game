@@ -61,7 +61,7 @@ export function createInteraction(ctx) {
   }
 
   function update() {
-    if (state.mode !== 'play' || state.player.action === 'prostrate') {
+    if (state.mode !== 'play' || state.player.action === 'prostrate' || state.player.action === 'faint') {
       currentTarget = null;
       state.interactionTarget = null;
       emitPromptIfChanged(null);

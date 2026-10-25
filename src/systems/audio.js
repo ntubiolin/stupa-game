@@ -706,6 +706,116 @@ export function createAudio(ctx) {
     }
   }
 
+  function playLevelUp() {
+    const context = ensureContext();
+    if (!context || muted) return;
+    const now = context.currentTime;
+
+    // Ascending major 9th singing bowl chord: C4, E4, G4, B4, D5
+    const freqs = [261.63, 329.63, 392.00, 493.88, 587.33];
+    freqs.forEach((f0, idx) => {
+      const startTime = now + idx * 0.12;
+      const partials = [
+        { ratio: 1.0, amp: 0.18, decay: 4.5 },
+        { ratio: 2.756, amp: 0.09, decay: 3.2 },
+        { ratio: 5.18, amp: 0.04, decay: 2.0 },
+      ];
+
+      for (const p of partials) {
+        const osc = context.createOscillator();
+        const gain = context.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(f0 * p.ratio, startTime);
+
+        gain.gain.setValueAtTime(0.0001, startTime);
+        gain.gain.linearRampToValueAtTime(p.amp * 0.6, startTime + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startTime + p.decay);
+
+        osc.connect(gain);
+        gain.connect(masterGain);
+        osc.start(startTime);
+        osc.stop(startTime + p.decay + 0.1);
+      }
+    });
+
+    // Shimmering overtone chime (C6, E6, G6)
+    const chimeFreqs = [1046.5, 1318.5, 1567.98];
+    chimeFreqs.forEach((cf, i) => {
+      const osc = context.createOscillator();
+      const gain = context.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(cf, now + 0.35 + i * 0.05);
+
+      gain.gain.setValueAtTime(0.0001, now + 0.35 + i * 0.05);
+      gain.gain.linearRampToValueAtTime(0.04, now + 0.45 + i * 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.8);
+
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start(now + 0.35 + i * 0.05);
+      osc.stop(now + 2.9);
+    });
+  }
+
+  function playFaint() {
+    const context = ensureContext();
+    if (!context || muted) return;
+    const now = context.currentTime;
+
+    // 1. Descending low resonant drone (95 Hz -> 42 Hz)
+    const droneOsc = context.createOscillator();
+    const droneFilter = context.createBiquadFilter();
+    const droneGain = context.createGain();
+
+    droneOsc.type = 'sawtooth';
+    droneOsc.frequency.setValueAtTime(95, now);
+    droneOsc.frequency.exponentialRampToValueAtTime(42, now + 1.6);
+
+    droneFilter.type = 'lowpass';
+    droneFilter.frequency.setValueAtTime(220, now);
+    droneFilter.frequency.exponentialRampToValueAtTime(60, now + 1.6);
+
+    droneGain.gain.setValueAtTime(0.0001, now);
+    droneGain.gain.linearRampToValueAtTime(0.18, now + 0.15);
+    droneGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.7);
+
+    droneOsc.connect(droneFilter);
+    droneFilter.connect(droneGain);
+    droneGain.connect(masterGain);
+    droneOsc.start(now);
+    droneOsc.stop(now + 1.8);
+
+    // 2. Muffled heartbeat pulses ("lub-dub", then a softer fade)
+    const heartbeats = [
+      { t: 0.15, amp: 0.22 },
+      { t: 0.42, amp: 0.18 },
+      { t: 0.95, amp: 0.10 },
+    ];
+
+    heartbeats.forEach((hb) => {
+      const hbOsc = context.createOscillator();
+      const hbGain = context.createGain();
+      const hbFilter = context.createBiquadFilter();
+
+      hbOsc.type = 'sine';
+      hbOsc.frequency.setValueAtTime(75, now + hb.t);
+      hbOsc.frequency.exponentialRampToValueAtTime(36, now + hb.t + 0.18);
+
+      hbFilter.type = 'lowpass';
+      hbFilter.frequency.setValueAtTime(110, now + hb.t);
+
+      hbGain.gain.setValueAtTime(0.0001, now + hb.t);
+      hbGain.gain.linearRampToValueAtTime(hb.amp, now + hb.t + 0.02);
+      hbGain.gain.exponentialRampToValueAtTime(0.0001, now + hb.t + 0.22);
+
+      hbOsc.connect(hbFilter);
+      hbFilter.connect(hbGain);
+      hbGain.connect(masterGain);
+      hbOsc.start(now + hb.t);
+      hbOsc.stop(now + hb.t + 0.25);
+    });
+  }
+
   // ---------------------------------------------------------------- bus listeners
   bus.on('game:start', () => {
     ensureContext();
@@ -763,6 +873,12 @@ export function createAudio(ctx) {
         break;
       case 'dispel':
         playDispel();
+        break;
+      case 'levelup':
+        playLevelUp();
+        break;
+      case 'faint':
+        playFaint();
         break;
       default:
         break;

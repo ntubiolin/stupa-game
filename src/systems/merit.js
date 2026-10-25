@@ -1,15 +1,19 @@
 /**
  * Merit & achievement system — tracks kora laps, prostrations, butter lamps lit,
- * monkeys fed, prayer wheels spun, and total merit points. Persists in localStorage.
+ * monkeys fed, prayer wheels spun, combat liberations, mantra chants,
+ * and total merit points. Persists in localStorage.
  */
 const STORAGE_KEY = 'stupa.merit.v1';
 
-const MERIT_WEIGHTS = {
+const DEFAULT_WEIGHTS = {
   kora: 108,
   prostration: 27,
   lamp: 18,
   monkey: 12,
   wheel: 3,
+  preta: 1,
+  tsen: 3,
+  migoi: 8,
 };
 
 export const ACHIEVEMENTS = [
@@ -21,9 +25,16 @@ export const ACHIEVEMENTS = [
   { id: 'lamps21', check: (s) => s.lamp >= 21 },
   { id: 'feed5', check: (s) => s.monkey >= 5 },
   { id: 'wheels108', check: (s) => s.wheel >= 108 },
-  { id: 'sunset', check: (s, ctx) => ctx.state.mode === 'play' && ctx.state.time.t >= 0.71 && ctx.state.time.t <= 0.79 },
-  { id: 'night', check: (s, ctx) => ctx.state.mode === 'play' && (ctx.state.time.nightFactor > 0.75 || ctx.state.time.t >= 0.85 || ctx.state.time.t <= 0.15) },
+  { id: 'sunset', check: (s, ctx) => ctx.state.mode === 'play' && ctx.state.time && ctx.state.time.t >= 0.71 && ctx.state.time.t <= 0.79 },
+  { id: 'night', check: (s, ctx) => ctx.state.mode === 'play' && ctx.state.time && (ctx.state.time.nightFactor > 0.75 || ctx.state.time.t >= 0.85 || ctx.state.time.t <= 0.15) },
   { id: 'allPractices', check: (s) => s.kora >= 1 && s.prostration >= 1 && s.lamp >= 1 && s.monkey >= 1 },
+  { id: 'firstLiberation', check: (s) => (s.totalLiberated || 0) >= 1 },
+  { id: 'liberatePreta50', check: (s) => (s.preta || 0) >= 50 },
+  { id: 'liberateTsen', check: (s) => (s.tsen || 0) >= 1 },
+  { id: 'liberateMigoi', check: (s) => (s.migoi || 0) >= 1 },
+  { id: 'level10', check: (s, ctx) => (ctx.state.player?.level || 1) >= 10 },
+  { id: 'fullDorje', check: (s, ctx) => (ctx.state.player?.permanent?.atk || 0) >= 20 },
+  { id: 'compassion', check: (s) => (s.mantraCasts || 0) >= 1008 },
 ];
 
 function defaultData() {
@@ -33,13 +44,19 @@ function defaultData() {
     lamp: 0,
     monkey: 0,
     wheel: 0,
+    preta: 0,
+    tsen: 0,
+    migoi: 0,
+    totalLiberated: 0,
+    mantraCasts: 0,
     points: 0,
     achievements: [],
   };
 }
 
 export function createMerit(ctx) {
-  const { bus, state } = ctx;
+  const { bus, state, config } = ctx;
+  const weights = config?.MERIT?.weights || DEFAULT_WEIGHTS;
 
   let data = defaultData();
   let koraFraction = 0;
@@ -56,6 +73,11 @@ export function createMerit(ctx) {
           lamp: Number(parsed.lamp) || 0,
           monkey: Number(parsed.monkey) || 0,
           wheel: Number(parsed.wheel) || 0,
+          preta: Number(parsed.preta) || 0,
+          tsen: Number(parsed.tsen) || 0,
+          migoi: Number(parsed.migoi) || 0,
+          totalLiberated: Number(parsed.totalLiberated) || 0,
+          mantraCasts: Number(parsed.mantraCasts) || 0,
           points: Number(parsed.points) || 0,
           achievements: Array.isArray(parsed.achievements) ? [...parsed.achievements] : [],
         };
@@ -102,11 +124,14 @@ export function createMerit(ctx) {
 
   bus.on('merit', (payload) => {
     const type = payload?.type;
-    if (!type || !(type in MERIT_WEIGHTS)) return;
+    const currentWeights = config?.MERIT?.weights || weights;
+    if (!type || !(type in currentWeights)) return;
 
     const count = Math.max(1, Number(payload.count) || 1);
-    data[type] += count;
-    const pts = MERIT_WEIGHTS[type] * count;
+    if (typeof data[type] === 'number') {
+      data[type] += count;
+    }
+    const pts = (currentWeights[type] || 0) * count;
     data.points += pts;
     save();
 
@@ -122,6 +147,38 @@ export function createMerit(ctx) {
 
     evaluateAchievements();
   });
+
+  bus.on('enemy:liberated', (payload) => {
+    const kind = payload?.kind;
+    if (!kind) return;
+    if (typeof data[kind] === 'number') {
+      data[kind] += 1;
+    }
+    data.totalLiberated = (data.totalLiberated || 0) + 1;
+    const currentWeights = config?.MERIT?.weights || weights;
+    const pts = currentWeights[kind] || 0;
+    if (pts > 0) {
+      data.points += pts;
+    }
+    save();
+    evaluateAchievements();
+  });
+
+  let lastMantraTime = -999;
+  function onMantraCast() {
+    const now = state.elapsed;
+    if (now - lastMantraTime < 0.05) return;
+    lastMantraTime = now;
+    data.mantraCasts = (data.mantraCasts || 0) + 1;
+    save();
+    evaluateAchievements();
+  }
+  bus.on('mantra:cast', onMantraCast);
+  bus.on('player:chant', onMantraCast);
+
+  bus.on('level:up', () => evaluateAchievements());
+  bus.on('vitals:changed', () => evaluateAchievements());
+  bus.on('item:pickup', () => evaluateAchievements());
 
   function reset() {
     data = defaultData();
@@ -152,6 +209,11 @@ export function createMerit(ctx) {
         lamp: data.lamp,
         monkey: data.monkey,
         wheel: data.wheel,
+        preta: data.preta,
+        tsen: data.tsen,
+        migoi: data.migoi,
+        totalLiberated: data.totalLiberated,
+        mantraCasts: data.mantraCasts,
         points: data.points,
         achievements: [...data.achievements],
       };
@@ -165,5 +227,11 @@ export function createMerit(ctx) {
   };
 
   ctx.merit = api;
+
+  ctx.debug?.register('merit', {
+    stats: () => api.getStats(),
+    reset: () => api.reset(),
+  });
+
   return api;
 }

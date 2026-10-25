@@ -1499,3 +1499,138 @@ kbd {
   transition: width 0.08s linear;
 }
 
+/* ==========================================================================
+   Level Up Banner & Gold Burst
+   ========================================================================== */
+.levelup-banner {
+  position: fixed;
+  top: 22%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 920;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.45s cubic-bezier(0.18, 0.9, 0.28, 1),
+              transform 0.45s cubic-bezier(0.18, 0.9, 0.28, 1),
+              visibility 0.45s;
+}
+
+.levelup-banner.is-hidden {
+  opacity: 0;
+  transform: translate(-50%, -36%) scale(0.85);
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.levelup-burst {
+  position: absolute;
+  width: 340px;
+  height: 340px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 215, 60, 0.4) 0%, rgba(240, 147, 43, 0.18) 45%, transparent 72%);
+  animation: levelup-burst-pulse 1.6s ease-out infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes levelup-burst-pulse {
+  0% { transform: scale(0.82); opacity: 0.5; }
+  100% { transform: scale(1.28); opacity: 0.95; }
+}
+
+.levelup-card {
+  position: relative;
+  padding: 22px 40px;
+  border-radius: 22px;
+  text-align: center;
+  background: linear-gradient(135deg, rgba(38, 20, 14, 0.94) 0%, rgba(20, 12, 28, 0.95) 100%);
+  border: 1.5px solid rgba(255, 215, 80, 0.72);
+  box-shadow: 0 0 38px rgba(255, 195, 70, 0.48), inset 0 0 16px rgba(255, 230, 140, 0.22);
+}
+
+.levelup-crown {
+  font-size: 1.85rem;
+  color: var(--col-gold);
+  filter: drop-shadow(0 0 10px rgba(255, 215, 80, 0.85));
+  margin-bottom: 4px;
+}
+
+.levelup-title {
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #fff8e1;
+  text-shadow: 0 0 16px rgba(255, 215, 80, 0.85), 0 2px 4px rgba(0, 0, 0, 0.8);
+  margin-bottom: 6px;
+}
+
+.levelup-stats {
+  font-size: 0.95rem;
+  color: #ffdda1;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+}
+
+/* ==========================================================================
+   Faint Dark Overlay
+   ========================================================================== */
+.faint-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: radial-gradient(circle at 50% 50%, rgba(14, 7, 20, 0.98) 0%, rgba(3, 1, 5, 0.99) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 960;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 0.55s cubic-bezier(0.25, 1, 0.5, 1), visibility 0.55s;
+}
+
+.faint-overlay.is-active {
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+}
+
+.faint-content {
+  max-width: 580px;
+  padding: 36px 30px;
+  text-align: center;
+  color: var(--col-text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.faint-icon {
+  font-size: 2.4rem;
+  color: var(--col-gold);
+  filter: drop-shadow(0 0 16px rgba(238, 195, 108, 0.65));
+  animation: faint-icon-spin 14s linear infinite;
+}
+
+@keyframes faint-icon-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.faint-message {
+  font-family: var(--font-serif);
+  font-size: 1.28rem;
+  line-height: 1.8;
+  letter-spacing: 0.06em;
+  color: #f7ede2;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9), 0 0 18px rgba(238, 195, 108, 0.35);
+}
+
