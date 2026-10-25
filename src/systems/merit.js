@@ -184,6 +184,9 @@ export function createMerit(ctx) {
     data = defaultData();
     koraFraction = 0;
     save();
+    try {
+      localStorage.removeItem('stupa_wild_tutorial_v1');
+    } catch { /* ignore */ }
     bus.emit('merit:reset');
     bus.emit('toast', { key: 'toast.reset' });
   }

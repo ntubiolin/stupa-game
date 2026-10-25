@@ -171,9 +171,11 @@ function updateWind(t) {
   state.wind.dir.set(Math.cos(a), Math.sin(a));
 }
 
-const clock = new THREE.Clock();
+let lastFrameTime = performance.now();
 function frame() {
-  const dt = Math.min(clock.getDelta(), 0.05);
+  const now = performance.now();
+  const dt = Math.min((now - lastFrameTime) / 1000, 0.05);
+  lastFrameTime = now;
   state.elapsed += dt;
   state.time.t = (state.time.t + (dt * state.time.speed) / CONFIG.TIME.dayLengthSec) % 1;
   updateWind(state.elapsed);

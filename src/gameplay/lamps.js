@@ -389,9 +389,32 @@ export function createLamps(ctx) {
   bowlInstanced.instanceMatrix.needsUpdate = true;
   gheeInstanced.instanceMatrix.needsUpdate = true;
 
+  // ---------------------------------------------------------------- zone visibility
+  bus.on('zone:change', ({ to }) => {
+    const isStupa = (to === 'stupa');
+    for (let s = 0; s < stations.length; s++) {
+      if (stations[s].light) {
+        stations[s].light.visible = isStupa;
+      }
+    }
+  });
+
   // ---------------------------------------------------------------- update
   function update(dt) {
-    if (state.zone && state.zone !== 'stupa') return;
+    if (state.zone && state.zone !== 'stupa') {
+      for (let s = 0; s < stations.length; s++) {
+        if (stations[s].light && stations[s].light.visible) {
+          stations[s].light.visible = false;
+        }
+      }
+      return;
+    }
+
+    for (let s = 0; s < stations.length; s++) {
+      if (stations[s].light && !stations[s].light.visible) {
+        stations[s].light.visible = true;
+      }
+    }
 
     flameUniforms.uTime.value = state.elapsed;
     flameUniforms.uWindDir.value.copy(state.wind.dir);

@@ -144,8 +144,51 @@ export function createZones(ctx) {
     onInteract: () => startTransition('stupa'),
   });
 
+  // ---------------------------------------------------------------- First-Time Wilderness Tutorial
+  const TUTORIAL_KEY = 'stupa_wild_tutorial_v1';
+  let tutorialQueue = [];
+
+  function clearTutorialTimers() {
+    tutorialQueue = [];
+  }
+
+  bus.on('zone:change', ({ to }) => {
+    if (to === 'wild') {
+      try {
+        const seen = localStorage.getItem(TUTORIAL_KEY);
+        if (!seen) {
+          localStorage.setItem(TUTORIAL_KEY, '1');
+          tutorialQueue = [
+            { delay: 0.4, key: 'tutorial.wild1' },
+            { delay: 2.8, key: 'tutorial.wild2' },
+            { delay: 5.2, key: 'tutorial.wild3' },
+          ];
+        }
+      } catch { /* ignore */ }
+    } else {
+      clearTutorialTimers();
+    }
+  });
+
+  bus.on('merit:reset', () => {
+    clearTutorialTimers();
+    try {
+      localStorage.removeItem(TUTORIAL_KEY);
+    } catch { /* ignore */ }
+  });
+
   const api = {
-    update(dt) {},
+    update(dt) {
+      if (state.zone === 'wild' && tutorialQueue.length > 0) {
+        for (let i = tutorialQueue.length - 1; i >= 0; i--) {
+          tutorialQueue[i].delay -= dt;
+          if (tutorialQueue[i].delay <= 0) {
+            const item = tutorialQueue.splice(i, 1)[0];
+            bus.emit('toast', { key: item.key });
+          }
+        }
+      }
+    },
     teleport,
     startTransition,
     isTransitioning() { return isTransitioning; },
