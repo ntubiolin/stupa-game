@@ -118,7 +118,7 @@ export function createPlayer(ctx) {
   const hairGeo = new THREE.SphereGeometry(0.16, 14, 10, 0, TWO_PI, 0, Math.PI * 0.58);
   const hair = new THREE.Mesh(hairGeo, hairMat);
   hair.position.y = 0.15;
-  hair.rotation.x = -0.35;
+  hair.rotation.x = 0.35;
   headGroup.add(hair);
 
   // Arms (pivot at shoulders on torsoPivot; -Z is forward)
@@ -522,10 +522,10 @@ export function createPlayer(ctx) {
     torsoPivot.position.set(0, 0.72, 0);
     torsoPivot.rotation.set(0, 0, 0);
     headGroup.rotation.set(0, 0, 0);
-    leftArm.pivot.rotation.set(0, 0, 0.08);
-    rightArm.pivot.rotation.set(0, 0, -0.08);
-    leftArm.forearmPivot.rotation.set(-0.18, 0, 0);
-    rightArm.forearmPivot.rotation.set(-0.18, 0, 0);
+    leftArm.pivot.rotation.set(0, 0, -0.08);
+    rightArm.pivot.rotation.set(0, 0, 0.08);
+    leftArm.forearmPivot.rotation.set(0.18, 0, 0);
+    rightArm.forearmPivot.rotation.set(0.18, 0, 0);
     leftLeg.rotation.set(0, 0, 0);
     rightLeg.rotation.set(0, 0, 0);
     auraMat.opacity = 0;
@@ -539,18 +539,18 @@ export function createPlayer(ctx) {
     const p2 = smoothstep(0.4, 1.0, t);
 
     body.position.y = -0.38 * p1 + 0.50 * p2;
-    body.position.z = -0.45 * p2;
-    body.rotation.x = (Math.PI * 0.47) * p2;
+    body.position.z = 0.45 * p2;
+    body.rotation.x = -(Math.PI * 0.47) * p2;
     skirt.scale.y = 1 - 0.38 * p1 + 0.38 * p2;
 
-    torsoPivot.rotation.x = 0.5 * p1 * (1 - p2) + 0.05 * p2;
-    headGroup.rotation.x = 0.3 * p1 * (1 - p2) + 0.2 * p2;
+    torsoPivot.rotation.x = -0.5 * p1 * (1 - p2) - 0.05 * p2;
+    headGroup.rotation.x = -0.3 * p1 * (1 - p2) - 0.2 * p2;
 
     // Arms drop limply forward/down
-    leftArm.pivot.rotation.set(-0.8 * p1 - 0.4 * p2, 0.4 * (1 - p2) + 0.25 * p2, 0);
-    rightArm.pivot.rotation.set(-0.8 * p1 - 0.4 * p2, -0.4 * (1 - p2) - 0.25 * p2, 0);
-    leftArm.forearmPivot.rotation.set(-0.3 * p1 - 0.2 * p2, 0, 0);
-    rightArm.forearmPivot.rotation.set(-0.3 * p1 - 0.2 * p2, 0, 0);
+    leftArm.pivot.rotation.set(0.8 * p1 + 0.4 * p2, -0.4 * (1 - p2) - 0.25 * p2, 0);
+    rightArm.pivot.rotation.set(0.8 * p1 + 0.4 * p2, 0.4 * (1 - p2) + 0.25 * p2, 0);
+    leftArm.forearmPivot.rotation.set(0.3 * p1 + 0.2 * p2, 0, 0);
+    rightArm.forearmPivot.rotation.set(0.3 * p1 + 0.2 * p2, 0, 0);
   }
 
   /**
@@ -577,59 +577,59 @@ export function createPlayer(ctx) {
     if (t < 0.55) {
       // Phase 1: Raise hands in lotus mudra above crown
       const p = smoothstep(0, 0.55, t);
-      leftArm.pivot.rotation.set(-2.55 * p, 0.35 * p, 0.18 * (1 - p));
-      rightArm.pivot.rotation.set(-2.55 * p, -0.35 * p, -0.18 * (1 - p));
-      leftArm.forearmPivot.rotation.set(-0.55 * p, 0, -0.25 * p);
-      rightArm.forearmPivot.rotation.set(-0.55 * p, 0, 0.25 * p);
-      headGroup.rotation.x = -0.12 * p;
+      leftArm.pivot.rotation.set(2.55 * p, 0.35 * p, -0.08 * (1 - p) + 0.22 * p);
+      rightArm.pivot.rotation.set(2.55 * p, -0.35 * p, 0.08 * (1 - p) - 0.22 * p);
+      leftArm.forearmPivot.rotation.set(0.18 * (1 - p) + 0.55 * p, 0, 0.35 * p);
+      rightArm.forearmPivot.rotation.set(0.18 * (1 - p) + 0.55 * p, 0, -0.35 * p);
+      headGroup.rotation.x = 0.12 * p;
     } else if (t < 1.15) {
       // Phase 2: Crown -> Forehead -> Throat -> Heart (anjali mudra at chest)
       const p = smoothstep(0.55, 1.15, t);
-      const shX = -2.55 + 1.65 * p; // -2.55 -> -0.90
-      leftArm.pivot.rotation.set(shX, 0.35 + 0.25 * p, 0);
-      rightArm.pivot.rotation.set(shX, -0.35 - 0.25 * p, 0);
-      leftArm.forearmPivot.rotation.set(-0.55 - 0.85 * p, 0, -0.25 - 0.25 * p);
-      rightArm.forearmPivot.rotation.set(-0.55 - 0.85 * p, 0, 0.25 + 0.25 * p);
-      headGroup.rotation.x = -0.12 + 0.32 * p;
-      torsoPivot.rotation.x = 0.12 * p;
+      const shX = 2.55 - 1.65 * p; // 2.55 -> 0.90
+      leftArm.pivot.rotation.set(shX, 0.35 * (1 - p) - 0.60 * p, 0.22 * (1 - p));
+      rightArm.pivot.rotation.set(shX, -0.35 * (1 - p) + 0.60 * p, -0.22 * (1 - p));
+      leftArm.forearmPivot.rotation.set(0.55 + 0.85 * p, 0, 0.35 + 0.15 * p);
+      rightArm.forearmPivot.rotation.set(0.55 + 0.85 * p, 0, -0.35 - 0.15 * p);
+      headGroup.rotation.x = 0.12 - 0.32 * p;
+      torsoPivot.rotation.x = -0.12 * p;
     } else if (t < 1.75) {
       // Phase 3: Kneel down and place hands forward on the ground
       const p = smoothstep(1.15, 1.75, t);
       body.position.y = -0.36 * p;
       skirt.scale.y = 1 - 0.38 * p;
-      torsoPivot.rotation.x = 0.12 + 0.95 * p;
-      headGroup.rotation.x = 0.20 - 0.35 * p;
-      leftArm.pivot.rotation.set(-0.90 - 0.75 * p, 0.60 * (1 - p), 0);
-      rightArm.pivot.rotation.set(-0.90 - 0.75 * p, -0.60 * (1 - p), 0);
-      leftArm.forearmPivot.rotation.set(-1.40 * (1 - p) - 0.15 * p, 0, -0.50 * (1 - p));
-      rightArm.forearmPivot.rotation.set(-1.40 * (1 - p) - 0.15 * p, 0, 0.50 * (1 - p));
+      torsoPivot.rotation.x = -0.12 - 0.95 * p;
+      headGroup.rotation.x = -0.20 + 0.35 * p;
+      leftArm.pivot.rotation.set(0.90 + 0.75 * p, -0.60 * (1 - p), 0);
+      rightArm.pivot.rotation.set(0.90 + 0.75 * p, 0.60 * (1 - p), 0);
+      leftArm.forearmPivot.rotation.set(1.40 * (1 - p) + 0.15 * p, 0, 0.50 * (1 - p));
+      rightArm.forearmPivot.rotation.set(1.40 * (1 - p) + 0.15 * p, 0, -0.50 * (1 - p));
     } else if (t < 3.15) {
       // Phase 4 & 5: Slide forward into full prostration (body flat on ground, arms extended to -Z)
       const slide = smoothstep(1.75, 2.45, t);
       const salute = smoothstep(2.45, 2.85, t) * (1 - smoothstep(2.85, 3.15, t));
       body.position.y = -0.36 + 0.52 * slide; // keep body just above ground when pitched 90 deg
-      body.position.z = -0.52 * slide;
-      body.rotation.x = (Math.PI * 0.47) * slide;
+      body.position.z = 0.52 * slide;
+      body.rotation.x = -(Math.PI * 0.47) * slide;
       skirt.scale.y = 0.62 + 0.38 * slide;
-      torsoPivot.rotation.x = 1.07 * (1 - slide) + 0.05 * slide;
-      headGroup.rotation.x = -0.15 + 0.25 * slide;
+      torsoPivot.rotation.x = -1.07 * (1 - slide) - 0.05 * slide;
+      headGroup.rotation.x = 0.15 - 0.25 * slide;
       // Arms stretched straight overhead (along -Z in world)
-      leftArm.pivot.rotation.set(-1.65 - 1.35 * slide, 0.18 * slide, 0);
-      rightArm.pivot.rotation.set(-1.65 - 1.35 * slide, -0.18 * slide, 0);
-      leftArm.forearmPivot.rotation.set(-0.15 - 0.45 * salute, 0, -0.25 * slide);
-      rightArm.forearmPivot.rotation.set(-0.15 - 0.45 * salute, 0, 0.25 * slide);
+      leftArm.pivot.rotation.set(1.65 + 1.35 * slide, 0.18 * slide, 0.22 * slide);
+      rightArm.pivot.rotation.set(1.65 + 1.35 * slide, -0.18 * slide, -0.22 * slide);
+      leftArm.forearmPivot.rotation.set(0.15 + 0.45 * salute, 0, 0.35 * slide);
+      rightArm.forearmPivot.rotation.set(0.15 + 0.45 * salute, 0, -0.35 * slide);
     } else {
       // Phase 6: Rise back from ground -> kneel -> stand with palms at heart
       const p = smoothstep(3.15, PROSTRATE_DUR, t);
       const inv = 1 - p;
       body.position.y = 0.16 * inv;
-      body.position.z = -0.52 * inv;
-      body.rotation.x = (Math.PI * 0.47) * inv;
-      torsoPivot.rotation.x = 0.35 * Math.sin(p * Math.PI);
-      leftArm.pivot.rotation.set(-3.0 * inv - 0.65 * Math.sin(p * Math.PI), 0.35 * Math.sin(p * Math.PI), 0.08 * p);
-      rightArm.pivot.rotation.set(-3.0 * inv - 0.65 * Math.sin(p * Math.PI), -0.35 * Math.sin(p * Math.PI), -0.08 * p);
-      leftArm.forearmPivot.rotation.set(-0.18 - 0.8 * Math.sin(p * Math.PI), 0, 0);
-      rightArm.forearmPivot.rotation.set(-0.18 - 0.8 * Math.sin(p * Math.PI), 0, 0);
+      body.position.z = 0.52 * inv;
+      body.rotation.x = -(Math.PI * 0.47) * inv;
+      torsoPivot.rotation.x = -0.35 * Math.sin(p * Math.PI);
+      leftArm.pivot.rotation.set(3.0 * inv + 0.65 * Math.sin(p * Math.PI), -0.35 * Math.sin(p * Math.PI), 0.22 * inv - 0.08 * p);
+      rightArm.pivot.rotation.set(3.0 * inv + 0.65 * Math.sin(p * Math.PI), 0.35 * Math.sin(p * Math.PI), -0.22 * inv + 0.08 * p);
+      leftArm.forearmPivot.rotation.set(0.18 + 0.8 * Math.sin(p * Math.PI), 0, 0.35 * Math.sin(p * Math.PI));
+      rightArm.forearmPivot.rotation.set(0.18 + 0.8 * Math.sin(p * Math.PI), 0, -0.35 * Math.sin(p * Math.PI));
     }
   }
 
@@ -638,17 +638,17 @@ export function createPlayer(ctx) {
     const p = Math.sin(Math.min(1, g.timer / g.duration) * Math.PI);
     if (g.name === 'light') {
       // Reverent bow and right hand reaching forward to offer flame
-      torsoPivot.rotation.x = 0.28 * p;
-      headGroup.rotation.x = 0.18 * p;
-      rightArm.pivot.rotation.set(-1.25 * p, -0.15 * p, -0.08);
-      rightArm.forearmPivot.rotation.set(-0.35 * p, 0, 0);
-      leftArm.pivot.rotation.set(-0.75 * p, 0.45 * p, 0);
-      leftArm.forearmPivot.rotation.set(-1.1 * p, 0, -0.35 * p);
+      torsoPivot.rotation.x = -0.28 * p;
+      headGroup.rotation.x = -0.18 * p;
+      rightArm.pivot.rotation.set(1.25 * p, 0.15 * p, 0.08);
+      rightArm.forearmPivot.rotation.set(0.35 * p, 0, 0);
+      leftArm.pivot.rotation.set(0.75 * p, -0.45 * p, 0);
+      leftArm.forearmPivot.rotation.set(1.1 * p, 0, 0.35 * p);
     } else {
       // 'feed' — underhand toss gesture
-      torsoPivot.rotation.x = 0.14 * p;
-      rightArm.pivot.rotation.set(-1.45 * p, -0.1 * p, -0.08);
-      rightArm.forearmPivot.rotation.set(-0.45 * p, 0, 0);
+      torsoPivot.rotation.x = -0.14 * p;
+      rightArm.pivot.rotation.set(1.45 * p, 0.1 * p, 0.08);
+      rightArm.forearmPivot.rotation.set(0.45 * p, 0, 0);
     }
   }
 
@@ -861,14 +861,14 @@ export function createPlayer(ctx) {
       const swing = Math.sin(walkPhase);
       const bob = Math.abs(Math.cos(walkPhase)) * (isRun ? 0.055 : 0.03);
       body.position.y = bob;
-      torsoPivot.rotation.x = isRun ? 0.14 : 0.06;
-      torsoPivot.rotation.y = swing * 0.08;
+      torsoPivot.rotation.x = isRun ? -0.14 : -0.06;
+      torsoPivot.rotation.y = -swing * 0.08;
 
       const armAmp = isRun ? 0.65 : 0.38;
       leftArm.pivot.rotation.x = swing * armAmp;
       rightArm.pivot.rotation.x = -swing * armAmp;
-      leftArm.forearmPivot.rotation.x = -0.25 - Math.max(0, -swing) * 0.35;
-      rightArm.forearmPivot.rotation.x = -0.25 - Math.max(0, swing) * 0.35;
+      leftArm.forearmPivot.rotation.x = 0.25 + Math.max(0, swing) * 0.35;
+      rightArm.forearmPivot.rotation.x = 0.25 + Math.max(0, -swing) * 0.35;
 
       const legAmp = isRun ? 0.55 : 0.35;
       leftLeg.rotation.x = -swing * legAmp;
@@ -884,29 +884,29 @@ export function createPlayer(ctx) {
     } else {
       const breathe = Math.sin(state.elapsed * 2.2);
       torsoPivot.position.y = 0.72 + breathe * 0.012;
-      leftArm.pivot.rotation.z = 0.07 + breathe * 0.015;
-      rightArm.pivot.rotation.z = -0.07 - breathe * 0.015;
+      leftArm.pivot.rotation.z = -0.07 - breathe * 0.015;
+      rightArm.pivot.rotation.z = 0.07 + breathe * 0.015;
       stepAccum = 0;
     }
 
     if (chantTimer > 0) {
       // Posed upper body with joined palms in Anjali Mudra at heart/chest
-      torsoPivot.rotation.x = isRun ? 0.08 : 0.04;
-      leftArm.pivot.rotation.set(-0.75, 0.45, 0);
-      rightArm.pivot.rotation.set(-0.75, -0.45, 0);
-      leftArm.forearmPivot.rotation.set(-1.1, 0, -0.35);
-      rightArm.forearmPivot.rotation.set(-1.1, 0, 0.35);
+      torsoPivot.rotation.x = isRun ? -0.08 : -0.04;
+      leftArm.pivot.rotation.set(0.75, -0.45, 0);
+      rightArm.pivot.rotation.set(0.75, 0.45, 0);
+      leftArm.forearmPivot.rotation.set(1.1, 0, 0.35);
+      rightArm.forearmPivot.rotation.set(1.1, 0, -0.35);
 
       const chantProgress = chantDuration > 0 ? chantTimer / chantDuration : 0;
       auraMat.opacity = Math.sin(chantProgress * Math.PI) * 0.75;
     }
 
     if (hurtTimer > 0) {
-      torsoPivot.rotation.x = -0.22;
-      headGroup.rotation.x = -0.15;
+      torsoPivot.rotation.x = 0.22;
+      headGroup.rotation.x = 0.15;
       body.position.y = -0.04;
-      leftArm.pivot.rotation.set(-0.35, 0.2, 0.45);
-      rightArm.pivot.rotation.set(-0.35, -0.2, -0.45);
+      leftArm.pivot.rotation.set(0.35, -0.2, -0.45);
+      rightArm.pivot.rotation.set(0.35, 0.2, 0.45);
     }
 
     root.position.copy(state.player.position);

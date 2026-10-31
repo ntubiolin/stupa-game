@@ -49,15 +49,69 @@ export function createAudio(ctx) {
     return buffer;
   }
 
+  // Tiny 1-sample silent WAV data URI to switch iOS WebKit audio session from 'ambient' (muted by silent switch) to 'playback'
+  const SILENT_WAV_URI = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+  let htmlAudioUnlocked = false;
+  let webAudioUnlocked = false;
+
+  function unlockMobileAudioSession() {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.audioSession && navigator.audioSession.type !== 'playback') {
+        navigator.audioSession.type = 'playback';
+      }
+    } catch { /* ignore */ }
+
+    if (!htmlAudioUnlocked && typeof Audio !== 'undefined') {
+      try {
+        const a = new Audio(SILENT_WAV_URI);
+        a.setAttribute('playsinline', '');
+        a.volume = 0.01;
+        const p = a.play();
+        if (p && typeof p.then === 'function') {
+          p.then(() => {
+            htmlAudioUnlocked = true;
+            a.pause();
+          }).catch(() => {});
+        } else {
+          htmlAudioUnlocked = true;
+        }
+      } catch { /* ignore */ }
+    }
+  }
+
+  function playSilentUnlockBuffer(context) {
+    if (!context || webAudioUnlocked) return;
+    try {
+      const buf = context.createBuffer(1, 1, 22050);
+      const src = context.createBufferSource();
+      src.buffer = buf;
+      src.connect(context.destination);
+      src.start(0);
+      if (context.state === 'running') webAudioUnlocked = true;
+    } catch { /* ignore */ }
+  }
+
   function ensureContext() {
+    unlockMobileAudioSession();
+
     if (ac) {
-      if (ac.state === 'suspended') ac.resume().catch(() => {});
+      if (ac.state !== 'running') {
+        ac.resume().catch(() => {});
+        playSilentUnlockBuffer(ac);
+      } else {
+        webAudioUnlocked = true;
+      }
       return ac;
     }
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtx) return null;
 
     ac = new AudioCtx();
+    if (ac.state !== 'running') {
+      ac.resume().catch(() => {});
+    }
+    playSilentUnlockBuffer(ac);
+
     masterGain = ac.createGain();
     masterGain.gain.value = muted ? 0 : volume;
     masterGain.connect(ac.destination);
@@ -82,18 +136,18 @@ export function createAudio(ctx) {
     windGain.connect(masterGain);
     windSource.start();
 
-    // 2. Subtle warm "Om" harmonic drone pad (108 Hz fundamental + fifth + octave)
+    // 2. Subtle warm "Om" harmonic drone pad (108 Hz fundamental + fifth + octaves for mobile speaker audibility)
     droneGain = ac.createGain();
-    droneGain.gain.value = 0.032;
+    droneGain.gain.value = 0.048;
 
     const droneFilter = ac.createBiquadFilter();
     droneFilter.type = 'lowpass';
-    droneFilter.frequency.value = 380;
+    droneFilter.frequency.value = 580;
     droneFilter.connect(droneGain);
     droneGain.connect(masterGain);
 
-    const droneFreqs = [108, 162, 216, 108.4];
-    const droneAmps = [0.45, 0.25, 0.15, 0.25];
+    const droneFreqs = [108, 162, 216, 108.4, 324, 432];
+    const droneAmps = [0.42, 0.25, 0.22, 0.24, 0.16, 0.10];
     for (let i = 0; i < droneFreqs.length; i++) {
       const osc = ac.createOscillator();
       const g = ac.createGain();
@@ -912,10 +966,43 @@ export function createAudio(ctx) {
     osc.stop(now + 4.3);
   }
 
+  // ---------------------------------------------------------------- mobile / gesture audio unlock
+  if (typeof window !== 'undefined') {
+    const unlockEvents = ['touchstart', 'touchend', 'pointerdown', 'mousedown', 'keydown', 'click'];
+    const onUserGesture = () => {
+      if (muted) return;
+      if (state.mode === 'play' || ac) {
+        ensureContext();
+      } else {
+        // Pre-warm and unlock AudioContext on first touch (e.g., tapping Begin button on mobile)
+        ensureContext();
+      }
+    };
+    for (const evt of unlockEvents) {
+      window.addEventListener(evt, onUserGesture, { passive: true, capture: true });
+    }
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && started && !muted && ac && ac.state !== 'running') {
+        ac.resume().catch(() => {});
+      }
+    });
+    window.addEventListener('pageshow', () => {
+      if (started && !muted && ac && ac.state !== 'running') {
+        ac.resume().catch(() => {});
+      }
+    });
+  }
+
   // ---------------------------------------------------------------- bus listeners
   bus.on('game:start', () => {
-    ensureContext();
-    playSingingBowl(1.0);
+    const context = ensureContext();
+    if (context && context.state !== 'running') {
+      context.resume().then(() => {
+        playSingingBowl(1.0);
+      }).catch(() => {});
+    } else {
+      playSingingBowl(1.0);
+    }
   });
 
   bus.on('sfx', (payload) => {
@@ -997,7 +1084,7 @@ export function createAudio(ctx) {
     const isWild = (to === 'wild');
 
     // Crossfade warm Om harmonic drone pad (diminishes in deep wilderness)
-    const targetDrone = isWild ? 0.003 : 0.032;
+    const targetDrone = isWild ? 0.004 : 0.048;
     droneGain.gain.setTargetAtTime(targetDrone, now, 0.28);
 
     // Highland wind resonant filter Q modulation
@@ -1007,7 +1094,7 @@ export function createAudio(ctx) {
 
   // ---------------------------------------------------------------- update
   let eagleTimer = 14 + Math.random() * 6;   // ~12–20s in wilderness
-  let stupaBellTimer = 22 + Math.random() * 18; // ~25–40s in stupa plaza
+  let stupaBellTimer = 10 + Math.random() * 10; // ~10–20s initial chime in stupa plaza
 
   function update(dt) {
     if (!ac || !started) return;
