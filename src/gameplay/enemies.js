@@ -2564,8 +2564,9 @@ export function createEnemies(ctx) {
       const mp = activeMoltenPatches[i];
       mp.timer -= dt;
       mp.tickTimer -= dt;
-      const lifeRatio = Math.max(0, mp.timer / mp.maxTimer);
-      mp.mat.opacity = 0.5 * Math.min(1, lifeRatio * 2.5);
+      const lifeRatio = Math.max(0, mp.timer / (mp.maxTimer || 3.0));
+      const mat = mp.mat || mp.mesh?.material;
+      if (mat) mat.opacity = 0.5 * Math.min(1, lifeRatio * 2.5);
 
       if (mp.tickTimer <= 0) {
         mp.tickTimer += 0.5;
@@ -2586,7 +2587,7 @@ export function createEnemies(ctx) {
 
       if (mp.timer <= 0) {
         enemyGroup.remove(mp.mesh);
-        mp.mat.dispose();
+        mat?.dispose?.();
         activeMoltenPatches.splice(i, 1);
       }
     }

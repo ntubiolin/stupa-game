@@ -15,6 +15,8 @@ export const MAPS = {
     level: [1, 1],
     innerRadius: CONFIG.WORLD?.stupaColliderRadius ?? 19.9,
     walkRadius: CONFIG.WORLD?.walkRadius ?? 38,
+    minimapColor: '#d9ccb4',
+    waypoint: { x: 10, z: -26, localX: 10, localZ: -26 },
     safeZones: [{ x: 0, z: 0, r: 45 }],
     gates: [
       {
@@ -30,6 +32,7 @@ export const MAPS = {
     spawns: {
       default: { x: stupaSouthPt.x, z: stupaSouthPt.z, heading: 0 },
       south: { x: stupaSouthPt.x, z: stupaSouthPt.z, heading: 0 },
+      waypoint: { x: 10, z: -24, heading: 0 },
       north: {
         x: W.stupaGate.returnPos.x,
         z: W.stupaGate.returnPos.z,
@@ -57,6 +60,8 @@ export const MAPS = {
     origin: { x: W.origin.x, z: W.origin.z },
     level: [1, 5],
     walkRadius: W.walkRadius,
+    minimapColor: '#6f7c56',
+    waypoint: { x: W.origin.x + 6, z: 32, localX: 6, localZ: 32 },
     safeZones: [
       {
         x: W.wildGate.x,
@@ -84,6 +89,11 @@ export const MAPS = {
       teleport: {
         x: W.wildGate.teleportPos.x,
         z: W.wildGate.teleportPos.z,
+        heading: W.wildGate.spawnHeading,
+      },
+      waypoint: {
+        x: W.origin.x + 6,
+        z: 34,
         heading: W.wildGate.spawnHeading,
       },
       'from-stupa': {
@@ -133,6 +143,8 @@ export const MAPS = {
     origin: { x: 9000, z: 0 },
     level: [1, 40],
     walkRadius: 60,
+    minimapColor: '#7a8264',
+    waypoint: { x: 9008, z: -4, localX: 8, localZ: -4 },
     safeZones: [
       { x: 9000, z: 50, r: 10 },
     ],
@@ -150,6 +162,7 @@ export const MAPS = {
     spawns: {
       default: { x: 9000, z: 20, heading: 0 },
       teleport: { x: 9000, z: 20, heading: 0 },
+      waypoint: { x: 9008, z: -2, heading: 0 },
       south: { x: 9000, z: 44, heading: 0 },
       'from-stupa': { x: 9000, z: 44, heading: 0 },
     },

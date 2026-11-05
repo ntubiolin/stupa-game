@@ -34,6 +34,7 @@ const ACTION_KEYS = {
   KeyK: 'skills',
   KeyJ: 'quests',
   KeyM: 'map',
+  Tab: 'minimapZoom',
   Escape: 'closeUi',
   KeyH: 'toggleHud',
   KeyP: 'pause',
@@ -46,6 +47,7 @@ const UI_ALLOWED_ACTIONS = new Set([
   'skills',
   'quests',
   'map',
+  'minimapZoom',
   'toggleHud',
   'pause',
 ]);
@@ -162,7 +164,7 @@ export function createInput(ctx) {
       e.preventDefault();
       e.target.blur();
     }
-    if (e.code.startsWith('Arrow') || e.code === 'Space') e.preventDefault();
+    if (e.code.startsWith('Arrow') || e.code === 'Space' || e.code === 'Tab') e.preventDefault();
     if (!e.repeat) {
       const a = ACTION_KEYS[e.code];
       if (a) {

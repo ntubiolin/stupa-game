@@ -238,8 +238,22 @@ export function createSave(ctx) {
   let isDirty = false;
   let dirtyTimer = 0;
   let writeCount = 0;
+  const registeredSections = new Map();
+
+  function syncRegisteredToStore() {
+    for (const [sec, { serializer }] of registeredSections.entries()) {
+      if (typeof serializer === 'function') {
+        try {
+          store.sections[sec] = deepClone(serializer());
+        } catch (err) {
+          console.warn(`[save] Failed to serialize registered section "${sec}":`, err);
+        }
+      }
+    }
+  }
 
   function writeToStorage() {
+    syncRegisteredToStore();
     store.version = SAVE_VERSION;
     store.savedAt = Date.now();
     try {
@@ -381,7 +395,23 @@ export function createSave(ctx) {
     return true;
   }
 
+  function register(section, serializer, deserializer) {
+    if (!section) return;
+    registeredSections.set(section, { serializer, deserializer });
+    if (typeof deserializer === 'function') {
+      const existing = store.sections[section];
+      if (existing !== undefined) {
+        try {
+          deserializer(deepClone(existing));
+        } catch (err) {
+          console.warn(`[save] Failed to deserialize registered section "${section}":`, err);
+        }
+      }
+    }
+  }
+
   function dump() {
+    syncRegisteredToStore();
     return deepClone(store);
   }
 
@@ -411,6 +441,7 @@ export function createSave(ctx) {
     version: SAVE_VERSION,
     get,
     set,
+    register,
     markDirty,
     flush,
     reset,

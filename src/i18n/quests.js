@@ -115,6 +115,13 @@ export const QUEST_STRINGS = {
     'dlg.debug.choice.next': '檢視動作執行結果',
     'dlg.debug.choice.flagOnly': '【條件選項】已偵測到 debug.flag.allActions 旗標',
     'dlg.debug.choice.close': '關閉測試對話',
+
+    // Debug Codex Link Dialogue (debug.codexLink)
+    'dialogue.debug.codexLink.speaker': '法脈考據學者',
+    'npc.dialogue.debug.codexLink.speaker': '法脈考據學者',
+    'dialogue.debug.codexLink.line1':
+      '行者吉祥！這卷古籍記載了[[codex:boudhanath|博達哈大佛塔]]與吐蕃第一座三寶道場[[codex:samye|桑耶寺]]的歷史淵源，點擊藍金色的詞條即可直接翻閱圖鑑考據。',
+    'dialogue.debug.codexLink.close': '合十致謝',
   },
 
   en: {
@@ -231,6 +238,13 @@ export const QUEST_STRINGS = {
     'dlg.debug.choice.next': 'Inspect action results',
     'dlg.debug.choice.flagOnly': '[Conditional Choice] Detected flag debug.flag.allActions',
     'dlg.debug.choice.close': 'Close debug dialogue',
+
+    // Debug Codex Link Dialogue (debug.codexLink)
+    'dialogue.debug.codexLink.speaker': 'Dharma Historian',
+    'npc.dialogue.debug.codexLink.speaker': 'Dharma Historian',
+    'dialogue.debug.codexLink.line1':
+      'Greetings, traveler! This scroll chronicles the sacred bond between [[codex:boudhanath|Boudhanath Stupa]] and Tibet’s first monastery, [[codex:samye|Samye Monastery]]. Click either highlighted term to open its Codex card directly.',
+    'dialogue.debug.codexLink.close': 'Thank you',
   },
 };
 
