@@ -72,6 +72,12 @@ export function createInput(ctx) {
     pressed(action) { return frameActions.has(action); },
     trigger(action) { pendingActions.add(action); },
     isHeld(code) { return held.has(code); },
+    isDown(actionOrCode) {
+      if (actionOrCode === 'showLoot' || actionOrCode === 'alt') {
+        return held.has('AltLeft') || held.has('AltRight');
+      }
+      return held.has(actionOrCode);
+    },
     update() {
       frameActions = pendingActions;
       pendingActions = new Set();
@@ -113,6 +119,10 @@ export function createInput(ctx) {
   // ------------------------------------------------------------ keyboard
   window.addEventListener('keydown', (e) => {
     if (isTypingTarget(e.target)) return;
+    if (e.code === 'AltLeft' || e.code === 'AltRight' || e.key === 'Alt') {
+      held.add('AltLeft');
+      return;
+    }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     held.add(e.code);
     if (MOVE_KEYS[e.code] && e.target?.tagName === 'INPUT') {
@@ -129,7 +139,13 @@ export function createInput(ctx) {
       }
     }
   });
-  window.addEventListener('keyup', (e) => { held.delete(e.code); });
+  window.addEventListener('keyup', (e) => {
+    if (e.code === 'AltLeft' || e.code === 'AltRight' || e.key === 'Alt') {
+      held.delete('AltLeft');
+      held.delete('AltRight');
+    }
+    held.delete(e.code);
+  });
   window.addEventListener('blur', () => { held.clear(); releaseJoy(); dragId = null; });
   document.addEventListener('visibilitychange', () => { if (document.hidden) held.clear(); });
 

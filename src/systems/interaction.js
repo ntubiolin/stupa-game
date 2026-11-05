@@ -15,15 +15,28 @@ export function createInteraction(ctx) {
   let lastEmittedId = null;
   let lastEmittedLabel = null;
 
+  function getKindPenalty(item) {
+    // Lower score is better: NPC and gate have priority over normal props, which have priority over ground loot
+    if (typeof item.priority === 'number') return -item.priority;
+    if (item.kind === 'npc') return -10;
+    if (item.kind === 'gate') return -5;
+    if (item.kind === 'loot') return 10;
+    return 0;
+  }
+
   function scoreItem(item, px, pz, fwdX, fwdZ) {
-    if (!item || typeof item.getPosition !== 'function') return Infinity;
+    if (!item) return Infinity;
+    const pos =
+      typeof item.getPosition === 'function'
+        ? item.getPosition()
+        : item.position;
+    if (!pos) return Infinity;
+
     const currentZone = state.zone || 'stupa';
-    const itemZone = item.zone || 'stupa';
+    const itemZone = item.zone || currentZone;
     if (itemZone !== currentZone) return Infinity;
     if (typeof item.isAvailable === 'function' && !item.isAvailable()) return Infinity;
-
-    const pos = item.getPosition();
-    if (!pos) return Infinity;
+    if (typeof item.enabled === 'function' && !item.enabled()) return Infinity;
 
     const dx = pos.x - px;
     const dz = pos.z - pz;
@@ -36,13 +49,13 @@ export function createInteraction(ctx) {
     if (dist > 0.05) {
       align = (dx / dist) * fwdX + (dz / dist) * fwdZ; // -1..1
     }
-    // Lower score is better: normalized distance minus front-facing preference
-    return (dist / Math.max(0.5, radius)) - align * 0.28;
+    // Lower score is better: kind priority offset + normalized distance minus front-facing preference
+    return getKindPenalty(item) + (dist / Math.max(0.5, radius)) - align * 0.28;
   }
 
   function emitPromptIfChanged(target) {
     const nextId = target ? target.id : null;
-    const nextLabel = target ? target.labelKey : null;
+    const nextLabel = target ? (target.labelKey || target.promptKey) : null;
     if (nextId === lastEmittedId && nextLabel === lastEmittedLabel) return;
 
     lastEmittedId = nextId;
@@ -51,11 +64,13 @@ export function createInteraction(ctx) {
     if (!target) {
       bus.emit('prompt', null);
     } else {
+      const act = typeof target.action === 'string' ? target.action : 'interact';
       bus.emit('prompt', {
         id: target.id,
-        action: target.action || 'interact',
-        labelKey: target.labelKey || 'prompt.interact',
-        keyHint: ACTION_KEY_HINT[target.action] || 'E',
+        action: act,
+        labelKey: target.labelKey || target.promptKey || 'prompt.interact',
+        params: target.labelParams || target.promptParams,
+        keyHint: ACTION_KEY_HINT[act] || 'E',
       });
     }
   }
@@ -87,7 +102,7 @@ export function createInteraction(ctx) {
         bestScore = s;
         best = item;
       }
-      const act = item?.action || 'interact';
+      const act = typeof item?.action === 'string' ? item.action : 'interact';
       if (s < (bestScoreByAction[act] ?? Infinity)) {
         bestScoreByAction[act] = s;
         bestByAction[act] = item;
@@ -101,10 +116,20 @@ export function createInteraction(ctx) {
     const input = ctx.input;
     if (!input) return;
 
-    if (best && input.pressed(best.action || 'interact')) {
-      best.onInteract?.();
+    const triggerInteract = (item) => {
+      if (!item) return;
+      if (typeof item.onInteract === 'function') item.onInteract();
+      else if (typeof item.action === 'function') item.action();
+    };
+
+    const bestAct = best ? (typeof best.action === 'string' ? best.action : 'interact') : null;
+    if (best && input.pressed(bestAct)) {
+      triggerInteract(best);
       // Re-evaluate availability immediately after interacting
-      if (typeof best.isAvailable === 'function' && !best.isAvailable()) {
+      if (
+        (typeof best.isAvailable === 'function' && !best.isAvailable()) ||
+        (typeof best.enabled === 'function' && !best.enabled())
+      ) {
         currentTarget = null;
         state.interactionTarget = null;
         emitPromptIfChanged(null);
@@ -114,9 +139,9 @@ export function createInteraction(ctx) {
 
     // Also allow pressing the specific key ('feed' or 'interact') if a matching target is in range
     if (input.pressed('feed') && bestByAction.feed) {
-      bestByAction.feed.onInteract?.();
+      triggerInteract(bestByAction.feed);
     } else if (input.pressed('interact') && bestByAction.interact) {
-      bestByAction.interact.onInteract?.();
+      triggerInteract(bestByAction.interact);
     }
   }
 

@@ -974,6 +974,82 @@ export function createAudio(ctx) {
     osc.stop(now + 4.3);
   }
 
+  // Terma (legendary) drop — deep Tibetan dungchen horn resonance + bright ritual bell
+  function playTermaDrop() {
+    const context = ensureContext();
+    if (!context || muted) return;
+    const now = context.currentTime;
+
+    // 1. Deep dungchen horn (low brassy sawtooth/triangle through resonant lowpass)
+    const hornFreqs = [81.0, 162.0, 243.0];
+    const hornFilter = context.createBiquadFilter();
+    hornFilter.type = 'lowpass';
+    hornFilter.frequency.setValueAtTime(260, now);
+    hornFilter.frequency.exponentialRampToValueAtTime(520, now + 0.35);
+    hornFilter.frequency.exponentialRampToValueAtTime(210, now + 1.8);
+    hornFilter.Q.value = 3.2;
+
+    const hornGain = context.createGain();
+    hornGain.gain.setValueAtTime(0.0001, now);
+    hornGain.gain.linearRampToValueAtTime(0.18, now + 0.14);
+    hornGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.9);
+
+    hornFilter.connect(hornGain);
+    hornGain.connect(masterGain);
+
+    for (let i = 0; i < hornFreqs.length; i++) {
+      const osc = context.createOscillator();
+      const g = context.createGain();
+      osc.type = i === 0 ? 'sawtooth' : 'triangle';
+      osc.frequency.setValueAtTime(hornFreqs[i] * 0.97, now);
+      osc.frequency.exponentialRampToValueAtTime(hornFreqs[i], now + 0.18);
+      g.gain.value = i === 0 ? 0.55 : i === 1 ? 0.3 : 0.18;
+      osc.connect(g);
+      g.connect(hornFilter);
+      osc.start(now);
+      osc.stop(now + 1.95);
+    }
+
+    // 2. Shimmering ritual drilbu bell overtone
+    const bellFreqs = [864, 1296, 1728];
+    for (let i = 0; i < bellFreqs.length; i++) {
+      const osc = context.createOscillator();
+      const g = context.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(bellFreqs[i], now + 0.08);
+      g.gain.setValueAtTime(0.0001, now + 0.08);
+      g.gain.linearRampToValueAtTime(0.09 / (i + 1), now + 0.11);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 1.5);
+      osc.connect(g);
+      g.connect(masterGain);
+      osc.start(now + 0.08);
+      osc.stop(now + 1.55);
+    }
+  }
+
+  // Equipment pickup — crisp metallic / ritual chime
+  function playPickupGear() {
+    const context = ensureContext();
+    if (!context || muted) return;
+    const now = context.currentTime;
+
+    const notes = [540, 810];
+    for (let i = 0; i < notes.length; i++) {
+      const start = now + i * 0.055;
+      const osc = context.createOscillator();
+      const g = context.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(notes[i], start);
+      g.gain.setValueAtTime(0.0001, start);
+      g.gain.linearRampToValueAtTime(0.09, start + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, start + 0.28);
+      osc.connect(g);
+      g.connect(masterGain);
+      osc.start(start);
+      osc.stop(start + 0.3);
+    }
+  }
+
   // ---------------------------------------------------------------- mobile / gesture audio unlock
   if (typeof window !== 'undefined') {
     const unlockEvents = ['touchstart', 'touchend', 'pointerdown', 'mousedown', 'keydown', 'click'];
@@ -1073,6 +1149,12 @@ export function createAudio(ctx) {
         break;
       case 'eagle':
         playEagleCry();
+        break;
+      case 'terma':
+        playTermaDrop();
+        break;
+      case 'pickupGear':
+        playPickupGear();
         break;
       default:
         break;
