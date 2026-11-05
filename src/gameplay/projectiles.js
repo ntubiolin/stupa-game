@@ -34,7 +34,7 @@ export function createProjectiles(ctx) {
   const projGroup = new THREE.Group();
   // Pre-warm GPU geometry buffers when renderer renders
   for (const ch of projGroup.children) ch.frustumCulled = false;
-  (ctx.wildGroup || scene).add(projGroup);
+  scene.add(projGroup);
 
   let hitboxesVisible = false;
 
@@ -441,7 +441,7 @@ export function createProjectiles(ctx) {
 
       const origin = params.origin || {
         x: playerPos.x + 6,
-        y: (ctx.wilderness?.getHeight ? ctx.wilderness.getHeight(playerPos.x + 6, playerPos.z) : 0) + 1.2,
+        y: (ctx.world ? ctx.world.getHeight(playerPos.x + 6, playerPos.z) : 0) + 1.2,
         z: playerPos.z,
       };
 
@@ -471,7 +471,7 @@ export function createProjectiles(ctx) {
 
       const origin = params.origin || {
         x: playerPos.x + 10,
-        y: (ctx.wilderness?.getHeight ? ctx.wilderness.getHeight(playerPos.x + 10, playerPos.z) : 0) + 1.6,
+        y: (ctx.world ? ctx.world.getHeight(playerPos.x + 10, playerPos.z) : 0) + 1.6,
         z: playerPos.z,
       };
 
@@ -505,7 +505,7 @@ export function createProjectiles(ctx) {
       const target = params.targetPos || { x: playerPos.x, y: playerPos.y, z: playerPos.z };
       const start = params.startPos || {
         x: target.x + 10,
-        y: (ctx.wilderness?.getHeight ? ctx.wilderness.getHeight(target.x + 10, target.z) : 0) + 2.2,
+        y: (ctx.world ? ctx.world.getHeight(target.x + 10, target.z) : 0) + 2.2,
         z: target.z,
       };
 
@@ -523,7 +523,7 @@ export function createProjectiles(ctx) {
       slot.group.position.copy(slot.startPos);
       slot.group.visible = true;
 
-      const groundY = ctx.wilderness?.getHeight ? ctx.wilderness.getHeight(target.x, target.z) : target.y;
+      const groundY = ctx.world ? ctx.world.getHeight(target.x, target.z) : target.y;
       slot.landingGroup.position.set(target.x, groundY + 0.04, target.z);
       slot.landingFill.scale.set(0.001, 1, 0.001);
       slot.landingGroup.visible = true;
@@ -538,7 +538,7 @@ export function createProjectiles(ctx) {
       if (!slot) return null;
 
       const target = params.targetPos || { x: playerPos.x, y: playerPos.y, z: playerPos.z };
-      const groundY = ctx.wilderness?.getHeight ? ctx.wilderness.getHeight(target.x, target.z) : target.y;
+      const groundY = ctx.world ? ctx.world.getHeight(target.x, target.z) : target.y;
 
       slot.active = true;
       slot.age = 0;
@@ -566,7 +566,7 @@ export function createProjectiles(ctx) {
 
   // ---------------------------------------------------------------- 6. Mantra Dispel Listener
   bus.on('mantra:cast', ({ origin, radius }) => {
-    if (state.zone !== 'wild' || !origin) return;
+    if (!ctx.world?.isCombatZone() || !origin) return;
     const mantraRad = radius || (config.MANTRA?.radius ?? 6.0);
 
     // Dispel active magic projectiles / rune circles
@@ -605,14 +605,18 @@ export function createProjectiles(ctx) {
 
   // ---------------------------------------------------------------- 7. Per-Frame Update
   function update(dt) {
-    const isWild = (state.zone === 'wild');
-    projGroup.visible = isWild;
+    const isCombat = Boolean(ctx.world?.isCombatZone());
+    projGroup.visible = isCombat;
 
-    if (!isWild) {
+    if (!isCombat) {
       if (count() > 0) clear();
       return;
     }
 
+    const currentZone = state.zone || 'stupa';
+    const mapDef = ctx.world?.getMap(currentZone);
+    const mapOrigin = mapDef?.origin || wildOrigin;
+    const mapWalkRadius = (mapDef?.walkRadius ?? walkRadius) || 70;
     const playerPos = state.player?.position;
     const playerRadius = config.PLAYER?.radius ?? 0.35;
 
@@ -641,12 +645,12 @@ export function createProjectiles(ctx) {
       gf.pos.z += vz * dt;
 
       // Smooth ground height tracking
-      const gY = ctx.wilderness?.getHeight ? ctx.wilderness.getHeight(gf.pos.x, gf.pos.z) : 0;
+      const gY = ctx.world ? ctx.world.getHeight(gf.pos.x, gf.pos.z) : 0;
       const targetY = gY + 0.95;
       gf.pos.y += (targetY - gf.pos.y) * Math.min(1, 8 * dt);
 
-      // Check boundary from wild origin
-      if (Math.hypot(gf.pos.x - wildOrigin.x, gf.pos.z - wildOrigin.z) > walkRadius) {
+      // Check boundary from map origin
+      if (Math.hypot(gf.pos.x - mapOrigin.x, gf.pos.z - mapOrigin.z) > mapWalkRadius) {
         gf.active = false;
         gf.group.visible = false;
         gf.hitbox.visible = false;
@@ -658,7 +662,7 @@ export function createProjectiles(ctx) {
       if (Array.isArray(ctx.colliders)) {
         for (let j = 0; j < ctx.colliders.length; j++) {
           const c = ctx.colliders[j];
-          if (!c || (c.zone || 'stupa') !== 'wild') continue;
+          if (!c || (c.zone || 'stupa') !== currentZone) continue;
           if (c.type === 'circle') {
             const cdx = gf.pos.x - c.x;
             const cdz = gf.pos.z - c.z;
@@ -717,11 +721,11 @@ export function createProjectiles(ctx) {
       ra.pos.z += ra.dir.z * ra.speed * dt;
 
       // Follow terrain contour at chest height so uphill slopes don't swallow horizontal arrows
-      const groundY = ctx.wilderness?.getHeight ? ctx.wilderness.getHeight(ra.pos.x, ra.pos.z) : 0;
+      const groundY = ctx.world ? ctx.world.getHeight(ra.pos.x, ra.pos.z) : 0;
       ra.pos.y = groundY + 1.15;
 
-      // Check boundary from wild origin
-      if (Math.hypot(ra.pos.x - wildOrigin.x, ra.pos.z - wildOrigin.z) > walkRadius) {
+      // Check boundary from map origin
+      if (Math.hypot(ra.pos.x - mapOrigin.x, ra.pos.z - mapOrigin.z) > mapWalkRadius) {
         ra.active = false;
         ra.group.visible = false;
         ra.hitbox.visible = false;
@@ -733,7 +737,7 @@ export function createProjectiles(ctx) {
       if (Array.isArray(ctx.colliders)) {
         for (let j = 0; j < ctx.colliders.length; j++) {
           const c = ctx.colliders[j];
-          if (!c || (c.zone || 'stupa') !== 'wild') continue;
+          if (!c || (c.zone || 'stupa') !== currentZone) continue;
           if (c.type === 'circle') {
             const cdx = ra.pos.x - c.x;
             const cdz = ra.pos.z - c.z;

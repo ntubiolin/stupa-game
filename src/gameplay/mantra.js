@@ -219,12 +219,12 @@ export function createMantra(ctx) {
       const action = state.player.action;
       const cannotCast = action === 'faint' || action === 'hurt' || action === 'prostrate';
       if (!cannotCast && cooldownRemaining <= 0) {
-        if ((state.zone || 'stupa') !== 'wild') {
-          // Stupa peaceful chant: no MP spent, no mantra:cast event
+        if (!ctx.world?.isCombatZone()) {
+          // Hub peaceful chant: no MP spent, no mantra:cast event
           cooldownRemaining = M.stupaCooldown ?? 0.45;
           triggerWave(true);
         } else {
-          // Wild zone: spends MP
+          // Combat zone: spends MP
           const mpCost = M.mpCost ?? 8;
           const spent = ctx.vitals ? ctx.vitals.spendMp(mpCost) : true;
           if (!spent) {

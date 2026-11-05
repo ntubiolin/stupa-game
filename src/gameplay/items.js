@@ -55,10 +55,11 @@ export function createItems(ctx) {
 
   // ---------------------------------------------------------------- Clamping & Ground
   function clampToWalkable(x, z) {
-    if (state.zone === 'wild') {
-      const ox = config.WILD?.origin?.x ?? 1000;
-      const oz = config.WILD?.origin?.z ?? 0;
-      const maxR = (config.WILD?.walkRadius ?? 70) - 1.5;
+    if (state.zone !== 'stupa') {
+      const mapDef = ctx.world?.getMap(state.zone);
+      const ox = mapDef?.origin?.x ?? config.WILD?.origin?.x ?? 1000;
+      const oz = mapDef?.origin?.z ?? config.WILD?.origin?.z ?? 0;
+      const maxR = ((mapDef?.walkRadius ?? config.WILD?.walkRadius) || 70) - 1.5;
       const dx = x - ox;
       const dz = z - oz;
       const r = Math.hypot(dx, dz);
@@ -79,10 +80,7 @@ export function createItems(ctx) {
   }
 
   function getGroundHeight(x, z) {
-    if (state.zone === 'wild' && ctx.wilderness?.getHeight) {
-      return ctx.wilderness.getHeight(x, z);
-    }
-    return 0;
+    return ctx.world ? ctx.world.getHeight(x, z) : 0;
   }
 
   // ---------------------------------------------------------------- Item 3D Geometries

@@ -365,9 +365,10 @@ export function createPlayer(ctx) {
     const pr = P.radius;
     const currentZone = state.zone || 'stupa';
 
-    if (currentZone === 'wild') {
-      const wOrigin = config.WILD?.origin || { x: 1000, z: 0 };
-      const maxWildR = (config.WILD?.walkRadius || 70) - pr;
+    if (currentZone !== 'stupa') {
+      const mapDef = ctx.world?.getMap(currentZone);
+      const wOrigin = mapDef?.origin || config.WILD?.origin || { x: 1000, z: 0 };
+      const maxWildR = ((mapDef?.walkRadius ?? config.WILD?.walkRadius) || 70) - pr;
       let dx = pos.x - wOrigin.x;
       let dz = pos.z - wOrigin.z;
       let r = Math.hypot(dx, dz);
@@ -382,7 +383,7 @@ export function createPlayer(ctx) {
         for (let i = 0; i < colliders.length; i++) {
           const c = colliders[i];
           if (!c) continue;
-          if ((c.zone || 'stupa') !== 'wild') continue;
+          if ((c.zone || 'stupa') !== currentZone) continue;
           if (c.type === 'circle') {
             const cdx = pos.x - c.x;
             const cdz = pos.z - c.z;
@@ -413,7 +414,7 @@ export function createPlayer(ctx) {
                 const dl = Math.abs(pos.x - c.minX);
                 const dr = Math.abs(c.maxX - pos.x);
                 const dtb = Math.abs(pos.z - c.minZ);
-                const dbb = Math.abs(c.maxZ - pos.z);
+                const dbb = Math.abs(pos.z - c.maxZ);
                 const m = Math.min(dl, dr, dtb, dbb);
                 if (m === dl) pos.x = c.minX - pr;
                 else if (m === dr) pos.x = c.maxX + pr;
@@ -433,7 +434,7 @@ export function createPlayer(ctx) {
         pos.x = wOrigin.x + dx * s;
         pos.z = wOrigin.z + dz * s;
       }
-      pos.y = ctx.wilderness ? ctx.wilderness.getHeight(pos.x, pos.z) : 0;
+      pos.y = ctx.world ? ctx.world.getHeight(pos.x, pos.z) : 0;
       return;
     }
 
@@ -760,8 +761,8 @@ export function createPlayer(ctx) {
     }
 
     // 3. Start prostration if requested
-    if (input && input.pressed('prostrate')) {
-      if (state.zone === 'wild') {
+    if (input && input.pressed('prostrate') && !state.uiOpen) {
+      if (ctx.world?.isCombatZone()) {
         bus.emit('toast', { key: 'toast.noProstrateWild', kind: 'warning' });
         return;
       }
@@ -780,8 +781,8 @@ export function createPlayer(ctx) {
     }
 
     // 4. Camera-relative movement
-    const mx = input ? input.move.x : 0;
-    const my = input ? input.move.y : 0;
+    const mx = (input && !state.uiOpen) ? input.move.x : 0;
+    const my = (input && !state.uiOpen) ? input.move.y : 0;
     const moveMag = Math.min(1, Math.hypot(mx, my));
     const isRun = Boolean(input && input.run && moveMag > 0.1);
 

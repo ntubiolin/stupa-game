@@ -23,7 +23,6 @@ import { createSky } from './world/sky.js';
 import { createStupa } from './world/stupa.js';
 import { createPrayerFlags } from './world/prayerFlags.js';
 import { createEnvironment } from './world/environment.js';
-import { createWilderness } from './world/wilderness.js';
 
 import { createLamps } from './gameplay/lamps.js';
 import { createMonkeys } from './gameplay/monkeys.js';
@@ -60,7 +59,9 @@ const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerH
 // ---------------------------------------------------------------- shared state
 const state = {
   mode: 'intro',                 // 'intro' (title screen, orbit camera) | 'play'
-  zone: 'stupa',                 // 'stupa' | 'wild'
+  zone: 'stupa',                 // active map id ('stupa' | 'wild' | ...)
+  zoneType: 'hub',               // 'hub' | 'combat' | 'dungeon'
+  uiOpen: false,                 // true when a fullscreen UI modal is open
   elapsed: 0,
   time: {
     t: CONFIG.TIME.start,        // 0..1, 0 = midnight
@@ -87,6 +88,11 @@ wildGroup.name = 'WildZone';
 wildGroup.visible = false;
 scene.add(wildGroup);
 
+const zoneGroups = {
+  stupa: stupaGroup,
+  wild: wildGroup,
+};
+
 const ctx = {
   THREE,
   scene,
@@ -94,6 +100,8 @@ const ctx = {
   renderer,
   stupaGroup,
   wildGroup,
+  zoneGroups,
+  world: null,
   bus: createBus(),
   state,
   config: CONFIG,
@@ -108,12 +116,11 @@ ctx.input = createInput(ctx);
 createDebug(ctx);
 
 // ---------------------------------------------------------------- modules (order = update order)
+const zones = createZones(ctx);
 const sky = createSky(ctx);
 const stupa = createStupa(ctx);
 const flags = createPrayerFlags(ctx, stupa.flagAnchors);
 const environment = createEnvironment(ctx);
-const wilderness = createWilderness(ctx);
-const zones = createZones(ctx);
 
 const player = createPlayer(ctx);
 const mantra = createMantra(ctx);
@@ -136,7 +143,7 @@ const hud = createHud(ctx);
 const modules = [
   ctx.input,
   sky, stupa, flags, environment,
-  wilderness, zones,
+  zones,
   player, mantra, enemies, projectiles, items, lamps, monkeys,
   vitals,
   cameraRig,
@@ -189,4 +196,4 @@ function frame() {
 requestAnimationFrame(frame);
 
 // Debug handle (dev only)
-if (import.meta.env.DEV) window.__game = { ctx, modules: { sky, stupa, flags, environment, wilderness, zones, player, mantra, enemies, projectiles, items, lamps, monkeys, vitals, cameraRig, merit, interaction, audio, hud } };
+if (import.meta.env.DEV) window.__game = { ctx, modules: { sky, stupa, flags, environment, zones, player, mantra, enemies, projectiles, items, lamps, monkeys, vitals, cameraRig, merit, interaction, audio, hud } };

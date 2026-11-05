@@ -1077,18 +1077,24 @@ export function createAudio(ctx) {
     playBell();
   });
 
+  function getAmbienceProfile(mapId = state.zone) {
+    const mapDef = ctx.world?.getMap(mapId);
+    const amb = mapDef?.ambience || (mapId === 'stupa' ? 'stupa' : 'wild');
+    return amb === 'stupa' ? 'stupa' : 'wild';
+  }
+
   // Crossfade between Stupa and Wilderness ambient profiles on zone change (~0.8s transition)
   bus.on('zone:change', ({ to }) => {
     if (!ac || !started) return;
     const now = ac.currentTime;
-    const isWild = (to === 'wild');
+    const isWildAmbience = (getAmbienceProfile(to) !== 'stupa');
 
     // Crossfade warm Om harmonic drone pad (diminishes in deep wilderness)
-    const targetDrone = isWild ? 0.004 : 0.048;
+    const targetDrone = isWildAmbience ? 0.004 : 0.048;
     droneGain.gain.setTargetAtTime(targetDrone, now, 0.28);
 
     // Highland wind resonant filter Q modulation
-    const targetQ = isWild ? 3.6 : 2.8;
+    const targetQ = isWildAmbience ? 3.6 : 2.8;
     windFilter.Q.setTargetAtTime(targetQ, now, 0.28);
   });
 
@@ -1101,17 +1107,17 @@ export function createAudio(ctx) {
 
     const windStrength = state.wind?.strength ?? 0.5;
     const nightFactor = state.time?.nightFactor ?? 0;
-    const isWild = (state.zone === 'wild');
+    const isWildAmbience = (getAmbienceProfile(state.zone) !== 'stupa');
 
     // Modulate ambient wind filter & gain by zone profile and wind strength
     const now = ac.currentTime;
-    const targetWindFreq = isWild ? (340 + windStrength * 520) : (220 + windStrength * 340);
-    const targetWindGain = isWild ? (0.13 + windStrength * 0.24) : (0.06 + windStrength * 0.14);
+    const targetWindFreq = isWildAmbience ? (340 + windStrength * 520) : (220 + windStrength * 340);
+    const targetWindGain = isWildAmbience ? (0.13 + windStrength * 0.24) : (0.06 + windStrength * 0.14);
     windFilter.frequency.setTargetAtTime(targetWindFreq, now, 0.2);
     windGain.gain.setTargetAtTime(targetWindGain, now, 0.2);
 
     // Periodic Himalayan eagle / hawk cry in wilderness (~12–20s)
-    if (isWild && state.mode === 'play') {
+    if (isWildAmbience && state.mode === 'play') {
       eagleTimer -= dt;
       if (eagleTimer <= 0) {
         eagleTimer = 12 + Math.random() * 8;
@@ -1122,7 +1128,7 @@ export function createAudio(ctx) {
     }
 
     // Periodic serene distant temple bell in Stupa plaza
-    if (!isWild && state.mode === 'play') {
+    if (!isWildAmbience && state.mode === 'play') {
       stupaBellTimer -= dt;
       if (stupaBellTimer <= 0) {
         stupaBellTimer = 25 + Math.random() * 20;
