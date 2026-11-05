@@ -179,15 +179,22 @@ export function createZones(ctx) {
     isCombatZone,
     isHub,
     sampleSpawnPoint,
+    getInstance: (mapId = state.zone) => mapInstances[mapId] || null,
   };
   ctx.world = worldApi;
 
   // ---------------------------------------------------------------- Lazy Map Loader
+  const worldMapLoaders = import.meta.glob('../world/maps/*.js');
+
   async function ensureMapLoaded(mapId) {
     const m = MAPS[mapId];
     if (!m) return null;
     if (mapInstances[mapId]) return mapInstances[mapId];
-    if (typeof m.load !== 'function') {
+    const loaderFn =
+      typeof m.load === 'function'
+        ? m.load
+        : worldMapLoaders[`../world/maps/${mapId}.js`];
+    if (typeof loaderFn !== 'function') {
       mapInstances[mapId] = { getHeight: () => 0, update: () => {} };
       return mapInstances[mapId];
     }
@@ -196,7 +203,7 @@ export function createZones(ctx) {
     }
 
     loadingPromises[mapId] = (async () => {
-      const mod = await m.load();
+      const mod = await loaderFn();
       const factory = mod.createMap || mod.createWilderness || mod.default;
       const inst = typeof factory === 'function' ? factory(ctx) : {};
       mapInstances[mapId] = inst || { getHeight: () => 0, update: () => {} };

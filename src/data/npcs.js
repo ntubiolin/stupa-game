@@ -92,6 +92,35 @@ export const NPCS = [
   },
 ];
 
+export const NPC_BY_ID = Object.fromEntries(NPCS.map((n) => [n.id, n]));
+
+export function registerNpcs(defs) {
+  const list = Array.isArray(defs) ? defs : (defs && typeof defs === 'object' ? Object.values(defs) : []);
+  for (const def of list) {
+    if (!def || typeof def.id !== 'string') continue;
+    const existingIdx = NPCS.findIndex((n) => n.id === def.id);
+    if (existingIdx !== -1) {
+      NPCS[existingIdx] = def;
+    } else {
+      NPCS.push(def);
+    }
+    NPC_BY_ID[def.id] = def;
+  }
+}
+
+// Auto-discover chapter NPC modules (`src/data/npcs/*.js`)
+const chapterNpcModules = import.meta.glob('./npcs/*.js', { eager: true });
+for (const mod of Object.values(chapterNpcModules)) {
+  if (!mod || typeof mod !== 'object') continue;
+  for (const val of Object.values(mod)) {
+    if (Array.isArray(val)) {
+      registerNpcs(val);
+    } else if (val && typeof val === 'object' && typeof val.id === 'string' && val.map) {
+      registerNpcs([val]);
+    }
+  }
+}
+
 export function getNpcDef(id) {
-  return NPCS.find((n) => n.id === id) || null;
+  return NPC_BY_ID[id] || NPCS.find((n) => n.id === id) || null;
 }
