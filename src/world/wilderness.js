@@ -45,6 +45,12 @@ export function computeWildernessHeight(x, z, wildConfig) {
     }
   }
 
+  // 4. Northern Boss Arena around (1000, -48)
+  const dBossArena = Math.hypot(x - origin.x, z - (origin.z - 48));
+  if (dBossArena < 18) {
+    flatWeight = Math.min(flatWeight, Math.max(0, (dBossArena - 14.5) / 3.5));
+  }
+
   // Outer rim rises into surrounding foothills
   const rimR = t.rimRadius || 58;
   if (r > rimR) {
@@ -558,6 +564,8 @@ export function createWilderness(ctx) {
     if (Math.abs(bx - gateX) < 5.5 && bz > 12) continue;
     // Reject if too close to chorten
     if (Math.hypot(bx - chortenX, bz - chortenZ) < 8) continue;
+    // Reject if inside northern Boss arena around (1000, -48)
+    if (Math.hypot(bx - origin.x, bz - (origin.z - 48)) < 16) continue;
 
     // Reject if too close to mani stones
     let nearMani = false;

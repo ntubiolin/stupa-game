@@ -798,7 +798,9 @@ export function createPlayer(ctx) {
       targetSpeed *= state.player.moveSpeedMult;
     }
     if (state.elapsed < (state.player.slowUntil || 0)) {
-      targetSpeed *= (config.VITALS?.slowMultiplier ?? 0.5);
+      targetSpeed *= (state.player.slowMultiplier ?? config.VITALS?.slowMultiplier ?? 0.5);
+    } else if (state.player.slowMultiplier != null) {
+      state.player.slowMultiplier = null;
     }
     const isCastSlow = state.elapsed < (state.player.castSlowUntil || 0);
     if (isCastSlow) {

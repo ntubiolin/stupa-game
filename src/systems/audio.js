@@ -1244,6 +1244,108 @@ export function createAudio(ctx) {
     playBell();
   });
 
+  // ---------------------------------------------------------------- Boss Combat Ritual Drum & Subjugation Chord
+  let bossCombatActive = false;
+  let bossCurrentPhase = 1;
+  let bossDrumTimer = 0;
+
+  function playBossDrum(intense = false) {
+    const context = ensureContext();
+    if (!context || muted) return;
+    const now = context.currentTime;
+
+    // Deep Tibetan Nga ritual frame drum thump + subtle low bronze resonance
+    const osc = context.createOscillator();
+    const gain = context.createGain();
+    osc.type = 'sine';
+    const startFreq = intense ? 112 : 92;
+    osc.frequency.setValueAtTime(startFreq, now);
+    osc.frequency.exponentialRampToValueAtTime(38, now + 0.28);
+
+    const peak = intense ? 0.22 : 0.16;
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(peak, now + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.42);
+
+    osc.connect(gain);
+    gain.connect(masterGain);
+    osc.start(now);
+    osc.stop(now + 0.45);
+
+    if (noiseBuffer) {
+      const src = context.createBufferSource();
+      src.buffer = noiseBuffer;
+      const filter = context.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = intense ? 240 : 170;
+      filter.Q.value = 2.4;
+
+      const nGain = context.createGain();
+      nGain.gain.setValueAtTime(0.0001, now);
+      nGain.gain.linearRampToValueAtTime(intense ? 0.075 : 0.045, now + 0.008);
+      nGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+
+      src.connect(filter);
+      filter.connect(nGain);
+      nGain.connect(masterGain);
+      src.start(now, Math.random() * 1.5);
+      src.stop(now + 0.14);
+    }
+  }
+
+  function playBossSubduedChord() {
+    const context = ensureContext();
+    if (!context || muted) return;
+    const now = context.currentTime;
+
+    // Long, sacred resonant Tibetan singing bowl harmonic chord
+    const freqs = [136.1, 204.15, 272.2, 408.3, 544.4];
+    for (let i = 0; i < freqs.length; i++) {
+      const osc = context.createOscillator();
+      const gain = context.createGain();
+      osc.type = i % 2 === 0 ? 'sine' : 'triangle';
+      osc.frequency.setValueAtTime(freqs[i], now);
+
+      const amp = 0.16 / (i + 1);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.linearRampToValueAtTime(amp, now + 0.08 + i * 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 4.2);
+
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start(now);
+      osc.stop(now + 4.3);
+    }
+  }
+
+  bus.on('boss:start', ({ phase }) => {
+    bossCombatActive = true;
+    bossCurrentPhase = phase || 1;
+    bossDrumTimer = 0.05;
+    if (started) playBossDrum(false);
+  });
+
+  bus.on('boss:phase', ({ phase }) => {
+    bossCurrentPhase = phase || 2;
+    if (started) playBossDrum(bossCurrentPhase >= 3);
+  });
+
+  bus.on('boss:end', () => {
+    bossCombatActive = false;
+    bossCurrentPhase = 1;
+  });
+
+  bus.on('boss:reset', () => {
+    bossCombatActive = false;
+    bossCurrentPhase = 1;
+  });
+
+  bus.on('boss:subdued', () => {
+    bossCombatActive = false;
+    bossCurrentPhase = 1;
+    if (started) playBossSubduedChord();
+  });
+
   function getAmbienceProfile(mapId = state.zone) {
     const mapDef = ctx.world?.getMap(mapId);
     const amb = mapDef?.ambience || (mapId === 'stupa' ? 'stupa' : 'wild');
@@ -1312,6 +1414,16 @@ export function createAudio(ctx) {
         playCricketChirp(nightFactor);
       }
     }
+
+    // Layered ritual drum pulse during Boss combat (speeds up in Phase 3)
+    if (bossCombatActive && state.mode === 'play') {
+      bossDrumTimer -= dt;
+      if (bossDrumTimer <= 0) {
+        const isPhase3 = bossCurrentPhase >= 3;
+        bossDrumTimer = isPhase3 ? 0.58 : 1.05;
+        playBossDrum(isPhase3);
+      }
+    }
   }
 
   function saveAudioSettings() {
@@ -1357,6 +1469,8 @@ export function createAudio(ctx) {
     setVolume,
     playEagleCry,
     playDistantBell,
+    playBossDrum,
+    playBossSubduedChord,
   };
 
   ctx.audio = api;
