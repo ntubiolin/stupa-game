@@ -34,6 +34,7 @@ import { createProjectiles } from './gameplay/projectiles.js';
 import { createNpcs } from './gameplay/npcs.js';
 import { createPotions } from './gameplay/potions.js';
 import { createShrines } from './gameplay/shrines.js';
+import { createTargeting } from './gameplay/targeting.js';
 import { createPlayer } from './player/player.js';
 import { createCameraRig } from './player/cameraRig.js';
 
@@ -42,11 +43,13 @@ import { createSave } from './systems/save.js';
 import { createLoot } from './systems/loot.js';
 import { createInventory } from './systems/inventory.js';
 import { createVitals } from './systems/vitals.js';
+import { createSkills } from './systems/skills.js';
 import { createQuests } from './systems/quests.js';
 import { createInteraction } from './systems/interaction.js';
 import { createMerit } from './systems/merit.js';
 import { createAudio } from './systems/audio.js';
 import { createHud } from './ui/hud.js';
+import { createSkillbar } from './ui/skillbar.js';
 import { createInventoryUi } from './ui/inventory.js';
 import { createDialogue } from './ui/dialogue.js';
 import { createQuestUi } from './ui/quests.js';
@@ -143,6 +146,7 @@ const enemies = createEnemies(ctx);
 ctx.enemies = enemies;
 const projectiles = createProjectiles(ctx);
 ctx.projectiles = projectiles;
+const targeting = createTargeting(ctx);
 const loot = createLoot(ctx);
 const inventory = createInventory(ctx);
 const groundLoot = createGroundLoot(ctx);
@@ -150,6 +154,7 @@ const items = createItems(ctx);
 const lamps = createLamps(ctx);
 const monkeys = createMonkeys(ctx);
 const vitals = createVitals(ctx);
+const skills = createSkills(ctx);
 const potions = createPotions(ctx);
 const shrines = createShrines(ctx);
 const quests = createQuests(ctx);
@@ -160,6 +165,7 @@ const merit = createMerit(ctx);
 const interaction = createInteraction(ctx);
 const audio = createAudio(ctx);
 const hud = createHud(ctx);
+const skillbar = createSkillbar(ctx);
 const inventoryUi = createInventoryUi(ctx);
 const dialogue = createDialogue(ctx);
 const questUi = createQuestUi(ctx);
@@ -169,11 +175,11 @@ const modules = [
   ctx.save,
   sky, stupa, flags, environment,
   zones,
-  player, mantra, enemies, projectiles, loot, inventory, groundLoot, items, lamps, monkeys,
-  vitals, potions, shrines,
+  player, mantra, enemies, projectiles, targeting, loot, inventory, groundLoot, items, lamps, monkeys,
+  vitals, skills, potions, shrines,
   quests, npcs,
   cameraRig,
-  merit, interaction, audio, hud, inventoryUi, dialogue, questUi,
+  merit, interaction, audio, hud, skillbar, inventoryUi, dialogue, questUi,
 ];
 
 // ---------------------------------------------------------------- post-processing

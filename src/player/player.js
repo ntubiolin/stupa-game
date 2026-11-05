@@ -800,6 +800,10 @@ export function createPlayer(ctx) {
     if (state.elapsed < (state.player.slowUntil || 0)) {
       targetSpeed *= (config.VITALS?.slowMultiplier ?? 0.5);
     }
+    const isCastSlow = state.elapsed < (state.player.castSlowUntil || 0);
+    if (isCastSlow) {
+      targetSpeed *= 0.8;
+    }
     if (chantTimer > 0) {
       targetSpeed *= (config.MANTRA?.moveSpeedMult ?? 0.6);
     }
@@ -852,7 +856,7 @@ export function createPlayer(ctx) {
       state.player.action = 'chant';
     }
 
-    if (state.player.isMoving) {
+    if (state.player.isMoving && !isCastSlow) {
       const targetHeading = Math.atan2(-state.player.velocity.x, -state.player.velocity.z);
       state.player.heading = lerpAngle(state.player.heading, targetHeading, dt * 11);
     }
@@ -891,6 +895,13 @@ export function createPlayer(ctx) {
       leftArm.pivot.rotation.z = -0.07 - breathe * 0.015;
       rightArm.pivot.rotation.z = 0.07 + breathe * 0.015;
       stepAccum = 0;
+    }
+
+    if (isCastSlow && chantTimer <= 0) {
+      rightArm.pivot.rotation.set(1.45, -0.05, 0.08);
+      rightArm.forearmPivot.rotation.set(0.18, 0, 0);
+      leftArm.pivot.rotation.set(0.65, -0.35, 0);
+      leftArm.forearmPivot.rotation.set(0.95, 0, 0.25);
     }
 
     if (chantTimer > 0) {

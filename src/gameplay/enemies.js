@@ -996,6 +996,7 @@ export function createEnemies(ctx) {
       radius: kCfg.radius * (rank === 'rare' ? 1.2 : 1.0),
       height: kCfg.height * (rank === 'rare' ? 1.2 : 1.0),
       pos: { x: spawnPos.x, y: spawnPos.y, z: spawnPos.z },
+      position: group.position,
       heading: 0,
       lockedHeading: 0,
       lastAttackId: null,
@@ -1478,7 +1479,60 @@ export function createEnemies(ctx) {
     return true;
   }
 
-  function damageEnemy(idOrEnemy, baseAmount, opts = {}) {
+  function applyStatus(idOrEnemy, kind, duration, extra = {}) {
+    const targetId = typeof idOrEnemy === 'object' && idOrEnemy !== null ? idOrEnemy.id : idOrEnemy;
+    const enemy = activeEnemies.find((e) => e.id === targetId);
+    if (!enemy || enemy.state === 'liberated' || enemy.hp <= 0) return false;
+
+    const resist = Math.max(0, Math.min(1, enemy.ccResist ?? enemy.kindConfig?.ccResist ?? 0));
+    const dur = (Number(duration) || 0) * (1 - resist);
+    if (dur <= 0) return false;
+
+    const applied = {};
+    if (kind === 'root') {
+      enemy.status.root = Math.max(enemy.status.root || 0, dur);
+      if (enemy.rootIndicator) enemy.rootIndicator.visible = true;
+      applied.root = enemy.status.root;
+    } else if (kind === 'stun') {
+      enemy.status.stun = Math.max(enemy.status.stun || 0, dur);
+      if (enemy.stunIndicator) enemy.stunIndicator.visible = true;
+      applied.stun = enemy.status.stun;
+      if (enemy.telegraphGroup) enemy.telegraphGroup.visible = false;
+      if (enemy.animNodes?.mouthOrb) enemy.animNodes.mouthOrb.visible = false;
+      enemy.chargeData = null;
+      enemy.activeAttack = null;
+      enemy.state = 'hurt';
+      enemy.stateTimer = cfg.hurtDuration ?? 0.25;
+    } else if (kind === 'slow') {
+      const mult = Math.max(0.05, Math.min(1, Number(extra?.mult ?? 0.6)));
+      const prevRem = enemy.status.slow?.remaining || 0;
+      const nextRem = Math.max(prevRem, dur);
+      enemy.status.slow = {
+        mult: dur >= prevRem ? mult : (enemy.status.slow?.mult ?? mult),
+        remaining: nextRem,
+        duration: Math.max(enemy.status.slow?.duration || 0, dur),
+      };
+      applied.slow = { ...enemy.status.slow };
+      if (enemy.flashTimer <= 0 && enemy.state !== 'windup') {
+        enemy.wasSlowed = true;
+        applyIdleMaterialEmissive(enemy);
+      }
+    }
+
+    if (Object.keys(applied).length > 0) {
+      bus.emit('enemy:status', {
+        id: enemy.id,
+        kind: enemy.kind,
+        status: applied,
+      });
+    }
+    return true;
+  }
+
+  function damageEnemy(idOrEnemy, baseAmount, typeOrOpts = {}, maybeOpts = {}) {
+    const opts = typeof typeOrOpts === 'string'
+      ? { ...(maybeOpts || {}), type: typeOrOpts }
+      : (typeOrOpts || {});
     const targetId = typeof idOrEnemy === 'object' && idOrEnemy !== null ? idOrEnemy.id : idOrEnemy;
     const enemy = activeEnemies.find((e) => e.id === targetId);
     if (!enemy || enemy.state === 'liberated' || enemy.hp <= 0) {
@@ -2669,6 +2723,7 @@ export function createEnemies(ctx) {
     group: enemyGroup,
     update,
     damage: damageEnemy,
+    applyStatus,
     queryCircle,
     queryCone,
     queryLine,
