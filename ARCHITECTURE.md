@@ -15,9 +15,12 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/world/stupa.js` | World | stupa, wall, prayer wheels, night string lights; exports `flagAnchors` |
 | `src/world/prayerFlags.js` | World | wind-animated five-color flags (vertex shader) |
 | `src/world/environment.js` | World | plaza ground, surrounding buildings, hills, pigeons, lit windows at night, north monastery gate |
-| `src/world/wilderness.js` | World | highland steppe terrain, chorten, mani stones, boulders, peaks, return gate |
+| `src/world/mapBase.js` | World | shared terrain heightfield, InstancedMesh rock scatter, mountain rim, seeded RNG, collider helper |
+| `src/world/wilderness.js` | World | highland steppe terrain, chorten, mani stones, boulders, peaks, return gate (lazy-loaded) |
+| `src/world/maps/sandbox.js` | World | debug sandbox arena with flat ground, scattered rocks, and return gate (lazy-loaded) |
+| `src/data/maps.js` | Data | data-driven map registry (`MAPS`: `stupa`, `wild`, `sandbox`, ...) |
 | `src/core/input.js` | Gameplay | keyboard / mouse-drag / touch virtual joystick + multi-touch action buttons → action state |
-| `src/i18n.js` | Gameplay | zh-Hant / en strings, dynamic substitution, tutorial & guide strings |
+| `src/i18n.js`, `src/i18n/maps.js` | Gameplay | zh-Hant / en strings, `i18n.register(dict)`, dynamic substitution, tutorial & map strings |
 | `src/player/player.js` | Gameplay | pilgrim mesh, movement, collision, prostration animation, kora tracking |
 | `src/player/cameraRig.js` | Gameplay | third-person follow camera + intro orbit |
 | `src/gameplay/mantra.js` | Gameplay | Six-Syllable Mantra (六字大明咒) area wave, syllables pool, cooldown & MP handling |
@@ -26,7 +29,7 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/gameplay/items.js` | Gameplay | dropped items, procedural 3D models, pickup detection, pity system |
 | `src/gameplay/lamps.js` | Gameplay | butter-lamp stations (interactable), flames + lights (PointLights disabled when out of stupa) |
 | `src/gameplay/monkeys.js` | Gameplay | monkey meshes, wander AI, feeding (interactable) |
-| `src/systems/zones.js` | Gameplay | zone manager ('stupa' | 'wild'), gate transitions, teleport API, first-time wilderness tutorial |
+| `src/systems/zones.js` | Gameplay | data-driven zone manager (`MAPS`), lazy `import()` loading, gate transitions, `ctx.world` API |
 | `src/systems/vitals.js` | Gameplay | vitals system (HP/MP/EXP/ATK/DEF), level curve, damage mitigation, buffs |
 | `src/systems/interaction.js` | Gameplay | nearest-interactable selection, prompt, dispatch |
 | `src/systems/merit.js` | Gameplay | counters, achievements, persistence (localStorage) |
@@ -41,8 +44,17 @@ Subagents edit **only** files they own. If a contract change is needed, report i
 - `θ = Math.atan2(z, x)`. **Clockwise kora (stupa on the right shoulder) ⇔ θ increasing.**
 - `state.player.heading`: yaw, 0 faces −Z, positive = counter-clockwise rotation about +Y (Three.js `rotation.y`).
 - Walkable plaza: ring `WORLD.stupaColliderRadius (19.9) < r < WORLD.walkRadius (38)`, ground y = 0.
-- Wilderness zone: centered at `CONFIG.WILD.origin` (`x = 1000, z = 0`), walkable radius 70m, terrain height $y = \text{getHeight}(x, z)$.
-- Layout numbers live in `src/config.js` (`CONFIG.STUPA`, `WALL`, `WORLD`, `LAMPS`, `WILD`, …). Never hardcode duplicates.
+- Map Origins (`src/data/maps.js`):
+  - `stupa` (博達哈大佛塔): `type: 'hub'`, `origin = (0, 0)`
+  - `wild` (北郊原野): `type: 'combat'`, `origin = (1000, 0)`, level 1–5
+  - `pharping` (帕平・揚列雪): `type: 'combat'`, `origin = (2000, 0)`, level 5–10
+  - `mangyul` (芒域山口): `type: 'combat'`, `origin = (3000, 0)`, level 10–16
+  - `yarlung` (雅隆河谷): `type: 'combat'`, `origin = (4000, 0)`, level 16–23
+  - `samye` (海波日山・桑耶): `type: 'combat'`, `origin = (5000, 0)`, level 23–30
+  - `chimphu` (青朴修行地): `type: 'hub'`, `origin = (6000, 0)`, level 28–32
+  - `terma` (伏藏秘境): `type: 'dungeon'`, `origin = (7000, 0)`, level 30–40+
+  - `sandbox` (測試場, debug only): `type: 'combat'`, `origin = (9000, 0)`
+- Layout numbers live in `src/config.js` (`CONFIG.STUPA`, `WALL`, `WORLD`, `LAMPS`, `WILD`, …) and `src/data/maps.js`. Never hardcode duplicates.
 
 ## Module contract
 
@@ -58,12 +70,13 @@ export function createX(ctx, ...extra) {
 | Field | Description |
 |---|---|
 | `THREE, scene, camera, renderer` | Three.js objects (camera is moved only by `cameraRig`) |
-| `stupaGroup, wildGroup` | Three.js Groups toggled by active zone for scene graph culling |
+| `zoneGroups` | `{ [mapId]: THREE.Group }` toggled by active zone (`stupaGroup` & `wildGroup` kept as aliases) |
+| `world` | `{ getMap(id?), getHeight(x, z), isCombatZone(), isHub(), sampleSpawnPoint(areaId, opts?) }` |
 | `bus` | `{ on(type, fn) → unsubscribe, emit(type, payload) }` |
 | `state` | shared mutable game state (below) |
 | `config` | `CONFIG` |
-| `i18n` | `{ t(key, params?), lang, setLang(lang), onChange(fn) }` |
-| `colliders` | array; push `{type:'circle',x,z,r,zone?:'stupa'\|'wild'}` or `{type:'box',minX,maxX,minZ,maxZ,zone?:'stupa'\|'wild'}` |
+| `i18n` | `{ t(key, params?), lang, setLang(lang), onChange(fn), register(dict) }` |
+| `colliders` | array; push `{type:'circle',x,z,r,zone:mapId}` or `{type:'box',minX,maxX,minZ,maxZ,zone:mapId}` |
 | `interactables` | array of Interactable (below) |
 | `input` | input module (created first) |
 | `debug` | `{ enabled, register(name, api) }` |
@@ -72,17 +85,19 @@ export function createX(ctx, ...extra) {
 | `projectiles` | `{ update(dt), spawn(type, params?), clear(), count(), showHitboxes(bool) }` |
 | `items` | `{ update(dt), drop(id?), forceNext(), pityCount(), activeItems }` |
 | `vitals` | `{ update(dt), addExp, spendMp, addBuff, addPermanent, getStats, set, damage, faint, god(bool) }` |
-| `zones` | `{ update(dt), teleport(to, options?), startTransition(to), isTransitioning() }` |
+| `zones` | `{ update(dt), teleport(mapId, options?), startTransition(mapId, spawnId?), isTransitioning(), list() }` |
 | `merit` | `{ update(dt), reset, getStats, getAchievementsList }` |
 | `audio` | `{ update(dt), isMuted, setMuted, toggleMute, getVolume, setVolume, playEagleCry, playDistantBell }` |
 
-Update order per frame: `input → sky → stupa → flags → environment → wilderness → zones → player → mantra → enemies → projectiles → items → lamps → monkeys → vitals → cameraRig → merit → interaction → audio → hud`.
+Update order per frame: `input → sky → stupa → flags → environment → zones → player → mantra → enemies → projectiles → items → lamps → monkeys → vitals → cameraRig → merit → interaction → audio → hud`.
 
 ### `state`
 
 ```js
 state.mode            // 'intro' | 'play'   (main sets 'play' on bus 'game:start')
-state.zone            // 'stupa' | 'wild'   (zones system manages)
+state.zone            // active mapId string ('stupa' | 'wild' | 'sandbox' | ...)
+state.zoneType        // 'hub' | 'combat' | 'dungeon'
+state.uiOpen          // true when a fullscreen UI modal is open
 state.elapsed         // seconds since load
 state.time.t          // 0..1 (0 midnight, .25 sunrise, .5 noon, .75 sunset) — main advances; HUD slider may set
 state.time.speed      // multiplier (0 = paused) — HUD may set
@@ -131,7 +146,8 @@ state.interactionTarget  // currently targeted interactable or null
 | Event | Payload | Emitted by |
 |---|---|---|
 | `game:start` | – | HUD (title button) |
-| `zone:change` | `{ from: 'stupa'\|'wild', to: 'stupa'\|'wild' }` | zones |
+| `zone:change` | `{ from: mapId, to: mapId }` | zones |
+| `map:loaded` | `{ mapId }` | zones (when a lazy-loaded map finishes building for the first time) |
 | `merit` | `{ type: 'kora'\|'prostration'\|'lamp'\|'monkey'\|'wheel' }` | player / lamps / monkeys / stupa |
 | `kora:progress` | `{ fraction: 0..1, laps }` | player |
 | `kora:wrongway` | – | player (walking counter-clockwise for a while) |
@@ -161,15 +177,12 @@ state.interactionTarget  // currently targeted interactable or null
 
 ## Combat & Wilderness Architecture
 
-### 1. Zone Architecture & Scene Graph Culling
-The world is strictly divided into two distinct zones:
-- **Stupa Zone**: Centered at origin `(0, 0, 0)`, ground level `y = 0`. Houses the great Stupa, the prayer wheel circumambulation wall, butter-lamp stations, and wandering monkeys.
-- **Wilderness Zone**: Centered at `(1000, 0, 0)`, radius 70m. Houses procedural terrain $y = \text{getHeight}(x, z)$, the central Chorten, ancient Mani stone mounds, boulder cover, and enemy habitats.
-- **Scene Graph Culling**: Meshes belonging to each zone are children of `ctx.stupaGroup` or `ctx.wildGroup`. When switching zones (`applyZoneSwitch(to)`), the inactive group's visibility is toggled off (`visible = false`), culling entire subtree render passes and light computations.
-- **Gate Transitions**:
-  - North Monastery Gate at `(0, 0, -37)` links to the Wilderness Gate at `(1000, 0, 62)`.
-  - Gate interaction triggers a seamless 0.4s fade-to-black transition overlay (`#zone-fade`).
-  - Synchronous `zones.teleport(to, options)` supports programmatic and faint recovery teleports.
+### 1. Data-Driven Zone Registry, Lazy Loading & Scene Graph Culling
+Maps are registered in `src/data/maps.js` (`MAPS`):
+- Each map entry defines `id`, `type` (`'hub' | 'combat' | 'dungeon'`), `nameKey`, `origin`, `level`, `walkRadius`, `safeZones`, `gates`, `spawns`, `spawnTable`, `spawnAreas`, `ambience`, `debugOnly`, and `load: () => import(...)`.
+- **Lazy Construction**: Non-hub maps are only imported and constructed the first time the player enters them (`zones.ensureMapLoaded(mapId)`), emitting `map:loaded`. During `startTransition`, the black fade screen stays active until `load()` resolves.
+- **Scene Graph Culling**: Each map owns a `THREE.Group` in `ctx.zoneGroups[mapId]` (`ctx.stupaGroup` and `ctx.wildGroup` are preserved as aliases). Switching maps hides inactive groups (`visible = false`).
+- **`ctx.world` Helpers**: Systems query `ctx.world.isCombatZone()`, `ctx.world.isHub()`, `ctx.world.getHeight(x, z)`, `ctx.world.getMap(id)`, and `ctx.world.sampleSpawnPoint(areaId, opts)` instead of hardcoding `'wild'`.
 
 ### 2. Vitals & Progression Formulas
 - **Vitals Base & Scaling**:

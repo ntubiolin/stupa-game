@@ -74,10 +74,11 @@ export function createWilderness(ctx) {
   const { scene, state, config, colliders, bus } = ctx;
   const W = config.WILD;
   const origin = W.origin;
+  const mapId = W.mapId || 'wild';
 
   const group = new THREE.Group();
   group.name = 'Wilderness';
-  (ctx.wildGroup || scene).add(group);
+  (ctx.zoneGroups?.[mapId] || ctx.wildGroup || scene).add(group);
 
   const getHeight = (x, z) => computeWildernessHeight(x, z, W);
 
@@ -244,7 +245,7 @@ export function createWilderness(ctx) {
       x: gateX + px,
       z: gateZ,
       r: 0.55,
-      zone: 'wild',
+      zone: mapId,
     });
   }
 
@@ -410,7 +411,7 @@ export function createWilderness(ctx) {
     x: chortenX,
     z: chortenZ,
     r: W.chorten?.colliderRadius || 1.8,
-    zone: 'wild',
+    zone: mapId,
   });
 
   group.add(chortenGroup);
@@ -441,7 +442,7 @@ export function createWilderness(ctx) {
       x: ms.x,
       z: ms.z,
       r: 1.6,
-      zone: 'wild',
+      zone: mapId,
     });
 
     // Procedural stack of 12 carved slate slabs forming a cairn
@@ -589,7 +590,7 @@ export function createWilderness(ctx) {
       x: bx,
       z: bz,
       r: bRadius * 0.9,
-      zone: 'wild',
+      zone: mapId,
     });
 
     // Deformed low-poly rock geometry
@@ -727,7 +728,7 @@ export function createWilderness(ctx) {
       if (Array.isArray(colliders)) {
         for (let i = 0; i < colliders.length; i++) {
           const c = colliders[i];
-          if (!c || (c.zone || 'stupa') !== 'wild') continue;
+          if (!c || (c.zone || 'stupa') !== mapId) continue;
           if (c.type === 'circle') {
             if (Math.hypot(x - c.x, z - c.z) < (c.r || 1) + 1.0) {
               insideCollider = true;
@@ -767,7 +768,7 @@ export function createWilderness(ctx) {
     maniStones: maniStonesData,
     zones: W.zones,
     update(dt) {
-      if (state.zone && state.zone !== 'wild') {
+      if (state.zone && state.zone !== mapId) {
         maniTimer = 0;
         return;
       }
@@ -812,3 +813,6 @@ export function createWilderness(ctx) {
   ctx.wilderness = api;
   return api;
 }
+
+export const createMap = createWilderness;
+export default createWilderness;

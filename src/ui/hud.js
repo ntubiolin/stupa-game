@@ -918,7 +918,7 @@ export function createHud(ctx) {
   const enemyBars = new Map();
   function updateEnemyHealthBars() {
     if (!enemyHpContainer) return;
-    if (state.zone !== 'wild' || hudHidden || !ctx.enemies) {
+    if (!ctx.world?.isCombatZone() || hudHidden || !ctx.enemies) {
       enemyHpContainer.style.display = 'none';
       return;
     }

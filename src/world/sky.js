@@ -332,15 +332,23 @@ export function createSky(ctx) {
     hemiLight.groundColor.lerpColors(pA.hemiGround, pB.hemiGround, blend);
     hemiLight.intensity = THREE.MathUtils.lerp(0.65, 0.42, nightFactor);
 
-    scene.fog.color.lerpColors(pA.fog, pB.fog, blend);
+    // Fog color & density per map (map.sky overrides default)
+    const mapDef = ctx.world?.getMap(state.zone);
+    const skyCfg = mapDef?.sky;
+    if (skyCfg?.fogColor != null) {
+      scene.fog.color.set(skyCfg.fogColor);
+    } else {
+      scene.fog.color.lerpColors(pA.fog, pB.fog, blend);
+    }
+    scene.fog.density = skyCfg?.fogDensity ?? 0.0022;
 
     // Sun directional light & target placement per zone
-    const isWild = (state.zone === 'wild');
-    const wildOrigin = config.WILD?.origin || { x: 1000, z: 0 };
-    const centerX = isWild ? wildOrigin.x : 0;
-    const centerZ = isWild ? wildOrigin.z : 0;
+    const isStupa = (state.zone === 'stupa');
+    const mapOrigin = mapDef?.origin || config.WILD?.origin || { x: 1000, z: 0 };
+    const centerX = isStupa ? 0 : mapOrigin.x;
+    const centerZ = isStupa ? 0 : mapOrigin.z;
 
-    const targetD = isWild ? 72 : 46;
+    const targetD = isStupa ? 46 : 72;
     if (targetD !== currentShadowFrustumD) {
       currentShadowFrustumD = targetD;
       sunLight.shadow.camera.left = -targetD;
@@ -377,7 +385,7 @@ export function createSky(ctx) {
 
     // Scale metallic environment map & toneMappingExposure
     scene.environmentIntensity = THREE.MathUtils.lerp(0.55, 0.22, nightFactor);
-    renderer.toneMappingExposure = THREE.MathUtils.lerp(0.88, 0.90, nightFactor);
+    renderer.toneMappingExposure = skyCfg?.exposure ?? THREE.MathUtils.lerp(0.88, 0.90, nightFactor);
 
     // Keep sky dome centered on camera
     skyMesh.position.copy(camera.position);

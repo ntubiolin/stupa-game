@@ -261,11 +261,6 @@ export const CONFIG = {
     hurtKnockback: 1.5,
     liberateDuration: 1.2,
     playerKnockback: 1.5,
-    initialCounts: {
-      preta: 5,
-      tsen: 4,
-      migoi: 3,
-    },
     kinds: {
       preta: {
         id: 'preta',

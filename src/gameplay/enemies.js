@@ -35,7 +35,7 @@ export function createEnemies(ctx) {
 
   const enemyGroup = new THREE.Group();
   enemyGroup.name = 'Enemies';
-  (ctx.wildGroup || scene).add(enemyGroup);
+  scene.add(enemyGroup);
 
   // ---------------------------------------------------------------- 1. Shared Geometries
   // --- Preta Geometries
@@ -492,7 +492,7 @@ export function createEnemies(ctx) {
       telegraphFill.scale.set(0.001, 1, 0.001);
       telegraphGroup.add(telegraphFill);
 
-      (ctx.wildGroup || scene).add(telegraphGroup);
+      enemyGroup.add(telegraphGroup);
     } else if (kind === 'tsen') {
       telegraphGroup = new THREE.Group();
       telegraphGroup.name = `Telegraph_${id}`;
@@ -522,7 +522,7 @@ export function createEnemies(ctx) {
       aimLineMesh.visible = false;
       telegraphGroup.add(aimLineMesh);
 
-      (ctx.wildGroup || scene).add(telegraphGroup);
+      enemyGroup.add(telegraphGroup);
     }
 
     enemyGroup.add(group);
@@ -568,10 +568,11 @@ export function createEnemies(ctx) {
 
   // ---------------------------------------------------------------- 4. Clamping & Collisions
   function clampEnemyPosition(enemy) {
-    const origin = wildCfg.origin || { x: 1000, z: 0 };
-    const maxR = (wildCfg.walkRadius || 70) - enemy.radius;
+    const mapDef = ctx.world?.getMap(state.zone);
+    const origin = mapDef?.origin || wildCfg.origin || { x: 1000, z: 0 };
+    const maxR = ((mapDef?.walkRadius ?? wildCfg.walkRadius) || 70) - enemy.radius;
 
-    // 1. Walk boundary from wild origin
+    // 1. Walk boundary from map origin
     let dx = enemy.pos.x - origin.x;
     let dz = enemy.pos.z - origin.z;
     let r = Math.hypot(dx, dz);
@@ -581,24 +582,29 @@ export function createEnemies(ctx) {
       enemy.pos.z = origin.z + dz * s;
     }
 
-    // 2. Gate safe zone (10m radius around 1000, 62)
-    const gateX = wildCfg.wildGate.x;
-    const gateZ = wildCfg.wildGate.z;
-    const safeR = cfg.gateSafeRadius ?? 10;
-    const gdx = enemy.pos.x - gateX;
-    const gdz = enemy.pos.z - gateZ;
-    const gd = Math.hypot(gdx, gdz);
-    if (gd < safeR) {
-      const push = safeR / (gd || 1);
-      enemy.pos.x = gateX + gdx * push;
-      enemy.pos.z = gateZ + gdz * push;
+    // 2. Safe zones (from mapDef.safeZones)
+    const safeZones = mapDef?.safeZones || [
+      { x: wildCfg.wildGate.x, z: wildCfg.wildGate.z, r: cfg.gateSafeRadius ?? 10 },
+    ];
+    for (let s = 0; s < safeZones.length; s++) {
+      const sz = safeZones[s];
+      const safeR = sz.r ?? cfg.gateSafeRadius ?? 10;
+      const gdx = enemy.pos.x - sz.x;
+      const gdz = enemy.pos.z - sz.z;
+      const gd = Math.hypot(gdx, gdz);
+      if (gd < safeR) {
+        const push = safeR / (gd || 1);
+        enemy.pos.x = sz.x + gdx * push;
+        enemy.pos.z = sz.z + gdz * push;
+      }
     }
 
     // 3. Obstacle colliders
+    const currentZone = state.zone || 'stupa';
     if (Array.isArray(ctx.colliders)) {
       for (let i = 0; i < ctx.colliders.length; i++) {
         const c = ctx.colliders[i];
-        if (!c || (c.zone || 'stupa') !== 'wild') continue;
+        if (!c || (c.zone || 'stupa') !== currentZone) continue;
         if (c.type === 'circle') {
           const cdx = enemy.pos.x - c.x;
           const cdz = enemy.pos.z - c.z;
@@ -615,12 +621,13 @@ export function createEnemies(ctx) {
     }
 
     // 4. Ground height
-    enemy.pos.y = ctx.wilderness?.getHeight ? ctx.wilderness.getHeight(enemy.pos.x, enemy.pos.z) : 0;
+    enemy.pos.y = ctx.world ? ctx.world.getHeight(enemy.pos.x, enemy.pos.z) : 0;
   }
 
   // ---------------------------------------------------------------- 5. Initial Spawning
   function disposeEnemy(e) {
     if (e.telegraphGroup) {
+      enemyGroup.remove(e.telegraphGroup);
       (ctx.wildGroup || scene).remove(e.telegraphGroup);
       scene.remove(e.telegraphGroup);
       e.telegraphGroup.traverse((child) => {
@@ -636,59 +643,64 @@ export function createEnemies(ctx) {
     }
   }
 
-  function initRoster() {
-    // Clear any existing
+  function clearAllEnemies() {
     for (const e of activeEnemies) {
       disposeEnemy(e);
     }
     activeEnemies.length = 0;
     pendingRespawns.length = 0;
+  }
 
-    if (!ctx.wilderness?.sampleRingPoint) return;
+  function initRoster() {
+    clearAllEnemies();
 
-    // 5 preta in 'near': cluster of 3 and cluster of 2
-    const nearPoint1 = ctx.wilderness.sampleRingPoint('near', { minDistFromGate: 12 });
-    for (let i = 0; i < 3; i++) {
-      const angle = (i / 3) * Math.PI * 2;
-      const offsetPos = {
-        x: nearPoint1.x + Math.cos(angle) * 1.8,
-        y: nearPoint1.y,
-        z: nearPoint1.z + Math.sin(angle) * 1.8,
-      };
-      const e = createEnemyInstance('preta', offsetPos);
-      clampEnemyPosition(e);
-    }
+    if (!ctx.world?.isCombatZone()) return;
+    const mapDef = ctx.world.getMap(state.zone);
+    const spawnTable = mapDef?.spawnTable || [];
+    if (!spawnTable.length) return;
 
-    const nearPoint2 = ctx.wilderness.sampleRingPoint('near', { minDistFromGate: 12 });
-    for (let i = 0; i < 2; i++) {
-      const angle = (i / 2) * Math.PI * 2;
-      const offsetPos = {
-        x: nearPoint2.x + Math.cos(angle) * 1.8,
-        y: nearPoint2.y,
-        z: nearPoint2.z + Math.sin(angle) * 1.8,
-      };
-      const e = createEnemyInstance('preta', offsetPos);
-      clampEnemyPosition(e);
-    }
+    for (const entry of spawnTable) {
+      const kind = entry.kind || 'preta';
+      const area = entry.area || 'near';
+      const count = entry.count ?? 0;
+      if (count <= 0) continue;
 
-    // 4 tsen in 'mid'
-    for (let i = 0; i < 4; i++) {
-      const pt = ctx.wilderness.sampleRingPoint('mid', { minDistFromGate: 12 });
-      const e = createEnemyInstance('tsen', pt);
-      clampEnemyPosition(e);
-    }
-
-    // 3 migoi in 'deep'
-    for (let i = 0; i < 3; i++) {
-      const pt = ctx.wilderness.sampleRingPoint('deep', { minDistFromGate: 12 });
-      const e = createEnemyInstance('migoi', pt);
-      clampEnemyPosition(e);
+      if (Array.isArray(entry.clusters) && entry.clusters.length > 0) {
+        for (const clusterSize of entry.clusters) {
+          const center = ctx.world.sampleSpawnPoint(area, { minDistFromGate: 12 });
+          for (let i = 0; i < clusterSize; i++) {
+            const angle = (i / clusterSize) * Math.PI * 2;
+            const offsetPos = {
+              x: center.x + Math.cos(angle) * 1.8,
+              y: center.y,
+              z: center.z + Math.sin(angle) * 1.8,
+            };
+            const e = createEnemyInstance(kind, offsetPos);
+            e.ring = area;
+            clampEnemyPosition(e);
+          }
+        }
+      } else {
+        for (let i = 0; i < count; i++) {
+          const pt = ctx.world.sampleSpawnPoint(area, { minDistFromGate: 12 });
+          const e = createEnemyInstance(kind, pt);
+          e.ring = area;
+          clampEnemyPosition(e);
+        }
+      }
     }
   }
 
+  bus.on('zone:change', () => {
+    clearAllEnemies();
+    if (ctx.world?.isCombatZone()) {
+      initRoster();
+    }
+  });
+
   // ---------------------------------------------------------------- 6. Damage & Liberation Bus Listeners
   bus.on('mantra:cast', ({ origin, radius, power }) => {
-    if (state.zone !== 'wild' || !origin) return;
+    if (!ctx.world?.isCombatZone() || !origin) return;
 
     const dmgPower = typeof power === 'number' && power > 0 ? power : (state.player?.atk || 10);
     const origin2D = { x: origin.x, z: origin.z };
@@ -768,18 +780,18 @@ export function createEnemies(ctx) {
           });
 
           // If no non-liberated enemies remain on the field and total queued < maxCount,
-          // schedule respawns to restore the full 12-enemy roster over 20–38s.
+          // schedule respawns from current map's spawnTable.
           const remainingAlive = activeEnemies.filter((e) => e.state !== 'liberated').length;
-          if (remainingAlive === 0 && pendingRespawns.length < (cfg.maxCount ?? 12)) {
-            const targetRoster = [
-              ...Array(5).fill({ kind: 'preta', ring: 'near' }),
-              ...Array(4).fill({ kind: 'tsen', ring: 'mid' }),
-              ...Array(3).fill({ kind: 'migoi', ring: 'deep' }),
-            ];
-            for (const slot of targetRoster) {
-              if (pendingRespawns.length >= (cfg.maxCount ?? 12)) break;
-              const t = (cfg.respawnMin ?? 20) + Math.random() * (((cfg.respawnMax ?? 40) - 2) - (cfg.respawnMin ?? 20));
-              pendingRespawns.push({ kind: slot.kind, ring: slot.ring, timer: t });
+          const mapDef = ctx.world?.getMap(state.zone);
+          const spawnTable = mapDef?.spawnTable || [];
+          const mapTotalCount = spawnTable.reduce((acc, s) => acc + (s.count || 0), 0);
+          if (remainingAlive === 0 && mapTotalCount > 0 && pendingRespawns.length < mapTotalCount) {
+            for (const entry of spawnTable) {
+              for (let c = 0; c < (entry.count || 0); c++) {
+                if (pendingRespawns.length >= mapTotalCount) break;
+                const t = (cfg.respawnMin ?? 20) + Math.random() * (((cfg.respawnMax ?? 40) - 2) - (cfg.respawnMin ?? 20));
+                pendingRespawns.push({ kind: entry.kind, ring: entry.area || 'near', timer: t });
+              }
             }
           }
 
@@ -866,11 +878,11 @@ export function createEnemies(ctx) {
   }
 
   function update(dt) {
-    const isWild = (state.zone === 'wild');
-    enemyGroup.visible = isWild;
+    const isCombat = Boolean(ctx.world?.isCombatZone());
+    enemyGroup.visible = isCombat;
 
-    if (!isWild) {
-      // Hide any active telegraphs when leaving wild zone
+    if (!isCombat) {
+      // Hide any active telegraphs when leaving combat zone
       for (const e of activeEnemies) {
         if (e.telegraphGroup) e.telegraphGroup.visible = false;
         if (e.animNodes?.mouthOrb) e.animNodes.mouthOrb.visible = false;
@@ -879,12 +891,20 @@ export function createEnemies(ctx) {
     }
 
     const playerPos = state.player?.position;
-    const gateX = wildCfg.wildGate.x;
-    const gateZ = wildCfg.wildGate.z;
-    const safeRadius = cfg.gateSafeRadius ?? 10;
-    const isPlayerInSafeZone = playerPos
-      ? Math.hypot(playerPos.x - gateX, playerPos.z - gateZ) <= safeRadius
-      : true;
+    const mapDef = ctx.world?.getMap(state.zone);
+    const safeZones = mapDef?.safeZones || [
+      { x: wildCfg.wildGate.x, z: wildCfg.wildGate.z, r: cfg.gateSafeRadius ?? 10 },
+    ];
+    let isPlayerInSafeZone = !playerPos;
+    if (playerPos) {
+      for (let s = 0; s < safeZones.length; s++) {
+        const sz = safeZones[s];
+        if (Math.hypot(playerPos.x - sz.x, playerPos.z - sz.z) <= (sz.r ?? cfg.gateSafeRadius ?? 10)) {
+          isPlayerInSafeZone = true;
+          break;
+        }
+      }
+    }
 
     // 1. Process Respawn Timers
     for (let i = pendingRespawns.length - 1; i >= 0; i--) {
@@ -892,12 +912,13 @@ export function createEnemies(ctx) {
       r.timer -= dt;
       if (r.timer <= 0) {
         pendingRespawns.splice(i, 1);
-        if (activeEnemies.length < (cfg.maxCount ?? 12) && ctx.wilderness?.sampleRingPoint) {
-          const pt = ctx.wilderness.sampleRingPoint(r.ring, {
+        if (activeEnemies.length < (cfg.maxCount ?? 12) && ctx.world?.sampleSpawnPoint) {
+          const pt = ctx.world.sampleSpawnPoint(r.ring, {
             minDistFromGate: 12,
-            minDistFromPlayer: cfg.respawnMinPlayerDist ?? 20,
+            minPlayerDist: cfg.respawnMinPlayerDist ?? 20,
           });
           const newEnemy = createEnemyInstance(r.kind, pt);
+          newEnemy.ring = r.ring;
           clampEnemyPosition(newEnemy);
         }
       }
@@ -1351,7 +1372,7 @@ export function createEnemies(ctx) {
 
       const sp = {
         x: rawX,
-        y: ctx.wilderness?.getHeight ? ctx.wilderness.getHeight(rawX, rawZ) : 0,
+        y: ctx.world ? ctx.world.getHeight(rawX, rawZ) : 0,
         z: rawZ,
       };
 
@@ -1359,13 +1380,7 @@ export function createEnemies(ctx) {
       clampEnemyPosition(enemy);
       return enemy.id;
     },
-    clear() {
-      for (const e of activeEnemies) {
-        disposeEnemy(e);
-      }
-      activeEnemies.length = 0;
-      pendingRespawns.length = 0;
-    },
+    clear: clearAllEnemies,
     list() {
       const playerPos = state.player?.position;
       return activeEnemies

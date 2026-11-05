@@ -416,4 +416,16 @@ export const i18n = {
     listeners.add(fn);
     return () => listeners.delete(fn);
   },
+  register(dict) {
+    if (!dict || typeof dict !== 'object') return;
+    if (dict['zh-Hant'] && typeof dict['zh-Hant'] === 'object') {
+      Object.assign(STRINGS.zh, dict['zh-Hant']);
+    }
+    if (dict.zh && typeof dict.zh === 'object') {
+      Object.assign(STRINGS.zh, dict.zh);
+    }
+    if (dict.en && typeof dict.en === 'object') {
+      Object.assign(STRINGS.en, dict.en);
+    }
+  },
 };

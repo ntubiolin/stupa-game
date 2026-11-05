@@ -472,7 +472,7 @@ export function createVitals(ctx) {
         if (!faintTeleported && faintTimer >= teleportTime) {
           faintTeleported = true;
           if (ctx.zones?.teleport) {
-            ctx.zones.teleport('stupa', { southSpawn: true, skipFade: true });
+            ctx.zones.teleport('stupa', { spawn: 'south', skipFade: true });
           } else {
             const startAng = deg(config.PLAYER?.startAngleDeg ?? 90);
             const startRad = config.PLAYER?.startRadius ?? 30;
@@ -482,6 +482,7 @@ export function createVitals(ctx) {
             state.player.velocity.set(0, 0, 0);
             state.player.isMoving = false;
             state.zone = 'stupa';
+            state.zoneType = 'hub';
           }
 
           p.hp = Math.round(p.maxHp * (V.faintHpRatio ?? 0.5));
