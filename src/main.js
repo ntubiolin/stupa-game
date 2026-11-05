@@ -32,6 +32,8 @@ import { createMantra } from './gameplay/mantra.js';
 import { createEnemies } from './gameplay/enemies.js';
 import { createProjectiles } from './gameplay/projectiles.js';
 import { createNpcs } from './gameplay/npcs.js';
+import { createPotions } from './gameplay/potions.js';
+import { createShrines } from './gameplay/shrines.js';
 import { createPlayer } from './player/player.js';
 import { createCameraRig } from './player/cameraRig.js';
 
@@ -148,6 +150,8 @@ const items = createItems(ctx);
 const lamps = createLamps(ctx);
 const monkeys = createMonkeys(ctx);
 const vitals = createVitals(ctx);
+const potions = createPotions(ctx);
+const shrines = createShrines(ctx);
 const quests = createQuests(ctx);
 const npcs = createNpcs(ctx);
 const cameraRig = createCameraRig(ctx);
@@ -166,7 +170,7 @@ const modules = [
   sky, stupa, flags, environment,
   zones,
   player, mantra, enemies, projectiles, loot, inventory, groundLoot, items, lamps, monkeys,
-  vitals,
+  vitals, potions, shrines,
   quests, npcs,
   cameraRig,
   merit, interaction, audio, hud, inventoryUi, dialogue, questUi,

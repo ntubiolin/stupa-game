@@ -102,6 +102,13 @@ export const MAPS = {
       { kind: 'tsen', area: 'mid', count: 4 },
       { kind: 'migoi', area: 'deep', count: 3 },
     ],
+    elitePacks: { champion: 1, rare: 1 },
+    shrineSpots: [
+      { x: -24, z: -18 },
+      { x: 26, z: -22 },
+      { x: -20, z: 28 },
+      { x: 28, z: 24 },
+    ],
     spawnAreas: {
       near: { minR: 8, maxR: 26 },
       mid: { minR: 26, maxR: 46 },

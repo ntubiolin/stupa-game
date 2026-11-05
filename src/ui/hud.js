@@ -12,6 +12,7 @@
  */
 import { Vector3 } from 'three';
 import { ACHIEVEMENTS } from '../systems/merit.js';
+import '../i18n/elites.js';
 
 const RING_RADIUS = 24;
 const RING_CIRC = 2 * Math.PI * RING_RADIUS;
@@ -154,8 +155,16 @@ export function createHud(ctx) {
           <div class="vitals-bars">
             <!-- HP Bar -->
             <div class="vitals-bar-wrap" id="hp-bar-wrap">
-              <div class="vitals-bar-track vitals-bar-track--hp">
-                <div id="stat-hp-bar" class="vitals-bar-fill vitals-bar-fill--hp" style="width: 100%;"></div>
+              <div class="vitals-bar-row">
+                <div class="vitals-bar-track vitals-bar-track--hp">
+                  <div id="stat-hp-bar" class="vitals-bar-fill vitals-bar-fill--hp" style="width: 100%;"></div>
+                </div>
+                <div id="potion-pips" class="potion-pips" aria-label="Amrita Pills">
+                  <span class="potion-pip is-filled" data-pip="0"></span>
+                  <span class="potion-pip is-filled" data-pip="1"></span>
+                  <span class="potion-pip is-filled" data-pip="2"></span>
+                  <span class="potion-pip is-filled" data-pip="3"></span>
+                </div>
               </div>
               <div class="vitals-bar-meta">
                 <span class="vitals-bar-label" data-i18n="hud.hp">HP</span>
@@ -319,6 +328,12 @@ export function createHud(ctx) {
           <span class="action-fab__label" data-i18n="mobile.feed"></span>
           <kbd class="action-fab__key">F</kbd>
         </button>
+        <button id="btn-mobile-potion" data-action="potion" type="button" class="action-fab action-fab--potion glass-panel">
+          <span class="action-fab__icon" aria-hidden="true">💊</span>
+          <span class="action-fab__label" data-i18n="mobile.potion"></span>
+          <span id="mobile-potion-count" class="action-fab__badge">4</span>
+          <kbd class="action-fab__key">X</kbd>
+        </button>
       </div>
     </div>
 
@@ -449,6 +464,8 @@ export function createHud(ctx) {
   const statTurquoise = root.querySelector('#stat-turquoise');
   const statHpBar = root.querySelector('#stat-hp-bar');
   const statHpText = root.querySelector('#stat-hp-text');
+  const potionPipsWrap = root.querySelector('#potion-pips');
+  const potionPipEls = potionPipsWrap ? Array.from(potionPipsWrap.querySelectorAll('.potion-pip')) : [];
   const hpPopupAnchor = root.querySelector('#hp-popup-anchor');
   const statMpBar = root.querySelector('#stat-mp-bar');
   const statMpText = root.querySelector('#stat-mp-text');
@@ -526,6 +543,8 @@ export function createHud(ctx) {
   const btnMobileProstrate = root.querySelector('#btn-mobile-prostrate');
   const btnMobileInteract = root.querySelector('#btn-mobile-interact');
   const btnMobileFeed = root.querySelector('#btn-mobile-feed');
+  const btnMobilePotion = root.querySelector('#btn-mobile-potion');
+  const mobilePotionCount = root.querySelector('#mobile-potion-count');
 
   const toastStack = root.querySelector('#toast-stack');
   const damageVignette = root.querySelector('#damage-vignette');
@@ -834,6 +853,39 @@ export function createHud(ctx) {
   bindActionButton(btnMobileProstrate, 'prostrate');
   bindActionButton(btnMobileInteract, 'interact');
   bindActionButton(btnMobileFeed, 'feed');
+  bindActionButton(btnMobilePotion, 'potion');
+
+  // Amrita potion pips & mobile badge
+  let lastPotionCharges = -1;
+  let lastPotionMax = -1;
+  function renderPotionPips(payload) {
+    const pot = payload || state.player?.potions || { charges: 4, max: 4 };
+    const charges = Math.max(0, Number(pot.charges ?? 4));
+    const max = Math.max(1, Number(pot.max ?? 4));
+    if (charges === lastPotionCharges && max === lastPotionMax) return;
+    lastPotionCharges = charges;
+    lastPotionMax = max;
+
+    for (let i = 0; i < potionPipEls.length; i++) {
+      const pip = potionPipEls[i];
+      const filled = i < charges;
+      pip.classList.toggle('is-filled', filled);
+      pip.classList.toggle('is-empty', !filled);
+    }
+    if (potionPipsWrap) {
+      potionPipsWrap.title = `${i18n.t('hud.potions') || 'Amrita'}: ${charges}/${max}`;
+    }
+    if (mobilePotionCount) {
+      mobilePotionCount.textContent = String(charges);
+    }
+    if (btnMobilePotion) {
+      btnMobilePotion.classList.toggle('is-empty', charges <= 0);
+    }
+  }
+
+  bus.on('potion:change', renderPotionPips);
+  bus.on('potion:use', renderPotionPips);
+  renderPotionPips();
 
   // Flash MP bar on insufficient MP
   const mpBarTrack = statMpBar?.parentElement;
@@ -1148,7 +1200,8 @@ export function createHud(ctx) {
       const e = enemies[i];
       activeIds.add(e.id);
 
-      if (e.hp <= 0 || e.hp >= e.maxHp || e.state === 'liberated') {
+      const isElite = e.rank === 'champion' || e.rank === 'rare';
+      if (e.hp <= 0 || e.state === 'liberated' || (!isElite && e.hp >= e.maxHp)) {
         const bar = enemyBars.get(e.id);
         if (bar) bar.wrap.style.display = 'none';
         continue;
@@ -1165,11 +1218,31 @@ export function createHud(ctx) {
       if (!bar) {
         const wrap = document.createElement('div');
         wrap.className = 'enemy-hp-wrap';
-        wrap.innerHTML = `<span class="enemy-hp-level">Lv1</span><div class="enemy-hp-track"><div class="enemy-hp-fill"></div></div>`;
+        wrap.innerHTML = `
+          <div class="enemy-hp-title"></div>
+          <div class="enemy-hp-affixes"></div>
+          <div class="enemy-hp-row">
+            <span class="enemy-hp-level">Lv1</span>
+            <div class="enemy-hp-track"><div class="enemy-hp-fill"></div></div>
+          </div>
+        `;
+        const titleEl = wrap.querySelector('.enemy-hp-title');
+        const affixesEl = wrap.querySelector('.enemy-hp-affixes');
         const fill = wrap.querySelector('.enemy-hp-fill');
         const lvl = wrap.querySelector('.enemy-hp-level');
         enemyHpContainer.appendChild(wrap);
-        bar = { wrap, fill, lvl, lastLevel: -1 };
+        bar = {
+          wrap,
+          titleEl,
+          affixesEl,
+          fill,
+          lvl,
+          lastLevel: -1,
+          lastTitle: '',
+          lastAffixes: '',
+          lastRank: '',
+          lastShielded: null,
+        };
         enemyBars.set(e.id, bar);
       }
 
@@ -1177,6 +1250,33 @@ export function createHud(ctx) {
       if (bar.lastLevel !== curLvl && bar.lvl) {
         bar.lastLevel = curLvl;
         bar.lvl.textContent = `Lv${curLvl}`;
+      }
+
+      const curRank = e.rank || 'normal';
+      if (bar.lastRank !== curRank) {
+        bar.lastRank = curRank;
+        bar.wrap.classList.toggle('enemy-hp-wrap--champion', curRank === 'champion');
+        bar.wrap.classList.toggle('enemy-hp-wrap--rare', curRank === 'rare');
+      }
+
+      const curShielded = Boolean(e.shielded);
+      if (bar.lastShielded !== curShielded) {
+        bar.lastShielded = curShielded;
+        bar.wrap.classList.toggle('is-shielded', curShielded);
+      }
+
+      const nextTitle = isElite ? (e.eliteName || '') : '';
+      if (bar.lastTitle !== nextTitle && bar.titleEl) {
+        bar.lastTitle = nextTitle;
+        bar.titleEl.textContent = nextTitle;
+        bar.titleEl.style.display = nextTitle ? 'block' : 'none';
+      }
+
+      const nextAffixes = curRank === 'rare' ? (e.eliteSubtitle || '') : '';
+      if (bar.lastAffixes !== nextAffixes && bar.affixesEl) {
+        bar.lastAffixes = nextAffixes;
+        bar.affixesEl.textContent = nextAffixes;
+        bar.affixesEl.style.display = nextAffixes ? 'block' : 'none';
       }
 
       bar.wrap.style.display = '';
@@ -1197,6 +1297,11 @@ export function createHud(ctx) {
   const BUFF_ICONS = {
     sungdu: '🪢',
     dungkar: '🐚',
+    shrine_diligence: '⚡',
+    shrine_vajra: '🛡️',
+    shrine_wisdom: '📖',
+    shrine_amrita: '💧',
+    shrine_fortune: '🍀',
   };
   let lastBuffKey = '';
 
@@ -1462,9 +1567,12 @@ export function createHud(ctx) {
       btnMobileFeed.classList.toggle('is-ready', canFeed);
     }
 
-    // 4. Update buff chips if active
+    // 4. Update buff chips & potion pips if active
     if (state.player?.buffs) {
       renderBuffs(state.player.buffs);
+    }
+    if (state.player?.potions) {
+      renderPotionPips(state.player.potions);
     }
 
     // 5. Update mobile chant button cooldown ring

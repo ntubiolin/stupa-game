@@ -135,6 +135,11 @@ export function createVitals(ctx) {
     let atkAdd = 0;
     let defMult = 1.0;
     let defAdd = 0;
+    let shrineCdr = 0;
+    let shrineInvuln = false;
+    let shrineExpMult = 1.0;
+    let shrineFreeMp = false;
+    let shrineFindMult = 1.0;
 
     if (Array.isArray(p.buffs)) {
       for (let i = 0; i < p.buffs.length; i++) {
@@ -146,8 +151,19 @@ export function createVitals(ctx) {
         if (b.stats.defMult != null) defMult *= b.stats.defMult;
         if (b.stats.defAdd != null) defAdd += b.stats.defAdd;
         if (b.stats.def != null) defAdd += b.stats.def;
+        if (b.stats.cdrAdd != null) shrineCdr += Number(b.stats.cdrAdd) || 0;
+        if (b.stats.invuln === true) shrineInvuln = true;
+        if (b.stats.expMult != null) shrineExpMult *= Number(b.stats.expMult) || 1;
+        if (b.stats.freeMp === true) shrineFreeMp = true;
+        if (b.stats.findMult != null) shrineFindMult *= Number(b.stats.findMult) || 1;
       }
     }
+
+    p.shrineCdr = shrineCdr;
+    p.shrineInvuln = shrineInvuln;
+    p.shrineExpMult = shrineExpMult;
+    p.shrineFreeMp = shrineFreeMp;
+    p.shrineFindMult = shrineFindMult;
 
     p.atk = Math.round(
       ((baseAtk + (perm.atk || 0) + (g.atk || 0)) *
@@ -165,7 +181,6 @@ export function createVitals(ctx) {
     );
     const eqCritDamage =
       (V.baseCritDamage ?? 1.5) + (g.critDamage || 0) / 100;
-
     p.critChance =
       p._critChanceOverride != null ? p._critChanceOverride : eqCritChance;
     p.critDamage =
@@ -258,6 +273,11 @@ export function createVitals(ctx) {
       skillDamage: p.skillDamage ?? 0,
       mantraRadiusBonus: p.mantraRadiusBonus ?? 0,
       turquoise: ctx.inventory?.getTurquoise?.() ?? state.inventory?.turquoise ?? 0,
+      shrineCdr: p.shrineCdr || 0,
+      shrineInvuln: Boolean(p.shrineInvuln),
+      shrineExpMult: p.shrineExpMult || 1,
+      shrineFreeMp: Boolean(p.shrineFreeMp),
+      shrineFindMult: p.shrineFindMult || 1,
       buffs: Array.isArray(p.buffs) ? [...p.buffs] : [],
       permanent: p.permanent ? { ...p.permanent } : { atk: 0, def: 0 },
     };
@@ -291,7 +311,7 @@ export function createVitals(ctx) {
     const p = state.player;
     if (p.level >= maxLvl) return;
 
-    const expMult = 1 + (p.expBonus || 0) / 100;
+    const expMult = (1 + (p.expBonus || 0) / 100) * (p.shrineExpMult || 1);
     const gained = Math.max(1, Math.round(n * expMult));
     p.exp = (p.exp || 0) + gained;
 
@@ -351,6 +371,7 @@ export function createVitals(ctx) {
   function spendMp(n) {
     const p = state.player;
     if (typeof n !== 'number' || n <= 0) return true;
+    if (p.shrineFreeMp) return true;
     if (p.mp < n) return false;
 
     p.mp -= n;
@@ -477,7 +498,7 @@ export function createVitals(ctx) {
       return 0;
     }
 
-    if (state.vitals?.god) {
+    if (state.vitals?.god || p.shrineInvuln) {
       invulnTimer = V.invulnDuration ?? 0.8;
       p.invulnUntil = state.elapsed + invulnTimer;
       bus.emit('player:hurt', { amount: 0, type, sourcePos: extra.sourcePos });

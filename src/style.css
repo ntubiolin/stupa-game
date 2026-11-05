@@ -1553,9 +1553,69 @@ kbd {
   position: absolute;
   transform: translate(-50%, -50%);
   display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.enemy-hp-row {
+  display: inline-flex;
   align-items: center;
   gap: 5px;
-  pointer-events: none;
+}
+
+.enemy-hp-title {
+  display: none;
+  font-family: var(--font-serif);
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: #f8fafc;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.96), 0 0 8px rgba(0, 0, 0, 0.9);
+  white-space: nowrap;
+}
+
+.enemy-hp-affixes {
+  display: none;
+  font-family: var(--font-sans);
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: #fef08a;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.96), 0 0 6px rgba(0, 0, 0, 0.85);
+  white-space: nowrap;
+}
+
+.enemy-hp-wrap--champion .enemy-hp-title {
+  color: #60a5fa;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.96), 0 0 8px rgba(59, 130, 246, 0.75);
+}
+
+.enemy-hp-wrap--champion .enemy-hp-track {
+  width: 58px;
+  border-color: rgba(96, 165, 250, 0.75);
+}
+
+.enemy-hp-wrap--rare .enemy-hp-title {
+  color: #facc15;
+  font-size: 12.5px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.98), 0 0 10px rgba(250, 204, 21, 0.8);
+}
+
+.enemy-hp-wrap--rare .enemy-hp-track {
+  width: 72px;
+  height: 7px;
+  border-color: rgba(250, 204, 21, 0.85);
+}
+
+.enemy-hp-wrap.is-shielded .enemy-hp-track {
+  border-color: #c084fc;
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.85);
+}
+
+.enemy-hp-wrap.is-shielded .enemy-hp-fill {
+  background: linear-gradient(90deg, #9333ea, #c084fc);
 }
 
 .enemy-hp-level {
@@ -1584,6 +1644,84 @@ kbd {
   background: linear-gradient(90deg, #ef4444, #f97316);
   border-radius: 2px;
   transition: width 0.08s linear;
+}
+
+/* ==========================================================================
+   Amrita Potion Pips & Mobile Button + Shrine Screen Flash
+   ========================================================================== */
+.vitals-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.vitals-bar-row .vitals-bar-track {
+  flex: 1;
+}
+
+.potion-pips {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.potion-pip {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid rgba(251, 191, 36, 0.55);
+  background: rgba(30, 20, 35, 0.7);
+  transition: background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.potion-pip.is-filled {
+  background: radial-gradient(circle at 35% 35%, #fef08a, #f59e0b);
+  border-color: #fde047;
+  box-shadow: 0 0 6px rgba(251, 191, 36, 0.85);
+}
+
+.potion-pip.is-empty {
+  opacity: 0.35;
+}
+
+.action-fab__badge {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f59e0b, #b45309);
+  border: 1px solid #fef08a;
+  color: #fffbeb;
+  font-family: var(--font-sans);
+  font-size: 0.64rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+.action-fab--potion.is-empty {
+  opacity: 0.52;
+}
+
+.shrine-flash-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 880;
+  background: radial-gradient(circle at center, rgba(255, 250, 220, 0.55), rgba(251, 191, 36, 0.25) 60%, transparent 100%);
+  opacity: 0;
+  transition: opacity 0.45s ease-out;
+}
+
+.shrine-flash-overlay.is-active {
+  opacity: 1;
+  transition: opacity 0.05s ease-in;
 }
 
 /* ==========================================================================
