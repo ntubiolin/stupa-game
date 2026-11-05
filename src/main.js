@@ -31,6 +31,7 @@ import { createGroundLoot } from './gameplay/groundLoot.js';
 import { createMantra } from './gameplay/mantra.js';
 import { createEnemies } from './gameplay/enemies.js';
 import { createProjectiles } from './gameplay/projectiles.js';
+import { createNpcs } from './gameplay/npcs.js';
 import { createPlayer } from './player/player.js';
 import { createCameraRig } from './player/cameraRig.js';
 
@@ -39,11 +40,14 @@ import { createSave } from './systems/save.js';
 import { createLoot } from './systems/loot.js';
 import { createInventory } from './systems/inventory.js';
 import { createVitals } from './systems/vitals.js';
+import { createQuests } from './systems/quests.js';
 import { createInteraction } from './systems/interaction.js';
 import { createMerit } from './systems/merit.js';
 import { createAudio } from './systems/audio.js';
 import { createHud } from './ui/hud.js';
 import { createInventoryUi } from './ui/inventory.js';
+import { createDialogue } from './ui/dialogue.js';
+import { createQuestUi } from './ui/quests.js';
 
 // ---------------------------------------------------------------- renderer
 const container = document.getElementById('app');
@@ -144,6 +148,8 @@ const items = createItems(ctx);
 const lamps = createLamps(ctx);
 const monkeys = createMonkeys(ctx);
 const vitals = createVitals(ctx);
+const quests = createQuests(ctx);
+const npcs = createNpcs(ctx);
 const cameraRig = createCameraRig(ctx);
 
 const merit = createMerit(ctx);
@@ -151,6 +157,8 @@ const interaction = createInteraction(ctx);
 const audio = createAudio(ctx);
 const hud = createHud(ctx);
 const inventoryUi = createInventoryUi(ctx);
+const dialogue = createDialogue(ctx);
+const questUi = createQuestUi(ctx);
 
 const modules = [
   ctx.input,
@@ -159,8 +167,9 @@ const modules = [
   zones,
   player, mantra, enemies, projectiles, loot, inventory, groundLoot, items, lamps, monkeys,
   vitals,
+  quests, npcs,
   cameraRig,
-  merit, interaction, audio, hud, inventoryUi,
+  merit, interaction, audio, hud, inventoryUi, dialogue, questUi,
 ];
 
 // ---------------------------------------------------------------- post-processing
@@ -209,4 +218,4 @@ function frame() {
 requestAnimationFrame(frame);
 
 // Debug handle (dev only)
-if (import.meta.env.DEV) window.__game = { ctx, modules: { sky, stupa, flags, environment, zones, player, mantra, enemies, projectiles, loot, inventory, groundLoot, items, lamps, monkeys, vitals, cameraRig, merit, interaction, audio, hud, inventoryUi } };
+if (import.meta.env.DEV) window.__game = { ctx, modules: { sky, stupa, flags, environment, zones, player, mantra, enemies, projectiles, loot, inventory, groundLoot, items, lamps, monkeys, vitals, quests, npcs, cameraRig, merit, interaction, audio, hud, inventoryUi, dialogue, questUi } };

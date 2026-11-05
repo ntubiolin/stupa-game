@@ -28,8 +28,20 @@ const ACTION_KEYS = {
   KeyP: 'pause',
   KeyI: 'inventory',
   KeyC: 'character',
+  KeyJ: 'quests',
   Escape: 'closeUi',
 };
+
+const UI_ALLOWED_ACTIONS = new Set([
+  'inventory',
+  'character',
+  'quests',
+  'skills',
+  'map',
+  'closeUi',
+  'toggleHud',
+  'pause',
+]);
 
 const MOVE_KEYS = {
   KeyW: [0, 1], ArrowUp: [0, 1],
@@ -137,6 +149,7 @@ export function createInput(ctx) {
     if (!e.repeat) {
       const a = ACTION_KEYS[e.code];
       if (a) {
+        if (ctx.state?.uiOpen && !UI_ALLOWED_ACTIONS.has(a)) return;
         if (e.code === 'Enter' && e.target && e.target.tagName === 'BUTTON') return;
         pendingActions.add(a);
       }

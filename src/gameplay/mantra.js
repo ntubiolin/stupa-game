@@ -253,7 +253,7 @@ export function createMantra(ctx) {
     cooldownRemaining = Math.max(0, cooldownRemaining - dt);
 
     // Trigger check
-    if (state.mode === 'play' && ctx.input?.pressed('chant')) {
+    if (state.mode === 'play' && !state.uiOpen && ctx.input?.pressed('chant')) {
       const action = state.player.action;
       const cannotCast = action === 'faint' || action === 'hurt' || action === 'prostrate';
       if (!cannotCast && cooldownRemaining <= 0) {

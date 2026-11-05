@@ -20,6 +20,7 @@ export function createInteraction(ctx) {
     if (typeof item.priority === 'number') return -item.priority;
     if (item.kind === 'npc') return -10;
     if (item.kind === 'gate') return -5;
+    if (item.kind === 'questItem' || item.kind === 'questInteract') return -2;
     if (item.kind === 'loot') return 10;
     return 0;
   }
@@ -76,7 +77,12 @@ export function createInteraction(ctx) {
   }
 
   function update() {
-    if (state.mode !== 'play' || state.player.action === 'prostrate' || state.player.action === 'faint') {
+    if (
+      state.mode !== 'play' ||
+      state.uiOpen ||
+      state.player.action === 'prostrate' ||
+      state.player.action === 'faint'
+    ) {
       currentTarget = null;
       state.interactionTarget = null;
       emitPromptIfChanged(null);

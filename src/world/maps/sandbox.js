@@ -90,9 +90,104 @@ export function createMap(ctx) {
     minSpacing: 8,
     avoid: [
       { x: origin.x, z: origin.z, r: 10 },
+      { x: origin.x, z: origin.z + 12, r: 6 },
+      { x: origin.x + 12, z: origin.z + 6, r: 6 },
+      { x: origin.x - 12, z: origin.z + 6, r: 6 },
       { x: gateCfg.x, z: gateCfg.z, r: 12 },
     ],
     getHeight,
+  });
+
+  // ---------------------------------------------------------------- Quest Trial Props (#28)
+  // 1. East Trial Stone Circle (`reach` step target at 9012, 6)
+  const reachX = origin.x + 12;
+  const reachZ = origin.z + 6;
+  const reachGroup = new THREE.Group();
+  reachGroup.position.set(reachX, getHeight(reachX, reachZ), reachZ);
+  const stoneRingGeo = new THREE.RingGeometry(2.8, 3.3, 32);
+  stoneRingGeo.rotateX(-Math.PI / 2);
+  const stoneRingMat = new THREE.MeshBasicMaterial({
+    color: 0xeec36c,
+    transparent: true,
+    opacity: 0.45,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const stoneRing = new THREE.Mesh(stoneRingGeo, stoneRingMat);
+  stoneRing.position.y = 0.03;
+  reachGroup.add(stoneRing);
+
+  const pillarMat = new THREE.MeshStandardMaterial({ color: 0x8a8275, roughness: 0.85 });
+  const pillarGeo = new THREE.BoxGeometry(0.35, 1.1, 0.35);
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+    pillar.position.set(Math.cos(a) * 3.1, 0.55, Math.sin(a) * 3.1);
+    pillar.castShadow = true;
+    pillar.receiveShadow = true;
+    reachGroup.add(pillar);
+  }
+  group.add(reachGroup);
+
+  // 2. Central Trial Mani Stone Cairn (`interact` step target `sandbox_mani` at 9000, 0)
+  const maniX = origin.x;
+  const maniZ = origin.z;
+  const maniY = getHeight(maniX, maniZ);
+  const maniGroup = new THREE.Group();
+  maniGroup.position.set(maniX, maniY, maniZ);
+
+  const maniStoneMat = new THREE.MeshStandardMaterial({ color: 0xd8d0c2, roughness: 0.78 });
+  const maniGoldMat = new THREE.MeshStandardMaterial({
+    color: 0xe8b84b,
+    emissive: 0xc87a18,
+    emissiveIntensity: 0.35,
+    roughness: 0.35,
+    metalness: 0.3,
+  });
+
+  const tiers = [
+    { r: 0.95, h: 0.34, y: 0.17 },
+    { r: 0.72, h: 0.30, y: 0.48 },
+    { r: 0.50, h: 0.28, y: 0.76 },
+    { r: 0.30, h: 0.24, y: 1.00 },
+  ];
+  for (const t of tiers) {
+    const g = new THREE.CylinderGeometry(t.r * 0.88, t.r, t.h, 8);
+    const m = new THREE.Mesh(g, maniStoneMat);
+    m.position.y = t.y;
+    m.castShadow = true;
+    m.receiveShadow = true;
+    maniGroup.add(m);
+  }
+
+  const spireGeo = new THREE.ConeGeometry(0.16, 0.45, 8);
+  const spire = new THREE.Mesh(spireGeo, maniGoldMat);
+  spire.position.y = 1.34;
+  maniGroup.add(spire);
+  group.add(maniGroup);
+
+  ctx.colliders.push({
+    type: 'circle',
+    x: maniX,
+    z: maniZ,
+    r: 1.05,
+    zone: 'sandbox',
+  });
+
+  const maniPosVec = new THREE.Vector3(maniX, maniY, maniZ);
+  ctx.interactables.push({
+    id: 'quest-interact-sandbox_mani',
+    kind: 'questInteract',
+    zone: 'sandbox',
+    action: 'interact',
+    labelKey: 'prompt.inspectQuest',
+    radius: 2.8,
+    getPosition: () => maniPosVec,
+    isAvailable: () => (ctx.state.zone || 'stupa') === 'sandbox' && !ctx.state.uiOpen,
+    onInteract: () => {
+      ctx.bus.emit('sfx', { name: 'bowl' });
+      ctx.bus.emit('quest:interact', { target: 'sandbox_mani', count: 1 });
+    },
   });
 
   return {

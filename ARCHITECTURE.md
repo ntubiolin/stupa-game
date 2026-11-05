@@ -17,10 +17,13 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/world/environment.js` | World | plaza ground, surrounding buildings, hills, pigeons, lit windows at night, north monastery gate |
 | `src/world/mapBase.js` | World | shared terrain heightfield, InstancedMesh rock scatter, mountain rim, seeded RNG, collider helper |
 | `src/world/wilderness.js` | World | highland steppe terrain, chorten, mani stones, boulders, peaks, return gate (lazy-loaded) |
-| `src/world/maps/sandbox.js` | World | debug sandbox arena with flat ground, scattered rocks, and return gate (lazy-loaded) |
+| `src/world/maps/sandbox.js` | World | debug sandbox arena with flat ground, scattered rocks, trial stone circle, Mani cairn, and return gate (lazy-loaded) |
 | `src/data/maps.js` | Data | data-driven map registry (`MAPS`: `stupa`, `wild`, `sandbox`, ...) |
+| `src/data/npcs.js` | Data | data-driven NPC registry (`NPCS`) and look definitions (`NPC_LOOKS`) |
+| `src/data/dialogues/debug.js` | Data | debug & sandbox NPC dialogue trees (`DEBUG_DIALOGUES`) |
+| `src/data/quests/debug.js` | Data | debug & sandbox trial quests (`DEBUG_QUESTS`) |
 | `src/core/input.js` | Gameplay | keyboard / mouse-drag / touch virtual joystick + multi-touch action buttons → action state |
-| `src/i18n.js`, `src/i18n/maps.js` | Gameplay | zh-Hant / en strings, `i18n.register(dict)`, dynamic substitution, tutorial & map strings |
+| `src/i18n.js`, `src/i18n/maps.js`, `src/i18n/quests.js` | Gameplay | zh-Hant / en strings, `i18n.register(dict)`, dynamic substitution, tutorial, map & quest strings |
 | `src/player/player.js` | Gameplay | pilgrim mesh, movement, collision, prostration animation, kora tracking |
 | `src/player/cameraRig.js` | Gameplay | third-person follow camera + intro orbit |
 | `src/gameplay/mantra.js` | Gameplay | Six-Syllable Mantra (六字大明咒) area wave, syllables pool, cooldown & MP handling |
@@ -29,13 +32,17 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/gameplay/items.js` | Gameplay | dropped items, procedural 3D models, pickup detection, pity system |
 | `src/gameplay/lamps.js` | Gameplay | butter-lamp stations (interactable), flames + lights (PointLights disabled when out of stupa) |
 | `src/gameplay/monkeys.js` | Gameplay | monkey meshes, wander AI, feeding (interactable) |
+| `src/gameplay/npcs.js` | Gameplay | procedural 3D NPC builder (8 looks), idle animations, smooth player-facing turn, overhead quest markers (`!`/`?`), showcase helper |
 | `src/systems/zones.js` | Gameplay | data-driven zone manager (`MAPS`), lazy `import()` loading, gate transitions, `ctx.world` API |
 | `src/systems/save.js` | Gameplay | unified v2 save system (`stupa.save.v2`), v1 migration, per-section fault tolerance, throttled writes |
 | `src/systems/vitals.js` | Gameplay | vitals system (HP/MP/EXP/ATK/DEF), level curve, damage mitigation, buffs |
-| `src/systems/interaction.js` | Gameplay | nearest-interactable selection, prompt, dispatch |
+| `src/systems/quests.js` | Gameplay | data-driven quest system (9 step types), collectible quest props, 3D diamond world marker, reward distribution |
+| `src/systems/interaction.js` | Gameplay | nearest-interactable selection (NPC highest priority), prompt, dispatch |
 | `src/systems/merit.js` | Gameplay | counters, achievements, persistence (localStorage) |
 | `src/systems/audio.js` | Gameplay | Web Audio synthesized singing bowl, wind crossfade, bells, chant drone, raptor eagle cry |
 | `src/ui/hud.js`, `src/style.css` | Gameplay | title screen, HUD, prompts, toasts, time slider, language toggle, mobile 2x2 action buttons |
+| `src/ui/dialogue.js` | Gameplay | bottom glassmorphic dialogue box, 2D canvas speaker portrait, typewriter text, codex link parser, choices & actions |
+| `src/ui/quests.js` | Gameplay | right-side Quest Tracker (up to 3), Quest Journal modal (`J`), projected diamond & edge directional arrow, completion banner |
 
 Subagents edit **only** files they own. If a contract change is needed, report it to the architect instead of editing shared files.
 
@@ -88,10 +95,14 @@ export function createX(ctx, ...extra) {
 | `items` | `{ update(dt), drop(id?), forceNext(), pityCount(), activeItems }` |
 | `vitals` | `{ update(dt), addExp, spendMp, addBuff, addPermanent, getStats, set, damage, faint, god(bool) }` |
 | `zones` | `{ update(dt), teleport(mapId, options?), startTransition(mapId, spawnId?), isTransitioning(), list() }` |
+| `quests` | `{ update(dt), start(id), complete(id), completeStep(id, step?), reset(id?), setFlag(flag), clearFlag(flag), hasFlag(flag), getTrackedTargets(), state() }` |
+| `npcs` | `{ update(dt), buildNpc(look), spawnNpc(def), spawnAllLooks(opts?), clearShowcase(), getNpc(id), list() }` |
+| `dialogue` | `{ update(dt), open(id, opts?), close(), advance(), selectChoice(idx), register(defs), isOpen(), state() }` |
+| `questUi` | `{ update(dt), openJournal(), closeJournal(), toggleJournal(), isOpen() }` |
 | `merit` | `{ update(dt), reset, getStats, getAchievementsList }` |
 | `audio` | `{ update(dt), isMuted, setMuted, toggleMute, getVolume, setVolume, playEagleCry, playDistantBell }` |
 
-Update order per frame: `input → sky → stupa → flags → environment → zones → player → mantra → enemies → projectiles → items → lamps → monkeys → vitals → cameraRig → merit → interaction → audio → hud`.
+Update order per frame: `input → save → sky → stupa → flags → environment → zones → player → mantra → enemies → projectiles → items → lamps → monkeys → vitals → quests → npcs → cameraRig → merit → interaction → audio → hud → dialogue → questUi`.
 
 ### `state`
 
@@ -124,6 +135,7 @@ state.player.buffs    // array of { id, remaining, duration, stats }
 state.player.permanent// { atk, def }
 state.player.invulnUntil // seconds timestamp
 state.player.slowUntil   // seconds timestamp
+state.quests          // { active: { [id]: { step, progress, tracked } }, done: string[], flags: { [flag]: true } }
 state.interactionTarget  // currently targeted interactable or null
 ```
 
@@ -174,6 +186,13 @@ state.interactionTarget  // currently targeted interactable or null
 | `mantra:nomp` | – | mantra |
 | `enemy:hit` | `{ id, kind, damage, type, position }` | enemies |
 | `enemy:liberated` | `{ id, kind, exp, position }` | enemies |
+| `npc:talk` | `{ npcId, dialogueId }` | npcs |
+| `dialogue:open` / `dialogue:close` | `{ id, npcId }` | dialogue |
+| `quest:start` / `quest:progress` / `quest:complete` | `{ id, step?, stepId?, progress?, goal?, rewards? }` | quests |
+| `quest:item` | `{ item, count }` | quests (collectible prop) / maps |
+| `quest:interact` | `{ target, count? }` | maps / props |
+| `flag:set` | `{ flag, value }` | quests |
+| `codex:open` / `codex:unlock` | `{ id }` | dialogue / quests |
 
 ---
 
