@@ -370,6 +370,12 @@ const STRINGS = {
 
 function loadLang() {
   try {
+    const rawV2 = localStorage.getItem('stupa.save.v2');
+    if (rawV2) {
+      const parsed = JSON.parse(rawV2);
+      const l = parsed?.sections?.settings?.lang;
+      if (l === 'zh' || l === 'en') return l;
+    }
     const v = localStorage.getItem(STORAGE_KEY);
     if (v === 'zh' || v === 'en') return v;
   } catch { /* storage unavailable */ }
@@ -378,6 +384,7 @@ function loadLang() {
 
 const listeners = new Set();
 let current = loadLang();
+let saveRef = null;
 
 function applyDocumentLang() {
   if (typeof document !== 'undefined') {
@@ -404,11 +411,30 @@ export const i18n = {
     return format(s, params);
   },
   has(key) { return key in STRINGS[current] || key in STRINGS.en; },
+  bindSave(saveApi) {
+    saveRef = saveApi;
+    if (saveRef) {
+      const settings = saveRef.get('settings', {});
+      if (settings.lang === 'zh' || settings.lang === 'en') {
+        if (settings.lang !== current) {
+          current = settings.lang;
+          applyDocumentLang();
+          for (const fn of [...listeners]) fn(current);
+        }
+      }
+    }
+  },
   setLang(lang) {
     if (lang !== 'zh' && lang !== 'en') return;
     if (lang === current) return;
     current = lang;
-    try { localStorage.setItem(STORAGE_KEY, lang); } catch { /* ignore */ }
+    if (saveRef) {
+      const settings = saveRef.get('settings', {});
+      settings.lang = lang;
+      saveRef.set('settings', settings);
+    } else {
+      try { localStorage.setItem(STORAGE_KEY, lang); } catch { /* ignore */ }
+    }
     applyDocumentLang();
     for (const fn of [...listeners]) fn(lang);
   },

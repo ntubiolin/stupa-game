@@ -31,6 +31,10 @@ export function createItems(ctx) {
 
   // ---------------------------------------------------------------- Persistence
   function loadPity() {
+    if (ctx.save) {
+      const saved = ctx.save.get('items', { pityCount: 0 });
+      return typeof saved?.pityCount === 'number' ? saved.pityCount : 0;
+    }
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return 0;
@@ -42,6 +46,10 @@ export function createItems(ctx) {
   }
 
   function savePity(count) {
+    if (ctx.save) {
+      ctx.save.set('items', { pityCount: count });
+      return;
+    }
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ pityCount: count }));
     } catch {
