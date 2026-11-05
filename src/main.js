@@ -30,6 +30,7 @@ import { createItems } from './gameplay/items.js';
 import { createGroundLoot } from './gameplay/groundLoot.js';
 import { createMantra } from './gameplay/mantra.js';
 import { createEnemies } from './gameplay/enemies.js';
+import { createBosses } from './gameplay/bosses/index.js';
 import { createProjectiles } from './gameplay/projectiles.js';
 import { createNpcs } from './gameplay/npcs.js';
 import { createPotions } from './gameplay/potions.js';
@@ -169,13 +170,14 @@ const skillbar = createSkillbar(ctx);
 const inventoryUi = createInventoryUi(ctx);
 const dialogue = createDialogue(ctx);
 const questUi = createQuestUi(ctx);
+const bosses = createBosses(ctx);
 
 const modules = [
   ctx.input,
   ctx.save,
   sky, stupa, flags, environment,
   zones,
-  player, mantra, enemies, projectiles, targeting, loot, inventory, groundLoot, items, lamps, monkeys,
+  player, mantra, enemies, bosses, projectiles, targeting, loot, inventory, groundLoot, items, lamps, monkeys,
   vitals, skills, potions, shrines,
   quests, npcs,
   cameraRig,
