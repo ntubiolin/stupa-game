@@ -720,8 +720,11 @@ export function createEnemies(ctx) {
     const dmgScale = (1 + 0.12 * (level - 1)) * rMult.dmg;
     const expScale = (1 + 0.18 * (level - 1)) * rMult.exp;
 
-    const scaledHp = Math.max(1, Math.round(kCfg.hp * hpScale));
-    const scaledExp = Math.max(1, Math.round(kCfg.exp * expScale));
+    const scaledHp =
+      opts.maxHp != null
+        ? Math.max(1, Math.round(Number(opts.maxHp)))
+        : Math.max(1, Math.round(kCfg.hp * hpScale));
+    const scaledExp = Math.max(0, Math.round(kCfg.exp * expScale));
     const displayNameKey = opts.displayNameKey || kCfg.nameKey || `enemy.${kind}`;
     const def = opts.def ?? kCfg.def ?? 0;
     const ccResist = opts.ccResist ?? kCfg.ccResist ?? 0;
@@ -1006,11 +1009,11 @@ export function createEnemies(ctx) {
     const hasSlamOrWave =
       kind === 'migoi' ||
       (Array.isArray(kCfg.attacks) &&
-        kCfg.attacks.some((a) => a.id === 'groundSlam' || a.id === 'heatWave'));
+        kCfg.attacks.some((a) => a.id === 'groundSlam' || a.id === 'heatWave' || a.id === 'rootGrasp'));
     const hasLineCharge =
       kind === 'tsen' ||
       (Array.isArray(kCfg.attacks) &&
-        kCfg.attacks.some((a) => a.id === 'spearCharge' || a.id === 'spinDash' || a.id === 'redArrow'));
+        kCfg.attacks.some((a) => a.id === 'spearCharge' || a.id === 'spinDash' || a.id === 'yakCharge' || a.id === 'redArrow'));
 
     if (hasSlamOrWave) {
       telegraphGroup = new THREE.Group();
@@ -1018,11 +1021,16 @@ export function createEnemies(ctx) {
       telegraphGroup.visible = false;
 
       const isHeatWave = Array.isArray(kCfg.attacks) && kCfg.attacks.some((a) => a.id === 'heatWave');
-      const aoeAtk = (kCfg.attacks || []).find((a) => a.id === 'heatWave' || a.id === 'groundSlam');
+      const isRootGrasp = Array.isArray(kCfg.attacks) && kCfg.attacks.some((a) => a.id === 'rootGrasp');
+      const aoeAtk = (kCfg.attacks || []).find((a) => a.id === 'heatWave' || a.id === 'groundSlam' || a.id === 'rootGrasp');
       const rRatio = ((aoeAtk?.aoeRadius ?? (isHeatWave ? 2.5 : 3.5)) / 3.5);
 
       const ringMat = new THREE.MeshBasicMaterial({
-        color: isHeatWave ? new THREE.Color(2.4, 0.75, 0.15) : new THREE.Color(2.2, 0.25, 0.25),
+        color: isHeatWave
+          ? new THREE.Color(2.4, 0.75, 0.15)
+          : isRootGrasp
+            ? new THREE.Color(0.55, 2.1, 0.35)
+            : new THREE.Color(2.2, 0.25, 0.25),
         toneMapped: false,
         transparent: true,
         opacity: 0.85,
@@ -1033,7 +1041,11 @@ export function createEnemies(ctx) {
       telegraphGroup.add(ringMesh);
 
       const fillMat = new THREE.MeshBasicMaterial({
-        color: isHeatWave ? new THREE.Color(2.2, 0.55, 0.1) : new THREE.Color(2.0, 0.2, 0.2),
+        color: isHeatWave
+          ? new THREE.Color(2.2, 0.55, 0.1)
+          : isRootGrasp
+            ? new THREE.Color(0.35, 1.8, 0.25)
+            : new THREE.Color(2.0, 0.2, 0.2),
         toneMapped: false,
         transparent: true,
         opacity: 0.38,
@@ -1050,7 +1062,9 @@ export function createEnemies(ctx) {
       telegraphGroup.name = `Telegraph_${id}`;
       telegraphGroup.visible = false;
 
-      const dashAtk = (kCfg.attacks || []).find((a) => a.id === 'spinDash' || a.id === 'spearCharge');
+      const dashAtk = (kCfg.attacks || []).find(
+        (a) => a.id === 'spinDash' || a.id === 'spearCharge' || a.id === 'yakCharge'
+      );
       const lenRatio = (dashAtk?.dashDist ?? 8.0) / 8.0;
 
       const lineMat = new THREE.MeshBasicMaterial({
@@ -1236,8 +1250,17 @@ export function createEnemies(ctx) {
       chargeData: null,
       customAnimate,
       fixedPos: opts.fixedPos || null,
+      disguised: Boolean(opts.disguised ?? kCfg.disguised),
+      calmOnDefeat: Boolean(opts.calmOnDefeat ?? kCfg.calmOnDefeat),
+      calmedTimer: 0,
+      calmDuration: 15.0,
+      stationary: Boolean(opts.stationary ?? kCfg.stationary),
       animTime: Math.random() * 10,
     };
+
+    if (enemy.disguised && customModel?.setDisguised) {
+      customModel.setDisguised(true);
+    }
 
     Object.defineProperty(enemy, 'eliteName', {
       enumerable: true,
@@ -1594,7 +1617,7 @@ export function createEnemies(ctx) {
     const out = [];
     for (let i = 0; i < activeEnemies.length; i++) {
       const e = activeEnemies[i];
-      if (e.state === 'liberated' || e.hp <= 0) continue;
+      if (e.state === 'liberated' || e.state === 'calmed' || e.hp <= 0) continue;
       const dist = Math.hypot(e.pos.x - cx, e.pos.z - cz);
       if (dist <= r) out.push(e);
     }
@@ -1612,7 +1635,7 @@ export function createEnemies(ctx) {
     const out = [];
     for (let i = 0; i < activeEnemies.length; i++) {
       const e = activeEnemies[i];
-      if (e.state === 'liberated' || e.hp <= 0) continue;
+      if (e.state === 'liberated' || e.state === 'calmed' || e.hp <= 0) continue;
       const dx = e.pos.x - ox;
       const dz = e.pos.z - oz;
       const dist = Math.hypot(dx, dz);
@@ -1639,7 +1662,7 @@ export function createEnemies(ctx) {
     const out = [];
     for (let i = 0; i < activeEnemies.length; i++) {
       const e = activeEnemies[i];
-      if (e.state === 'liberated' || e.hp <= 0) continue;
+      if (e.state === 'liberated' || e.state === 'calmed' || e.hp <= 0) continue;
       const dx = e.pos.x - ox;
       const dz = e.pos.z - oz;
       const forward = dx * fx + dz * fz;
@@ -1665,7 +1688,7 @@ export function createEnemies(ctx) {
 
     for (let i = 0; i < activeEnemies.length; i++) {
       const e = activeEnemies[i];
-      if (e.state === 'liberated' || e.hp <= 0) continue;
+      if (e.state === 'liberated' || e.state === 'calmed' || e.hp <= 0) continue;
       const dx = e.pos.x - ox;
       const dz = e.pos.z - oz;
       const dist = Math.hypot(dx, dz);
@@ -1705,7 +1728,7 @@ export function createEnemies(ctx) {
   function applyStatus(idOrEnemy, kind, duration, extra = {}) {
     const targetId = typeof idOrEnemy === 'object' && idOrEnemy !== null ? idOrEnemy.id : idOrEnemy;
     const enemy = activeEnemies.find((e) => e.id === targetId);
-    if (!enemy || enemy.state === 'liberated' || enemy.hp <= 0) return false;
+    if (!enemy || enemy.state === 'liberated' || enemy.state === 'calmed' || enemy.hp <= 0) return false;
 
     const resist = Math.max(0, Math.min(1, enemy.ccResist ?? enemy.kindConfig?.ccResist ?? 0));
     const dur = (Number(duration) || 0) * (1 - resist);
@@ -1777,7 +1800,7 @@ export function createEnemies(ctx) {
       : (typeOrOpts || {});
     const targetId = typeof idOrEnemy === 'object' && idOrEnemy !== null ? idOrEnemy.id : idOrEnemy;
     const enemy = activeEnemies.find((e) => e.id === targetId);
-    if (!enemy || enemy.state === 'liberated' || enemy.hp <= 0) {
+    if (!enemy || enemy.state === 'liberated' || enemy.state === 'calmed' || enemy.hp <= 0) {
       return { dealt: 0, liberated: false };
     }
 
@@ -1831,6 +1854,10 @@ export function createEnemies(ctx) {
     });
 
     if (enemy.hp > 0) {
+      if (enemy.disguised) {
+        enemy.disguised = false;
+        enemy.model?.setDisguised?.(false);
+      }
       // Apply status effects if present
       const statusIn = opts.status;
       const resist = Math.max(0, Math.min(1, enemy.ccResist ?? enemy.kindConfig?.ccResist ?? 0));
@@ -1898,9 +1925,9 @@ export function createEnemies(ctx) {
         if (mat.emissiveIntensity != null) mat.emissiveIntensity = 1.0;
       }
 
-      // Knockback (unless rooted or knockback == 0)
-      const defaultKb = statusIn?.root || statusIn?.stun ? 0 : (cfg.hurtKnockback ?? 1.5);
-      const kb = opts.knockback !== undefined ? Number(opts.knockback) : defaultKb;
+      // Knockback (unless rooted, stationary, or knockback == 0)
+      const defaultKb = statusIn?.root || statusIn?.stun || enemy.stationary ? 0 : (cfg.hurtKnockback ?? 1.5);
+      const kb = enemy.stationary ? 0 : (opts.knockback !== undefined ? Number(opts.knockback) : defaultKb);
       if (kb > 0 && !(enemy.status.root > 0)) {
         const fromPos = opts.from || state.player?.position;
         if (fromPos) {
@@ -1918,7 +1945,7 @@ export function createEnemies(ctx) {
       return { dealt, liberated: false };
     }
 
-    // Liberated!
+    // Liberated or Calmed!
     if (enemy.telegraphGroup) enemy.telegraphGroup.visible = false;
     if (enemy.animNodes?.mouthOrb) enemy.animNodes.mouthOrb.visible = false;
     if (enemy.rootIndicator) enemy.rootIndicator.visible = false;
@@ -1929,11 +1956,63 @@ export function createEnemies(ctx) {
     enemy.shielded = false;
     enemy.chargeData = null;
     enemy.activeAttack = null;
+
+    // --- Educational Mechanic: `wildYak` (`calmOnDefeat`) Calms Down Instead of 5-Color Liberation
+    if (enemy.calmOnDefeat) {
+      enemy.state = 'calmed';
+      enemy.calmedTimer = 0;
+      enemy.calmDuration = 15.0;
+      enemy.flashTimer = 0;
+      applyIdleMaterialEmissive(enemy);
+      enemy.model?.setCalmed?.(true);
+      bus.emit('sfx', { name: 'bell' });
+
+      if (enemy.exp > 0) {
+        ctx.vitals?.addExp?.(enemy.exp);
+      }
+
+      const calmedTags = Array.from(
+        new Set([...(enemy.tags || [enemy.kind]), 'animal', 'calmed'])
+      );
+      bus.emit('enemy:liberated', {
+        id: enemy.id,
+        kind: enemy.kind,
+        exp: enemy.exp,
+        position: { ...enemy.pos },
+        level: enemy.level,
+        rank: enemy.rank,
+        affixes: Array.isArray(enemy.affixes) ? [...enemy.affixes] : [],
+        eliteName: enemy.eliteName,
+        mapId: state.zone || 'wild',
+        calmed: true,
+        tags: calmedTags,
+      });
+
+      const yakToast = i18n?.t?.('toast.yakCalmed') || '狂暴野犛牛眼中的白光消退，溫順地低頭啃食青草。';
+      ctx.hud?.toast?.(yakToast);
+
+      if (!enemy.noSplit) {
+        const respawnTime =
+          (cfg.respawnMin ?? 20) + Math.random() * ((cfg.respawnMax ?? 40) - (cfg.respawnMin ?? 20));
+        pendingRespawns.push({
+          kind: enemy.kind,
+          ring: enemy.ring,
+          tags: enemy.tags,
+          fixedPos: enemy.fixedPos || null,
+          timer: respawnTime,
+        });
+      }
+
+      return { dealt, liberated: true, calmed: true };
+    }
+
     enemy.state = 'liberated';
     enemy.liberateTimer = 0;
     bus.emit('sfx', { name: 'liberate' });
 
-    ctx.vitals?.addExp?.(enemy.exp);
+    if (enemy.exp > 0) {
+      ctx.vitals?.addExp?.(enemy.exp);
+    }
 
     // Elite affix on-death effects:
     // 1. Molten: leaves a 1.5s red warning circle (radius 2.5m) that explodes for 14 * dmgMult magic damage
@@ -2099,7 +2178,7 @@ export function createEnemies(ctx) {
         enemy.aimLineMesh.visible = true;
         enemy.telegraphGroup.visible = true;
       }
-    } else if (atk.id === 'spearCharge' || atk.id === 'spinDash') {
+    } else if (atk.id === 'spearCharge' || atk.id === 'spinDash' || atk.id === 'yakCharge') {
       if (enemy.telegraphGroup && enemy.chargeLineMesh) {
         enemy.telegraphGroup.position.set(enemy.pos.x, enemy.pos.y + 0.03, enemy.pos.z);
         enemy.telegraphGroup.rotation.y = enemy.heading;
@@ -2107,7 +2186,7 @@ export function createEnemies(ctx) {
         enemy.chargeLineMesh.visible = true;
         enemy.telegraphGroup.visible = true;
       }
-    } else if (atk.id === 'groundSlam' || atk.id === 'heatWave') {
+    } else if (atk.id === 'groundSlam' || atk.id === 'heatWave' || atk.id === 'rootGrasp') {
       if (enemy.telegraphGroup) {
         enemy.telegraphGroup.position.set(enemy.pos.x, enemy.pos.y + 0.03, enemy.pos.z);
         enemy.telegraphGroup.visible = true;
@@ -2182,7 +2261,10 @@ export function createEnemies(ctx) {
       r.timer -= dt;
       if (r.timer <= 0) {
         pendingRespawns.splice(i, 1);
-        if (activeEnemies.length < maxMapEnemies && ctx.world?.sampleSpawnPoint) {
+        const activeHostileCount = activeEnemies.filter(
+          (e) => e.state !== 'liberated' && e.state !== 'calmed'
+        ).length;
+        if (activeHostileCount < maxMapEnemies && ctx.world?.sampleSpawnPoint) {
           const pt = r.fixedPos
             ? {
                 x: r.fixedPos.x,
@@ -2238,6 +2320,58 @@ export function createEnemies(ctx) {
         if (enemy.flashTimer <= 0) {
           applyIdleMaterialEmissive(enemy);
         }
+      }
+
+      // --- Calmed State Animation (Wild Yak grazing peacefully for ~15s before recycling)
+      if (enemy.state === 'calmed') {
+        enemy.calmedTimer = (enemy.calmedTimer || 0) + dt;
+        const dur = enemy.calmDuration || 15.0;
+        enemy.animTime += dt;
+
+        // Slowly walk/graze peacefully around current area
+        enemy.wanderTimer -= dt;
+        if (enemy.wanderTimer <= 0) {
+          enemy.wanderTimer = 4.0 + Math.random() * 4.0;
+          const wAngle = Math.random() * Math.PI * 2;
+          const wDist = 0.8 + Math.random() * 2.2;
+          enemy.wanderTarget.x = enemy.pos.x + Math.cos(wAngle) * wDist;
+          enemy.wanderTarget.z = enemy.pos.z + Math.sin(wAngle) * wDist;
+        }
+        const wdx = enemy.wanderTarget.x - enemy.pos.x;
+        const wdz = enemy.wanderTarget.z - enemy.pos.z;
+        const wdist = Math.hypot(wdx, wdz);
+        let calmedMoving = false;
+        if (wdist > 0.35 && !isFrozen) {
+          calmedMoving = true;
+          const wHeading = Math.atan2(-wdx, -wdz);
+          enemy.heading = lerpAngle(enemy.heading, wHeading, dt * 2.5);
+          const step = Math.min(0.45 * dt, wdist);
+          enemy.pos.x += (wdx / wdist) * step;
+          enemy.pos.z += (wdz / wdist) * step;
+          clampEnemyPosition(enemy);
+        }
+
+        if (typeof enemy.customAnimate === 'function') {
+          enemy.customAnimate(enemy, dt, calmedMoving);
+        }
+
+        // Fade out gently during final 1.2s before recycling
+        if (dur - enemy.calmedTimer < 1.2) {
+          const fade = Math.max(0, (dur - enemy.calmedTimer) / 1.2);
+          for (const mat of enemy.materials) {
+            mat.transparent = true;
+            mat.opacity = fade;
+          }
+        }
+
+        enemy.group.position.set(enemy.pos.x, enemy.pos.y, enemy.pos.z);
+        enemy.group.rotation.y = enemy.heading;
+
+        if (enemy.calmedTimer >= dur) {
+          disposeEnemy(enemy);
+          activeEnemies.splice(i, 1);
+        }
+        continue;
       }
 
       // --- Liberated State Animation
@@ -2433,6 +2567,37 @@ export function createEnemies(ctx) {
       const prevZ = enemy.pos.z;
       const cdMult = enemy.cooldownMult ?? 1.0;
 
+      // --- Stationary entities (e.g. Phase 2 Hail Cores)
+      if (enemy.stationary) {
+        enemy.animTime += dt;
+        if (typeof enemy.customAnimate === 'function') {
+          enemy.customAnimate(enemy, dt, false);
+        }
+        enemy.group.position.set(enemy.pos.x, enemy.pos.y, enemy.pos.z);
+        continue;
+      }
+
+      // --- Disguised Nyen (`enemy.disguised`): sits as mossy boulder/tree until player within 5m
+      if (enemy.disguised) {
+        if (!isPlayerInSafeZone && distToPlayer <= (enemy.kindConfig.wakeRadius ?? 5.0)) {
+          enemy.disguised = false;
+          enemy.model?.setDisguised?.(false);
+          enemy.state = 'notice';
+          enemy.stateTimer = 0.25;
+          bus.emit('sfx', { name: 'boulder' });
+          bus.emit('enemy:awaken', { id: enemy.id, kind: enemy.kind });
+          const awakenMsg = i18n?.t?.('toast.nyenAwaken');
+          if (awakenMsg) ctx.hud?.toast?.(awakenMsg);
+        } else {
+          if (typeof enemy.customAnimate === 'function') {
+            enemy.customAnimate(enemy, dt, false);
+          }
+          enemy.group.position.set(enemy.pos.x, enemy.pos.y, enemy.pos.z);
+          enemy.group.rotation.y = enemy.heading;
+          continue;
+        }
+      }
+
       // --- AI State Machine Transitions
       if (enemy.state === 'hurt') {
         enemy.stateTimer -= dt;
@@ -2531,10 +2696,10 @@ export function createEnemies(ctx) {
             mat.emissive?.setRGB(0.7 * pulse, 0.05, 0.05);
             if (mat.emissiveIntensity != null) mat.emissiveIntensity = 0.8;
           }
-          if ((atk?.id === 'groundSlam' || atk?.id === 'heatWave') && enemy.telegraphFill) {
+          if ((atk?.id === 'groundSlam' || atk?.id === 'heatWave' || atk?.id === 'rootGrasp') && enemy.telegraphFill) {
             const maxS = enemy.telegraphFill.userData?.maxScale || 1.0;
             enemy.telegraphFill.scale.set(uFill * maxS, 1, uFill * maxS);
-          } else if ((atk?.id === 'spearCharge' || atk?.id === 'spinDash') && enemy.chargeLineMesh) {
+          } else if ((atk?.id === 'spearCharge' || atk?.id === 'spinDash' || atk?.id === 'yakCharge') && enemy.chargeLineMesh) {
             enemy.chargeLineMesh.material.opacity = 0.35 + 0.35 * pulse;
           }
         }
@@ -2588,7 +2753,7 @@ export function createEnemies(ctx) {
             enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
             enemy.state = 'recover';
             enemy.stateTimer = atk.recover ?? 0.35;
-          } else if (atk.id === 'spearCharge' || atk.id === 'spinDash') {
+          } else if (atk.id === 'spearCharge' || atk.id === 'spinDash' || atk.id === 'yakCharge') {
             if (isRooted) {
               enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
               enemy.state = 'recover';
@@ -2617,17 +2782,27 @@ export function createEnemies(ctx) {
             enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
             enemy.state = 'recover';
             enemy.stateTimer = atk.recover ?? 0.5;
-          } else if (atk.id === 'groundSlam' || atk.id === 'heatWave') {
+          } else if (atk.id === 'groundSlam' || atk.id === 'heatWave' || atk.id === 'rootGrasp') {
             const isHeatWave = atk.id === 'heatWave';
+            const isRootGrasp = atk.id === 'rootGrasp';
             if (isHeatWave) {
               bus.emit('sfx', { name: 'fireball' });
+            } else if (isRootGrasp) {
+              bus.emit('sfx', { name: 'boulder' });
             }
             if (playerPos) {
               const slamDist = Math.hypot(playerPos.x - enemy.pos.x, playerPos.z - enemy.pos.z);
-              if (slamDist <= (atk.aoeRadius ?? (isHeatWave ? 2.5 : 3.5))) {
+              if (slamDist <= (atk.aoeRadius ?? (isHeatWave ? 2.5 : isRootGrasp ? 2.8 : 3.5))) {
+                if (isRootGrasp && state.player) {
+                  const rootDur = atk.playerRoot || 1.0;
+                  state.player.rootUntil = Math.max(state.player.rootUntil || 0, state.elapsed + rootDur);
+                  state.player.slowUntil = Math.max(state.player.slowUntil || 0, state.elapsed + rootDur);
+                  state.player.slowMultiplier = 0.05;
+                }
                 bus.emit('vitals:damage', {
                   amount: scaledDmg,
                   type: isHeatWave ? 'magic' : 'physical',
+                  slow: isRootGrasp ? (atk.playerRoot || 1.0) : undefined,
                   sourcePos: { ...enemy.pos },
                 });
               }
@@ -3150,7 +3325,7 @@ export function createEnemies(ctx) {
     list() {
       const playerPos = state.player?.position;
       return activeEnemies
-        .filter((e) => e.state !== 'liberated')
+        .filter((e) => e.state !== 'liberated' && e.state !== 'calmed')
         .map((e) => {
           const d = playerPos ? Math.hypot(playerPos.x - e.pos.x, playerPos.z - e.pos.z) : 0;
           return {
@@ -3162,6 +3337,7 @@ export function createEnemies(ctx) {
             eliteName: e.eliteName,
             eliteSubtitle: e.eliteSubtitle,
             shielded: Boolean(e.shielded),
+            disguised: Boolean(e.disguised),
             minionOf: e.minionOf || null,
             displayNameKey: e.displayNameKey,
             hp: e.hp,
