@@ -26,6 +26,9 @@ const ACTION_KEYS = {
   Space: 'chant',
   KeyH: 'toggleHud',
   KeyP: 'pause',
+  KeyI: 'inventory',
+  KeyC: 'character',
+  Escape: 'closeUi',
 };
 
 const MOVE_KEYS = {

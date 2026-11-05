@@ -174,6 +174,20 @@ export function createMantra(ctx) {
   // ---------------------------------------------------------------- State & Trigger
   let cooldownRemaining = 0;
 
+  function getEffectiveRadius(isPeaceful = false) {
+    if (isPeaceful) return M.stupaRadius ?? 1.5;
+    const baseR = M.radius ?? 6.0;
+    const bonusPct = state.player?.mantraRadiusBonus || 0;
+    return baseR * (1 + bonusPct / 100);
+  }
+
+  function getEffectiveCooldown(isPeaceful = false) {
+    if (isPeaceful) return M.stupaCooldown ?? 0.45;
+    const baseCd = M.cooldown ?? 0.85;
+    const cdr = Math.max(0, Math.min(0.4, state.player?.cdr || 0));
+    return baseCd * (1 - cdr);
+  }
+
   function triggerWave(isPeaceful = false) {
     let wave = pool.find((w) => !w.active);
     if (!wave) {
@@ -189,11 +203,13 @@ export function createMantra(ctx) {
     }
     if (!wave) wave = pool[0];
 
+    const waveRadius = getEffectiveRadius(isPeaceful);
+
     wave.active = true;
     wave.t = 0;
     wave.duration = M.duration ?? 0.5;
     wave.startR = M.startRadius ?? 0.5;
-    wave.endR = isPeaceful ? (M.stupaRadius ?? 1.5) : (M.radius ?? 6.0);
+    wave.endR = waveRadius;
     wave.origin.copy(state.player.position);
     wave.group.position.copy(wave.origin);
     wave.group.visible = true;
@@ -203,16 +219,16 @@ export function createMantra(ctx) {
 
     if (!isPeaceful) {
       const originPos = state.player.position.clone();
-      const waveRadius = M.radius ?? 6.0;
       const basePower = state.player?.atk || 10;
+      const skillMult = 1 + (state.player?.skillDamage || 0) / 100;
 
       if (ctx.world?.isCombatZone() && ctx.enemies?.queryCircle && ctx.enemies?.damage) {
         const hitEnemies = ctx.enemies.queryCircle(originPos.x, originPos.z, waveRadius);
         for (let i = 0; i < hitEnemies.length; i++) {
           const enemy = hitEnemies[i];
           const rolled = ctx.vitals?.rollDamage
-            ? ctx.vitals.rollDamage(basePower)
-            : { amount: basePower, crit: false };
+            ? ctx.vitals.rollDamage(basePower, { mult: skillMult })
+            : { amount: Math.round(basePower * skillMult), crit: false };
           ctx.enemies.damage(enemy.id, rolled.amount, {
             type: 'magic',
             source: 'mantra',
@@ -226,7 +242,7 @@ export function createMantra(ctx) {
       bus.emit('mantra:cast', {
         origin: originPos,
         radius: waveRadius,
-        power: basePower,
+        power: Math.round(basePower * skillMult),
         handledByMantra: true,
       });
     }
@@ -243,7 +259,7 @@ export function createMantra(ctx) {
       if (!cannotCast && cooldownRemaining <= 0) {
         if (!ctx.world?.isCombatZone()) {
           // Hub peaceful chant: no MP spent, no mantra:cast event
-          cooldownRemaining = M.stupaCooldown ?? 0.45;
+          cooldownRemaining = getEffectiveCooldown(true);
           triggerWave(true);
         } else {
           // Combat zone: spends MP
@@ -253,7 +269,7 @@ export function createMantra(ctx) {
             bus.emit('toast', { key: 'toast.noMp', kind: 'warning' });
             bus.emit('mantra:nomp');
           } else {
-            cooldownRemaining = M.cooldown ?? 0.9;
+            cooldownRemaining = getEffectiveCooldown(false);
             triggerWave(false);
           }
         }
@@ -313,6 +329,8 @@ export function createMantra(ctx) {
     if (showRadiusEnabled) {
       debugWire.visible = true;
       debugWire.position.copy(state.player.position);
+      const effScale = getEffectiveRadius(false) / (M.radius ?? 6.0);
+      debugWire.scale.set(effScale, 1, effScale);
     } else {
       debugWire.visible = false;
     }
@@ -330,9 +348,11 @@ export function createMantra(ctx) {
       return showRadiusEnabled;
     },
     getCooldownFraction() {
-      const cd = M.cooldown || 0.9;
+      const cd = getEffectiveCooldown(false) || 0.85;
       return Math.max(0, Math.min(1, cooldownRemaining / cd));
     },
+    getEffectiveRadius,
+    getEffectiveCooldown,
   };
 
   ctx.mantra = api;

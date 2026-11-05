@@ -794,6 +794,9 @@ export function createPlayer(ctx) {
     camRight.set(-camForward.z, 0, camForward.x);
 
     let targetSpeed = moveMag > 0.02 ? (isRun ? P.runSpeed : P.walkSpeed) * moveMag : 0;
+    if (state.player.moveSpeedMult && state.player.moveSpeedMult !== 1) {
+      targetSpeed *= state.player.moveSpeedMult;
+    }
     if (state.elapsed < (state.player.slowUntil || 0)) {
       targetSpeed *= (config.VITALS?.slowMultiplier ?? 0.5);
     }

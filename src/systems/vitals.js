@@ -19,7 +19,7 @@ export function createVitals(ctx) {
     baseDef: 0,
     expBase: 20,
     expExponent: 1.5,
-    maxLevel: 30,
+    maxLevel: 40,
     defConstant: 50,
     magicDefFactor: 0.5,
     invulnDuration: 0.8,
@@ -105,9 +105,27 @@ export function createVitals(ctx) {
   function recalcDerived() {
     const p = state.player;
     const lvl = p.level || 1;
+    const g = ctx.inventory?.getEquipStats?.() || {
+      atk: 0,
+      atkPct: 0,
+      def: 0,
+      maxHp: 0,
+      maxMp: 0,
+      mpRegen: 0,
+      critChance: 0,
+      critDamage: 0,
+      moveSpeed: 0,
+      cdr: 0,
+      mantraRadius: 0,
+      skillDamage: 0,
+      magicRes: 0,
+      hpOnLiberate: 0,
+      expBonus: 0,
+      findBonus: 0,
+    };
 
-    p.maxHp = V.baseHp + V.hpPerLevel * (lvl - 1);
-    p.maxMp = V.baseMp + V.mpPerLevel * (lvl - 1);
+    p.maxHp = V.baseHp + V.hpPerLevel * (lvl - 1) + (g.maxHp || 0);
+    p.maxMp = V.baseMp + V.mpPerLevel * (lvl - 1) + (g.maxMp || 0);
 
     const baseAtk = V.baseAtk + V.atkPerLevel * (lvl - 1);
     const baseDef = V.baseDef ?? 0;
@@ -131,16 +149,37 @@ export function createVitals(ctx) {
       }
     }
 
-    p.atk = Math.round((baseAtk + (perm.atk || 0)) * atkMult + atkAdd);
-    p.def = Math.round((baseDef + (perm.def || 0)) * defMult + defAdd);
+    p.atk = Math.round(
+      ((baseAtk + (perm.atk || 0) + (g.atk || 0)) *
+        (1 + (g.atkPct || 0) / 100)) *
+        atkMult +
+        atkAdd
+    );
+    p.def = Math.round(
+      (baseDef + (perm.def || 0) + (g.def || 0)) * defMult + defAdd
+    );
+
+    const eqCritChance = Math.min(
+      0.6,
+      (V.baseCritChance ?? 0.05) + (g.critChance || 0) / 100
+    );
+    const eqCritDamage =
+      (V.baseCritDamage ?? 1.5) + (g.critDamage || 0) / 100;
+
     p.critChance =
-      p._critChanceOverride != null
-        ? p._critChanceOverride
-        : (V.baseCritChance ?? 0.05);
+      p._critChanceOverride != null ? p._critChanceOverride : eqCritChance;
     p.critDamage =
-      p._critDamageOverride != null
-        ? p._critDamageOverride
-        : (V.baseCritDamage ?? 1.5);
+      p._critDamageOverride != null ? p._critDamageOverride : eqCritDamage;
+
+    p.moveSpeedMult = +(1 + Math.min(0.3, (g.moveSpeed || 0) / 100)).toFixed(4);
+    p.cdr = +Math.min(0.4, (g.cdr || 0) / 100).toFixed(4);
+    p.mpRegen = +(g.mpRegen || 0).toFixed(2);
+    p.magicRes = +Math.min(0.6, (g.magicRes || 0) / 100).toFixed(4);
+    p.hpOnLiberate = g.hpOnLiberate || 0;
+    p.expBonus = g.expBonus || 0;
+    p.findBonus = g.findBonus || 0;
+    p.skillDamage = g.skillDamage || 0;
+    p.mantraRadiusBonus = g.mantraRadius || 0;
 
     if (p.hp != null) p.hp = Math.min(p.hp, p.maxHp);
     if (p.mp != null) p.mp = Math.min(p.mp, p.maxMp);
@@ -159,7 +198,7 @@ export function createVitals(ctx) {
 
   // ---------------------------------------------------------------- Initial State
   const saved = loadSaved();
-  const maxLvl = V.maxLevel || 30;
+  const maxLvl = V.maxLevel || 40;
 
   state.player.level =
     typeof saved?.level === 'number' && saved.level >= 1
@@ -197,9 +236,9 @@ export function createVitals(ctx) {
     const p = state.player;
     const isMax = (p.level || 1) >= maxLvl;
     return {
-      hp: p.hp,
+      hp: Math.round(p.hp ?? p.maxHp),
       maxHp: p.maxHp,
-      mp: p.mp,
+      mp: Math.round((p.mp ?? p.maxMp) * 10) / 10,
       maxMp: p.maxMp,
       exp: isMax ? 0 : p.exp,
       maxExp: isMax ? 0 : getMaxExp(p.level),
@@ -209,6 +248,16 @@ export function createVitals(ctx) {
       def: p.def,
       critChance: p.critChance ?? 0.05,
       critDamage: p.critDamage ?? 1.5,
+      moveSpeedMult: p.moveSpeedMult ?? 1,
+      cdr: p.cdr ?? 0,
+      mpRegen: p.mpRegen ?? 0,
+      magicRes: p.magicRes ?? 0,
+      hpOnLiberate: p.hpOnLiberate ?? 0,
+      expBonus: p.expBonus ?? 0,
+      findBonus: p.findBonus ?? 0,
+      skillDamage: p.skillDamage ?? 0,
+      mantraRadiusBonus: p.mantraRadiusBonus ?? 0,
+      turquoise: ctx.inventory?.getTurquoise?.() ?? state.inventory?.turquoise ?? 0,
       buffs: Array.isArray(p.buffs) ? [...p.buffs] : [],
       permanent: p.permanent ? { ...p.permanent } : { atk: 0, def: 0 },
     };
@@ -242,7 +291,9 @@ export function createVitals(ctx) {
     const p = state.player;
     if (p.level >= maxLvl) return;
 
-    p.exp = (p.exp || 0) + Math.floor(n);
+    const expMult = 1 + (p.expBonus || 0) / 100;
+    const gained = Math.max(1, Math.round(n * expMult));
+    p.exp = (p.exp || 0) + gained;
 
     let leveledUp = false;
     const prevLevel = p.level;
@@ -440,7 +491,9 @@ export function createVitals(ctx) {
 
     let dmg = 0;
     if (type === 'magic') {
-      dmg = Math.max(1, Math.round((amount * defConst) / (defConst + currentDef * magicFactor)));
+      const defMitigated = (amount * defConst) / (defConst + currentDef * magicFactor);
+      const magicRes = Math.max(0, Math.min(0.6, p.magicRes || 0));
+      dmg = Math.max(1, Math.round(defMitigated * (1 - magicRes)));
     } else {
       dmg = Math.max(1, Math.round((amount * defConst) / (defConst + currentDef)));
     }
@@ -476,6 +529,19 @@ export function createVitals(ctx) {
     applyDamage(payload.amount, payload.type, payload);
   });
 
+  bus.on('equipment:changed', () => {
+    recalcDerived();
+    save();
+    emitChanged({ source: 'equipment' });
+  });
+
+  bus.on('enemy:liberated', () => {
+    const heal = state.player?.hpOnLiberate || 0;
+    if (heal > 0 && !isFainting && state.player.hp > 0) {
+      applyRestore({ hp: heal, source: 'hpOnLiberate' });
+    }
+  });
+
   bus.on('merit:reset', () => {
     const p = state.player;
     p.level = 1;
@@ -501,10 +567,29 @@ export function createVitals(ctx) {
 
   // ---------------------------------------------------------------- API & exports
   let buffEmitTimer = 0;
+  let mpRegenTimer = 0;
 
   const api = {
     update(dt) {
       const p = state.player;
+
+      // Passive MP regeneration from equipment (active in both hub and combat zones)
+      if (!isFainting && (p.mpRegen || 0) > 0 && p.mp < p.maxMp) {
+        mpRegenTimer += dt;
+        if (mpRegenTimer >= 1.0) {
+          const ticks = Math.floor(mpRegenTimer);
+          mpRegenTimer -= ticks;
+          const gain = +(p.mpRegen * ticks).toFixed(1);
+          const oldMp = p.mp;
+          p.mp = Math.min(p.maxMp, +(p.mp + gain).toFixed(1));
+          if (p.mp > oldMp) {
+            save();
+            emitChanged({ deltaMp: +(p.mp - oldMp).toFixed(1), source: 'mpRegen' });
+          }
+        }
+      } else {
+        mpRegenTimer = 0;
+      }
 
       // Faint sequence handling
       if (isFainting) {
@@ -592,6 +677,8 @@ export function createVitals(ctx) {
     addBuff,
     addPermanent,
     getStats,
+    stats: getStats,
+    recalcDerived,
     set,
     rollDamage,
     faint() {
@@ -619,6 +706,7 @@ export function createVitals(ctx) {
       api.damage(amount, type, extra),
     god: (bool) => api.god(bool),
     get: () => api.getStats(),
+    stats: () => api.getStats(),
     addExp: (n) => api.addExp(n),
     faint: () => api.faint(),
     rollDamage: (base, opts) => api.rollDamage(base, opts),

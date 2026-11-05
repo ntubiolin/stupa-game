@@ -149,7 +149,7 @@ export const CONFIG = {
     baseDef: 0,
     expBase: 20,
     expExponent: 1.5,
-    maxLevel: 30,
+    maxLevel: 40,
     defConstant: 50,
     magicDefFactor: 0.5,
     invulnDuration: 0.8,

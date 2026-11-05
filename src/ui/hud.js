@@ -144,6 +144,10 @@ export function createHud(ctx) {
                 <span class="vitals-stat-label" data-i18n="hud.def">DEF</span>
                 <span id="stat-def" class="vitals-stat-val">0</span>
               </div>
+              <div class="vitals-stat-chip vitals-stat-chip--turquoise" id="hud-turquoise-chip" title="Turquoise">
+                <span class="vitals-stat-icon" aria-hidden="true">💎</span>
+                <span id="stat-turquoise" class="vitals-stat-val">0</span>
+              </div>
             </div>
           </div>
 
@@ -261,6 +265,9 @@ export function createHud(ctx) {
         </div>
 
         <div class="utility-bar glass-panel">
+          <button id="btn-inventory-toggle" type="button" class="icon-btn" aria-label="Inventory" title="Inventory (I)">
+            <span>🎒</span>
+          </button>
           <button id="btn-lang-toggle" type="button" class="icon-btn">
             <span id="btn-lang-text" class="icon-btn__text">EN</span>
           </button>
@@ -439,6 +446,7 @@ export function createHud(ctx) {
   const statLevel = root.querySelector('#stat-level');
   const statAtk = root.querySelector('#stat-atk');
   const statDef = root.querySelector('#stat-def');
+  const statTurquoise = root.querySelector('#stat-turquoise');
   const statHpBar = root.querySelector('#stat-hp-bar');
   const statHpText = root.querySelector('#stat-hp-text');
   const hpPopupAnchor = root.querySelector('#hp-popup-anchor');
@@ -484,6 +492,7 @@ export function createHud(ctx) {
 
   const btnLangToggle = root.querySelector('#btn-lang-toggle');
   const btnLangText = root.querySelector('#btn-lang-text');
+  const btnInventoryToggle = root.querySelector('#btn-inventory-toggle');
   const btnMuteToggle = root.querySelector('#btn-mute-toggle');
   const btnMuteIcon = root.querySelector('#btn-mute-icon');
   const btnHelpToggle = root.querySelector('#btn-help-toggle');
@@ -627,7 +636,8 @@ export function createHud(ctx) {
     renderAchievementsModal();
     if (ctx.vitals?.getStats) {
       const vs = ctx.vitals.getStats();
-      if ((vs.level >= 30 || vs.isMaxLevel) && statExpText) {
+      const maxLvl = ctx.config?.VITALS?.maxLevel || 40;
+      if ((vs.level >= maxLvl || vs.isMaxLevel) && statExpText) {
         statExpText.textContent = i18n.t('hud.max') || 'MAX';
       }
     }
@@ -727,6 +737,22 @@ export function createHud(ctx) {
   titleLangEn.addEventListener('click', () => i18n.setLang('en'));
   btnLangToggle.addEventListener('click', () => {
     i18n.setLang(i18n.lang === 'zh' ? 'en' : 'zh');
+  });
+
+  if (btnInventoryToggle) {
+    btnInventoryToggle.addEventListener('click', () => {
+      if (ctx.inventoryUi?.toggle) {
+        ctx.inventoryUi.toggle('bag');
+      } else {
+        ctx.input?.trigger('inventory');
+      }
+    });
+  }
+
+  bus.on('currency:changed', (payload) => {
+    if (statTurquoise && payload && payload.turquoise != null) {
+      statTurquoise.textContent = String(payload.turquoise);
+    }
   });
 
   btnMuteToggle.addEventListener('click', () => {
@@ -1216,6 +1242,14 @@ export function createHud(ctx) {
     if (statLevel && level != null) statLevel.textContent = String(level);
     if (statAtk && atk != null) statAtk.textContent = String(atk);
     if (statDef && def != null) statDef.textContent = String(def);
+    if (statTurquoise) {
+      const tq =
+        payload.turquoise ??
+        ctx.inventory?.getTurquoise?.() ??
+        state.inventory?.turquoise ??
+        0;
+      statTurquoise.textContent = String(tq);
+    }
 
     if (statHpBar && maxHp > 0 && hp != null) {
       const pct = Math.max(0, Math.min(100, (hp / maxHp) * 100));
@@ -1233,7 +1267,8 @@ export function createHud(ctx) {
       statMpText.textContent = `${mp} / ${maxMp}`;
     }
 
-    if (level != null && level >= 30) {
+    const maxLvl = ctx.config?.VITALS?.maxLevel || 40;
+    if (level != null && level >= maxLvl) {
       if (statExpFill) statExpFill.style.width = '100%';
       if (statExpText) statExpText.textContent = i18n.t('hud.max') || 'MAX';
     } else {
