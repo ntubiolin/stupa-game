@@ -5,7 +5,6 @@
  * each 150–300 chars in zh-Hant with historical/legend tags and verified https:// sources.
  */
 import '../../i18n/ch3.js';
-import { CODEX_BY_ID, registerCodexEntries } from '../codex.js';
 
 export const CH3_CODEX_ENTRIES = [
   {
@@ -86,25 +85,19 @@ export const CH3_CODEX_ENTRIES = [
       { label: 'Wikipedia: Dharmapala', url: 'https://en.wikipedia.org/wiki/Dharmapala' },
     ],
   },
+  {
+    id: 'terma',
+    category: 'practice',
+    tag: 'history',
+    chapter: 3,
+    titleKey: 'codex.terma.title',
+    bodyKey: 'codex.terma.body',
+    glyph: 'གཏེར་མ།',
+    sources: [
+      { label: 'Wikipedia: Terma (religion)', url: 'https://en.wikipedia.org/wiki/Terma_(religion)' },
+      { label: 'Rigpa Wiki: Terma', url: 'https://www.rigpawiki.org/index.php?title=Terma' },
+    ],
+  },
 ];
-
-// Ensure 'terma' is also registered so Sheldrak Crystal Cave & C3-2 quest rewards can unlock it cleanly
-if (CODEX_BY_ID && !CODEX_BY_ID.terma) {
-  registerCodexEntries([
-    {
-      id: 'terma',
-      category: 'practice',
-      tag: 'history',
-      chapter: 3,
-      titleKey: 'codex.terma.title',
-      bodyKey: 'codex.terma.body',
-      glyph: 'གཏེར་མ།',
-      sources: [
-        { label: 'Wikipedia: Terma (religion)', url: 'https://en.wikipedia.org/wiki/Terma_(religion)' },
-        { label: 'Rigpa Wiki: Terma', url: 'https://www.rigpawiki.org/index.php?title=Terma' },
-      ],
-    },
-  ]);
-}
 
 export default CH3_CODEX_ENTRIES;

@@ -838,6 +838,14 @@ export function createQuests(ctx) {
     const targetIdx = order.indexOf(norm);
     if (targetIdx === -1) return false;
 
+    if (state.mode !== 'play') {
+      if (typeof document !== 'undefined') {
+        document.getElementById('btn-start')?.click();
+      }
+      state.mode = 'play';
+      bus.emit('game:start');
+    }
+
     // 1. Complete Prologue prerequisites
     markQuestDoneSilent('prologue.vow');
     markQuestDoneSilent('prologue.north');
