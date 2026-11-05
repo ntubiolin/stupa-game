@@ -13,8 +13,9 @@ import { EQUIPMENT_SLOTS } from '../data/itemBases.js';
 import { LEGENDARIES_BY_ID } from '../data/legendaries.js';
 import { BAG_CAPACITY, STAT_KEYS, sumSingleItemStats } from '../systems/inventory.js';
 
-const RARITY_COLOR = {
+export const RARITY_COLOR = {
   normal: '#e5e7eb',
+  common: '#e5e7eb',
   blessed: '#5b8cff',
   rare: '#ffd84a',
   terma: '#ff8a1f',
@@ -47,7 +48,7 @@ const PCT_STATS = new Set([
 // Cache canvas data URLs per (slot, rarity) so we don't redraw every render
 const iconCache = new Map();
 
-function getSlotIconDataUrl(slot, rarity = 'normal') {
+export function getSlotIconDataUrl(slot, rarity = 'normal') {
   const key = `${slot}:${rarity}`;
   if (iconCache.has(key)) return iconCache.get(key);
 
@@ -179,6 +180,143 @@ function getSlotIconDataUrl(slot, rarity = 'normal') {
   return url;
 }
 
+export function formatStatLineForCtx(i18n, stat, value) {
+  const valStr =
+    stat === 'mpRegen' ? Number(value).toFixed(1) : String(Math.round(value));
+  return i18n.t(`stat.${stat}`, { v: valStr });
+}
+
+export function formatDeltaBadgeForCtx(stat, diff) {
+  if (Math.abs(diff) < 1e-4) return '';
+  const isUp = diff > 0;
+  const sign = isUp ? '+' : '';
+  const numStr =
+    stat === 'mpRegen' ? diff.toFixed(1) : String(Math.round(diff));
+  const unit = PCT_STATS.has(stat) ? '%' : '';
+  const arrow = isUp ? '▲' : '▼';
+  const cls = isUp ? 'inv-diff inv-diff--up' : 'inv-diff inv-diff--down';
+  return `<span class="${cls}">${arrow} ${sign}${numStr}${unit}</span>`;
+}
+
+/**
+ * Shared item comparison tooltip card renderer for Inventory (#24), Shop (#31), and Crafting (#31).
+ */
+export function renderItemComparisonCardHtml(ctx, item, opts = {}) {
+  const { i18n } = ctx;
+  if (!item) return '';
+  const normRarity = item.rarity === 'common' ? 'normal' : item.rarity;
+  const color = RARITY_COLOR[normRarity] || RARITY_COLOR.normal;
+  const rarityLabel = i18n.t(`rarity.${normRarity}`);
+  const slotLabel = i18n.t(`slot.${item.slot}`);
+  const ilvlLabel = i18n.t('inv.ilvl', { ilvl: item.ilvl });
+
+  const impLines = [];
+  if (item.implicit) {
+    impLines.push(formatStatLineForCtx(i18n, item.implicit.stat, item.implicit.value));
+    if (item.implicit.extraStat) {
+      impLines.push(
+        formatStatLineForCtx(i18n, item.implicit.extraStat, item.implicit.extraValue)
+      );
+    }
+  }
+
+  const lockedIdx =
+    item.lockedAffixIndex != null
+      ? item.lockedAffixIndex
+      : item.reforgeSlot != null
+        ? item.reforgeSlot
+        : null;
+
+  const affixLines = (item.affixes || []).map((af, idx) => {
+    const line = formatStatLineForCtx(i18n, af.stat, af.value);
+    const lockTag = lockedIdx === idx ? ' 🔒' : '';
+    return `${line}${lockTag}`;
+  });
+
+  let termaHtml = '';
+  if (item.legendaryId || item.powerId) {
+    const legId = item.legendaryId || item.powerId;
+    const legDef = LEGENDARIES_BY_ID[legId];
+    const powerDesc = legDef
+      ? i18n.t(legDef.powerKey)
+      : i18n.t(`legendary.${legId}.power`);
+    termaHtml = `
+      <div class="inv-tooltip__terma">
+        ✦ ${i18n.t('inv.termaPower', { power: powerDesc })}
+      </div>
+    `;
+  }
+
+  let compareHtml = '';
+  const isEquippedSelf = opts.isEquipped === true;
+  if (!isEquippedSelf && opts.compareWithEquipped !== false) {
+    const equippedItem = ctx.inventory?.getEquipped?.()?.[item.slot] || null;
+    const candStats = sumSingleItemStats(item);
+    const eqStats = sumSingleItemStats(equippedItem);
+    const diffRows = [];
+    for (const stKey of STAT_KEYS) {
+      const diff = +(candStats[stKey] - eqStats[stKey]).toFixed(1);
+      if (Math.abs(diff) >= 0.05) {
+        const statLabel = formatStatLineForCtx(i18n, stKey, Math.abs(diff))
+          .replace(/\+[0-9.]+%?/, '')
+          .trim();
+        diffRows.push(`
+          <div class="inv-compare-row">
+            <span class="inv-compare-row__stat">${statLabel}</span>
+            ${formatDeltaBadgeForCtx(stKey, diff)}
+          </div>
+        `);
+      }
+    }
+    if (diffRows.length > 0) {
+      compareHtml = `
+        <div class="inv-tooltip__compare">
+          <div class="inv-tooltip__sec-label">${i18n.t('inv.compareEquipped')}</div>
+          ${diffRows.join('')}
+        </div>
+      `;
+    }
+  }
+
+  const equippedBadge = isEquippedSelf
+    ? `<span class="inv-tooltip__badge">${i18n.t('inv.equippedBadge')}</span>`
+    : '';
+
+  const priceLine =
+    opts.priceHtml ||
+    `<span>💎 ${i18n.t('inv.sellValue', { v: item.sellValue || 1 })}</span>`;
+
+  return `
+    <div class="inv-tooltip__card rarity-${normRarity}">
+      <div class="inv-tooltip__head">
+        <div class="inv-tooltip__name" style="color: ${color}">${item.name}</div>
+        ${equippedBadge}
+      </div>
+      <div class="inv-tooltip__meta">
+        <span>${rarityLabel} · ${slotLabel}</span>
+        <span>${ilvlLabel}</span>
+      </div>
+      <div class="inv-tooltip__section">
+        <div class="inv-tooltip__sec-label">${i18n.t('inv.implicit')}</div>
+        ${impLines.map((l) => `<div class="inv-tooltip__line inv-tooltip__line--imp">${l}</div>`).join('')}
+      </div>
+      ${
+        affixLines.length > 0
+          ? `<div class="inv-tooltip__section">
+              <div class="inv-tooltip__sec-label">${i18n.t('inv.affixes')}</div>
+              ${affixLines.map((l) => `<div class="inv-tooltip__line inv-tooltip__line--affix">• ${l}</div>`).join('')}
+            </div>`
+          : ''
+      }
+      ${termaHtml}
+      ${compareHtml}
+      <div class="inv-tooltip__footer">
+        ${priceLine}
+      </div>
+    </div>
+  `;
+}
+
 export function createInventoryUi(ctx) {
   const { state, bus, i18n } = ctx;
 
@@ -201,6 +339,21 @@ export function createInventoryUi(ctx) {
           </div>
         </div>
         <div class="inv-header__right">
+          <div class="inv-mat-pill" title="碎綠松石 / Turquoise Shard">
+            <span class="inv-mat-pill__icon" aria-hidden="true">🔹</span>
+            <span id="inv-mat-shard-label" data-i18n="crafting.mat.turquoiseShard">碎綠松石</span>
+            <span id="inv-mat-shard-val" class="inv-mat-pill__val">0</span>
+          </div>
+          <div class="inv-mat-pill" title="金粉 / Gold Dust">
+            <span class="inv-mat-pill__icon" aria-hidden="true">✨</span>
+            <span id="inv-mat-gold-label" data-i18n="crafting.mat.goldDust">金粉</span>
+            <span id="inv-mat-gold-val" class="inv-mat-pill__val">0</span>
+          </div>
+          <div class="inv-mat-pill" title="伏藏精華 / Terma Essence">
+            <span class="inv-mat-pill__icon" aria-hidden="true">🔥</span>
+            <span id="inv-mat-terma-label" data-i18n="crafting.mat.termaEssence">伏藏精華</span>
+            <span id="inv-mat-terma-val" class="inv-mat-pill__val">0</span>
+          </div>
           <div class="inv-currency-pill" title="Turquoise">
             <span class="inv-currency-pill__icon" aria-hidden="true">💎</span>
             <span id="inv-turquoise-val" class="inv-currency-pill__val">0</span>
@@ -458,108 +611,9 @@ export function createInventoryUi(ctx) {
       return;
     }
 
-    const color = RARITY_COLOR[item.rarity] || RARITY_COLOR.normal;
-    const rarityLabel = i18n.t(`rarity.${item.rarity}`);
-    const slotLabel = i18n.t(`slot.${item.slot}`);
-    const ilvlLabel = i18n.t('inv.ilvl', { ilvl: item.ilvl });
-
-    // Implicit lines
-    const impLines = [];
-    if (item.implicit) {
-      impLines.push(formatStatLine(item.implicit.stat, item.implicit.value));
-      if (item.implicit.extraStat) {
-        impLines.push(
-          formatStatLine(item.implicit.extraStat, item.implicit.extraValue)
-        );
-      }
-    }
-
-    // Affix lines
-    const affixLines = (item.affixes || []).map((af) =>
-      formatStatLine(af.stat, af.value)
-    );
-
-    // Terma legendary power
-    let termaHtml = '';
-    if (item.legendaryId || item.powerId) {
-      const legId = item.legendaryId || item.powerId;
-      const legDef = LEGENDARIES_BY_ID[legId];
-      const powerDesc = legDef
-        ? i18n.t(legDef.powerKey)
-        : i18n.t(`legendary.${legId}.power`);
-      termaHtml = `
-        <div class="inv-tooltip__terma">
-          ✦ ${i18n.t('inv.termaPower', { power: powerDesc })}
-        </div>
-      `;
-    }
-
-    // Comparison against currently equipped item in the same slot
-    let compareHtml = '';
-    const equippedItem = ctx.inventory?.getEquipped?.()?.[item.slot] || null;
-    if (selectedSource?.type === 'bag') {
-      const candStats = sumSingleItemStats(item);
-      const eqStats = sumSingleItemStats(equippedItem);
-      const diffRows = [];
-      for (const stKey of STAT_KEYS) {
-        const diff = +(candStats[stKey] - eqStats[stKey]).toFixed(1);
-        if (Math.abs(diff) >= 0.05) {
-          const statLabel = formatStatLine(stKey, Math.abs(diff)).replace(
-            /\+[0-9.]+%?/,
-            ''
-          ).trim();
-          diffRows.push(`
-            <div class="inv-compare-row">
-              <span class="inv-compare-row__stat">${statLabel}</span>
-              ${formatDeltaBadge(stKey, diff)}
-            </div>
-          `);
-        }
-      }
-      if (diffRows.length > 0) {
-        compareHtml = `
-          <div class="inv-tooltip__compare">
-            <div class="inv-tooltip__sec-label">${i18n.t('inv.compareEquipped')}</div>
-            ${diffRows.join('')}
-          </div>
-        `;
-      }
-    }
-
-    const equippedBadge =
-      selectedSource?.type === 'equipped'
-        ? `<span class="inv-tooltip__badge">${i18n.t('inv.equippedBadge')}</span>`
-        : '';
-
-    tooltipEl.innerHTML = `
-      <div class="inv-tooltip__card rarity-${item.rarity}">
-        <div class="inv-tooltip__head">
-          <div class="inv-tooltip__name" style="color: ${color}">${item.name}</div>
-          ${equippedBadge}
-        </div>
-        <div class="inv-tooltip__meta">
-          <span>${rarityLabel} · ${slotLabel}</span>
-          <span>${ilvlLabel}</span>
-        </div>
-        <div class="inv-tooltip__section">
-          <div class="inv-tooltip__sec-label">${i18n.t('inv.implicit')}</div>
-          ${impLines.map((l) => `<div class="inv-tooltip__line inv-tooltip__line--imp">${l}</div>`).join('')}
-        </div>
-        ${
-          affixLines.length > 0
-            ? `<div class="inv-tooltip__section">
-                <div class="inv-tooltip__sec-label">${i18n.t('inv.affixes')}</div>
-                ${affixLines.map((l) => `<div class="inv-tooltip__line inv-tooltip__line--affix">• ${l}</div>`).join('')}
-              </div>`
-            : ''
-        }
-        ${termaHtml}
-        ${compareHtml}
-        <div class="inv-tooltip__footer">
-          <span>💎 ${i18n.t('inv.sellValue', { v: item.sellValue || 1 })}</span>
-        </div>
-      </div>
-    `;
+    tooltipEl.innerHTML = renderItemComparisonCardHtml(ctx, item, {
+      isEquipped: selectedSource?.type === 'equipped',
+    });
 
     actionBarEl.classList.remove('is-hidden');
     const isBag = selectedSource?.type === 'bag';
@@ -628,6 +682,14 @@ export function createInventoryUi(ctx) {
     applyStaticTranslations();
     const tq = ctx.inventory?.getTurquoise?.() ?? 0;
     turquoiseValEl.textContent = String(tq);
+
+    const mats = ctx.inventory?.getMaterials?.() || {};
+    const shardEl = overlay.querySelector('#inv-mat-shard-val');
+    const goldEl = overlay.querySelector('#inv-mat-gold-val');
+    const termaEl = overlay.querySelector('#inv-mat-terma-val');
+    if (shardEl) shardEl.textContent = String(mats.turquoiseShard || 0);
+    if (goldEl) goldEl.textContent = String(mats.goldDust || 0);
+    if (termaEl) termaEl.textContent = String(mats.termaEssence || 0);
 
     tabBagBtn.classList.toggle('is-active', activeTab === 'bag');
     tabCharBtn.classList.toggle('is-active', activeTab === 'char');

@@ -1,4 +1,5 @@
 import '../i18n/quests.js';
+import '../i18n/prologue.js';
 
 export const NPC_LOOKS = [
   'lama',
@@ -26,6 +27,51 @@ export const NPC_LOOKS = [
  *   }
  */
 export const NPCS = [
+  // Town NPCs at Boudhanath Stupa (outer plaza ring r ~ 32.2..32.6m; does not block Kora r=21..25m or lamps r~20.4m)
+  {
+    id: 'oldLama',
+    map: 'stupa',
+    x: -6,
+    z: 32,
+    heading: 0.25,
+    look: 'lama',
+    nameKey: 'npc.oldLama',
+    idle: 'pray',
+    quests: ['prologue.vow', 'prologue.north'],
+    dialogue: [
+      { if: { questStep: 'prologue.north:talk_report' }, id: 'prologue.oldLama.northReport' },
+      { if: { questStep: 'prologue.north:talk_intro' }, id: 'prologue.oldLama.northIntro' },
+      { if: { questActive: 'prologue.north' }, id: 'prologue.oldLama.northActive' },
+      { if: { flag: 'prologue.north.done' }, id: 'prologue.oldLama.completed' },
+      { if: { questStep: 'prologue.vow:talk_legend' }, id: 'prologue.oldLama.vowLegend' },
+      { if: { questStep: 'prologue.vow:talk_intro' }, id: 'prologue.oldLama.vowIntro' },
+      { if: { questActive: 'prologue.vow' }, id: 'prologue.oldLama.vowActive' },
+      { if: { flag: 'prologue.vow.done' }, id: 'prologue.oldLama.northIntro' },
+      { id: 'prologue.oldLama.vowIntro' },
+    ],
+  },
+  {
+    id: 'merchant',
+    map: 'stupa',
+    x: 32,
+    z: 4,
+    heading: -Math.PI / 2,
+    look: 'merchant',
+    nameKey: 'npc.merchant',
+    idle: 'stand',
+    dialogue: 'prologue.merchant.talk',
+  },
+  {
+    id: 'artisan',
+    map: 'stupa',
+    x: -32,
+    z: 4,
+    heading: Math.PI / 2,
+    look: 'artisan',
+    nameKey: 'npc.artisan',
+    idle: 'work',
+    dialogue: 'prologue.artisan.talk',
+  },
   {
     id: 'sandbox_lama',
     map: 'sandbox',

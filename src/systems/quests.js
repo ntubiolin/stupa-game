@@ -8,7 +8,9 @@
  */
 import * as THREE from 'three';
 import { DEBUG_QUESTS } from '../data/quests/debug.js';
+import { PROLOGUE_QUESTS } from '../data/quests/prologue.js';
 import '../i18n/quests.js';
+import '../i18n/prologue.js';
 
 function getStepGoal(step) {
   if (!step) return 1;
@@ -293,6 +295,7 @@ export function createQuests(ctx) {
   }
 
   register(DEBUG_QUESTS);
+  register(PROLOGUE_QUESTS);
 
   // Re-parent collectibles when a lazy map finishes building
   bus.on('map:loaded', ({ mapId }) => {
@@ -490,9 +493,14 @@ export function createQuests(ctx) {
       }
     }
 
-    if (Array.isArray(rewards.items)) {
-      for (let i = 0; i < rewards.items.length; i++) {
-        const spec = rewards.items[i];
+    const itemSpecs = Array.isArray(rewards.items)
+      ? rewards.items
+      : rewards.item
+        ? [rewards.item]
+        : [];
+    if (itemSpecs.length > 0) {
+      for (let i = 0; i < itemSpecs.length; i++) {
+        const spec = itemSpecs[i];
         const item = ctx.loot?.rollItem
           ? ctx.loot.rollItem(spec)
           : ctx.loot?.generate
@@ -542,6 +550,10 @@ export function createQuests(ctx) {
       ctx.protectors?.unlock?.(rewards.protector);
       bus.emit('protector:unlock', { id: rewards.protector });
     }
+
+    if (rewards.chapterBanner) {
+      bus.emit('chapter:banner', rewards.chapterBanner);
+    }
   }
 
   function complete(questId) {
@@ -563,6 +575,11 @@ export function createQuests(ctx) {
       titleKey: def.titleKey,
       rewards: def.rewards || {},
     });
+
+    const nextQuestId = def.nextQuest || def.rewards?.nextQuest;
+    if (nextQuestId && !isActive(nextQuestId) && !isDone(nextQuestId)) {
+      start(nextQuestId);
+    }
 
     checkAutoStartQuests();
     return true;
@@ -644,14 +661,17 @@ export function createQuests(ctx) {
   }
 
   // 1. `talk`: { npc }
-  bus.on('npc:talk', ({ npcId }) => {
+  function handleTalkEvent(payload = {}) {
+    const npcId = payload.npcId || payload.id || payload.npc;
     if (!npcId) return;
     forEachActiveStepOfType('talk', (qId, _entry, step) => {
       if (step.npc === npcId) {
         advanceStepProgress(qId, 1);
       }
     });
-  });
+  }
+  bus.on('npc:talk', handleTalkEvent);
+  bus.on('npc:talked', handleTalkEvent);
 
   // 3. `liberate`: { count, kind?, tag?, rank?, map? }
   bus.on('enemy:liberated', (payload = {}) => {
@@ -670,7 +690,7 @@ export function createQuests(ctx) {
   });
 
   // 4. `collect`: { item, count }
-  bus.on('quest:item', (payload = {}) => {
+  function handleCollectEvent(payload = {}) {
     const itemId = payload.item || payload.id;
     const count = Number(payload.count ?? 1);
     if (!itemId) return;
@@ -679,7 +699,9 @@ export function createQuests(ctx) {
         advanceStepProgress(qId, count);
       }
     });
-  });
+  }
+  bus.on('quest:item', handleCollectEvent);
+  bus.on('quest:collect', handleCollectEvent);
 
   // 5. `interact`: { target, count } (also supports `light` if target === 'lamp')
   bus.on('quest:interact', (payload = {}) => {
@@ -700,18 +722,30 @@ export function createQuests(ctx) {
     }
   });
 
-  // 6. `kora` & 7. `light` via `merit`
+  // 6. `kora` & 7. `light` via `merit` (and direct `kora:lap` / `lamp:lit` aliases)
   bus.on('merit', (payload = {}) => {
-    if (payload.type === 'kora') {
+    const kind = payload.type || payload.source;
+    if (kind === 'kora') {
       forEachActiveStepOfType('kora', (qId) => {
         advanceStepProgress(qId, 1);
       });
-    } else if (payload.type === 'lamp') {
+    } else if (kind === 'lamp') {
       forEachActiveStepOfType('light', (qId, _entry, step) => {
         if (step.map && step.map !== state.zone) return;
         advanceStepProgress(qId, 1);
       });
     }
+  });
+  bus.on('kora:lap', () => {
+    forEachActiveStepOfType('kora', (qId) => {
+      advanceStepProgress(qId, 1);
+    });
+  });
+  bus.on('lamp:lit', () => {
+    forEachActiveStepOfType('light', (qId, _entry, step) => {
+      if (step.map && step.map !== state.zone) return;
+      advanceStepProgress(qId, 1);
+    });
   });
 
   // 8. `boss`: { bossId }
@@ -742,7 +776,7 @@ export function createQuests(ctx) {
   function getNpcMarker(npcId, npcDef) {
     if (!npcId) return null;
 
-    // Priority 1: Active `talk` step targeting this NPC -> '?'
+    // Priority 1: Active `talk` step targeting this NPC -> '?' (golden ready-to-talk/turn-in)
     for (const [qId, entry] of Object.entries(questData.active)) {
       const def = registry.get(qId);
       const step = def?.steps?.[entry.step];
@@ -751,7 +785,7 @@ export function createQuests(ctx) {
       }
     }
 
-    // Priority 2: Available quest to start from this NPC -> '!'
+    // Priority 2: Available quest to start from this NPC -> '!' (golden available)
     for (const def of registry.values()) {
       if (def.giverNpc === npcId && canStartQuest(def)) {
         return '!';
@@ -766,6 +800,47 @@ export function createQuests(ctx) {
       }
     }
 
+    // Priority 3: Active in-progress quest from this NPC -> '?' (silver in-progress)
+    for (const [qId, entry] of Object.entries(questData.active)) {
+      const def = registry.get(qId);
+      if (!def) continue;
+      if (def.giverNpc === npcId || (Array.isArray(npcDef?.quests) && npcDef.quests.includes(qId))) {
+        return '?';
+      }
+    }
+
+    return null;
+  }
+
+  function getNpcMarkerColor(npcId, npcDef) {
+    if (!npcId) return null;
+    for (const [qId, entry] of Object.entries(questData.active)) {
+      const def = registry.get(qId);
+      const step = def?.steps?.[entry.step];
+      if (step && step.type === 'talk' && step.npc === npcId) {
+        return 'gold';
+      }
+    }
+    for (const def of registry.values()) {
+      if (def.giverNpc === npcId && canStartQuest(def)) {
+        return 'gold';
+      }
+    }
+    if (Array.isArray(npcDef?.quests)) {
+      for (const qId of npcDef.quests) {
+        const def = registry.get(qId);
+        if (def && canStartQuest(def)) {
+          return 'gold';
+        }
+      }
+    }
+    for (const [qId] of Object.entries(questData.active)) {
+      const def = registry.get(qId);
+      if (!def) continue;
+      if (def.giverNpc === npcId || (Array.isArray(npcDef?.quests) && npcDef.quests.includes(qId))) {
+        return 'silver';
+      }
+    }
     return null;
   }
 
@@ -802,7 +877,7 @@ export function createQuests(ctx) {
     return { x, y, z, map };
   }
 
-  function getTrackedTargets() {
+  function getTrackedTargets(mapFilter) {
     const targets = [];
     for (const [qId, entry] of Object.entries(questData.active)) {
       if (entry.tracked === false) continue;
@@ -812,7 +887,7 @@ export function createQuests(ctx) {
       if (!step) continue;
 
       const coords = resolveStepWorldCoords(def, step);
-      if (coords) {
+      if (coords && (!mapFilter || coords.map === mapFilter)) {
         targets.push({
           questId: qId,
           stepId: step.id,
@@ -919,11 +994,13 @@ export function createQuests(ctx) {
     setFlag,
     clearFlag,
     hasFlag,
+    getFlag: hasFlag,
     isActive,
     isDone,
     isAtStep,
     toggleTrack,
     getNpcMarker,
+    getNpcMarkerColor,
     getTrackedTargets,
     getActiveQuestsDetailed,
     getCompletedQuestsDetailed,

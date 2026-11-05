@@ -730,6 +730,11 @@ export function createWorldMap(ctx) {
         const isUnl = Boolean(ctx.waypoints?.isUnlocked?.(nodeId)) || nodeId === 'stupa';
         const hasMap = Boolean(MAPS[nodeId]);
 
+        if (isUnl && !hasMap) {
+          bus.emit('toast', { text: i18n.t('prologue.toast.pharpingComingSoon') });
+          renderWorldRouteTab();
+          return;
+        }
         if (canPlayerTeleportNow() && isUnl && hasMap) {
           handleTeleportToNode(nodeId);
           return;
@@ -757,7 +762,7 @@ export function createWorldMap(ctx) {
     else if (isUnl) statusText = i18n.t('mapModal.world.status.unlockedView');
     else if (!hasMap) statusText = i18n.t('mapModal.world.status.unreached');
 
-    const showTpBtn = isUnl && hasMap && canTp && !isCur;
+    const showTpBtn = isUnl && !isCur && (canTp || !hasMap);
 
     worldDetailEl.innerHTML = `
       <div class="world-detail__header">
@@ -782,13 +787,17 @@ export function createWorldMap(ctx) {
   }
 
   function handleTeleportToNode(mapId) {
-    if (!MAPS[mapId]) return;
+    if (!MAPS[mapId]) {
+      bus.emit('toast', { text: i18n.t('prologue.toast.pharpingComingSoon') });
+      return false;
+    }
     close();
     if (ctx.waypoints?.teleportTo) {
       ctx.waypoints.teleportTo(mapId);
     } else if (ctx.zones?.teleport) {
       ctx.zones.teleport(mapId, 'waypoint');
     }
+    return true;
   }
 
   function renderCodexTab() {

@@ -193,6 +193,70 @@ export function createLoot(ctx) {
     return result;
   }
 
+  function rollReforgeCandidates(item, affixIndex = 0, count = 3) {
+    if (!item || !item.slot) return [];
+    const slot = item.slot;
+    const ilvl = Math.max(1, Math.floor(Number(item.ilvl || state.player?.level || 1)));
+    const otherStats = new Set();
+    if (Array.isArray(item.affixes)) {
+      item.affixes.forEach((af, idx) => {
+        if (idx !== affixIndex && af && af.stat) {
+          otherStats.add(af.stat);
+        }
+      });
+    }
+
+    const basePool = AFFIXES.filter(
+      (a) =>
+        a.slots.includes(slot) &&
+        a.tiers.some((t) => t.minIlvl <= ilvl) &&
+        !otherStats.has(a.stat)
+    );
+    const fallbackPool = AFFIXES.filter(
+      (a) => a.slots.includes(slot) && a.tiers.some((t) => t.minIlvl <= ilvl)
+    );
+    const poolSource = basePool.length > 0 ? basePool : fallbackPool;
+    if (poolSource.length === 0) return [];
+
+    const usedCandidateStats = new Set();
+    const candidates = [];
+
+    for (let i = 0; i < count; i++) {
+      let pool = poolSource.filter((a) => !usedCandidateStats.has(a.stat));
+      if (pool.length === 0) pool = poolSource;
+
+      const chosen = pickWeightedAffix(pool);
+      if (!chosen) break;
+      usedCandidateStats.add(chosen.stat);
+
+      const eligibleIndices = [];
+      for (let t = 0; t < chosen.tiers.length; t++) {
+        if (chosen.tiers[t].minIlvl <= ilvl) {
+          eligibleIndices.push(t);
+        }
+      }
+      const tierIdx =
+        eligibleIndices.length > 0
+          ? eligibleIndices[randInt(0, eligibleIndices.length - 1)]
+          : 0;
+      const tierDef = chosen.tiers[tierIdx];
+
+      const value = chosen.float
+        ? Math.round(randFloat(tierDef.min, tierDef.max) * 10) / 10
+        : randInt(tierDef.min, tierDef.max);
+
+      candidates.push({
+        id: chosen.id,
+        kind: chosen.kind,
+        stat: chosen.stat,
+        value,
+        tier: tierIdx + 1,
+      });
+    }
+
+    return candidates;
+  }
+
   // ---------------------------------------------------------------- Name Formatting
   function tLang(key, lang) {
     if (!lang) return i18n.t(key);
@@ -260,7 +324,7 @@ export function createLoot(ctx) {
       Math.floor(Number(opts.ilvl ?? state.player?.level ?? 1) || 1)
     );
 
-    let rarity = opts.rarity || null;
+    let rarity = opts.rarity === 'common' ? 'normal' : (opts.rarity || null);
     let legendaryDef = null;
     const reqLegId = opts.legendaryId || opts.id || opts.powerId;
 
@@ -548,6 +612,7 @@ export function createLoot(ctx) {
     update() {},
     generate,
     rollRarity,
+    rollReforgeCandidates,
     simulate,
     drop,
     formatItemName,

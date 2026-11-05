@@ -10,7 +10,10 @@
  */
 import * as THREE from 'three';
 import { NPCS, NPC_LOOKS } from '../data/npcs.js';
+import { createShop } from '../ui/shop.js';
+import { createCrafting } from '../ui/crafting.js';
 import '../i18n/quests.js';
+import '../i18n/prologue.js';
 
 const TWO_PI = Math.PI * 2;
 
@@ -27,7 +30,7 @@ function lerpAngle(a, b, t) {
 // ---------------------------------------------------------------- Shared Marker & Label Textures
 let markerTextures = null;
 
-function createMarkerTexture(symbol, colorHex = '#ffd84a') {
+function createMarkerTexture(symbol, colorHex = '#ffd84a', isSilver = false) {
   if (typeof document === 'undefined') return null;
   const canvas = document.createElement('canvas');
   canvas.width = 128;
@@ -36,12 +39,12 @@ function createMarkerTexture(symbol, colorHex = '#ffd84a') {
   if (c) {
     c.clearRect(0, 0, 128, 128);
 
-    // Subtle dark-gold diamond backing badge
+    // Subtle dark-gold or silver diamond backing badge
     c.save();
     c.translate(64, 66);
     c.rotate(Math.PI / 4);
     c.fillStyle = 'rgba(20, 12, 28, 0.82)';
-    c.strokeStyle = 'rgba(255, 216, 74, 0.92)';
+    c.strokeStyle = isSilver ? 'rgba(203, 213, 225, 0.92)' : 'rgba(255, 216, 74, 0.92)';
     c.lineWidth = 5;
     c.beginPath();
     c.roundRect(-30, -30, 60, 60, 8);
@@ -49,17 +52,17 @@ function createMarkerTexture(symbol, colorHex = '#ffd84a') {
     c.stroke();
     c.restore();
 
-    // Glowing golden symbol (! or ?)
+    // Glowing golden or silver symbol (! or ?)
     c.textAlign = 'center';
     c.textBaseline = 'middle';
     c.font = '900 68px "Outfit", "Noto Serif TC", Georgia, serif';
-    c.shadowColor = 'rgba(255, 190, 40, 0.95)';
+    c.shadowColor = isSilver ? 'rgba(148, 163, 184, 0.95)' : 'rgba(255, 190, 40, 0.95)';
     c.shadowBlur = 16;
     c.fillStyle = colorHex;
     c.fillText(symbol, 64, 68);
 
     c.shadowBlur = 0;
-    c.fillStyle = '#fff9e6';
+    c.fillStyle = isSilver ? '#f1f5f9' : '#fff9e6';
     c.fillText(symbol, 64, 68);
   }
   const tex = new THREE.CanvasTexture(canvas);
@@ -73,8 +76,9 @@ function createMarkerTexture(symbol, colorHex = '#ffd84a') {
 function getMarkerTextures() {
   if (!markerTextures) {
     markerTextures = {
-      '!': createMarkerTexture('!', '#ffd84a'),
-      '?': createMarkerTexture('?', '#ffd84a'),
+      '!': createMarkerTexture('!', '#ffd84a', false),
+      '?': createMarkerTexture('?', '#ffd84a', false),
+      '?_silver': createMarkerTexture('?', '#cbd5e1', true),
     };
   }
   return markerTextures;
@@ -730,6 +734,9 @@ export function createNpcs(ctx) {
   scene.add(showcaseGroup);
   const showcaseModels = [];
 
+  if (!ctx.shop) createShop(ctx);
+  if (!ctx.crafting) createCrafting(ctx);
+
   function isNpcVisible(def) {
     if (def.debugOnly && !ctx.debug?.enabled && state.zone !== 'sandbox') {
       return false;
@@ -939,13 +946,17 @@ export function createNpcs(ctx) {
       // Idle animation
       model.animate(t + inst.phaseOffset, dt, def.idle || 'stand', isConversing);
 
-      // Update overhead quest marker (! or ?)
+      // Update overhead quest marker (! golden, ? silver for active, ? golden for ready-to-turn-in)
       const markerType = ctx.quests?.getNpcMarker?.(def.id, def) || null;
+      const markerColor = ctx.quests?.getNpcMarkerColor?.(def.id, def) || (markerType ? 'gold' : null);
       inst.markerState = markerType;
-      if (markerType && textures[markerType]) {
+      inst.markerColor = markerColor;
+      const texKey =
+        markerType === '?' && markerColor === 'silver' ? '?_silver' : markerType;
+      if (texKey && textures[texKey]) {
         markerSprite.visible = true;
-        if (markerMat.map !== textures[markerType]) {
-          markerMat.map = textures[markerType];
+        if (markerMat.map !== textures[texKey]) {
+          markerMat.map = textures[texKey];
           markerMat.needsUpdate = true;
         }
         markerSprite.position.y = 2.36 + Math.sin(t * 3.2 + inst.phaseOffset) * 0.08;
@@ -959,6 +970,9 @@ export function createNpcs(ctx) {
       const item = showcaseModels[i];
       item.model.animate(t + i * 0.7, dt, item.idle, false);
     }
+
+    ctx.shop?.update?.(dt);
+    ctx.crafting?.update?.(dt);
   }
 
   const api = {
@@ -974,15 +988,24 @@ export function createNpcs(ctx) {
       return instances.get(id) || null;
     },
     list() {
-      return Array.from(instances.values()).map((inst) => ({
-        id: inst.id,
-        map: inst.def.map,
-        look: inst.def.look,
-        x: inst.def.x,
-        z: inst.def.z,
-        visible: isNpcVisible(inst.def),
-        marker: inst.markerState,
-      }));
+      return Array.from(instances.values()).map((inst) => {
+        const marker =
+          ctx.quests?.getNpcMarker?.(inst.id, inst.def) ?? inst.markerState;
+        const markerColor =
+          ctx.quests?.getNpcMarkerColor?.(inst.id, inst.def) ??
+          inst.markerColor ??
+          (marker ? 'gold' : null);
+        return {
+          id: inst.id,
+          map: inst.def.map,
+          look: inst.def.look,
+          x: inst.def.x,
+          z: inst.def.z,
+          visible: isNpcVisible(inst.def),
+          marker,
+          markerColor,
+        };
+      });
     },
   };
 

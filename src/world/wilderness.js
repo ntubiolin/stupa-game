@@ -497,6 +497,32 @@ export function createWilderness(ctx) {
     maniPoles.push(new THREE.Vector3(ms.x, my + poleH, ms.z));
   }
 
+  // Tilted Mani stone cairn beside the Ancient Pilgrim's Map spot at (origin.x + 8, origin.z - 12)
+  {
+    const tx = origin.x + 9.15;
+    const tz = origin.z - 12.65;
+    const ty = getHeight(tx, tz);
+    for (let s = 0; s < 10; s++) {
+      const u = s / 9;
+      const slabW = 1.15 - u * 0.62;
+      const slabD = 0.95 - u * 0.5;
+      const slabH = 0.11;
+      const slab = new THREE.BoxGeometry(slabW, slabH, slabD);
+      slab.rotateZ(-0.18); // Tilted cairn
+      slab.rotateY(s * 1.1);
+      slab.translate(
+        tx - s * 0.03,
+        ty + s * 0.095 + slabH * 0.5,
+        tz + s * 0.015
+      );
+      maniSlateGeos.push(slab);
+    }
+    const tiltedPole = new THREE.CylinderGeometry(0.04, 0.08, 3.2, 7);
+    tiltedPole.rotateZ(-0.26);
+    tiltedPole.translate(tx - 0.35, ty + 1.45, tz);
+    maniWoodGeos.push(tiltedPole);
+  }
+
   if (maniSlateGeos.length) {
     const m = new THREE.Mesh(mergeGeometries(maniSlateGeos, false), slateMat);
     m.castShadow = true;
@@ -566,6 +592,8 @@ export function createWilderness(ctx) {
     if (Math.hypot(bx - chortenX, bz - chortenZ) < 8) continue;
     // Reject if inside northern Boss arena around (1000, -48)
     if (Math.hypot(bx - origin.x, bz - (origin.z - 48)) < 16) continue;
+    // Reject if too close to tilted Mani stone cairn / Ancient Pilgrim's Map at (origin.x + 8, origin.z - 12)
+    if (Math.hypot(bx - (origin.x + 8.5), bz - (origin.z - 12)) < 5.5) continue;
 
     // Reject if too close to mani stones
     let nearMani = false;
