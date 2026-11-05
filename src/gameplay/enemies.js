@@ -1020,7 +1020,8 @@ export function createEnemies(ctx) {
             a.id === 'groundSlam' ||
             a.id === 'heatWave' ||
             a.id === 'rootGrasp' ||
-            a.id === 'stomp'
+            a.id === 'stomp' ||
+            a.id === 'silence'
         ));
     const hasLineCharge =
       kind === 'tsen' ||
@@ -1045,21 +1046,25 @@ export function createEnemies(ctx) {
     if (hasSlamOrWave) {
       const isHeatWave = Array.isArray(kCfg.attacks) && kCfg.attacks.some((a) => a.id === 'heatWave');
       const isRootGrasp = Array.isArray(kCfg.attacks) && kCfg.attacks.some((a) => a.id === 'rootGrasp');
+      const isSilence = Array.isArray(kCfg.attacks) && kCfg.attacks.some((a) => a.id === 'silence');
       const aoeAtk = (kCfg.attacks || []).find(
         (a) =>
           a.id === 'heatWave' ||
           a.id === 'groundSlam' ||
           a.id === 'rootGrasp' ||
-          a.id === 'stomp'
+          a.id === 'stomp' ||
+          a.id === 'silence'
       );
-      const rRatio = (aoeAtk?.aoeRadius ?? (isHeatWave ? 2.5 : 3.5)) / 3.5;
+      const rRatio = (aoeAtk?.aoeRadius ?? (isSilence ? 3.0 : isHeatWave ? 2.5 : 3.5)) / 3.5;
 
       const ringMat = new THREE.MeshBasicMaterial({
-        color: isHeatWave
-          ? new THREE.Color(2.4, 0.75, 0.15)
-          : isRootGrasp
-            ? new THREE.Color(0.55, 2.1, 0.35)
-            : new THREE.Color(2.2, 0.25, 0.25),
+        color: isSilence
+          ? new THREE.Color(1.6, 0.85, 2.4)
+          : isHeatWave
+            ? new THREE.Color(2.4, 0.75, 0.15)
+            : isRootGrasp
+              ? new THREE.Color(0.55, 2.1, 0.35)
+              : new THREE.Color(2.2, 0.25, 0.25),
         toneMapped: false,
         transparent: true,
         opacity: 0.85,
@@ -1070,11 +1075,13 @@ export function createEnemies(ctx) {
       telegraphGroup.add(slamRingMesh);
 
       const fillMat = new THREE.MeshBasicMaterial({
-        color: isHeatWave
-          ? new THREE.Color(2.2, 0.55, 0.1)
-          : isRootGrasp
-            ? new THREE.Color(0.35, 1.8, 0.25)
-            : new THREE.Color(2.0, 0.2, 0.2),
+        color: isSilence
+          ? new THREE.Color(1.3, 0.65, 2.1)
+          : isHeatWave
+            ? new THREE.Color(2.2, 0.55, 0.1)
+            : isRootGrasp
+              ? new THREE.Color(0.35, 1.8, 0.25)
+              : new THREE.Color(2.0, 0.2, 0.2),
         toneMapped: false,
         transparent: true,
         opacity: 0.38,
@@ -1290,6 +1297,8 @@ export function createEnemies(ctx) {
       calmedTimer: 0,
       calmDuration: 15.0,
       stationary: Boolean(opts.stationary ?? kCfg.stationary),
+      wallTarget: opts.wallTarget || null,
+      aggroedByPlayer: Boolean(opts.aggroedByPlayer),
       animTime: Math.random() * 10,
       animPhase: Math.random() * Math.PI * 2,
     };
@@ -1877,6 +1886,11 @@ export function createEnemies(ctx) {
         : 0;
 
     enemy.hp = Math.max(0, enemy.hp - dealt);
+    if (dealt > 0 && !enemy.aggroedByPlayer) {
+      enemy.aggroedByPlayer = true;
+      enemy.wallTarget = null;
+      if (enemy.state === 'wander') enemy.state = 'chase';
+    }
     bus.emit('sfx', { name: 'hit' });
 
     bus.emit('enemy:hit', {
@@ -2239,7 +2253,8 @@ export function createEnemies(ctx) {
       atk.id === 'groundSlam' ||
       atk.id === 'heatWave' ||
       atk.id === 'rootGrasp' ||
-      atk.id === 'stomp'
+      atk.id === 'stomp' ||
+      atk.id === 'silence'
     ) {
       if (enemy.telegraphGroup) {
         enemy.telegraphGroup.position.set(enemy.pos.x, enemy.pos.y + 0.03, enemy.pos.z);
@@ -2253,6 +2268,13 @@ export function createEnemies(ctx) {
         }
         enemy.telegraphGroup.visible = true;
       }
+    } else if (atk.id === 'shadowStep') {
+      spawnSmokePuff(
+        { x: enemy.pos.x, y: enemy.pos.y + 0.7, z: enemy.pos.z },
+        0x18181b,
+        1.5,
+        0.38
+      );
     } else if (atk.id === 'boulder') {
       enemy.lastAttackId = 'boulder';
       const startPos = {
@@ -2569,12 +2591,19 @@ export function createEnemies(ctx) {
         continue;
       }
 
-      // Distance to player (or taunting protector ally if taunted)
+      // Distance to player (or taunting protector ally if taunted, or Samye wall segment if wallTarget active)
       const tauntOrigin =
         enemy.status?.taunt > 0 && enemy.status.tauntTarget?.pos
           ? enemy.status.tauntTarget.pos
           : null;
-      const chaseTargetPos = tauntOrigin || playerPos;
+      const wallOrigin =
+        !tauntOrigin &&
+        !enemy.aggroedByPlayer &&
+        enemy.wallTarget &&
+        enemy.wallTarget.active !== false
+          ? enemy.wallTarget
+          : null;
+      const chaseTargetPos = tauntOrigin || wallOrigin || playerPos;
       const dxPlayer = chaseTargetPos ? chaseTargetPos.x - enemy.pos.x : 999;
       const dzPlayer = chaseTargetPos ? chaseTargetPos.z - enemy.pos.z : 999;
       const distToPlayer = Math.hypot(dxPlayer, dzPlayer);
@@ -2684,16 +2713,16 @@ export function createEnemies(ctx) {
       if (enemy.state === 'hurt') {
         enemy.stateTimer -= dt;
         if (enemy.stateTimer <= 0) {
-          enemy.state = (!isPlayerInSafeZone && distToPlayer <= (cfg.leashRange ?? 25)) ? 'chase' : 'wander';
+          enemy.state = (wallOrigin || (!isPlayerInSafeZone && distToPlayer <= (cfg.leashRange ?? 25))) ? 'chase' : 'wander';
         }
       } else if (enemy.state === 'recover') {
         enemy.stateTimer -= dt;
-        if (playerPos) {
+        if (chaseTargetPos) {
           const targetHeading = Math.atan2(-dxPlayer, -dzPlayer);
           enemy.heading = lerpAngle(enemy.heading, targetHeading, dt * 6);
         }
         if (enemy.stateTimer <= 0) {
-          enemy.state = (!isPlayerInSafeZone && distToPlayer <= (cfg.leashRange ?? 25)) ? 'chase' : 'wander';
+          enemy.state = (wallOrigin || (!isPlayerInSafeZone && distToPlayer <= (cfg.leashRange ?? 25))) ? 'chase' : 'wander';
         }
       } else if (enemy.state === 'attack') {
         // Active dash attack (Tsen spear charge / spinDash / avalancheRoll)
@@ -2787,7 +2816,8 @@ export function createEnemies(ctx) {
             (atk?.id === 'groundSlam' ||
               atk?.id === 'heatWave' ||
               atk?.id === 'rootGrasp' ||
-              atk?.id === 'stomp') &&
+              atk?.id === 'stomp' ||
+              atk?.id === 'silence') &&
             enemy.telegraphFill
           ) {
             const maxS = enemy.telegraphFill.userData?.maxScale || 1.0;
@@ -2830,6 +2860,79 @@ export function createEnemies(ctx) {
             enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
             enemy.state = 'recover';
             enemy.stateTimer = atk.recover ?? 0.35;
+          } else if (atk.id === 'curseOrb') {
+            const count = atk.count || 3;
+            for (let cIdx = 0; cIdx < count; cIdx++) {
+              const angOffset = ((cIdx - (count - 1) * 0.5) * 0.42);
+              const orbHeading = enemy.heading + angOffset;
+              const orbOrigin = {
+                x: enemy.pos.x - Math.sin(orbHeading) * 0.55,
+                y: enemy.pos.y + 1.35 + (cIdx % 2) * 0.15,
+                z: enemy.pos.z - Math.cos(orbHeading) * 0.55,
+              };
+              ctx.projectiles?.spawn('ghostfire', {
+                origin: orbOrigin,
+                damage: scaledDmg,
+                speed: atk.speed ?? 4.6,
+                turnRate: atk.turnRate ?? 1.15,
+                lifetime: atk.lifetime ?? 3.8,
+                hitRadius: atk.hitRadius ?? 0.42,
+                magic: true,
+              });
+            }
+            bus.emit('sfx', { name: 'fireball' });
+            enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
+            enemy.state = 'recover';
+            enemy.stateTimer = atk.recover ?? 0.45;
+          } else if (atk.id === 'shadowStep') {
+            if (!isRooted && playerPos) {
+              const pHeading = state.player?.heading || 0;
+              const behindDist = 1.35;
+              // Player forward is (-sin(h), -cos(h)), so behind player is (+sin(h), +cos(h))
+              enemy.pos.x = playerPos.x + Math.sin(pHeading) * behindDist;
+              enemy.pos.z = playerPos.z + Math.cos(pHeading) * behindDist;
+              clampEnemyPosition(enemy);
+              enemy.heading = Math.atan2(-(playerPos.x - enemy.pos.x), -(playerPos.z - enemy.pos.z));
+              spawnSmokePuff(
+                { x: enemy.pos.x, y: enemy.pos.y + 0.7, z: enemy.pos.z },
+                0x7f1d1d,
+                1.6,
+                0.42
+              );
+              const strikeDist = Math.hypot(playerPos.x - enemy.pos.x, playerPos.z - enemy.pos.z);
+              if (strikeDist <= (atk.hitReach ?? 2.4)) {
+                bus.emit('vitals:damage', {
+                  amount: scaledDmg,
+                  type: 'physical',
+                  sourcePos: { ...enemy.pos },
+                });
+              }
+            }
+            enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
+            enemy.state = 'recover';
+            enemy.stateTimer = atk.recover ?? 0.4;
+          } else if (atk.id === 'silence') {
+            bus.emit('sfx', { name: 'dispel' });
+            if (playerPos) {
+              const silDist = Math.hypot(playerPos.x - enemy.pos.x, playerPos.z - enemy.pos.z);
+              if (silDist <= (atk.aoeRadius ?? 3.0)) {
+                const silDur = atk.silenceDuration ?? 2.0;
+                if (state.player) {
+                  state.player.silencedUntil = Math.max(state.player.silencedUntil || 0, state.elapsed + silDur);
+                }
+                bus.emit('player:silenced', { duration: silDur, sourceId: enemy.id });
+                if (scaledDmg > 0) {
+                  bus.emit('vitals:damage', {
+                    amount: scaledDmg,
+                    type: 'magic',
+                    sourcePos: { ...enemy.pos },
+                  });
+                }
+              }
+            }
+            enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
+            enemy.state = 'recover';
+            enemy.stateTimer = atk.recover ?? 0.5;
           } else if (atk.id === 'redArrow') {
             const lockedHeading = enemy.lockedHeading ?? enemy.heading;
             const dirX = -Math.sin(lockedHeading);
@@ -2950,8 +3053,17 @@ export function createEnemies(ctx) {
             enemy.state = 'recover';
             enemy.stateTimer = atk.recover ?? 0.5;
           } else {
-            // Melee claw
-            if (playerPos) {
+            // Melee claw / smash
+            if (wallOrigin && distToPlayer <= (atk.hitReach ?? 2.2)) {
+              if (typeof wallOrigin.onHit === 'function') {
+                wallOrigin.onHit(scaledDmg, enemy);
+              }
+              bus.emit('samye:wallHit', {
+                segIndex: wallOrigin.segIndex,
+                damage: scaledDmg,
+                enemyId: enemy.id,
+              });
+            } else if (playerPos) {
               const clawDist = Math.hypot(playerPos.x - enemy.pos.x, playerPos.z - enemy.pos.z);
               if (clawDist <= (atk.hitReach ?? 1.8)) {
                 bus.emit('vitals:damage', {
@@ -2967,12 +3079,12 @@ export function createEnemies(ctx) {
           }
         }
       } else if (enemy.state === 'chase') {
-        // Leash check
-        if (isPlayerInSafeZone || distToPlayer > (cfg.leashRange ?? 25)) {
+        // Leash check (bypassed when marching toward a Samye wall segment)
+        if (!wallOrigin && (isPlayerInSafeZone || distToPlayer > (cfg.leashRange ?? 25))) {
           enemy.state = 'wander';
           enemy.wanderTimer = 0;
         } else {
-          // Smoothly face player
+          // Smoothly face target (player or wall segment)
           const targetHeading = Math.atan2(-dxPlayer, -dzPlayer);
           enemy.heading = lerpAngle(enemy.heading, targetHeading, dt * 9);
 
@@ -2982,7 +3094,11 @@ export function createEnemies(ctx) {
 
           // Melee attack priority when in melee range
           const meleeAtk = attacks.find(
-            (a) => a.id === 'claw' || a.id === 'groundSlam' || a.id === 'stomp'
+            (a) =>
+              a.id === 'claw' ||
+              a.id === 'smash' ||
+              a.id === 'groundSlam' ||
+              a.id === 'stomp'
           );
           if (meleeAtk && distToPlayer <= meleeAtk.range && (enemy.attackCooldowns[meleeAtk.id] || 0) <= 0) {
             chosenAttack = meleeAtk;
@@ -3057,7 +3173,9 @@ export function createEnemies(ctx) {
         }
       } else {
         // 'wander'
-        if (!isPlayerInSafeZone && distToPlayer <= (cfg.sightRange ?? 14)) {
+        if (wallOrigin) {
+          enemy.state = 'chase';
+        } else if (!isPlayerInSafeZone && distToPlayer <= (cfg.sightRange ?? 14)) {
           enemy.state = 'notice';
           enemy.stateTimer = 0.25;
         } else if (effSpeed > 0) {
