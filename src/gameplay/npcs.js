@@ -125,7 +125,7 @@ function createLabelSprite(text) {
  * Procedural 3D NPC model builder supporting all 8 looks:
  * `lama` | `merchant` | `artisan` | `villager` | `noble` | `abbot` | `yogini` | `vision`
  */
-export function buildNpc(look = 'lama') {
+export function buildNpc(look = 'lama', opts = {}) {
   const isVision = look === 'vision';
   const group = new THREE.Group();
   group.name = `NPC_${look}`;
@@ -592,6 +592,32 @@ export function buildNpc(look = 'lama') {
     body.add(bodyHalo);
   }
 
+  // Optional sutra scroll pack on back (e.g. Indian messenger carrying Vajrakilaya texts)
+  if (opts?.prop === 'sutraPack') {
+    const packGroup = new THREE.Group();
+    packGroup.position.set(0, 0.30, 0.21);
+    const frameMat = makeMat(0x4a2c18, { roughness: 0.82 });
+    const wrapClothMat = makeMat(0xb87d1e, { roughness: 0.55 });
+    const strapMat = makeMat(0x7c1e19, { roughness: 0.65 });
+
+    const packBox = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.42, 0.18), frameMat);
+    packBox.castShadow = true;
+    packGroup.add(packBox);
+
+    // 3 stacked horizontal Tibetan pecha sutra bundles wrapped in saffron silk
+    for (let s = 0; s < 3; s++) {
+      const pecha = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.085, 0.14), wrapClothMat);
+      pecha.position.set(0, -0.11 + s * 0.11, 0.02);
+      pecha.castShadow = true;
+      packGroup.add(pecha);
+
+      const ribbon = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.095, 0.15), strapMat);
+      ribbon.position.set(0, -0.11 + s * 0.11, 0.02);
+      packGroup.add(ribbon);
+    }
+    torsoPivot.add(packGroup);
+  }
+
   function animate(t, dt, idleMode = 'stand', isConversing = false) {
     // Reset base transforms
     torsoPivot.position.y = 0.72;
@@ -654,6 +680,20 @@ export function buildNpc(look = 'lama') {
       leftArm.forearmPivot.rotation.set(0.9, 0, 0.2);
       rightArm.pivot.rotation.set(0.65 + strike * 0.35, 0.15, 0.08);
       rightArm.forearmPivot.rotation.set(0.75 - strike * 0.28, 0, -0.1);
+    } else if (idleMode === 'walk') {
+      const stride = Math.sin(t * 6.5);
+      body.position.y = Math.abs(Math.cos(t * 6.5)) * 0.035;
+      torsoPivot.rotation.x = 0.09;
+      leftArm.pivot.rotation.set(stride * 0.42, 0, -0.08);
+      rightArm.pivot.rotation.set(-stride * 0.42, 0, 0.08);
+    } else if (idleMode === 'rest') {
+      // Sitting down to catch breath during escort rest
+      body.position.y = -0.28;
+      torsoPivot.position.y = 0.70 + Math.sin(t * 3.8) * 0.02;
+      torsoPivot.rotation.x = 0.24;
+      headGroup.rotation.x = 0.18;
+      leftArm.pivot.rotation.set(0.55, -0.2, -0.1);
+      rightArm.pivot.rotation.set(0.55, 0.2, 0.1);
     } else {
       // 'stand'
       torsoPivot.position.y = 0.72 + breathe * 0.012;
@@ -754,7 +794,7 @@ export function createNpcs(ctx) {
   function spawnNpcFromDef(def) {
     if (instances.has(def.id)) return instances.get(def.id);
 
-    const model = buildNpc(def.look || 'lama');
+    const model = buildNpc(def.look || 'lama', { prop: def.prop });
     const y = ctx.world?.getHeight(def.x, def.z, def.map) ?? 0;
     const defaultHeading = def.heading ?? Math.PI;
     model.group.position.set(def.x, y, def.z);
@@ -924,14 +964,18 @@ export function createNpcs(ctx) {
       }
       if (!visible || !inZone) continue;
 
-      // Ground height sync
+      // Position & ground height sync (supports moving escort NPCs)
       const groundY = ctx.world?.getHeight(def.x, def.z, def.map) ?? 0;
-      group.position.y = groundY;
+      group.position.set(def.x, groundY, def.z);
+      if (collider) {
+        collider.x = def.x;
+        collider.z = def.z;
+      }
 
-      // Smooth turn toward player when conversing or within 4.0m
-      let targetHeading = inst.defaultHeading;
+      // Smooth turn toward player when conversing or within 4.0m (unless walking/locked heading)
+      let targetHeading = def.heading ?? inst.defaultHeading;
       const isConversing = activeDialogueNpcId === def.id;
-      if (playerPos) {
+      if (playerPos && def.idle !== 'walk' && !def.lockHeading) {
         const dx = playerPos.x - def.x;
         const dz = playerPos.z - def.z;
         const dist = Math.hypot(dx, dz);

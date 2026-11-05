@@ -105,7 +105,16 @@ export function formatEliteTitle(enemy, lang) {
   if (!enemy) return '';
   const activeLang = lang || (i18n.lang === 'en' ? 'en' : 'zh-Hant');
   const isEn = activeLang === 'en';
-  const kindStr = tElite(`enemyShort.${enemy.kind}`, activeLang) || enemy.kind;
+  const shortKey = `enemyShort.${enemy.kind}`;
+  const rawShort = tElite(shortKey, activeLang);
+  const fullKey = `enemy.${enemy.kind}`;
+  const rawFull = tElite(fullKey, activeLang);
+  const kindStr =
+    rawShort && rawShort !== shortKey
+      ? rawShort
+      : rawFull && rawFull !== fullKey
+        ? rawFull
+        : enemy.kind;
 
   if (enemy.rank === 'champion') {
     const firstAffix = Array.isArray(enemy.affixes) && enemy.affixes[0] ? enemy.affixes[0] : 'swift';

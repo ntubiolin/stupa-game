@@ -162,3 +162,28 @@ export const CODEX_ENTRIES = [
 ];
 
 export const CODEX_BY_ID = Object.fromEntries(CODEX_ENTRIES.map((e) => [e.id, e]));
+
+export function registerCodexEntries(entries) {
+  const list = Array.isArray(entries) ? entries : [];
+  for (const entry of list) {
+    if (!entry || typeof entry.id !== 'string') continue;
+    const idx = CODEX_ENTRIES.findIndex((e) => e.id === entry.id);
+    if (idx !== -1) {
+      CODEX_ENTRIES[idx] = entry;
+    } else {
+      CODEX_ENTRIES.push(entry);
+    }
+    CODEX_BY_ID[entry.id] = entry;
+  }
+}
+
+// Auto-discover chapter codex entries (`src/data/codex/*.js`)
+const chapterCodexModules = import.meta.glob('./codex/*.js', { eager: true });
+for (const mod of Object.values(chapterCodexModules)) {
+  if (!mod || typeof mod !== 'object') continue;
+  for (const val of Object.values(mod)) {
+    if (Array.isArray(val)) {
+      registerCodexEntries(val);
+    }
+  }
+}

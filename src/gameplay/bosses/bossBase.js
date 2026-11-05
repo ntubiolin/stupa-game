@@ -324,6 +324,9 @@ export function createBoss(ctx, def) {
     stunUntil: 0,
     rootUntil: 0,
     oathCeremonyTimer: 0,
+    ctx,
+    built,
+    patternRunner,
     setPosition(nx, nz) {
       const dx = nx - arena.x;
       const dz = nz - arena.z;
@@ -341,29 +344,48 @@ export function createBoss(ctx, def) {
   };
 
   const oathInteractableId = `oathStone_${def.id}`;
+  const oathInteractableDotId = `oathStone.${def.id}`;
   function removeOathStoneInteractable() {
     ctx.interaction?.unregister?.(oathInteractableId);
+    ctx.interaction?.unregister?.(oathInteractableDotId);
     if (Array.isArray(ctx.interactables)) {
-      const idx = ctx.interactables.findIndex((it) => it.id === oathInteractableId);
-      if (idx !== -1) ctx.interactables.splice(idx, 1);
+      for (let i = ctx.interactables.length - 1; i >= 0; i--) {
+        const it = ctx.interactables[i];
+        if (it && (it.id === oathInteractableId || it.id === oathInteractableDotId)) {
+          ctx.interactables.splice(i, 1);
+        }
+      }
     }
   }
 
   function registerOathStoneInteractable() {
     removeOathStoneInteractable();
-    const entry = {
-      id: oathInteractableId,
+    const posVec = new THREE.Vector3(arena.x, getGroundY(arena.x, arena.z), arena.z);
+    const makeEntry = (id, radius = 3.0) => ({
+      id,
       kind: 'oathStone',
       zone: arena.map,
-      position: { x: arena.x, y: startY, z: arena.z },
-      radius: 3.0,
+      action: 'interact',
+      position: { x: arena.x, y: posVec.y, z: arena.z },
+      getPosition: () => {
+        posVec.set(arena.x, getGroundY(arena.x, arena.z), arena.z);
+        return posVec;
+      },
+      isAvailable: () =>
+        (state.zone || 'stupa') === arena.map &&
+        !state.uiOpen &&
+        bossState.subdued &&
+        !bossState.active,
+      radius,
       labelKey: 'prompt.oathStone',
       interact: () => start({ isRematch: true }),
       onInteract: () => start({ isRematch: true }),
-    };
+    });
+    const entry = makeEntry(oathInteractableId, 3.0);
+    const dotAlias = makeEntry(oathInteractableDotId, 3.0);
     ctx.interaction?.register?.(entry);
     if (Array.isArray(ctx.interactables)) {
-      ctx.interactables.push(entry);
+      ctx.interactables.push(entry, dotAlias);
     }
   }
 
@@ -385,6 +407,29 @@ export function createBoss(ctx, def) {
     }
     syncOathStoneVisibility();
   }
+
+  // Re-attach rootGroup and sync terrain height when lazy map finishes loading
+  bus.on('map:loaded', ({ mapId }) => {
+    if (mapId === arena.map) {
+      const zg = ctx.zoneGroups?.[mapId];
+      if (zg && rootGroup.parent !== zg) {
+        zg.add(rootGroup);
+      }
+      const gy = getGroundY(arena.x, arena.z);
+      barrierGroup.position.set(arena.x, gy, arena.z);
+      oathStoneGroup.position.set(arena.x, gy, arena.z);
+      if (!bossState.active) {
+        bossState.setPosition(arena.x, arena.z);
+      }
+    }
+  });
+
+  // Forward Mantra casts to boss definition hook (e.g. Phase 3 illusion dispelling)
+  bus.on('mantra:cast', (payload) => {
+    if (bossState.active && typeof def.onMantraCast === 'function') {
+      def.onMantraCast(payload, bossState, ctx, patternRunner, built);
+    }
+  });
 
   // ---------------------------------------------------------------- 6. Combat Start / Phase / Reset / Subdue
   function getCurrentPhaseDef() {
@@ -448,6 +493,14 @@ export function createBoss(ctx, def) {
     bossMeshGroup.visible = true;
     removeOathStoneInteractable();
 
+    def.onStart?.(bossState, ctx, patternRunner, built);
+
+    // If Phase 1 includes weatherZone, activate it on start
+    const p1 = getCurrentPhaseDef();
+    if (Array.isArray(p1.attacks) && p1.attacks.includes('weatherZone') && def.attacks?.weatherZone) {
+      def.attacks.weatherZone(bossState, patternRunner.patterns, ctx);
+    }
+
     const name = i18n.t(def.nameKey);
     const title = i18n.t(def.titleKey);
     bus.emit('boss:start', {
@@ -499,6 +552,8 @@ export function createBoss(ctx, def) {
       def.attacks.summonAdds(bossState, patternRunner.patterns, ctx);
     }
 
+    def.onPhaseEnter?.(targetPhase, bossState, ctx, phaseDef, patternRunner, built);
+
     bus.emit('boss:phase', {
       id: def.id,
       phase: bossState.phase,
@@ -547,11 +602,14 @@ export function createBoss(ctx, def) {
 
     const items = [];
     if (firstKill) {
-      // Guaranteed 1 Terma item on first subjugation
+      // Guaranteed 1 Terma item on first subjugation (supports specific Terma id like 'phurbaSplit')
+      const fkSpec = def.loot?.firstKill || {};
       const termaItem = ctx.loot.generate({
         ilvl,
-        rarity: def.loot?.firstKill?.rarity || 'terma',
+        rarity: fkSpec.rarity || 'terma',
         rank: 'boss',
+        id: fkSpec.id || fkSpec.legendaryId,
+        legendaryId: fkSpec.id || fkSpec.legendaryId,
       });
       if (termaItem) items.push(termaItem);
     }
@@ -632,10 +690,17 @@ export function createBoss(ctx, def) {
     // Persist subdued state in ctx.save ('bosses')
     markSavedSubdued();
 
-    // Set quest flag (e.g. 'boss.migoiKing')
+    // Set quest flag (e.g. 'boss.migoiKing') and any extra flags
     if (def.oath?.flag) {
       ctx.quests?.setFlag?.(def.oath.flag, true);
     }
+    if (Array.isArray(def.oath?.flags)) {
+      for (const f of def.oath.flags) {
+        ctx.quests?.setFlag?.(f, true);
+      }
+    }
+
+    def.onSubdue?.(bossState, ctx, patternRunner, built);
 
     // Unlock protector if configured
     if (def.oath?.protector) {
@@ -696,6 +761,7 @@ export function createBoss(ctx, def) {
   function reset() {
     const wasActive = bossState.active;
     patternRunner.clear();
+    def.onReset?.(bossState, ctx, patternRunner, built);
 
     bossState.active = false;
     bossState.hp = bossState.maxHp;
@@ -1016,12 +1082,16 @@ export function createBoss(ctx, def) {
 
     // 4. Update active pattern telegraphs, projectiles, and hazards
     patternRunner.update(dt);
+    def.onUpdate?.(dt, bossState, ctx, patternRunner, built);
 
     // 5. Update procedural model animation
     built.anim?.(dt, bossState);
   }
 
   function getState() {
+    const extra = typeof def.getExtraState === 'function'
+      ? def.getExtraState(bossState, patternRunner, ctx, built)
+      : null;
     return {
       id: def.id,
       name: i18n.t(def.nameKey),
@@ -1041,6 +1111,7 @@ export function createBoss(ctx, def) {
       position: { x: bossState.pos.x, y: bossState.pos.y, z: bossState.pos.z },
       arena: { ...arena },
       oathStoneVisible: oathStoneGroup.visible,
+      ...(extra || {}),
     };
   }
 

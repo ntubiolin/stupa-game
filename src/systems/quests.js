@@ -283,10 +283,11 @@ export function createQuests(ctx) {
       // Subscribe any custom `event` step names on the bus
       if (Array.isArray(def.steps)) {
         for (const step of def.steps) {
-          if (step.type === 'event' && step.name && !subscribedCustomEvents.has(step.name)) {
-            subscribedCustomEvents.add(step.name);
-            bus.on(step.name, (payload) => {
-              handleCustomEventStep(step.name, payload);
+          const evName = step.name || step.event;
+          if (step.type === 'event' && evName && !subscribedCustomEvents.has(evName)) {
+            subscribedCustomEvents.add(evName);
+            bus.on(evName, (payload) => {
+              handleCustomEventStep(evName, payload);
             });
           }
         }
@@ -296,6 +297,20 @@ export function createQuests(ctx) {
 
   register(DEBUG_QUESTS);
   register(PROLOGUE_QUESTS);
+
+  // Auto-discover chapter i18n (`src/i18n/*.js`) and chapter quests (`src/data/quests/*.js`)
+  import.meta.glob('../i18n/*.js', { eager: true });
+  const chapterQuestModules = import.meta.glob('../data/quests/*.js', { eager: true });
+  for (const mod of Object.values(chapterQuestModules)) {
+    if (!mod || typeof mod !== 'object') continue;
+    for (const val of Object.values(mod)) {
+      if (Array.isArray(val)) {
+        register(val);
+      } else if (val && typeof val === 'object' && typeof val.id === 'string' && Array.isArray(val.steps)) {
+        register([val]);
+      }
+    }
+  }
 
   // Re-parent collectibles when a lazy map finishes building
   bus.on('map:loaded', ({ mapId }) => {
@@ -426,7 +441,7 @@ export function createQuests(ctx) {
     if (!stepDef) return false;
 
     const goal = getStepGoal(stepDef);
-    entry.progress = Math.min(goal, (entry.progress || 0) + delta);
+    entry.progress = Math.max(0, Math.min(goal, (entry.progress || 0) + delta));
     persist();
 
     bus.emit('quest:progress', {
@@ -542,11 +557,14 @@ export function createQuests(ctx) {
     }
 
     if (rewards.skillUnlock) {
+      setFlag(`skill.${rewards.skillUnlock}`, true);
       ctx.skills?.unlock?.(rewards.skillUnlock);
       bus.emit('skill:unlock', { id: rewards.skillUnlock });
     }
 
     if (rewards.protector) {
+      setFlag(`protector.${rewards.protector}`, true);
+      ctx.allies?.unlock?.(rewards.protector);
       ctx.protectors?.unlock?.(rewards.protector);
       bus.emit('protector:unlock', { id: rewards.protector });
     }
@@ -709,7 +727,10 @@ export function createQuests(ctx) {
     const count = Number(payload.count ?? 1);
     if (target) {
       forEachActiveStepOfType('interact', (qId, _entry, step) => {
-        if (step.target === target) {
+        if (
+          step.target === target ||
+          (Array.isArray(step.target) && step.target.includes(target))
+        ) {
           advanceStepProgress(qId, count);
         }
       });
@@ -761,7 +782,7 @@ export function createQuests(ctx) {
   // 9. `event`: { name, count, match? }
   function handleCustomEventStep(eventName, payload) {
     forEachActiveStepOfType('event', (qId, _entry, step) => {
-      if (step.name === eventName && matchEventPayload(payload, step.match)) {
+      if ((step.name || step.event) === eventName && matchEventPayload(payload, step.match)) {
         advanceStepProgress(qId, 1);
       }
     });
@@ -771,6 +792,193 @@ export function createQuests(ctx) {
   bus.on('merit:reset', () => {
     reset();
   });
+
+  // Trigger Pure Vision Intro Card & chapter opening quest on first arrival in a chapter map
+  bus.on('zone:change', ({ to }) => {
+    const mapDef = ctx.world?.getMap?.(to);
+    const intro = mapDef?.chapterIntro;
+    if (intro && intro.flag && !hasFlag(intro.flag)) {
+      bus.emit('chapter:intro', intro);
+    }
+    if (intro?.startQuest && !isActive(intro.startQuest) && !isDone(intro.startQuest)) {
+      start(intro.startQuest);
+    }
+    checkAutoStartQuests();
+  });
+
+  // ---------------------------------------------------------------- Skip-To Chapter Helper (`__stupa.quests.skipTo`)
+  function grantSkipGear(targetLevel) {
+    const slots = ['mainhand', 'offhand', 'head', 'body', 'waist', 'accessory'];
+    const addFn = ctx.inventory?.addItem || ctx.inventory?.add;
+    for (let i = 0; i < slots.length; i++) {
+      const slot = slots[i];
+      const rarity = i % 2 === 0 ? 'rare' : 'blessed';
+      const item = ctx.loot?.generate?.({
+        ilvl: targetLevel,
+        slot,
+        rarity,
+      });
+      if (item && addFn) {
+        addFn.call(ctx.inventory, item);
+      }
+    }
+    ctx.inventory?.equipBest?.();
+  }
+
+  function markQuestDoneSilent(qId) {
+    delete questData.active[qId];
+    if (!questData.done.includes(qId)) {
+      questData.done.push(qId);
+    }
+  }
+
+  function skipTo(chapterId = 'ch1') {
+    const norm = String(chapterId || 'ch1').toLowerCase().trim();
+    const order = ['ch1', 'ch2', 'ch3', 'ch4', 'ch5'];
+    const targetIdx = order.indexOf(norm);
+    if (targetIdx === -1) return false;
+
+    // 1. Complete Prologue prerequisites
+    markQuestDoneSilent('prologue.vow');
+    markQuestDoneSilent('prologue.north');
+    const prologueFlags = [
+      'prologue.vow.done',
+      'prologue.north.done',
+      'prologue.done',
+      'chapter1.unlocked',
+    ];
+    for (const f of prologueFlags) {
+      questData.flags[f] = true;
+    }
+    const prologueCodex = [
+      'boudhanath',
+      'kora',
+      'prostration',
+      'butterLamp',
+      'prayerWheel',
+      'maniStone',
+      'omManiPadmeHum',
+      'padmasambhava',
+      'jarungKhashor',
+      'liberation',
+    ];
+    for (const cId of prologueCodex) {
+      ctx.codex?.unlock?.(cId);
+    }
+    ctx.waypoints?.unlock?.('stupa');
+    ctx.waypoints?.unlock?.('wild');
+    ctx.waypoints?.unlock?.('pharping');
+
+    // 2. If skipping to ch2+, complete Chapter 1
+    if (targetIdx >= 1) {
+      ['ch1.drought', 'ch1.lamps', 'ch1.scrolls', 'ch1.kilaya'].forEach(markQuestDoneSilent);
+      [
+        'ch1.introSeen',
+        'ch1.springs.cleared',
+        'ch1.lamps.lit',
+        'ch1.scrolls.done',
+        'ch1.rain',
+        'ch1.done',
+        'ch2.unlocked',
+        'skill.phurba',
+      ].forEach((f) => {
+        questData.flags[f] = true;
+      });
+      ['pharping', 'yangleshoCave', 'asuraCave', 'vajrakilaya', 'phurba', 'droughtLegend'].forEach(
+        (cId) => ctx.codex?.unlock?.(cId)
+      );
+      ctx.skills?.unlock?.('phurba');
+      ctx.waypoints?.unlock?.('mangyul');
+    }
+
+    // 3. If skipping to ch3+, complete Chapter 2
+    if (targetIdx >= 2) {
+      ['ch2.done', 'ch3.unlocked', 'skill.vajraBell', 'protector.tenma'].forEach((f) => {
+        questData.flags[f] = true;
+      });
+      ctx.skills?.unlock?.('vajraBell');
+      ctx.protectors?.unlock?.('tenma');
+      ctx.allies?.unlock?.('tenma');
+      ctx.waypoints?.unlock?.('yarlung');
+    }
+
+    // 4. If skipping to ch4+, complete Chapter 3
+    if (targetIdx >= 3) {
+      ['ch3.done', 'ch4.unlocked', 'skill.lotusShield', 'protector.whiteYak'].forEach((f) => {
+        questData.flags[f] = true;
+      });
+      ctx.skills?.unlock?.('lotusShield');
+      ctx.protectors?.unlock?.('whiteYak');
+      ctx.allies?.unlock?.('whiteYak');
+      ctx.waypoints?.unlock?.('samye');
+    }
+
+    // 5. If skipping to ch5, complete Chapter 4
+    if (targetIdx >= 4) {
+      ['ch4.done', 'ch5.unlocked', 'skill.vajraGuru', 'protector.pehar'].forEach((f) => {
+        questData.flags[f] = true;
+      });
+      ctx.skills?.unlock?.('vajraGuru');
+      ctx.protectors?.unlock?.('pehar');
+      ctx.allies?.unlock?.('pehar');
+      ctx.waypoints?.unlock?.('chimphu');
+      ctx.waypoints?.unlock?.('chimpu');
+    }
+
+    persist();
+
+    // Emit flag updates so skills/allies/world react immediately
+    for (const f of Object.keys(questData.flags)) {
+      bus.emit('flag:set', { flag: f, value: true });
+    }
+
+    const levelMap = { ch1: 5, ch2: 10, ch3: 16, ch4: 23, ch5: 30 };
+    const minLevel = levelMap[norm] || 5;
+    const curLevel = state.player?.level || ctx.vitals?.state?.level || state.vitals?.level || 1;
+    if (curLevel < minLevel) {
+      if (ctx.vitals?.set) {
+        ctx.vitals.set({ level: minLevel });
+      } else {
+        ctx.vitals?.setLevel?.(minLevel);
+      }
+    }
+    grantSkipGear(Math.max(curLevel, minLevel));
+
+    // Start first quest of target chapter if registered
+    const firstQuestMap = {
+      ch1: 'ch1.drought',
+      ch2: 'ch2.pass',
+      ch3: 'ch3.valley',
+      ch4: 'ch4.foundation',
+      ch5: 'ch5.retreat',
+    };
+    const qToStart = firstQuestMap[norm];
+    if (qToStart && registry.has(qToStart) && !isActive(qToStart) && !isDone(qToStart)) {
+      start(qToStart);
+    } else {
+      checkAutoStartQuests();
+    }
+
+    // Teleport to target chapter map if it exists in MAPS
+    const mapTarget = {
+      ch1: 'pharping',
+      ch2: 'mangyul',
+      ch3: 'yarlung',
+      ch4: 'samye',
+      ch5: 'chimphu',
+    }[norm];
+    if (mapTarget && ctx.world?.getMap?.(mapTarget)?.id === mapTarget) {
+      ctx.zones?.teleport?.(mapTarget, { spawn: 'waypoint' });
+    }
+
+    bus.emit('quest:progress', { id: qToStart || norm, step: 0, progress: 0 });
+    return {
+      chapter: norm,
+      level: ctx.vitals?.state?.level || minLevel,
+      active: Object.keys(questData.active),
+      done: [...questData.done],
+    };
+  }
 
   // ---------------------------------------------------------------- NPC Overhead Marker & Tracked Targets
   function getNpcMarker(npcId, npcDef) {
@@ -991,6 +1199,7 @@ export function createQuests(ctx) {
     complete,
     completeStep,
     reset,
+    skipTo,
     setFlag,
     clearFlag,
     hasFlag,

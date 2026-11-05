@@ -289,9 +289,18 @@ export function createDialogue(ctx) {
     }
   }
 
-  // Register debug & prologue dialogues
+  // Register debug & prologue dialogues + auto-discover chapter dialogues (`src/data/dialogues/*.js`)
   register(DEBUG_DIALOGUES);
   register(PROLOGUE_DIALOGUES);
+  const chapterDialogueModules = import.meta.glob('../data/dialogues/*.js', { eager: true });
+  for (const mod of Object.values(chapterDialogueModules)) {
+    if (!mod || typeof mod !== 'object') continue;
+    for (const val of Object.values(mod)) {
+      if (val && typeof val === 'object') {
+        register(val);
+      }
+    }
+  }
 
   // ---------------------------------------------------------------- DOM Construction
   const uiRoot = document.getElementById('ui') || document.body;

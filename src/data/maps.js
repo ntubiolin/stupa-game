@@ -178,6 +178,24 @@ export const MAPS = {
   },
 };
 
+// Auto-discover chapter map definitions (`src/data/maps/*.js`) and chapter i18n (`src/i18n/*.js`)
+import.meta.glob('../i18n/*.js', { eager: true });
+const chapterMapModules = import.meta.glob('./maps/*.js', { eager: true });
+for (const mod of Object.values(chapterMapModules)) {
+  if (!mod || typeof mod !== 'object') continue;
+  for (const val of Object.values(mod)) {
+    if (val && typeof val === 'object' && typeof val.id === 'string' && val.origin) {
+      MAPS[val.id] = val;
+    }
+  }
+}
+
+export function registerMap(def) {
+  if (!def || typeof def.id !== 'string') return null;
+  MAPS[def.id] = def;
+  return def;
+}
+
 export function getMapDef(id) {
   return MAPS[id] || MAPS.stupa;
 }

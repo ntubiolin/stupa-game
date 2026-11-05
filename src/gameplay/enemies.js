@@ -24,6 +24,81 @@ import {
 
 const TWO_PI = Math.PI * 2;
 
+const registeredEnemyDefs = new Map();
+const customModelBuilders = new Map();
+
+export function registerEnemyKind(idOrDef, defOrBuildModel, maybeBuildModel) {
+  let id = null;
+  let def = null;
+  let buildModel = null;
+
+  if (typeof idOrDef === 'string') {
+    id = idOrDef;
+    if (typeof defOrBuildModel === 'function') {
+      buildModel = defOrBuildModel;
+    } else if (defOrBuildModel && typeof defOrBuildModel === 'object') {
+      def = defOrBuildModel;
+      if (typeof maybeBuildModel === 'function') buildModel = maybeBuildModel;
+      else if (typeof def.buildModel === 'function') buildModel = def.buildModel;
+    }
+  } else if (idOrDef && typeof idOrDef === 'object') {
+    id = idOrDef.id || idOrDef.kind;
+    def = idOrDef;
+    if (typeof defOrBuildModel === 'function') buildModel = defOrBuildModel;
+    else if (typeof def.buildModel === 'function') buildModel = def.buildModel;
+  }
+
+  if (!id) return null;
+  if (def) {
+    const prev = registeredEnemyDefs.get(id) || {};
+    registeredEnemyDefs.set(id, { ...prev, ...def, id });
+  }
+  if (typeof buildModel === 'function') {
+    customModelBuilders.set(id, buildModel);
+  }
+  return id;
+}
+
+// Auto-discover chapter enemy definitions (`src/data/enemies/*.js`) and models (`src/gameplay/enemyModels/*.js`)
+const chapterEnemyDefModules = import.meta.glob('../data/enemies/*.js', { eager: true });
+for (const mod of Object.values(chapterEnemyDefModules)) {
+  if (!mod || typeof mod !== 'object') continue;
+  for (const val of Object.values(mod)) {
+    if (Array.isArray(val)) {
+      for (const item of val) registerEnemyKind(item);
+    } else if (val && typeof val === 'object') {
+      if (typeof val.id === 'string' && (val.hp || val.base || val.attacks)) {
+        registerEnemyKind(val);
+      } else {
+        for (const [k, v] of Object.entries(val)) {
+          if (v && typeof v === 'object' && (v.hp || v.base || v.attacks)) {
+            registerEnemyKind(v.id || k, v);
+          }
+        }
+      }
+    }
+  }
+}
+
+const chapterEnemyModelModules = import.meta.glob('./enemyModels/*.js', { eager: true });
+for (const mod of Object.values(chapterEnemyModelModules)) {
+  if (!mod || typeof mod !== 'object') continue;
+  for (const [exportKey, val] of Object.entries(mod)) {
+    if (typeof val === 'function') {
+      if (exportKey.startsWith('build') && exportKey.length > 5) {
+        const inferredId = exportKey[5].toLowerCase() + exportKey.slice(6).replace(/Model$/, '');
+        registerEnemyKind(inferredId, val);
+      }
+    } else if (val && typeof val === 'object') {
+      for (const [k, fn] of Object.entries(val)) {
+        if (typeof fn === 'function') {
+          registerEnemyKind(k, fn);
+        }
+      }
+    }
+  }
+}
+
 function wrapAngle(a) {
   a = (a + Math.PI) % TWO_PI;
   if (a < 0) a += TWO_PI;
@@ -38,6 +113,34 @@ export function createEnemies(ctx) {
   const { scene, state, config, bus, i18n } = ctx;
   const cfg = config.ENEMIES;
   const wildCfg = config.WILD;
+
+  function syncRegisteredKindsIntoConfig() {
+    if (!cfg.kinds) cfg.kinds = {};
+    for (const [id, rawDef] of registeredEnemyDefs.entries()) {
+      const baseKind = rawDef.base ? cfg.kinds[rawDef.base] : null;
+      const statMult = typeof rawDef.statMult === 'number' ? rawDef.statMult : 1.0;
+      const merged = {
+        ...(baseKind ? JSON.parse(JSON.stringify(baseKind)) : {}),
+        ...rawDef,
+        id,
+        nameKey: rawDef.nameKey || `enemy.${id}`,
+        hp: rawDef.hp ?? (baseKind ? Math.round(baseKind.hp * statMult) : 25),
+        speed: rawDef.speed ?? (baseKind ? Number((baseKind.speed * Math.min(1.15, statMult)).toFixed(2)) : 2.2),
+        exp: rawDef.exp ?? (baseKind ? Math.round(baseKind.exp * statMult) : 7),
+        radius: rawDef.radius ?? baseKind?.radius ?? 0.52,
+        height: rawDef.height ?? baseKind?.height ?? 1.55,
+        stopDistance: rawDef.stopDistance ?? baseKind?.stopDistance ?? 1.3,
+        ring: rawDef.ring ?? baseKind?.ring ?? 'near',
+        attacks: Array.isArray(rawDef.attacks)
+          ? rawDef.attacks
+          : baseKind?.attacks
+            ? JSON.parse(JSON.stringify(baseKind.attacks))
+            : [],
+      };
+      cfg.kinds[id] = merged;
+    }
+  }
+  syncRegisteredKindsIntoConfig();
 
   const enemyGroup = new THREE.Group();
   enemyGroup.name = 'Enemies';
@@ -329,6 +432,7 @@ export function createEnemies(ctx) {
   const activeFrozenOrbs = [];
   const activeMoltenPatches = [];
   const activeMoltenBombs = [];
+  const activeDustPatches = [];
   const activePuffs = [];
   let enemyIdCounter = 1;
   let packIdCounter = 1;
@@ -526,6 +630,55 @@ export function createEnemies(ctx) {
       pf.mat.dispose();
     }
     activePuffs.length = 0;
+
+    for (const dp of activeDustPatches) {
+      eliteHazardGroup.remove(dp.group);
+      dp.fillMat.dispose();
+      dp.ringMat.dispose();
+    }
+    activeDustPatches.length = 0;
+  }
+
+  function spawnDustTrailPatch(x, z) {
+    const y = ctx.world ? ctx.world.getHeight(x, z) : 0;
+    const grp = new THREE.Group();
+    grp.position.set(x, y + 0.025, z);
+
+    const fillMat = new THREE.MeshBasicMaterial({
+      color: 0xd97706,
+      transparent: true,
+      opacity: 0.36,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const fillMesh = new THREE.Mesh(moltenPatchGeo, fillMat);
+    grp.add(fillMesh);
+
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xf59e0b,
+      transparent: true,
+      opacity: 0.55,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const ringMesh = new THREE.Mesh(moltenPatchRingGeo, ringMat);
+    grp.add(ringMesh);
+
+    eliteHazardGroup.add(grp);
+    activeDustPatches.push({
+      group: grp,
+      fillMat,
+      ringMat,
+      x,
+      y,
+      z,
+      timer: 3.0,
+      maxTimer: 3.0,
+      radius: 1.35,
+      tickTimer: 0.05,
+    });
   }
 
   function sampleMapLevel() {
@@ -584,8 +737,32 @@ export function createEnemies(ctx) {
 
     const materials = [];
     const animNodes = {};
+    let customAnimate = null;
+    let customModel = null;
 
-    if (kind === 'preta') {
+    const customBuilder = customModelBuilders.get(kind) || kCfg.buildModel;
+    if (typeof customBuilder === 'function') {
+      const built = customBuilder(THREE, kCfg) || {};
+      customModel = built;
+      const modelGroup = built.group || built.root;
+      if (modelGroup) {
+        group.add(modelGroup);
+      }
+      if (Array.isArray(built.materials)) {
+        materials.push(...built.materials);
+      }
+      if (built.animNodes && typeof built.animNodes === 'object') {
+        Object.assign(animNodes, built.animNodes);
+      }
+      for (const key of ['bodyRoot', 'head', 'belly', 'leftArm', 'rightArm', 'leftLeg', 'rightLeg', 'mouthOrb', 'armL', 'armR', 'legL', 'legR']) {
+        if (built[key] && !animNodes[key]) {
+          animNodes[key] = built[key];
+        }
+      }
+      if (typeof built.animate === 'function') {
+        customAnimate = built.animate;
+      }
+    } else if (kind === 'preta') {
       const skinMat = new THREE.MeshStandardMaterial({
         color: 0x4d6352,
         roughness: 0.82,
@@ -826,23 +1003,37 @@ export function createEnemies(ctx) {
     let chargeLineMesh = null;
     let aimLineMesh = null;
 
-    if (kind === 'migoi') {
+    const hasSlamOrWave =
+      kind === 'migoi' ||
+      (Array.isArray(kCfg.attacks) &&
+        kCfg.attacks.some((a) => a.id === 'groundSlam' || a.id === 'heatWave'));
+    const hasLineCharge =
+      kind === 'tsen' ||
+      (Array.isArray(kCfg.attacks) &&
+        kCfg.attacks.some((a) => a.id === 'spearCharge' || a.id === 'spinDash' || a.id === 'redArrow'));
+
+    if (hasSlamOrWave) {
       telegraphGroup = new THREE.Group();
       telegraphGroup.name = `Telegraph_${id}`;
       telegraphGroup.visible = false;
 
+      const isHeatWave = Array.isArray(kCfg.attacks) && kCfg.attacks.some((a) => a.id === 'heatWave');
+      const aoeAtk = (kCfg.attacks || []).find((a) => a.id === 'heatWave' || a.id === 'groundSlam');
+      const rRatio = ((aoeAtk?.aoeRadius ?? (isHeatWave ? 2.5 : 3.5)) / 3.5);
+
       const ringMat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color(2.2, 0.25, 0.25),
+        color: isHeatWave ? new THREE.Color(2.4, 0.75, 0.15) : new THREE.Color(2.2, 0.25, 0.25),
         toneMapped: false,
         transparent: true,
         opacity: 0.85,
         depthWrite: false,
       });
       const ringMesh = new THREE.Mesh(slamRingGeo, ringMat);
+      ringMesh.scale.set(rRatio, 1, rRatio);
       telegraphGroup.add(ringMesh);
 
       const fillMat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color(2.0, 0.2, 0.2),
+        color: isHeatWave ? new THREE.Color(2.2, 0.55, 0.1) : new THREE.Color(2.0, 0.2, 0.2),
         toneMapped: false,
         transparent: true,
         opacity: 0.38,
@@ -850,16 +1041,20 @@ export function createEnemies(ctx) {
       });
       telegraphFill = new THREE.Mesh(slamFillGeo, fillMat);
       telegraphFill.scale.set(0.001, 1, 0.001);
+      telegraphFill.userData.maxScale = rRatio;
       telegraphGroup.add(telegraphFill);
 
       enemyGroup.add(telegraphGroup);
-    } else if (kind === 'tsen') {
+    } else if (hasLineCharge) {
       telegraphGroup = new THREE.Group();
       telegraphGroup.name = `Telegraph_${id}`;
       telegraphGroup.visible = false;
 
+      const dashAtk = (kCfg.attacks || []).find((a) => a.id === 'spinDash' || a.id === 'spearCharge');
+      const lenRatio = (dashAtk?.dashDist ?? 8.0) / 8.0;
+
       const lineMat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color(2.2, 0.2, 0.2),
+        color: dashAtk?.id === 'spinDash' ? new THREE.Color(2.1, 1.35, 0.35) : new THREE.Color(2.2, 0.2, 0.2),
         toneMapped: false,
         transparent: true,
         opacity: 0.42,
@@ -867,6 +1062,7 @@ export function createEnemies(ctx) {
         depthWrite: false,
       });
       chargeLineMesh = new THREE.Mesh(chargeLineGeo, lineMat);
+      chargeLineMesh.scale.set(1, 1, lenRatio);
       telegraphGroup.add(chargeLineMesh);
       telegraphFill = chargeLineMesh;
 
@@ -1025,6 +1221,7 @@ export function createEnemies(ctx) {
       moltenTimer: 0.25,
       teleportTimer: 5.0,
       group,
+      model: customModel || animNodes,
       materials,
       animNodes,
       rootIndicator,
@@ -1037,6 +1234,8 @@ export function createEnemies(ctx) {
       chargeLineMesh,
       aimLineMesh,
       chargeData: null,
+      customAnimate,
+      fixedPos: opts.fixedPos || null,
       animTime: Math.random() * 10,
     };
 
@@ -1295,10 +1494,31 @@ export function createEnemies(ctx) {
     for (const entry of spawnTable) {
       const kind = entry.kind || 'preta';
       const area = entry.area || 'near';
-      const count = entry.count ?? 0;
+      const count = entry.count ?? (Array.isArray(entry.positions) ? entry.positions.length : 0);
       if (count <= 0) continue;
+      const entryTags = Array.isArray(entry.tags)
+        ? entry.tags
+        : entry.tag
+          ? [kind, entry.tag]
+          : null;
 
-      if (Array.isArray(entry.clusters) && entry.clusters.length > 0) {
+      if (Array.isArray(entry.positions) && entry.positions.length > 0) {
+        const origin = mapDef?.origin || { x: 0, z: 0 };
+        for (let i = 0; i < count; i++) {
+          const rawPt = entry.positions[i % entry.positions.length];
+          const isRel = Math.hypot(rawPt.x, rawPt.z) < 200 && Math.hypot(origin.x, origin.z) >= 200;
+          const wx = isRel ? origin.x + rawPt.x : rawPt.x;
+          const wz = isRel ? origin.z + rawPt.z : rawPt.z;
+          const wy = ctx.world ? ctx.world.getHeight(wx, wz) : 0;
+          const pt = { x: wx, y: wy, z: wz };
+          const e = createEnemyInstance(kind, pt, {
+            tags: entryTags,
+            fixedPos: { x: wx, z: wz },
+          });
+          e.ring = area;
+          clampEnemyPosition(e);
+        }
+      } else if (Array.isArray(entry.clusters) && entry.clusters.length > 0) {
         for (const clusterSize of entry.clusters) {
           const center = ctx.world.sampleSpawnPoint(area, { minDistFromGate: 12 });
           for (let i = 0; i < clusterSize; i++) {
@@ -1308,7 +1528,7 @@ export function createEnemies(ctx) {
               y: center.y,
               z: center.z + Math.sin(angle) * 1.8,
             };
-            const e = createEnemyInstance(kind, offsetPos);
+            const e = createEnemyInstance(kind, offsetPos, { tags: entryTags });
             e.ring = area;
             clampEnemyPosition(e);
           }
@@ -1316,7 +1536,7 @@ export function createEnemies(ctx) {
       } else {
         for (let i = 0; i < count; i++) {
           const pt = ctx.world.sampleSpawnPoint(area, { minDistFromGate: 12 });
-          const e = createEnemyInstance(kind, pt);
+          const e = createEnemyInstance(kind, pt, { tags: entryTags });
           e.ring = area;
           clampEnemyPosition(e);
         }
@@ -1791,6 +2011,8 @@ export function createEnemies(ctx) {
       pendingRespawns.push({
         kind: enemy.kind,
         ring: enemy.ring,
+        tags: enemy.tags,
+        fixedPos: enemy.fixedPos || null,
         timer: respawnTime,
       });
     }
@@ -1864,7 +2086,7 @@ export function createEnemies(ctx) {
 
     const playerPos = state.player?.position || { x: 1000, y: 0, z: 0 };
 
-    if (atk.id === 'ghostfire') {
+    if (atk.id === 'ghostfire' || atk.id === 'heatBolt') {
       if (enemy.animNodes.mouthOrb) {
         enemy.animNodes.mouthOrb.visible = true;
         enemy.animNodes.mouthOrb.scale.setScalar(0.01);
@@ -1877,7 +2099,7 @@ export function createEnemies(ctx) {
         enemy.aimLineMesh.visible = true;
         enemy.telegraphGroup.visible = true;
       }
-    } else if (atk.id === 'spearCharge') {
+    } else if (atk.id === 'spearCharge' || atk.id === 'spinDash') {
       if (enemy.telegraphGroup && enemy.chargeLineMesh) {
         enemy.telegraphGroup.position.set(enemy.pos.x, enemy.pos.y + 0.03, enemy.pos.z);
         enemy.telegraphGroup.rotation.y = enemy.heading;
@@ -1885,7 +2107,7 @@ export function createEnemies(ctx) {
         enemy.chargeLineMesh.visible = true;
         enemy.telegraphGroup.visible = true;
       }
-    } else if (atk.id === 'groundSlam') {
+    } else if (atk.id === 'groundSlam' || atk.id === 'heatWave') {
       if (enemy.telegraphGroup) {
         enemy.telegraphGroup.position.set(enemy.pos.x, enemy.pos.y + 0.03, enemy.pos.z);
         enemy.telegraphGroup.visible = true;
@@ -1953,17 +2175,28 @@ export function createEnemies(ctx) {
     }
 
     // 1. Process Respawn Timers
+    const mapSpawnTotal = (mapDef?.spawnTable || []).reduce((acc, s) => acc + (s.count || 0), 0);
+    const maxMapEnemies = Math.max(cfg.maxCount ?? 12, mapSpawnTotal);
     for (let i = pendingRespawns.length - 1; i >= 0; i--) {
       const r = pendingRespawns[i];
       r.timer -= dt;
       if (r.timer <= 0) {
         pendingRespawns.splice(i, 1);
-        if (activeEnemies.length < (cfg.maxCount ?? 12) && ctx.world?.sampleSpawnPoint) {
-          const pt = ctx.world.sampleSpawnPoint(r.ring, {
-            minDistFromGate: 12,
-            minPlayerDist: cfg.respawnMinPlayerDist ?? 20,
+        if (activeEnemies.length < maxMapEnemies && ctx.world?.sampleSpawnPoint) {
+          const pt = r.fixedPos
+            ? {
+                x: r.fixedPos.x,
+                y: ctx.world.getHeight(r.fixedPos.x, r.fixedPos.z),
+                z: r.fixedPos.z,
+              }
+            : ctx.world.sampleSpawnPoint(r.ring, {
+                minDistFromGate: 12,
+                minPlayerDist: cfg.respawnMinPlayerDist ?? 20,
+              });
+          const newEnemy = createEnemyInstance(r.kind, pt, {
+            tags: r.tags,
+            fixedPos: r.fixedPos,
           });
-          const newEnemy = createEnemyInstance(r.kind, pt);
           newEnemy.ring = r.ring;
           clampEnemyPosition(newEnemy);
         }
@@ -2232,6 +2465,15 @@ export function createEnemies(ctx) {
             enemy.pos.z = cd.startPos.z + cd.dir.z * (enemy.activeAttack.dashDist * u);
             clampEnemyPosition(enemy);
 
+            // SpinDash leaves slowing dust trail patches behind
+            if (enemy.activeAttack.id === 'spinDash') {
+              cd.trailStep = (cd.trailStep || 0) + dt;
+              if (cd.trailStep >= 0.11) {
+                cd.trailStep = 0;
+                spawnDustTrailPatch(enemy.pos.x, enemy.pos.z);
+              }
+            }
+
             // Check hit on player along charge segment
             if (!cd.hasHit && playerPos) {
               const curDist = Math.hypot(playerPos.x - enemy.pos.x, playerPos.z - enemy.pos.z);
@@ -2260,9 +2502,11 @@ export function createEnemies(ctx) {
         const uFill = Math.min(1, 1 - Math.max(0, enemy.stateTimer) / windupTotal);
         const pulse = Math.sin(state.elapsed * 18) * 0.5 + 0.5;
 
-        if (atk?.id === 'ghostfire') {
+        if (atk?.id === 'ghostfire' || atk?.id === 'heatBolt') {
+          const isHeat = atk.id === 'heatBolt';
           for (const mat of enemy.materials) {
-            mat.emissive?.setRGB(0.05, 0.7 * pulse, 0.15);
+            if (isHeat) mat.emissive?.setRGB(0.95 * pulse, 0.35 * pulse, 0.05);
+            else mat.emissive?.setRGB(0.05, 0.7 * pulse, 0.15);
             if (mat.emissiveIntensity != null) mat.emissiveIntensity = 0.85;
           }
           if (enemy.animNodes.mouthOrb) {
@@ -2287,9 +2531,10 @@ export function createEnemies(ctx) {
             mat.emissive?.setRGB(0.7 * pulse, 0.05, 0.05);
             if (mat.emissiveIntensity != null) mat.emissiveIntensity = 0.8;
           }
-          if (enemy.kind === 'migoi' && enemy.telegraphFill) {
-            enemy.telegraphFill.scale.set(uFill, 1, uFill);
-          } else if (enemy.kind === 'tsen' && enemy.chargeLineMesh) {
+          if ((atk?.id === 'groundSlam' || atk?.id === 'heatWave') && enemy.telegraphFill) {
+            const maxS = enemy.telegraphFill.userData?.maxScale || 1.0;
+            enemy.telegraphFill.scale.set(uFill * maxS, 1, uFill * maxS);
+          } else if ((atk?.id === 'spearCharge' || atk?.id === 'spinDash') && enemy.chargeLineMesh) {
             enemy.chargeLineMesh.material.opacity = 0.35 + 0.35 * pulse;
           }
         }
@@ -2302,13 +2547,13 @@ export function createEnemies(ctx) {
 
           const scaledDmg = getScaledAttackDamage(enemy, atk.damage);
 
-          if (atk.id === 'ghostfire') {
+          if (atk.id === 'ghostfire' || atk.id === 'heatBolt') {
             const mouthPos = {
               x: enemy.pos.x - Math.sin(enemy.heading) * 0.35,
               y: enemy.pos.y + 1.25,
               z: enemy.pos.z - Math.cos(enemy.heading) * 0.35,
             };
-            ctx.projectiles?.spawn('ghostfire', {
+            ctx.projectiles?.spawn(atk.id, {
               origin: mouthPos,
               damage: scaledDmg,
               speed: atk.speed,
@@ -2343,7 +2588,7 @@ export function createEnemies(ctx) {
             enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
             enemy.state = 'recover';
             enemy.stateTimer = atk.recover ?? 0.35;
-          } else if (atk.id === 'spearCharge') {
+          } else if (atk.id === 'spearCharge' || atk.id === 'spinDash') {
             if (isRooted) {
               enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
               enemy.state = 'recover';
@@ -2357,7 +2602,11 @@ export function createEnemies(ctx) {
                 dir: { x: dirX, z: dirZ },
                 progress: 0,
                 hasHit: false,
+                trailStep: 0,
               };
+              if (atk.id === 'spinDash') {
+                spawnDustTrailPatch(enemy.pos.x, enemy.pos.z);
+              }
               enemy.state = 'attack';
             }
           } else if (atk.id === 'boulder') {
@@ -2368,13 +2617,17 @@ export function createEnemies(ctx) {
             enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
             enemy.state = 'recover';
             enemy.stateTimer = atk.recover ?? 0.5;
-          } else if (atk.id === 'groundSlam') {
+          } else if (atk.id === 'groundSlam' || atk.id === 'heatWave') {
+            const isHeatWave = atk.id === 'heatWave';
+            if (isHeatWave) {
+              bus.emit('sfx', { name: 'fireball' });
+            }
             if (playerPos) {
               const slamDist = Math.hypot(playerPos.x - enemy.pos.x, playerPos.z - enemy.pos.z);
-              if (slamDist <= (atk.aoeRadius ?? 3.5)) {
+              if (slamDist <= (atk.aoeRadius ?? (isHeatWave ? 2.5 : 3.5))) {
                 bus.emit('vitals:damage', {
                   amount: scaledDmg,
-                  type: 'physical',
+                  type: isHeatWave ? 'magic' : 'physical',
                   sourcePos: { ...enemy.pos },
                 });
               }
@@ -2539,7 +2792,9 @@ export function createEnemies(ctx) {
         }
       }
 
-      if (enemy.kind === 'preta') {
+      if (typeof enemy.customAnimate === 'function') {
+        enemy.customAnimate(enemy, dt, isMoving);
+      } else if (enemy.kind === 'preta') {
         const pace = isMoving ? 9.5 : 2.5;
         const swing = Math.sin(enemy.animTime * pace);
         if (enemy.animNodes.legL) enemy.animNodes.legL.rotation.x = swing * 0.35;
@@ -2676,6 +2931,40 @@ export function createEnemies(ctx) {
       }
     }
 
+    // Update slowing dust patches from dustDevil `spinDash`
+    for (let i = activeDustPatches.length - 1; i >= 0; i--) {
+      const dp = activeDustPatches[i];
+      dp.timer -= dt;
+      dp.tickTimer -= dt;
+      const fade = Math.max(0, Math.min(1, dp.timer / (dp.maxTimer || 3.0)));
+      dp.fillMat.opacity = 0.36 * fade;
+      dp.ringMat.opacity = 0.55 * fade;
+
+      if (dp.tickTimer <= 0) {
+        dp.tickTimer = 0.25;
+        if (playerPos && !isPlayerInSafeZone) {
+          const d = Math.hypot(playerPos.x - dp.x, playerPos.z - dp.z);
+          if (d <= dp.radius) {
+            bus.emit('vitals:damage', {
+              amount: 0,
+              type: 'physical',
+              slow: 1.5,
+              ignoreInvuln: true,
+              knockback: 0,
+              sourcePos: { x: dp.x, y: dp.y, z: dp.z },
+            });
+          }
+        }
+      }
+
+      if (dp.timer <= 0) {
+        eliteHazardGroup.remove(dp.group);
+        dp.fillMat.dispose();
+        dp.ringMat.dispose();
+        activeDustPatches.splice(i, 1);
+      }
+    }
+
     // 3. Update Liberation Particles
     const posAttr = particleGeo.attributes.position;
     let anyParticleActive = false;
@@ -2767,6 +3056,11 @@ export function createEnemies(ctx) {
   const api = {
     group: enemyGroup,
     update,
+    registerKind(idOrDef, defOrBuildModel, maybeBuildModel) {
+      const id = registerEnemyKind(idOrDef, defOrBuildModel, maybeBuildModel);
+      syncRegisteredKindsIntoConfig();
+      return id;
+    },
     damage: damageEnemy,
     applyStatus,
     queryCircle,
@@ -2806,6 +3100,14 @@ export function createEnemies(ctx) {
         sp = {
           x: px,
           y: opts.position.y ?? (ctx.world ? ctx.world.getHeight(px, pz) : 0),
+          z: pz,
+        };
+      } else if (typeof opts.x === 'number') {
+        const px = opts.x;
+        const pz = opts.z ?? 0;
+        sp = {
+          x: px,
+          y: opts.y ?? (ctx.world ? ctx.world.getHeight(px, pz) : 0),
           z: pz,
         };
       } else {

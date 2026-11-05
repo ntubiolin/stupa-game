@@ -104,6 +104,18 @@ export function createQuestUi(ctx) {
       </div>
     </div>
 
+    <!-- 3c. Pure Vision Chapter Intro Card (淨相開場) -->
+    <div id="chapter-intro-overlay" class="chapter-intro-overlay is-hidden" role="dialog" aria-modal="true" style="position:fixed;inset:0;z-index:88;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 45%, rgba(255, 224, 112, 0.34) 0%, rgba(28, 18, 10, 0.92) 68%, rgba(12, 8, 6, 0.97) 100%);backdrop-filter:blur(6px);cursor:pointer;transition:opacity 0.55s ease;">
+      <div class="chapter-intro-card glass-panel" style="max-width:620px;width:90%;padding:38px 34px;text-align:center;border:1px solid rgba(255, 214, 102, 0.55);box-shadow:0 0 64px rgba(245, 186, 54, 0.28);border-radius:16px;background:rgba(24, 16, 12, 0.85);">
+        <div style="font-size:28px;color:#ffd86b;margin-bottom:8px;text-shadow:0 0 16px rgba(255,200,60,0.8);">☸</div>
+        <div id="chapter-intro-meta" style="font-size:13px;letter-spacing:0.18em;color:#e5c07b;text-transform:uppercase;margin-bottom:10px;"></div>
+        <h2 id="chapter-intro-title" style="font-size:30px;font-weight:800;color:#fff4d2;margin:0 0 18px;letter-spacing:0.06em;text-shadow:0 2px 18px rgba(255,190,50,0.5);"></h2>
+        <div style="width:84px;height:1px;background:linear-gradient(90deg,transparent,#ffd86b,transparent);margin:0 auto 20px;"></div>
+        <p id="chapter-intro-narration" style="font-size:16px;line-height:1.85;color:#f3e5ab;margin:0 0 26px;white-space:pre-line;"></p>
+        <div id="chapter-intro-hint" style="font-size:12px;letter-spacing:0.12em;color:rgba(255, 224, 140, 0.75);"></div>
+      </div>
+    </div>
+
     <!-- 4. Quest Journal Modal (J) -->
     <section id="quest-journal-modal" class="quest-journal-modal is-hidden" aria-label="Quest Journal">
       <div class="quest-journal-card glass-panel">
@@ -154,6 +166,12 @@ export function createQuestUi(ctx) {
   const chapterKickerEl = root.querySelector('#chapter-unlock-kicker');
   const chapterTitleEl = root.querySelector('#chapter-unlock-title');
   const chapterSubEl = root.querySelector('#chapter-unlock-sub');
+
+  const chapterIntroEl = root.querySelector('#chapter-intro-overlay');
+  const chapterIntroMetaEl = root.querySelector('#chapter-intro-meta');
+  const chapterIntroTitleEl = root.querySelector('#chapter-intro-title');
+  const chapterIntroNarrationEl = root.querySelector('#chapter-intro-narration');
+  const chapterIntroHintEl = root.querySelector('#chapter-intro-hint');
 
   const journalModalEl = root.querySelector('#quest-journal-modal');
   const journalTitleEl = root.querySelector('#quest-journal-title');
@@ -383,6 +401,55 @@ export function createQuestUi(ctx) {
     }, 5200);
   }
 
+  let activeIntroPayload = null;
+  let introOpenedAt = 0;
+
+  function showChapterIntro(payload = {}) {
+    if (!chapterIntroEl) return;
+    activeIntroPayload = payload;
+    introOpenedAt = performance.now();
+
+    const loc = payload.locationKey ? i18n.t(payload.locationKey) : '';
+    const era = payload.eraKey ? i18n.t(payload.eraKey) : '';
+    chapterIntroMetaEl.textContent = [loc, era].filter(Boolean).join(' · ');
+    chapterIntroTitleEl.textContent = payload.titleKey ? i18n.t(payload.titleKey) : '';
+    chapterIntroNarrationEl.textContent = payload.narrationKey ? i18n.t(payload.narrationKey) : '';
+    chapterIntroHintEl.textContent = i18n.t(payload.hintKey || 'ch1.intro.hint');
+
+    chapterIntroEl.style.display = 'flex';
+    chapterIntroEl.classList.remove('is-hidden');
+    bus.emit('sfx', { name: 'bowl' });
+  }
+
+  function dismissChapterIntro() {
+    if (!activeIntroPayload || !chapterIntroEl) return;
+    const flag = activeIntroPayload.flag;
+    activeIntroPayload = null;
+    chapterIntroEl.classList.add('is-hidden');
+    chapterIntroEl.style.display = 'none';
+    if (flag) {
+      ctx.quests?.setFlag?.(flag, true);
+    }
+    bus.emit('sfx', { name: 'bell' });
+  }
+
+  if (chapterIntroEl) {
+    chapterIntroEl.style.display = 'none';
+    chapterIntroEl.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (performance.now() - introOpenedAt < 180) return;
+      dismissChapterIntro();
+    });
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('keydown', () => {
+      if (activeIntroPayload && performance.now() - introOpenedAt >= 180) {
+        dismissChapterIntro();
+      }
+    });
+  }
+
   function showCompletionBanner(payload) {
     if (!payload) return;
     const def = ctx.quests?.getQuestDef?.(payload.id);
@@ -489,6 +556,9 @@ export function createQuestUi(ctx) {
   });
   bus.on('chapter:banner', (payload) => {
     showChapterBanner(payload);
+  });
+  bus.on('chapter:intro', (payload) => {
+    showChapterIntro(payload);
   });
   bus.on('quest:reset', () => {
     renderTracker();

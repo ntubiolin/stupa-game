@@ -886,6 +886,21 @@ export function createPatternRunner(ctx, parentGroup) {
     spawnedAddIds.clear();
   }
 
+  // Allow Six-Syllable Mantra (`mantra:cast`) to dispel active boss volley projectiles within radius
+  bus.on('mantra:cast', (ev) => {
+    if (!activeProjectiles.length) return;
+    const ox = ev?.origin?.x ?? state.player?.position?.x ?? 0;
+    const oz = ev?.origin?.z ?? state.player?.position?.z ?? 0;
+    const r = (ev?.radius ?? 6.5) + 1.0;
+    for (let i = activeProjectiles.length - 1; i >= 0; i--) {
+      const p = activeProjectiles[i];
+      if (Math.hypot(p.x - ox, p.z - oz) <= r) {
+        telegraphGroup.remove(p.mesh);
+        activeProjectiles.splice(i, 1);
+      }
+    }
+  });
+
   return {
     patterns: {
       radialAoe,

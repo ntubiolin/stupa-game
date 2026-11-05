@@ -49,8 +49,29 @@ export function createBosses(ctx) {
     return instance;
   }
 
-  // Register Prologue Boss: Migoi King
+  // Register Prologue Boss: Migoi King + auto-discover chapter boss modules (`src/gameplay/bosses/*.js`)
   register(MIGOI_KING_DEF);
+
+  const bossModules = import.meta.glob('./*.js', { eager: true });
+  for (const [path, mod] of Object.entries(bossModules)) {
+    if (path.endsWith('/index.js') || path.endsWith('/bossBase.js') || path.endsWith('/patterns.js')) {
+      continue;
+    }
+    if (!mod || typeof mod !== 'object') continue;
+    for (const [exportKey, val] of Object.entries(mod)) {
+      if (typeof val === 'function' && /^register.*Dialogue$/.test(exportKey)) {
+        val(ctx);
+      } else if (
+        val &&
+        typeof val === 'object' &&
+        typeof val.id === 'string' &&
+        typeof val.buildModel === 'function' &&
+        !bosses.has(val.id)
+      ) {
+        register(val);
+      }
+    }
+  }
 
   function getActiveBoss() {
     for (const b of bosses.values()) {
@@ -59,8 +80,21 @@ export function createBosses(ctx) {
     return null;
   }
 
-  function getBoss(id = activeBossId) {
-    return bosses.get(id) || bosses.get('migoiKing') || null;
+  function getBossForCurrentZone() {
+    const z = state.zone || 'stupa';
+    for (const b of bosses.values()) {
+      if (b.def?.arena?.map === z) return b;
+    }
+    return null;
+  }
+
+  function getBoss(id) {
+    if (id && bosses.has(id)) return bosses.get(id);
+    const active = getActiveBoss();
+    if (active) return active;
+    const zoneBoss = getBossForCurrentZone();
+    if (zoneBoss) return zoneBoss;
+    return bosses.get(activeBossId) || bosses.get('migoiKing') || null;
   }
 
   // ---------------------------------------------------------------- 1. Wire Boss Events to Top-Center HUD (#boss-bar)
@@ -287,37 +321,49 @@ export function createBosses(ctx) {
   }
 
   // ---------------------------------------------------------------- 3. Public & Debug API (__stupa.bosses)
-  function start(id = 'migoiKing', opts = {}) {
-    activeBossId = id;
+  function start(id, opts = {}) {
     const boss = getBoss(id);
     if (!boss) return null;
+    activeBossId = boss.id;
     return boss.start(opts);
   }
 
-  function setHp(fraction, id = activeBossId) {
+  function setHp(fraction, id) {
     const boss = getBoss(id);
     if (!boss) return null;
+    activeBossId = boss.id;
     return boss.setHp(fraction);
   }
 
-  function subdue(id = activeBossId) {
+  function subdue(id) {
     const boss = getBoss(id);
     if (!boss) return null;
+    activeBossId = boss.id;
     if (!boss.isActive()) {
       boss.start();
     }
     return boss.subdue();
   }
 
-  function reset(id = activeBossId) {
+  function reset(id) {
     const boss = getBoss(id);
     if (!boss) return null;
     return boss.reset();
   }
 
-  function getState(id = activeBossId) {
-    const boss = getActiveBoss() || getBoss(id);
+  function getState(id) {
+    const boss = (id ? bosses.get(id) : null) || getActiveBoss() || getBoss(id);
     return boss ? boss.getState() : null;
+  }
+
+  function dispelIllusions(id) {
+    const boss = getBoss(id);
+    if (!boss) return 0;
+    const bs = boss.getInternalState();
+    if (typeof boss.def?.dispelAllIllusions === 'function') {
+      return boss.def.dispelAllIllusions(bs, ctx);
+    }
+    return 0;
   }
 
   function update(dt) {
@@ -333,6 +379,7 @@ export function createBosses(ctx) {
     subdue,
     reset,
     getState,
+    dispelIllusions,
     getBoss,
     getActiveBoss,
     update,
@@ -345,6 +392,7 @@ export function createBosses(ctx) {
     subdue,
     reset,
     getState,
+    dispelIllusions,
   };
   ctx.debug?.register?.('bosses', debugBossesApi);
   if (typeof window !== 'undefined' && window.__stupa) {

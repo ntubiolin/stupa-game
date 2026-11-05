@@ -55,6 +55,20 @@ export function createProjectiles(ctx) {
     depthWrite: false,
   });
 
+  // HeatBolt (Chapter 1 Drought Sprite magic fireball)
+  const heatCoreMat = new THREE.MeshStandardMaterial({
+    color: 0xf97316,
+    emissive: 0xea580c,
+    emissiveIntensity: 2.0,
+    roughness: 0.2,
+  });
+  const heatGlowMat = new THREE.MeshBasicMaterial({
+    color: 0xfdba74,
+    transparent: true,
+    opacity: 0.45,
+    depthWrite: false,
+  });
+
   // Red Arrow
   const arrowShaftGeo = new THREE.CylinderGeometry(0.022, 0.022, 0.9, 6);
   arrowShaftGeo.rotateX(-Math.PI / 2);
@@ -298,6 +312,8 @@ export function createProjectiles(ctx) {
       magic: true,
       active: false,
       group,
+      core,
+      glow,
       hitbox,
       pos: new THREE.Vector3(),
       heading: 0,
@@ -622,9 +638,14 @@ export function createProjectiles(ctx) {
       return null;
     }
 
-    if (type === 'ghostfire') {
+    if (type === 'ghostfire' || type === 'heatBolt') {
       const slot = ghostfirePool.find((item) => !item.active);
       if (!slot) return null;
+
+      const isHeat = type === 'heatBolt';
+      slot.type = isHeat ? 'heatBolt' : 'ghostfire';
+      if (slot.core) slot.core.material = isHeat ? heatCoreMat : ghostCoreMat;
+      if (slot.glow) slot.glow.material = isHeat ? heatGlowMat : ghostGlowMat;
 
       const origin = params.origin || {
         x: playerPos.x + 6,
@@ -635,9 +656,9 @@ export function createProjectiles(ctx) {
       slot.active = true;
       slot.age = 0;
       slot.pos.set(origin.x, origin.y, origin.z);
-      slot.damage = params.damage ?? 8;
-      slot.speed = params.speed ?? 4.0;
-      slot.turnRate = params.turnRate ?? 1.2;
+      slot.damage = params.damage ?? (isHeat ? 9 : 8);
+      slot.speed = params.speed ?? (isHeat ? 5.2 : 4.0);
+      slot.turnRate = params.turnRate ?? (isHeat ? 1.35 : 1.2);
       slot.lifetime = params.lifetime ?? 4.0;
       slot.hitRadius = params.hitRadius ?? 0.45;
 
