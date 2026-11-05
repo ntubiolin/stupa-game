@@ -46,7 +46,20 @@ export function createVitals(ctx) {
   let faintTeleported = false;
 
   // ---------------------------------------------------------------- Persistence
+  function defaultVitalsData() {
+    return {
+      level: 1,
+      exp: 0,
+      hp: null,
+      mp: null,
+      permanent: { atk: 0, def: 0 },
+    };
+  }
+
   function loadSaved() {
+    if (ctx.save) {
+      return ctx.save.get('vitals', defaultVitalsData());
+    }
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return null;
@@ -59,18 +72,22 @@ export function createVitals(ctx) {
   }
 
   function save() {
+    const p = state.player;
+    const data = {
+      level: p.level,
+      exp: p.exp,
+      hp: p.hp,
+      mp: p.mp,
+      permanent: {
+        atk: p.permanent?.atk || 0,
+        def: p.permanent?.def || 0,
+      },
+    };
+    if (ctx.save) {
+      ctx.save.set('vitals', data);
+      return;
+    }
     try {
-      const p = state.player;
-      const data = {
-        level: p.level,
-        exp: p.exp,
-        hp: p.hp,
-        mp: p.mp,
-        permanent: {
-          atk: p.permanent?.atk || 0,
-          def: p.permanent?.def || 0,
-        },
-      };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch {
       // Storage unavailable or quota exceeded
@@ -431,11 +448,6 @@ export function createVitals(ctx) {
   });
 
   bus.on('merit:reset', () => {
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // ignore
-    }
     const p = state.player;
     p.level = 1;
     p.exp = 0;

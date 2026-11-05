@@ -62,6 +62,24 @@ export function createMerit(ctx) {
   let koraFraction = 0;
 
   function load() {
+    if (ctx.save) {
+      const saved = ctx.save.get('merit', defaultData());
+      data = {
+        kora: Number(saved.kora) || 0,
+        prostration: Number(saved.prostration) || 0,
+        lamp: Number(saved.lamp) || 0,
+        monkey: Number(saved.monkey) || 0,
+        wheel: Number(saved.wheel) || 0,
+        preta: Number(saved.preta) || 0,
+        tsen: Number(saved.tsen) || 0,
+        migoi: Number(saved.migoi) || 0,
+        totalLiberated: Number(saved.totalLiberated) || 0,
+        mantraCasts: Number(saved.mantraCasts) || 0,
+        points: Number(saved.points) || 0,
+        achievements: Array.isArray(saved.achievements) ? [...saved.achievements] : [],
+      };
+      return;
+    }
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
@@ -86,6 +104,10 @@ export function createMerit(ctx) {
   }
 
   function save() {
+    if (ctx.save) {
+      ctx.save.set('merit', data);
+      return;
+    }
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch { /* ignore storage errors */ }
@@ -181,13 +203,14 @@ export function createMerit(ctx) {
   bus.on('item:pickup', () => evaluateAchievements());
 
   function reset() {
+    if (ctx.save) {
+      ctx.save.reset();
+    }
     data = defaultData();
     koraFraction = 0;
     save();
-    try {
-      localStorage.removeItem('stupa_wild_tutorial_v1');
-    } catch { /* ignore */ }
     bus.emit('merit:reset');
+    ctx.save?.flush?.();
     bus.emit('toast', { key: 'toast.reset' });
   }
 

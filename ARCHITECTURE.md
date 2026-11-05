@@ -30,6 +30,7 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/gameplay/lamps.js` | Gameplay | butter-lamp stations (interactable), flames + lights (PointLights disabled when out of stupa) |
 | `src/gameplay/monkeys.js` | Gameplay | monkey meshes, wander AI, feeding (interactable) |
 | `src/systems/zones.js` | Gameplay | data-driven zone manager (`MAPS`), lazy `import()` loading, gate transitions, `ctx.world` API |
+| `src/systems/save.js` | Gameplay | unified v2 save system (`stupa.save.v2`), v1 migration, per-section fault tolerance, throttled writes |
 | `src/systems/vitals.js` | Gameplay | vitals system (HP/MP/EXP/ATK/DEF), level curve, damage mitigation, buffs |
 | `src/systems/interaction.js` | Gameplay | nearest-interactable selection, prompt, dispatch |
 | `src/systems/merit.js` | Gameplay | counters, achievements, persistence (localStorage) |
@@ -79,6 +80,7 @@ export function createX(ctx, ...extra) {
 | `colliders` | array; push `{type:'circle',x,z,r,zone:mapId}` or `{type:'box',minX,maxX,minZ,maxZ,zone:mapId}` |
 | `interactables` | array of Interactable (below) |
 | `input` | input module (created first) |
+| `save` | `{ version: 2, get(section, fallback), set(section, data), markDirty(section), flush(), reset(), exportString(), importString(str) }` |
 | `debug` | `{ enabled, register(name, api) }` |
 | `mantra` | `{ update(dt), cast(), showRadius(bool), getCooldownFraction() }` |
 | `enemies` | `{ update(dt), spawn(kind?, distance?), clear(), list(), freeze(bool), forceAttack(id?, attackId) }` |
@@ -243,14 +245,35 @@ $$\text{Wander} \longleftrightarrow \text{Notice} \longrightarrow \text{Chase} \
 - **1.8s**: Overlay fades out, player regains control with 3.0s invulnerability period.
 
 ### 7. First-Time Wilderness Onboarding Tutorial
-- When player enters `'wild'` for the first time, checks `localStorage.getItem('stupa_wild_tutorial_v1')`.
+- When player enters `'wild'` for the first time, checks `ctx.save.get('tutorial')['stupa_wild_tutorial_v1']`.
 - Displays 3 localized sequential tips:
-  1. `0.5s`: `tutorial.wild1` — "按 R / Space 唸誦六字大明咒" / "Press R / Space to chant the Six-Syllable Mantra"
-  2. `3.2s`: `tutorial.wild2` — "注意紅色預警，及時閃避" / "Watch for red telegraphs and dodge in time"
-  3. `6.0s`: `tutorial.wild3` — "HP/MP 不足時，回佛塔大禮拜、點燈、餵猴" / "When low on HP/MP, return to the Stupa to prostrate, light lamps, and feed monkeys"
-- Persists `'1'` in `stupa_wild_tutorial_v1`; cleared on `merit:reset`.
+  1. `0.4s`: `tutorial.wild1` — "按 R / Space 唸誦六字大明咒" / "Press R / Space to chant the Six-Syllable Mantra"
+  2. `2.8s`: `tutorial.wild2` — "注意紅色預警，及時閃避" / "Watch for red telegraphs and dodge in time"
+  3. `5.2s`: `tutorial.wild3` — "HP/MP 不足時，回佛塔大禮拜、點燈、餵猴" / "When low on HP/MP, return to the Stupa to prostrate, light lamps, and feed monkeys"
+- Persists in the `tutorial` save section; cleared on `merit:reset`.
 
-### 8. Performance & Audio Crossfade
+### 8. Unified Save System v2 (`src/systems/save.js`)
+- **Storage Key**: `stupa.save.v2`, JSON format `{ version: 2, savedAt, sections: { ... } }`.
+- **Rule**: All systems **must** persist data exclusively through `ctx.save` (`get`, `set`, `markDirty`). Direct `localStorage` access outside `save.js` is prohibited.
+- **`get(section, fallback)`**: Returns a validated deep clone of the section data (falling back to `fallback` if missing or corrupted without crashing the game).
+- **Write Throttling**: `set()` and `markDirty()` mark the store dirty; `save.update(dt)` writes to `localStorage` at most once per 1.0s, and flushes immediately on `visibilitychange` (`hidden`) and `pagehide`.
+- **Migration**: On first load when `stupa.save.v2` is absent, legacy v1 keys (`stupa.vitals.v1`, `stupa.merit.v1`, `stupa.items.v1`, `stupa_wild_tutorial_v1`, `stupa.lang`, `stupa.audio.muted`, `stupa.audio.volume`) are migrated via `migrations[1]` into `stupa.save.v2` while preserving the old keys in `localStorage`.
+- **Save Sections & Owners**:
+  | Section | Owner | Contents |
+  |---|---|---|
+  | `vitals` | `src/systems/vitals.js` | `{ level, exp, hp, mp, permanent: { atk, def } }` |
+  | `merit` | `src/systems/merit.js` | `{ kora, prostration, lamp, monkey, wheel, preta, tsen, migoi, totalLiberated, mantraCasts, points, achievements }` |
+  | `items` | `src/gameplay/items.js` | `{ pityCount }` |
+  | `tutorial` | `src/systems/zones.js` | `{ [tutorialKey]: boolean }` |
+  | `settings` | `src/i18n.js`, `src/systems/audio.js` | `{ lang, muted, volume }` |
+  | `inventory` | `src/systems/inventory.js` (#24) | `{ bag, equipped, turquoise, materials }` |
+  | `skills` | `src/gameplay/skills.js` (#26) | `{ points, ranks, enhance, unlocked, bar, ultCharge, activeProtector }` |
+  | `quests` | `src/systems/quests.js` (#28) | `{ active, done, flags }` |
+  | `codex` | `src/systems/codex.js` (#29) | `{ unlocked }` |
+  | `waypoints` | `src/systems/waypoints.js` (#29) | `string[]` |
+  | `protectors` | `src/gameplay/bosses.js` (#30) | `string[]` |
+
+### 9. Performance & Audio Crossfade
 - **PointLight Budget**: Total active PointLights $\le 6$. Wilderness zone uses 0 PointLights; Stupa zone uses 3 (1 per lamp station, which explicitly hide when `state.zone !== 'stupa'`).
 - **Audio Crossfade**:
   - Stupa Zone: Warm "Om" harmonic drone pad (108 Hz fundamental + harmonics) + serene plaza wind + periodic distant temple bells.

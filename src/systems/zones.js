@@ -371,13 +371,22 @@ export function createZones(ctx) {
   bus.on('zone:change', ({ to }) => {
     const mapDef = MAPS[to];
     if (mapDef?.tutorialKey && Array.isArray(mapDef.tutorials)) {
-      try {
-        const seen = localStorage.getItem(mapDef.tutorialKey);
-        if (!seen) {
-          localStorage.setItem(mapDef.tutorialKey, '1');
+      if (ctx.save) {
+        const tutSection = ctx.save.get('tutorial', {});
+        if (!tutSection[mapDef.tutorialKey]) {
+          tutSection[mapDef.tutorialKey] = true;
+          ctx.save.set('tutorial', tutSection);
           tutorialQueue = mapDef.tutorials.map((t) => ({ ...t }));
         }
-      } catch { /* ignore */ }
+      } else {
+        try {
+          const seen = localStorage.getItem(mapDef.tutorialKey);
+          if (!seen) {
+            localStorage.setItem(mapDef.tutorialKey, '1');
+            tutorialQueue = mapDef.tutorials.map((t) => ({ ...t }));
+          }
+        } catch { /* ignore */ }
+      }
     } else {
       clearTutorialTimers();
     }
@@ -385,11 +394,15 @@ export function createZones(ctx) {
 
   bus.on('merit:reset', () => {
     clearTutorialTimers();
-    try {
-      for (const m of Object.values(MAPS)) {
-        if (m.tutorialKey) localStorage.removeItem(m.tutorialKey);
-      }
-    } catch { /* ignore */ }
+    if (ctx.save) {
+      ctx.save.set('tutorial', {});
+    } else {
+      try {
+        for (const m of Object.values(MAPS)) {
+          if (m.tutorialKey) localStorage.removeItem(m.tutorialKey);
+        }
+      } catch { /* ignore */ }
+    }
   });
 
   function list() {

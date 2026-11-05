@@ -34,6 +34,7 @@ import { createPlayer } from './player/player.js';
 import { createCameraRig } from './player/cameraRig.js';
 
 import { createZones } from './systems/zones.js';
+import { createSave } from './systems/save.js';
 import { createVitals } from './systems/vitals.js';
 import { createInteraction } from './systems/interaction.js';
 import { createMerit } from './systems/merit.js';
@@ -111,9 +112,12 @@ const ctx = {
   /** Things the player can interact with. See ARCHITECTURE.md "Interactable". */
   interactables: [],
   input: null,
+  save: null,
 };
 ctx.input = createInput(ctx);
 createDebug(ctx);
+ctx.save = createSave(ctx);
+i18n.bindSave?.(ctx.save);
 
 // ---------------------------------------------------------------- modules (order = update order)
 const zones = createZones(ctx);
@@ -142,6 +146,7 @@ const hud = createHud(ctx);
 
 const modules = [
   ctx.input,
+  ctx.save,
   sky, stupa, flags, environment,
   zones,
   player, mantra, enemies, projectiles, items, lamps, monkeys,

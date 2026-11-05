@@ -23,11 +23,19 @@ export function createAudio(ctx) {
   let started = false;
   let cricketTimer = 0;
 
-  try {
-    muted = localStorage.getItem(MUTE_STORAGE_KEY) === '1';
-    const savedVol = parseFloat(localStorage.getItem(VOL_STORAGE_KEY));
-    if (!Number.isNaN(savedVol)) volume = Math.max(0, Math.min(1, savedVol));
-  } catch { /* ignore */ }
+  if (ctx.save) {
+    const settings = ctx.save.get('settings', { muted: false, volume: 0.75 });
+    muted = Boolean(settings.muted);
+    if (typeof settings.volume === 'number' && !Number.isNaN(settings.volume)) {
+      volume = Math.max(0, Math.min(1, settings.volume));
+    }
+  } else {
+    try {
+      muted = localStorage.getItem(MUTE_STORAGE_KEY) === '1';
+      const savedVol = parseFloat(localStorage.getItem(VOL_STORAGE_KEY));
+      if (!Number.isNaN(savedVol)) volume = Math.max(0, Math.min(1, savedVol));
+    } catch { /* ignore */ }
+  }
 
   function createPinkNoiseBuffer(context, seconds = 4) {
     const rate = context.sampleRate;
@@ -1147,9 +1155,23 @@ export function createAudio(ctx) {
     }
   }
 
+  function saveAudioSettings() {
+    if (ctx.save) {
+      const settings = ctx.save.get('settings', {});
+      settings.muted = muted;
+      settings.volume = volume;
+      ctx.save.set('settings', settings);
+    } else {
+      try {
+        localStorage.setItem(MUTE_STORAGE_KEY, muted ? '1' : '0');
+        localStorage.setItem(VOL_STORAGE_KEY, String(volume));
+      } catch { /* ignore */ }
+    }
+  }
+
   function setMuted(nextMuted) {
     muted = Boolean(nextMuted);
-    try { localStorage.setItem(MUTE_STORAGE_KEY, muted ? '1' : '0'); } catch { /* ignore */ }
+    saveAudioSettings();
     if (!muted && state.mode === 'play') ensureContext();
     applyMasterGain();
     bus.emit('audio:change', { muted, volume });
@@ -1162,7 +1184,7 @@ export function createAudio(ctx) {
 
   function setVolume(v) {
     volume = Math.max(0, Math.min(1, Number(v) || 0));
-    try { localStorage.setItem(VOL_STORAGE_KEY, String(volume)); } catch { /* ignore */ }
+    saveAudioSettings();
     applyMasterGain();
     bus.emit('audio:change', { muted, volume });
   }
