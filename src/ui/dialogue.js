@@ -15,7 +15,9 @@
  *    keys 1–3 or click -> select choice; Esc -> close. Sets `state.uiOpen = true` while open.
  */
 import { DEBUG_DIALOGUES } from '../data/dialogues/debug.js';
+import { PROLOGUE_DIALOGUES } from '../data/dialogues/prologue.js';
 import '../i18n/quests.js';
+import '../i18n/prologue.js';
 
 const TYPEWRITER_SPEED = 52; // chars per second
 
@@ -287,8 +289,9 @@ export function createDialogue(ctx) {
     }
   }
 
-  // Register debug dialogues
+  // Register debug & prologue dialogues
   register(DEBUG_DIALOGUES);
+  register(PROLOGUE_DIALOGUES);
 
   // ---------------------------------------------------------------- DOM Construction
   const uiRoot = document.getElementById('ui') || document.body;
@@ -491,7 +494,7 @@ export function createDialogue(ctx) {
     if (hasChoices) {
       choicesEl.innerHTML = active.visibleChoices
         .map((c, idx) => {
-          const label = escapeHtml(i18n.t(c.textKey));
+          const label = escapeHtml(i18n.t(c.textKey || c.labelKey || ''));
           return `
             <button type="button" class="dialogue-choice-btn" data-choice-index="${idx}">
               <kbd class="dialogue-choice-key">${idx + 1}</kbd>
@@ -608,7 +611,12 @@ export function createDialogue(ctx) {
     const closedNpcId = active.npcId;
     active = null;
     wrap.classList.add('is-hidden');
-    state.uiOpen = Boolean(ctx.questUi?.isOpen?.());
+    state.uiOpen = Boolean(
+      ctx.questUi?.isOpen?.() ||
+        ctx.shop?.isOpen?.() ||
+        ctx.crafting?.isOpen?.() ||
+        ctx.inventoryUi?.isOpen?.()
+    );
     bus.emit('dialogue:close', { id: closedId, npcId: closedNpcId });
   }
 

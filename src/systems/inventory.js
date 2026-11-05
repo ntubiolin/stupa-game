@@ -355,6 +355,11 @@ export function createInventory(ctx) {
     return materials[id];
   }
 
+  function getMaterial(id) {
+    if (!id) return 0;
+    return materials[id] || 0;
+  }
+
   function spendMaterials(costs = {}) {
     if (!costs || typeof costs !== 'object') return true;
     for (const [id, req] of Object.entries(costs)) {
@@ -370,24 +375,41 @@ export function createInventory(ctx) {
     return true;
   }
 
+  function notifyItemUpdated(itemOrUid) {
+    const uid = typeof itemOrUid === 'string' ? itemOrUid : itemOrUid?.uid;
+    const item = uid ? get(uid) : itemOrUid;
+    save();
+    if (item) {
+      for (const slot of EQUIPMENT_SLOTS) {
+        if (equipped[slot] && equipped[slot].uid === item.uid) {
+          bus.emit('equipment:changed', { slot, item, previous: item });
+        }
+      }
+    }
+    bus.emit('inventory:changed', { reason: 'reforge', item });
+    return item;
+  }
+
   // ---------------------------------------------------------------- Debug Helpers
   function give(rarityOrOpts, maybeOpts = {}) {
     let opts = {};
     if (typeof rarityOrOpts === 'string') {
+      const normRarity = rarityOrOpts === 'common' ? 'normal' : rarityOrOpts;
       if (typeof maybeOpts === 'string') {
-        opts = { rarity: rarityOrOpts, legendaryId: maybeOpts };
+        opts = { rarity: normRarity, legendaryId: maybeOpts };
       } else if (
-        rarityOrOpts !== 'normal' &&
-        rarityOrOpts !== 'blessed' &&
-        rarityOrOpts !== 'rare' &&
-        rarityOrOpts !== 'terma'
+        normRarity !== 'normal' &&
+        normRarity !== 'blessed' &&
+        normRarity !== 'rare' &&
+        normRarity !== 'terma'
       ) {
-        opts = { ...(maybeOpts || {}), rarity: 'terma', legendaryId: rarityOrOpts };
+        opts = { ...(maybeOpts || {}), rarity: 'terma', legendaryId: normRarity };
       } else {
-        opts = { ...(maybeOpts || {}), rarity: rarityOrOpts };
+        opts = { ...(maybeOpts || {}), rarity: normRarity };
       }
     } else if (rarityOrOpts && typeof rarityOrOpts === 'object') {
       opts = { ...rarityOrOpts };
+      if (opts.rarity === 'common') opts.rarity = 'normal';
     }
     const item = ctx.loot?.generate ? ctx.loot.generate(opts) : null;
     if (!item) return null;
@@ -471,8 +493,11 @@ export function createInventory(ctx) {
     spendTurquoise,
     getTurquoise: () => turquoise,
     addMaterial,
+    getMaterial,
     spendMaterials,
     getMaterials: () => ({ ...materials }),
+    notifyItemUpdated,
+    save,
     give,
     equipBest,
     clear,
@@ -487,7 +512,10 @@ export function createInventory(ctx) {
     equipBest: () => api.equipBest(),
     clear: () => api.clear(),
     addTurquoise: (n) => api.addTurquoise(n),
+    getTurquoise: () => api.getTurquoise(),
     addMaterial: (id, n) => api.addMaterial(id, n),
+    getMaterial: (id) => api.getMaterial(id),
+    getMaterials: () => api.getMaterials(),
     getBag: () => api.getBag(),
     getEquipped: () => api.getEquipped(),
     getEquipment: () => api.getEquipped(),

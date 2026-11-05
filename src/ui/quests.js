@@ -95,6 +95,15 @@ export function createQuestUi(ctx) {
       </div>
     </div>
 
+    <!-- 3b. Chapter Unlock Center Banner (e.g. 「第一章：帕平・揚列雪」) -->
+    <div id="chapter-unlock-banner" class="chapter-unlock-banner is-hidden" aria-live="polite">
+      <div class="chapter-unlock-card glass-panel">
+        <div id="chapter-unlock-kicker" class="chapter-unlock-kicker"></div>
+        <div id="chapter-unlock-title" class="chapter-unlock-title"></div>
+        <div id="chapter-unlock-sub" class="chapter-unlock-sub"></div>
+      </div>
+    </div>
+
     <!-- 4. Quest Journal Modal (J) -->
     <section id="quest-journal-modal" class="quest-journal-modal is-hidden" aria-label="Quest Journal">
       <div class="quest-journal-card glass-panel">
@@ -140,6 +149,11 @@ export function createQuestUi(ctx) {
   const bannerEl = root.querySelector('#quest-complete-banner');
   const bannerTitleEl = root.querySelector('#quest-complete-title');
   const bannerRewardsEl = root.querySelector('#quest-complete-rewards');
+
+  const chapterBannerEl = root.querySelector('#chapter-unlock-banner');
+  const chapterKickerEl = root.querySelector('#chapter-unlock-kicker');
+  const chapterTitleEl = root.querySelector('#chapter-unlock-title');
+  const chapterSubEl = root.querySelector('#chapter-unlock-sub');
 
   const journalModalEl = root.querySelector('#quest-journal-modal');
   const journalTitleEl = root.querySelector('#quest-journal-title');
@@ -203,7 +217,8 @@ export function createQuestUi(ctx) {
   }
 
   function getChapterTitle(chapter) {
-    const key = `quest.chapter.${chapter ?? 0}`;
+    const chKey = chapter === 'prologue' ? 0 : (chapter ?? 0);
+    const key = `quest.chapter.${chKey}`;
     return i18n.t(key);
   }
 
@@ -336,12 +351,36 @@ export function createQuestUi(ctx) {
     if (!journalOpen) return;
     journalOpen = false;
     journalModalEl.classList.add('is-hidden');
-    state.uiOpen = Boolean(ctx.dialogue?.isOpen?.());
+    state.uiOpen = Boolean(
+      ctx.dialogue?.isOpen?.() ||
+        ctx.shop?.isOpen?.() ||
+        ctx.crafting?.isOpen?.() ||
+        ctx.inventoryUi?.isOpen?.()
+    );
   }
 
   function toggleJournal() {
     if (journalOpen) closeJournal();
     else openJournal();
+  }
+
+  let chapterBannerTimer = null;
+  function showChapterBanner(payload = {}) {
+    if (!chapterBannerEl) return;
+    const kickerKey = payload.kickerKey || 'prologue.banner.chapter1.kicker';
+    const titleKey = payload.titleKey || 'prologue.banner.chapter1.title';
+    const subKey = payload.subKey || 'prologue.banner.chapter1.sub';
+
+    chapterKickerEl.textContent = i18n.t(kickerKey);
+    chapterTitleEl.textContent = i18n.t(titleKey);
+    chapterSubEl.textContent = i18n.t(subKey);
+
+    chapterBannerEl.classList.remove('is-hidden');
+    if (chapterBannerTimer) clearTimeout(chapterBannerTimer);
+    chapterBannerTimer = setTimeout(() => {
+      chapterBannerEl.classList.add('is-hidden');
+      chapterBannerTimer = null;
+    }, 5200);
   }
 
   function showCompletionBanner(payload) {
@@ -447,6 +486,9 @@ export function createQuestUi(ctx) {
     renderTracker();
     if (journalOpen) renderJournal();
     showCompletionBanner(payload);
+  });
+  bus.on('chapter:banner', (payload) => {
+    showChapterBanner(payload);
   });
   bus.on('quest:reset', () => {
     renderTracker();

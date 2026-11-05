@@ -3266,6 +3266,609 @@ kbd {
   }
 }
 
+/* ============================================================================
+ * Issue #31 — Dharma Merchant Shop, Lotus Artisan Crafting, Materials & Chapter Banner
+ * ============================================================================ */
+
+.inv-mat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  font-size: 0.78rem;
+  color: #e2e8f0;
+  white-space: nowrap;
+}
+
+.inv-mat-pill__val {
+  font-weight: 700;
+  color: #fde68a;
+  margin-left: 2px;
+}
+
+.shop-modal,
+.crafting-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 82;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(8, 6, 16, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.shop-modal.is-hidden,
+.crafting-modal.is-hidden {
+  display: none !important;
+}
+
+.shop-dialog,
+.crafting-dialog {
+  width: min(1120px, 96vw);
+  max-height: min(740px, 92vh);
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  background: linear-gradient(160deg, rgba(24, 15, 34, 0.96), rgba(13, 18, 30, 0.96));
+  border: 1px solid rgba(251, 191, 36, 0.38);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.78);
+  color: #f8fafc;
+  overflow: hidden;
+}
+
+.shop-header,
+.crafting-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 20px;
+  border-bottom: 1px solid rgba(251, 191, 36, 0.24);
+  background: rgba(15, 10, 24, 0.65);
+  flex-wrap: wrap;
+}
+
+.shop-header__left,
+.crafting-header__left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.shop-header__badge,
+.crafting-header__badge {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  background: rgba(251, 191, 36, 0.14);
+  border: 1px solid rgba(251, 191, 36, 0.42);
+  color: #fde68a;
+}
+
+.shop-title,
+.crafting-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #fef3c7;
+}
+
+.shop-subtitle,
+.crafting-subtitle {
+  margin: 2px 0 0;
+  font-size: 0.76rem;
+  color: #cbd5e1;
+}
+
+.shop-header__right,
+.crafting-header__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.shop-timer-pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(30, 41, 59, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  font-size: 0.76rem;
+  color: #cbd5e1;
+}
+
+.shop-refresh-btn,
+.shop-batch-btn {
+  padding: 5px 11px;
+  border-radius: 8px;
+  border: 1px solid rgba(251, 191, 36, 0.42);
+  background: rgba(251, 191, 36, 0.14);
+  color: #fde68a;
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.shop-refresh-btn:hover:not(:disabled),
+.shop-batch-btn:hover:not(:disabled) {
+  background: rgba(251, 191, 36, 0.26);
+}
+
+.shop-batch-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.shop-body {
+  display: grid;
+  grid-template-columns: 1.15fr 0.95fr 1.15fr;
+  gap: 14px;
+  padding: 16px 20px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.shop-col,
+.crafting-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  background: rgba(15, 23, 42, 0.48);
+  border: 1px solid rgba(251, 191, 36, 0.18);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.shop-col__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.shop-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding-right: 4px;
+  flex: 1;
+}
+
+.shop-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.78);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.shop-item-row:hover,
+.shop-item-row.is-selected {
+  background: rgba(30, 41, 59, 0.92);
+  border-color: rgba(251, 191, 36, 0.75);
+}
+
+.shop-item-row.rarity-blessed {
+  border-left: 3px solid #5b8cff;
+}
+
+.shop-item-row.rarity-rare {
+  border-left: 3px solid #ffd84a;
+}
+
+.shop-item-row.rarity-terma {
+  border-left: 3px solid #ff8a1f;
+}
+
+.shop-item-row__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.shop-item-row__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.65);
+  border: 1px solid rgba(251, 191, 36, 0.22);
+  flex-shrink: 0;
+}
+
+.shop-item-row__info {
+  min-width: 0;
+}
+
+.shop-item-row__name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shop-item-row__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.74rem;
+  color: #94a3b8;
+  margin-top: 2px;
+  flex-wrap: wrap;
+}
+
+.shop-item-row__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.shop-price-tag {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #5eead4;
+}
+
+.shop-price-tag.is-insufficient {
+  color: #f87171;
+}
+
+.shop-action-btn {
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(251, 191, 36, 0.5);
+  background: linear-gradient(135deg, rgba(217, 119, 6, 0.85), rgba(180, 83, 9, 0.85));
+  color: #fffbeb;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.shop-action-btn:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+
+.shop-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.shop-action-btn--sell {
+  background: rgba(14, 116, 144, 0.75);
+  border-color: rgba(56, 189, 248, 0.55);
+}
+
+.shop-action-btn--salvage {
+  background: rgba(124, 45, 18, 0.82);
+  border-color: rgba(251, 146, 60, 0.6);
+}
+
+.shop-empty {
+  margin: auto;
+  padding: 28px 14px;
+  text-align: center;
+  font-size: 0.84rem;
+  color: #94a3b8;
+}
+
+.shop-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 20px;
+  border-top: 1px solid rgba(251, 191, 36, 0.2);
+  background: rgba(15, 10, 24, 0.72);
+  font-size: 0.78rem;
+  color: #fde68a;
+  flex-wrap: wrap;
+}
+
+.shop-footer__hint {
+  color: #94a3b8;
+}
+
+/* Crafting Tabs & Panes */
+.crafting-body {
+  padding: 16px 20px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.crafting-pane {
+  display: none;
+  grid-template-columns: 1.05fr 1.25fr;
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+}
+
+.crafting-pane.is-active {
+  display: grid;
+}
+
+.crafting-rules-card {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(30, 20, 42, 0.68);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+}
+
+.crafting-rules-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 0.78rem;
+  color: #e2e8f0;
+  line-height: 1.6;
+}
+
+.crafting-source-tag {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(51, 65, 85, 0.8);
+  color: #cbd5e1;
+  font-size: 0.68rem;
+}
+
+.crafting-source-tag.is-equipped {
+  background: rgba(217, 119, 6, 0.32);
+  color: #fde68a;
+  border: 1px solid rgba(251, 191, 36, 0.45);
+}
+
+.crafting-lock-pill {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(234, 179, 8, 0.22);
+  color: #fde047;
+  font-weight: 700;
+}
+
+.crafting-workbench__card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.crafting-workbench__name {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.crafting-workbench__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: #94a3b8;
+  margin-top: 3px;
+}
+
+.crafting-affix-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 6px;
+}
+
+.crafting-affix-slot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #f1f5f9;
+  font-size: 0.84rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.crafting-affix-slot.is-selected {
+  border-color: #fbbf24;
+  background: rgba(251, 191, 36, 0.14);
+}
+
+.crafting-affix-slot.is-locked {
+  border-color: #38bdf8;
+}
+
+.crafting-affix-slot.is-disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.crafting-affix-slot__badge {
+  font-size: 0.72rem;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(30, 41, 59, 0.85);
+  color: #fde68a;
+}
+
+.crafting-cost-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(2, 6, 23, 0.55);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  flex-wrap: wrap;
+}
+
+.crafting-cost-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.crafting-cost-pill {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  font-size: 0.78rem;
+  color: #e2e8f0;
+}
+
+.crafting-cost-pill.is-missing {
+  border-color: rgba(248, 113, 113, 0.7);
+  color: #fca5a5;
+}
+
+.crafting-choices-box {
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(28, 18, 38, 0.9);
+  border: 1px solid rgba(251, 191, 36, 0.55);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.crafting-choices-box__title {
+  margin: 0;
+  font-size: 0.86rem;
+  color: #fde68a;
+}
+
+.crafting-choices-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.crafting-choice-card {
+  padding: 10px;
+  border-radius: 9px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(251, 191, 36, 0.32);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.crafting-choice-card__badge {
+  font-size: 0.7rem;
+  color: #94a3b8;
+}
+
+.crafting-choice-card__stat {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #fef08a;
+}
+
+.crafting-keep-btn {
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: rgba(30, 41, 59, 0.85);
+  color: #e2e8f0;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.crafting-keep-btn:hover {
+  background: rgba(51, 65, 85, 0.95);
+}
+
+/* Chapter Unlock Center Banner */
+.chapter-unlock-banner {
+  position: fixed;
+  top: 22%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 88;
+  pointer-events: none;
+  animation: chapterBannerFadeIn 0.5s ease-out;
+}
+
+.chapter-unlock-banner.is-hidden {
+  display: none !important;
+}
+
+.chapter-unlock-card {
+  padding: 18px 36px;
+  border-radius: 16px;
+  text-align: center;
+  background: linear-gradient(160deg, rgba(32, 16, 40, 0.95), rgba(14, 10, 24, 0.95));
+  border: 2px solid rgba(251, 191, 36, 0.78);
+  box-shadow: 0 0 42px rgba(251, 191, 36, 0.38), 0 18px 40px rgba(0, 0, 0, 0.75);
+}
+
+.chapter-unlock-kicker {
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  color: #5eead4;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.chapter-unlock-title {
+  font-family: var(--font-serif);
+  font-size: 1.65rem;
+  font-weight: 800;
+  color: #fef08a;
+  text-shadow: 0 0 16px rgba(251, 191, 36, 0.65);
+}
+
+.chapter-unlock-sub {
+  margin-top: 6px;
+  font-size: 0.86rem;
+  color: #e2e8f0;
+}
+
+@keyframes chapterBannerFadeIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -12px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@media (max-width: 860px) {
+  .shop-body,
+  .crafting-pane.is-active,
+  .crafting-choices-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
 
 
 /* ==========================================================================
