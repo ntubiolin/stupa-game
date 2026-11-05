@@ -1,10 +1,12 @@
 /**
- * Skill Bar, Skills Modal Panel (K), and Mobile Arc Skill Pad (#26).
+ * Skill Bar, Skills Modal Panel (K), and Mobile Arc Skill Pad (#26 & #27).
  *
  * - Desktop Skill Bar: bottom-center 7 slots (Space, R, 1, 2, 3, 4, T) with Tibetan glyphs,
- *   keybind badges, MP cost badges, radial conic cooldown sweeps, .is-nomp, and .is-locked states.
+ *   keybind badges, MP cost badges, radial conic cooldown sweeps, Ultimate charge progress ring (0..30)
+ *   with golden ready glow, .is-nomp, and .is-locked states.
  * - Skills Modal Panel (K): toggles state.uiOpen, displays available Skill Points, hub-only Respec,
- *   7 skill upgrade rows (+ button), and Rank 3 A/B Mastery Enhancement cards.
+ *   7 skill upgrade rows (+ button), Rank 3 A/B Mastery Enhancement cards, and Dharma Protector
+ *   selector (tenma / whiteYak / pehar) on the Protector Summon row.
  * - Mobile Arc Skill Pad: in combat zones (state.zone !== 'stupa'), replaces #mobile-actions with
  *   an ergonomic thumb arc pad (large center ཧཱུྃ button + surrounding arc buttons + Amrita potion),
  *   using pointerdown + stopPropagation() for simultaneous dual-thumb joystick + skill casting.
@@ -13,11 +15,21 @@ import { SKILLS } from '../data/skills.js';
 import { i18n } from '../i18n.js';
 import '../i18n/skills.js';
 
+const ULT_RING_R = 23;
+const ULT_RING_CIRC = 2 * Math.PI * ULT_RING_R;
+
 export function createSkillbar(ctx) {
   const { state, bus } = ctx;
 
-  const playHud = document.getElementById('play-hud') || document.getElementById('hud-root') || document.getElementById('ui') || document.body;
-  const hudRoot = document.getElementById('hud-root') || document.getElementById('ui') || document.body;
+  const playHud =
+    document.getElementById('play-hud') ||
+    document.getElementById('hud-root') ||
+    document.getElementById('ui') ||
+    document.body;
+  const hudRoot =
+    document.getElementById('hud-root') ||
+    document.getElementById('ui') ||
+    document.body;
   const mobileActions = document.getElementById('mobile-actions');
 
   let modalOpen = false;
@@ -32,17 +44,33 @@ export function createSkillbar(ctx) {
   const slotEls = new Map();
 
   for (const def of SKILLS) {
+    const isUlt = Boolean(def.maxCharge);
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = `skill-slot skill-slot--${def.slot}`;
     btn.dataset.slot = def.slot;
     btn.dataset.skillId = def.id;
+    if (def.alias) {
+      btn.dataset.skillAlias = def.alias;
+    }
+
     btn.innerHTML = `
       <div class="skill-slot__cd" aria-hidden="true"></div>
+      ${
+        isUlt
+          ? `<svg class="skill-slot__ult-ring" viewBox="0 0 54 54" aria-hidden="true">
+               <circle class="skill-slot__ult-track" cx="27" cy="27" r="${ULT_RING_R}" />
+               <circle class="skill-slot__ult-fill" cx="27" cy="27" r="${ULT_RING_R}"
+                 stroke-dasharray="${ULT_RING_CIRC.toFixed(2)}"
+                 stroke-dashoffset="${ULT_RING_CIRC.toFixed(2)}" />
+             </svg>`
+          : ''
+      }
       <span class="skill-slot__glyph" aria-hidden="true">${def.glyph}</span>
       <span class="skill-slot__lock" aria-hidden="true">🔒</span>
       <kbd class="skill-slot__key">${def.keyLabel}</kbd>
       ${def.mpCost > 0 ? `<span class="skill-slot__mp">${def.mpCost}</span>` : ''}
+      ${isUlt ? `<span class="skill-slot__charge">0/${def.maxCharge}</span>` : ''}
       <span class="skill-slot__cd-text" aria-hidden="true"></span>
       <span class="skill-slot__rank-dots" aria-hidden="true"></span>
     `;
@@ -54,7 +82,6 @@ export function createSkillbar(ctx) {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
-      // Fallback for synthetic DOM click() in automated tests
       if (e.detail === 0) {
         ctx.skills?.cast(def.slot);
       }
@@ -66,6 +93,8 @@ export function createSkillbar(ctx) {
       cdTextEl: btn.querySelector('.skill-slot__cd-text'),
       mpEl: btn.querySelector('.skill-slot__mp'),
       rankDotsEl: btn.querySelector('.skill-slot__rank-dots'),
+      ultFillEl: btn.querySelector('.skill-slot__ult-fill'),
+      chargeEl: btn.querySelector('.skill-slot__charge'),
     });
   }
 
@@ -136,6 +165,7 @@ export function createSkillbar(ctx) {
     b.className = `arc-btn arc-btn--sat arc-btn--pos-${idx} glass-panel`;
     b.dataset.mobileSlot = def.slot;
     b.dataset.skillId = def.id;
+    if (def.alias) b.dataset.skillAlias = def.alias;
     b.innerHTML = `
       <div class="arc-btn__cd" aria-hidden="true"></div>
       <span class="arc-btn__glyph" aria-hidden="true">${def.glyph}</span>
@@ -221,12 +251,60 @@ export function createSkillbar(ctx) {
   });
 
   function formatEffectText(def, rankIndex) {
+    const shieldPct = def.rankScaling?.shieldPct?.[rankIndex];
+    if (typeof shieldPct === 'number') {
+      return i18n.t('skills.effectShield', { pct: Math.round(shieldPct * 100) });
+    }
     const mult = Math.round((def.rankScaling?.damageMult?.[rankIndex] ?? 1) * 100);
+    const dur = def.rankScaling?.duration?.[rankIndex];
+    if (typeof dur === 'number' && def.id === 'protector') {
+      return i18n.t('skills.effectProtector', { dur, mult });
+    }
+    const stun = def.rankScaling?.stunDuration?.[rankIndex];
+    if (typeof stun === 'number') {
+      return i18n.t('skills.effectStun', { mult, stun: stun.toFixed(1) });
+    }
     const radAdd = def.rankScaling?.radiusAdd?.[rankIndex];
     if (typeof radAdd === 'number' && radAdd > 0) {
       return i18n.t('skills.effectDamageRadius', { mult, radius: radAdd.toFixed(1) });
     }
     return i18n.t('skills.effectDamage', { mult });
+  }
+
+  function renderProtectorSelector() {
+    if (!ctx.protectors) return '';
+    const list = ctx.protectors.list();
+    return `
+      <div class="skill-row__protectors">
+        <div class="skill-row__enh-header">
+          <span>${i18n.t('protector.selectTitle')}</span>
+        </div>
+        <div class="skill-row__protector-grid">
+          ${list
+            .map(
+              (p) => `
+            <button
+              type="button"
+              class="protector-select-card ${p.active ? 'is-selected' : ''} ${p.unlocked ? 'is-unlocked' : 'is-locked'}"
+              data-select-protector="${p.id}"
+              ${p.unlocked ? '' : 'disabled'}
+            >
+              <div class="protector-select-card__head">
+                <span class="protector-select-card__glyph">${p.glyph}</span>
+                <span class="protector-select-card__name">${p.name}</span>
+                <span class="protector-select-card__role">${p.roleName}</span>
+                <span class="protector-select-card__badge">
+                  ${p.unlocked ? (p.active ? i18n.t('protector.active') : i18n.t('protector.select')) : `🔒 ${i18n.t('protector.locked')}`}
+                </span>
+              </div>
+              <p class="protector-select-card__desc">${p.desc}</p>
+            </button>
+          `
+            )
+            .join('')}
+        </div>
+      </div>
+    `;
   }
 
   function renderModal() {
@@ -252,18 +330,25 @@ export function createSkillbar(ctx) {
       const row = document.createElement('article');
       row.className = `skill-row ${sk.unlocked ? 'is-unlocked' : 'is-locked'}`;
       row.dataset.skillId = def.id;
+      if (def.alias) row.dataset.skillAlias = def.alias;
       row.dataset.slot = def.slot;
 
       const curIdx = Math.max(0, Math.min(sk.maxRank - 1, sk.rank - 1));
       const curEffect = formatEffectText(def, curIdx);
-      const nextEffect = sk.rank < sk.maxRank
-        ? i18n.t('skills.nextEffect', { effect: formatEffectText(def, curIdx + 1) })
-        : i18n.t('skills.maxRankReached');
+      const nextEffect =
+        sk.rank < sk.maxRank
+          ? i18n.t('skills.nextEffect', { effect: formatEffectText(def, curIdx + 1) })
+          : i18n.t('skills.maxRankReached');
 
-      const mpLabel = def.mpCost > 0
-        ? i18n.t('skills.mpCost', { mp: def.mpCost })
-        : i18n.t('skills.mpFree');
-      const cdLabel = i18n.t('skills.cooldown', { cd: sk.effectiveCooldown.toFixed(2).replace(/\.00$/, '') });
+      const mpLabel =
+        def.mpCost > 0
+          ? i18n.t('skills.mpCost', { mp: def.mpCost })
+          : i18n.t('skills.mpFree');
+      const cdLabel = def.maxCharge
+        ? i18n.t('skills.chargeCost', { max: def.maxCharge })
+        : i18n.t('skills.cooldown', {
+            cd: sk.effectiveCooldown.toFixed(2).replace(/\.00$/, ''),
+          });
 
       const canUpgrade = sk.unlocked && pts > 0 && sk.rank < sk.maxRank;
       const unlockHint = i18n.t(def.unlock?.hintKey || 'skills.unlockDefaultHint');
@@ -284,24 +369,34 @@ export function createSkillbar(ctx) {
               <span id="skill-rank-${def.id}" class="skill-row__rank" data-rank="${sk.rank}">
                 ${sk.unlocked ? i18n.t('skills.rank', { rank: sk.rank, max: sk.maxRank }) : `🔒 ${i18n.t('skills.locked')}`}
               </span>
+              ${
+                def.alias
+                  ? `<span id="skill-rank-${def.alias}" class="is-hidden" data-rank="${sk.rank}">${sk.rank}</span>`
+                  : ''
+              }
               <span class="skill-row__meta-chip">${mpLabel}</span>
               <span class="skill-row__meta-chip">${cdLabel}</span>
             </div>
             <p class="skill-row__desc">${i18n.t(def.descKey)}</p>
-            ${sk.unlocked ? `
+            ${
+              sk.unlocked
+                ? `
               <div class="skill-row__scaling">
                 <span class="skill-row__effect-cur">${i18n.t('skills.currentEffect', { effect: curEffect })}</span>
                 <span class="skill-row__effect-next">${nextEffect}</span>
               </div>
-            ` : `
+            `
+                : `
               <div class="skill-row__unlock-hint">🔒 ${unlockHint}</div>
-            `}
+            `
+            }
           </div>
           <div class="skill-row__upgrade">
             <button
               type="button"
               class="btn-skill-upgrade ${canUpgrade ? 'is-available' : ''}"
               data-upgrade-skill="${def.id}"
+              ${def.alias ? `data-upgrade-alias="${def.alias}"` : ''}
               ${canUpgrade ? '' : 'disabled'}
               aria-label="${i18n.t('skills.upgradeBtn')}"
             >
@@ -310,7 +405,10 @@ export function createSkillbar(ctx) {
             </button>
           </div>
         </div>
-        ${(enhA && enhB) ? `
+        ${def.id === 'protector' ? renderProtectorSelector() : ''}
+        ${
+          enhA && enhB
+            ? `
           <div class="skill-row__enhancements ${canChooseEnh ? 'is-unlocked' : 'is-locked'}">
             <div class="skill-row__enh-header">
               <span>${i18n.t('skills.enhTitle')}</span>
@@ -345,7 +443,9 @@ export function createSkillbar(ctx) {
               </button>
             </div>
           </div>
-        ` : ''}
+        `
+            : ''
+        }
       `;
 
       const upgBtn = row.querySelector(`[data-upgrade-skill="${def.id}"]`);
@@ -364,6 +464,17 @@ export function createSkillbar(ctx) {
           e.stopPropagation();
           const choice = eb.dataset.enh;
           if (ctx.skills?.chooseEnhancement(def.id, choice)) {
+            renderModal();
+          }
+        });
+      });
+
+      const protBtns = row.querySelectorAll('[data-select-protector]');
+      protBtns.forEach((pb) => {
+        pb.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const pid = pb.dataset.selectProtector;
+          if (ctx.protectors?.setActive(pid)) {
             renderModal();
           }
         });
@@ -395,7 +506,7 @@ export function createSkillbar(ctx) {
     return openModal();
   }
 
-  // Re-render modal when language or skill ranks/points change
+  // Re-render modal when language or skill ranks/points/protectors change
   i18n.onChange(() => {
     if (modalOpen) renderModal();
   });
@@ -406,6 +517,12 @@ export function createSkillbar(ctx) {
     if (modalOpen) renderModal();
   });
   bus?.on('skill:unlock', () => {
+    if (modalOpen) renderModal();
+  });
+  bus?.on('protector:unlock', () => {
+    if (modalOpen) renderModal();
+  });
+  bus?.on('protector:active', () => {
     if (modalOpen) renderModal();
   });
   bus?.on('zone:change', () => {
@@ -433,8 +550,11 @@ export function createSkillbar(ctx) {
       pointsBadgeEl.classList.add('is-hidden');
     }
 
-    const isCombat = Boolean(ctx.world?.isCombatZone ? ctx.world.isCombatZone() : state.zone !== 'stupa');
+    const isCombat = Boolean(
+      ctx.world?.isCombatZone ? ctx.world.isCombatZone() : state.zone !== 'stupa'
+    );
     const curMp = state.player?.mp ?? 0;
+    const freeMp = Boolean(state.player?.shrineFreeMp);
 
     // Toggle mobile pad vs Stupa ritual buttons based on zone
     if (isCombat) {
@@ -450,23 +570,50 @@ export function createSkillbar(ctx) {
       if (!sk) continue;
       const frac = sk.cooldownFraction;
       const deg = Math.round(frac * 360);
-      const noMp = sk.unlocked && def.mpCost > 0 && (def.id !== 'mantra' || isCombat) && curMp < def.mpCost;
+      const noMp =
+        !freeMp &&
+        sk.unlocked &&
+        def.mpCost > 0 &&
+        (def.id !== 'mantra' || isCombat) &&
+        curMp < def.mpCost;
 
-      // Desktop slot update
       const ui = slotEls.get(def.id);
       if (ui) {
         ui.btn.classList.toggle('is-locked', !sk.unlocked);
         ui.btn.classList.toggle('is-nomp', noMp);
-        ui.btn.classList.toggle('is-cooldown', frac > 0.001);
-        if (frac > 0.001) {
-          ui.cdEl.style.background = `conic-gradient(rgba(10, 6, 18, 0.84) ${deg}deg, transparent ${deg}deg)`;
-          ui.cdTextEl.textContent = sk.cooldownRemaining >= 1
-            ? Math.ceil(sk.cooldownRemaining).toString()
-            : sk.cooldownRemaining.toFixed(1);
+
+        if (sk.isUltimate) {
+          const chargeFrac = sk.chargeFraction || 0;
+          const isReady = sk.unlocked && sk.charge >= sk.maxCharge;
+          ui.btn.classList.toggle('is-ult-ready', isReady);
+          ui.btn.classList.toggle('is-cooldown', !isReady);
+          if (ui.ultFillEl) {
+            const offset = ULT_RING_CIRC * (1 - chargeFrac);
+            ui.ultFillEl.setAttribute('stroke-dashoffset', offset.toFixed(2));
+          }
+          if (ui.chargeEl) {
+            ui.chargeEl.textContent = `${sk.charge}/${sk.maxCharge}`;
+          }
+          if (ui.cdEl) {
+            ui.cdEl.style.background = 'none';
+          }
+          if (ui.cdTextEl) {
+            ui.cdTextEl.textContent = '';
+          }
         } else {
-          ui.cdEl.style.background = 'none';
-          ui.cdTextEl.textContent = '';
+          ui.btn.classList.toggle('is-cooldown', frac > 0.001);
+          if (frac > 0.001) {
+            ui.cdEl.style.background = `conic-gradient(rgba(10, 6, 18, 0.84) ${deg}deg, transparent ${deg}deg)`;
+            ui.cdTextEl.textContent =
+              sk.cooldownRemaining >= 1
+                ? Math.ceil(sk.cooldownRemaining).toString()
+                : sk.cooldownRemaining.toFixed(1);
+          } else {
+            ui.cdEl.style.background = 'none';
+            ui.cdTextEl.textContent = '';
+          }
         }
+
         if (ui.rankDotsEl) {
           ui.rankDotsEl.textContent = sk.unlocked ? '•'.repeat(sk.rank) : '';
         }
@@ -477,11 +624,20 @@ export function createSkillbar(ctx) {
       if (mob) {
         mob.btn.classList.toggle('is-locked', !sk.unlocked);
         mob.btn.classList.toggle('is-nomp', noMp);
-        mob.btn.classList.toggle('is-cooldown', frac > 0.001);
-        if (frac > 0.001) {
-          mob.cdEl.style.background = `conic-gradient(rgba(10, 6, 18, 0.84) ${deg}deg, transparent ${deg}deg)`;
+        if (sk.isUltimate) {
+          const isReady = sk.unlocked && sk.charge >= sk.maxCharge;
+          mob.btn.classList.toggle('is-ult-ready', isReady);
+          mob.btn.classList.toggle('is-cooldown', !isReady);
+          mob.cdEl.style.background = isReady
+            ? 'none'
+            : `conic-gradient(rgba(10, 6, 18, 0.72) ${deg}deg, transparent ${deg}deg)`;
         } else {
-          mob.cdEl.style.background = 'none';
+          mob.btn.classList.toggle('is-cooldown', frac > 0.001);
+          if (frac > 0.001) {
+            mob.cdEl.style.background = `conic-gradient(rgba(10, 6, 18, 0.84) ${deg}deg, transparent ${deg}deg)`;
+          } else {
+            mob.cdEl.style.background = 'none';
+          }
         }
       }
     }

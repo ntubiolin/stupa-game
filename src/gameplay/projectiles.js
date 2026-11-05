@@ -751,43 +751,101 @@ export function createProjectiles(ctx) {
     return null;
   }
 
-  // ---------------------------------------------------------------- 6. Mantra Dispel Listener
-  bus.on('mantra:cast', ({ origin, radius }) => {
-    if (!ctx.world?.isCombatZone() || !origin) return;
-    const mantraRad = radius || (config.MANTRA?.radius ?? 6.0);
+  // ---------------------------------------------------------------- 6. Dispel & Reflection Helpers
+  function isPointInConeOrCircle(px, pz, origin, radius, dirRad = null, halfAngleRad = null) {
+    const dx = px - origin.x;
+    const dz = pz - origin.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist > radius) return false;
+    if (dirRad == null || halfAngleRad == null || halfAngleRad >= Math.PI - 1e-3 || dist < 1e-4) {
+      return true;
+    }
+    const fx = -Math.sin(dirRad);
+    const fz = -Math.cos(dirRad);
+    const dot = (dx * fx + dz * fz) / dist;
+    const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+    return angle <= halfAngleRad;
+  }
 
-    // Dispel active magic projectiles / rune circles
+  function reflectMagicProjectileAt(x, y, z, baseDmg = 10) {
+    burstDispelParticles(x, y, z);
+    bus.emit('sfx', { name: 'dispel' });
+    const nearestEnemy = ctx.enemies?.nearest
+      ? ctx.enemies.nearest({ x, z }, 20)
+      : null;
+    const atk = state.player?.atk || 10;
+    const reflectDmg = Math.max(baseDmg, Math.round(atk * 1.0));
+    if (nearestEnemy) {
+      const dirAngle = Math.atan2(-(nearestEnemy.pos.x - x), -(nearestEnemy.pos.z - z));
+      spawn('humBolt', {
+        origin: { x, y, z },
+        dir: dirAngle,
+        damageMult: 0, // visual bolt; instant damage applied below for reliability
+        mpRestore: 0,
+        speed: 26,
+      });
+      ctx.enemies.damage(nearestEnemy.id, reflectDmg, 'magic', {
+        source: 'lotusMirror',
+        from: { x, z },
+      });
+    } else {
+      const heading = state.player?.heading || 0;
+      spawn('humBolt', {
+        origin: { x, y, z },
+        dir: heading,
+        damageMult: 1.0,
+        mpRestore: 0,
+        speed: 26,
+      });
+    }
+    bus.emit('projectile:reflected', { x, y, z, damage: reflectDmg, targetId: nearestEnemy?.id || null });
+  }
+
+  function dispelInArea({ origin, radius = 6.0, dirRad = null, halfAngleRad = null, reflect = false } = {}) {
+    if (!origin) return 0;
+    let dispelled = 0;
+
     for (let i = 0; i < POOL_CAP; i++) {
-      // 1. Ghostfire (magic: true)
       const gf = ghostfirePool[i];
       if (gf.active) {
-        const dx = gf.pos.x - origin.x;
-        const dz = gf.pos.z - origin.z;
-        const dist = Math.hypot(dx, dz);
-        if (dist <= mantraRad + gf.hitRadius) {
+        if (isPointInConeOrCircle(gf.pos.x, gf.pos.z, origin, radius + gf.hitRadius, dirRad, halfAngleRad)) {
           gf.active = false;
           gf.group.visible = false;
           gf.hitbox.visible = false;
-          burstDispelParticles(gf.pos.x, gf.pos.y, gf.pos.z);
-          bus.emit('sfx', { name: 'dispel' });
+          dispelled++;
+          if (reflect) {
+            reflectMagicProjectileAt(gf.pos.x, gf.pos.y, gf.pos.z, gf.damage);
+          } else {
+            burstDispelParticles(gf.pos.x, gf.pos.y, gf.pos.z);
+            bus.emit('sfx', { name: 'dispel' });
+          }
         }
       }
 
-      // 2. Frost Roar Ground Circle (magic: true, only before eruption completes)
       const fr = frostRoarPool[i];
       if (fr.active && !fr.erupted) {
-        const dx = fr.centerPos.x - origin.x;
-        const dz = fr.centerPos.z - origin.z;
-        const dist = Math.hypot(dx, dz);
-        if (dist <= mantraRad + fr.aoeRadius) {
+        if (isPointInConeOrCircle(fr.centerPos.x, fr.centerPos.z, origin, radius + fr.aoeRadius, dirRad, halfAngleRad)) {
           fr.active = false;
           fr.group.visible = false;
           fr.hitbox.visible = false;
-          burstDispelParticles(fr.centerPos.x, fr.centerPos.y + 0.5, fr.centerPos.z);
-          bus.emit('sfx', { name: 'dispel' });
+          dispelled++;
+          if (reflect) {
+            reflectMagicProjectileAt(fr.centerPos.x, fr.centerPos.y + 0.5, fr.centerPos.z, fr.damage);
+          } else {
+            burstDispelParticles(fr.centerPos.x, fr.centerPos.y + 0.5, fr.centerPos.z);
+            bus.emit('sfx', { name: 'dispel' });
+          }
         }
       }
     }
+
+    return dispelled;
+  }
+
+  bus.on('mantra:cast', ({ origin, radius }) => {
+    if (!ctx.world?.isCombatZone() || !origin) return;
+    const mantraRad = radius || (config.MANTRA?.radius ?? 6.0);
+    dispelInArea({ origin, radius: mantraRad });
   });
 
   // ---------------------------------------------------------------- 7. Per-Frame Update
@@ -968,11 +1026,19 @@ export function createProjectiles(ctx) {
         continue;
       }
 
-      // Check collision with player
+      // Check collision with player (or Lotus Mirror reflection if shieldEnh === 'a')
       if (playerPos) {
         const pdx = playerPos.x - gf.pos.x;
         const pdz = playerPos.z - gf.pos.z;
         const pDist = Math.hypot(pdx, pdz);
+        const lotusReflect = (state.player?.shield || 0) > 0 && state.player?.shieldEnh === 'a';
+        if (lotusReflect && pDist <= gf.hitRadius + playerRadius + 1.1) {
+          gf.active = false;
+          gf.group.visible = false;
+          gf.hitbox.visible = false;
+          reflectMagicProjectileAt(gf.pos.x, gf.pos.y, gf.pos.z, gf.damage);
+          continue;
+        }
         if (pDist <= gf.hitRadius + playerRadius && Math.abs(playerPos.y - gf.pos.y) < 1.8) {
           bus.emit('vitals:damage', {
             amount: gf.damage,
@@ -1134,12 +1200,17 @@ export function createProjectiles(ctx) {
           const pdz = playerPos.z - fr.centerPos.z;
           const pDist = Math.hypot(pdx, pdz);
           if (pDist <= fr.aoeRadius) {
-            bus.emit('vitals:damage', {
-              amount: fr.damage,
-              type: 'magic',
-              slow: fr.slow,
-              sourcePos: { ...fr.centerPos },
-            });
+            const lotusReflect = (state.player?.shield || 0) > 0 && state.player?.shieldEnh === 'a';
+            if (lotusReflect) {
+              reflectMagicProjectileAt(fr.centerPos.x, fr.centerPos.y + 0.5, fr.centerPos.z, fr.damage);
+            } else {
+              bus.emit('vitals:damage', {
+                amount: fr.damage,
+                type: 'magic',
+                slow: fr.slow,
+                sourcePos: { ...fr.centerPos },
+              });
+            }
           }
         }
       }
@@ -1194,6 +1265,8 @@ export function createProjectiles(ctx) {
     update,
     spawn,
     fireHumBolt: (params) => spawn('humBolt', params),
+    dispelInArea,
+    reflectMagicProjectileAt,
     clear,
     count,
     showHitboxes,

@@ -162,6 +162,7 @@ export function createHud(ctx) {
               <div class="vitals-bar-row">
                 <div class="vitals-bar-track vitals-bar-track--hp">
                   <div id="stat-hp-bar" class="vitals-bar-fill vitals-bar-fill--hp" style="width: 100%;"></div>
+                  <div id="stat-shield-bar" class="vitals-bar-fill vitals-bar-fill--shield" style="width: 0%;"></div>
                 </div>
                 <div id="potion-pips" class="potion-pips" aria-label="Amrita Pills">
                   <span class="potion-pip is-filled" data-pip="0"></span>
@@ -469,6 +470,7 @@ export function createHud(ctx) {
   const statDef = root.querySelector('#stat-def');
   const statTurquoise = root.querySelector('#stat-turquoise');
   const statHpBar = root.querySelector('#stat-hp-bar');
+  const statShieldBar = root.querySelector('#stat-shield-bar');
   const statHpText = root.querySelector('#stat-hp-text');
   const potionPipsWrap = root.querySelector('#potion-pips');
   const potionPipEls = potionPipsWrap ? Array.from(potionPipsWrap.querySelectorAll('.potion-pip')) : [];
@@ -1308,6 +1310,10 @@ export function createHud(ctx) {
     shrine_wisdom: '📖',
     shrine_amrita: '💧',
     shrine_fortune: '🍀',
+    chimphuStill: '📿',
+    guruBlessing: '☸',
+    vajraGuruChannel: '✨',
+    protectorOath: '🛡️',
   };
   let lastBuffKey = '';
 
@@ -1348,7 +1354,7 @@ export function createHud(ctx) {
 
   function updateVitals(payload) {
     if (!payload) return;
-    const { hp, maxHp, mp, maxMp, exp, maxExp, level, atk, def, buffs, deltaHp, deltaMp } = payload;
+    const { hp, maxHp, shield, mp, maxMp, exp, maxExp, level, atk, def, buffs, deltaHp, deltaMp } = payload;
 
     if (statLevel && level != null) statLevel.textContent = String(level);
     if (statAtk && atk != null) statAtk.textContent = String(atk);
@@ -1366,8 +1372,15 @@ export function createHud(ctx) {
       const pct = Math.max(0, Math.min(100, (hp / maxHp) * 100));
       statHpBar.style.width = `${pct}%`;
     }
+    const curShield = Math.max(0, Math.round(Number(shield ?? state.player?.shield) || 0));
+    if (statShieldBar && maxHp > 0) {
+      const shPct = Math.max(0, Math.min(100, (curShield / maxHp) * 100));
+      statShieldBar.style.width = `${shPct}%`;
+      statShieldBar.classList.toggle('is-active', curShield > 0);
+    }
     if (statHpText && hp != null && maxHp != null) {
-      statHpText.textContent = `${hp} / ${maxHp}`;
+      statHpText.textContent =
+        curShield > 0 ? `${hp} / ${maxHp} (+${curShield})` : `${hp} / ${maxHp}`;
     }
 
     if (statMpBar && maxMp > 0 && mp != null) {

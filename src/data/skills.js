@@ -1,14 +1,14 @@
 /**
- * Skill Definitions (#26) — 7-slot Tibetan Buddhist action RPG skill framework.
+ * Skill Definitions (#26, #27) — 7-slot Tibetan Buddhist action RPG skill framework.
  *
  * Slots:
- *   basic    (Space) : humBolt    (ཧཱུྃ — Hum Seed Bolt)
- *   chant    (R)     : mantra     (ཨོཾ — Six-Syllable Mantra)
- *   skill1   (1)     : phurba     (ཕུར — Vajra Phurba)
- *   skill2   (2)     : lotusWard  (པདྨ — Lotus Ward)
- *   skill3   (3)     : vajraBell  (དྲིལ — Vajra Bell)
- *   skill4   (4)     : protector  (སྲུང — Dharma Protector)
- *   ultimate (T)     : guruMantra (གུ་རུ — Vajra Guru Mantra)
+ *   basic    (Space) : humBolt     (ཧཱུྃ — Hum Seed Bolt)
+ *   chant    (R)     : mantra      (ཨོཾ — Six-Syllable Mantra)
+ *   skill1   (1)     : phurba      (ཕུར — Vajra Phurba)
+ *   skill2   (2)     : vajraBell   (དྲིལ — Vajra Bell)
+ *   skill3   (3)     : lotusShield (པདྨ — Lotus Shield, alias lotusWard)
+ *   skill4   (4)     : protector   (སྲུང — Dharma Protector)
+ *   ultimate (T)     : vajraGuru   (གུ་རུ — Vajra Guru Mantra, alias guruMantra)
  */
 import '../i18n/skills.js';
 
@@ -21,6 +21,13 @@ export const SKILL_SLOTS = [
   'skill4',
   'ultimate',
 ];
+
+export const SKILL_ALIASES = {
+  lotusWard: 'lotusShield',
+  lotusShield: 'lotusShield',
+  guruMantra: 'vajraGuru',
+  vajraGuru: 'vajraGuru',
+};
 
 export const SKILLS = [
   {
@@ -107,12 +114,13 @@ export const SKILLS = [
     nameKey: 'skill.phurba.name',
     descKey: 'skill.phurba.desc',
     glyph: 'ཕུར',
-    mpCost: 18,
-    cooldown: 5.0,
+    mpCost: 14,
+    cooldown: 6.0,
     castTime: 0.15,
     maxRank: 5,
     rankScaling: {
-      damageMult: [1.35, 1.50, 1.65, 1.80, 1.95],
+      damageMult: [1.40, 1.54, 1.68, 1.82, 1.96],
+      rootDuration: [2.0, 2.0, 2.0, 2.0, 2.0],
     },
     enhancements: {
       a: { id: 'a', nameKey: 'skill.phurba.enhA.name', descKey: 'skill.phurba.enhA.desc' },
@@ -124,51 +132,24 @@ export const SKILLS = [
         return ctx.skillEffects.castPhurba(payload);
       }
       ctx.bus?.emit('skill:effect', { id: 'phurba', ...payload });
-      ctx.bus?.emit('sfx', { name: 'humBolt' });
-      return true;
-    },
-  },
-  {
-    id: 'lotusWard',
-    slot: 'skill2',
-    keyLabel: '2',
-    nameKey: 'skill.lotusWard.name',
-    descKey: 'skill.lotusWard.desc',
-    glyph: 'པདྨ',
-    mpCost: 22,
-    cooldown: 10.0,
-    castTime: 0,
-    maxRank: 5,
-    rankScaling: {
-      damageMult: [1.00, 1.15, 1.30, 1.45, 1.60],
-    },
-    enhancements: {
-      a: { id: 'a', nameKey: 'skill.lotusWard.enhA.name', descKey: 'skill.lotusWard.enhA.desc' },
-      b: { id: 'b', nameKey: 'skill.lotusWard.enhB.name', descKey: 'skill.lotusWard.enhB.desc' },
-    },
-    unlock: { flag: 'skill.lotusWard', hintKey: 'skill.lotusWard.unlockHint' },
-    cast(ctx, payload) {
-      if (ctx.skillEffects?.castLotusWard) {
-        return ctx.skillEffects.castLotusWard(payload);
-      }
-      ctx.bus?.emit('skill:effect', { id: 'lotusWard', ...payload });
-      ctx.bus?.emit('sfx', { name: 'chant' });
+      ctx.bus?.emit('sfx', { name: 'phurba' });
       return true;
     },
   },
   {
     id: 'vajraBell',
-    slot: 'skill3',
-    keyLabel: '3',
+    slot: 'skill2',
+    keyLabel: '2',
     nameKey: 'skill.vajraBell.name',
     descKey: 'skill.vajraBell.desc',
     glyph: 'དྲིལ',
-    mpCost: 20,
-    cooldown: 8.0,
+    mpCost: 18,
+    cooldown: 9.0,
     castTime: 0,
     maxRank: 5,
     rankScaling: {
-      damageMult: [0.90, 1.02, 1.14, 1.26, 1.38],
+      damageMult: [1.0, 1.1, 1.2, 1.3, 1.4],
+      stunDuration: [1.0, 1.1, 1.2, 1.3, 1.4],
     },
     enhancements: {
       a: { id: 'a', nameKey: 'skill.vajraBell.enhA.name', descKey: 'skill.vajraBell.enhA.desc' },
@@ -180,7 +161,44 @@ export const SKILLS = [
         return ctx.skillEffects.castVajraBell(payload);
       }
       ctx.bus?.emit('skill:effect', { id: 'vajraBell', ...payload });
-      ctx.bus?.emit('sfx', { name: 'chant' });
+      ctx.bus?.emit('sfx', { name: 'vajraBell' });
+      return true;
+    },
+  },
+  {
+    id: 'lotusShield',
+    alias: 'lotusWard',
+    slot: 'skill3',
+    keyLabel: '3',
+    nameKey: 'skill.lotusShield.name',
+    descKey: 'skill.lotusShield.desc',
+    glyph: 'པདྨ',
+    mpCost: 20,
+    cooldown: 16.0,
+    castTime: 0,
+    maxRank: 5,
+    rankScaling: {
+      shieldPct: [0.30, 0.35, 0.40, 0.45, 0.50],
+      damageMult: [0.80, 0.80, 0.80, 0.80, 0.80],
+    },
+    enhancements: {
+      a: { id: 'a', nameKey: 'skill.lotusShield.enhA.name', descKey: 'skill.lotusShield.enhA.desc' },
+      b: { id: 'b', nameKey: 'skill.lotusShield.enhB.name', descKey: 'skill.lotusShield.enhB.desc' },
+    },
+    unlock: {
+      flag: 'skill.lotusShield',
+      altFlag: 'skill.lotusWard',
+      hintKey: 'skill.lotusShield.unlockHint',
+    },
+    cast(ctx, payload) {
+      if (ctx.skillEffects?.castLotusShield) {
+        return ctx.skillEffects.castLotusShield(payload);
+      }
+      if (ctx.skillEffects?.castLotusWard) {
+        return ctx.skillEffects.castLotusWard(payload);
+      }
+      ctx.bus?.emit('skill:effect', { id: 'lotusShield', ...payload });
+      ctx.bus?.emit('sfx', { name: 'lotus' });
       return true;
     },
   },
@@ -191,12 +209,13 @@ export const SKILLS = [
     nameKey: 'skill.protector.name',
     descKey: 'skill.protector.desc',
     glyph: 'སྲུང',
-    mpCost: 25,
-    cooldown: 16.0,
+    mpCost: 30,
+    cooldown: 30.0,
     castTime: 0,
     maxRank: 5,
     rankScaling: {
-      damageMult: [0.85, 0.98, 1.11, 1.24, 1.37],
+      duration: [12, 14, 16, 18, 20],
+      damageMult: [1.0, 1.1, 1.2, 1.3, 1.4],
     },
     enhancements: {
       a: { id: 'a', nameKey: 'skill.protector.enhA.name', descKey: 'skill.protector.enhA.desc' },
@@ -208,44 +227,64 @@ export const SKILLS = [
         return ctx.skillEffects.castProtector(payload);
       }
       ctx.bus?.emit('skill:effect', { id: 'protector', ...payload });
-      ctx.bus?.emit('sfx', { name: 'chant' });
+      ctx.bus?.emit('sfx', { name: 'summon' });
       return true;
     },
   },
   {
-    id: 'guruMantra',
+    id: 'vajraGuru',
+    alias: 'guruMantra',
     slot: 'ultimate',
     keyLabel: 'T',
-    nameKey: 'skill.guruMantra.name',
-    descKey: 'skill.guruMantra.desc',
+    nameKey: 'skill.vajraGuru.name',
+    descKey: 'skill.vajraGuru.desc',
     glyph: 'གུ་རུ',
-    mpCost: 40,
-    cooldown: 30.0,
-    castTime: 0.2,
+    mpCost: 0,
+    cooldown: 0,
+    usesCharge: true,
+    maxCharge: 30,
+    channelDuration: 2.5,
+    castTime: 2.5,
     maxRank: 5,
     rankScaling: {
-      damageMult: [2.20, 2.50, 2.80, 3.10, 3.40],
+      damageMult: [5.0, 5.5, 6.0, 6.5, 7.0],
+      radius: [16, 16, 16, 16, 16],
     },
     enhancements: {
-      a: { id: 'a', nameKey: 'skill.guruMantra.enhA.name', descKey: 'skill.guruMantra.enhA.desc' },
-      b: { id: 'b', nameKey: 'skill.guruMantra.enhB.name', descKey: 'skill.guruMantra.enhB.desc' },
+      a: { id: 'a', nameKey: 'skill.vajraGuru.enhA.name', descKey: 'skill.vajraGuru.enhA.desc' },
+      b: { id: 'b', nameKey: 'skill.vajraGuru.enhB.name', descKey: 'skill.vajraGuru.enhB.desc' },
     },
-    unlock: { flag: 'skill.guruMantra', hintKey: 'skill.guruMantra.unlockHint' },
+    unlock: {
+      flag: 'skill.vajraGuru',
+      altFlag: 'skill.guruMantra',
+      hintKey: 'skill.vajraGuru.unlockHint',
+    },
     cast(ctx, payload) {
+      if (ctx.skillEffects?.castVajraGuru) {
+        return ctx.skillEffects.castVajraGuru(payload);
+      }
       if (ctx.skillEffects?.castGuruMantra) {
         return ctx.skillEffects.castGuruMantra(payload);
       }
-      ctx.bus?.emit('skill:effect', { id: 'guruMantra', ...payload });
-      ctx.bus?.emit('sfx', { name: 'chant' });
+      ctx.bus?.emit('skill:effect', { id: 'vajraGuru', ...payload });
+      ctx.bus?.emit('sfx', { name: 'vajraGuru' });
       return true;
     },
   },
 ];
 
-export const SKILL_BY_ID = Object.fromEntries(SKILLS.map((s) => [s.id, s]));
+export const SKILL_BY_ID = {};
+for (const s of SKILLS) {
+  SKILL_BY_ID[s.id] = s;
+  if (s.alias) {
+    SKILL_BY_ID[s.alias] = s;
+  }
+}
+
 export const SKILL_BY_SLOT = Object.fromEntries(SKILLS.map((s) => [s.slot, s]));
 
 export function getSkillDef(slotOrId) {
   if (!slotOrId) return null;
-  return SKILL_BY_ID[slotOrId] || SKILL_BY_SLOT[slotOrId] || null;
+  const aliased = SKILL_ALIASES[slotOrId] || slotOrId;
+  return SKILL_BY_ID[aliased] || SKILL_BY_ID[slotOrId] || SKILL_BY_SLOT[slotOrId] || null;
 }

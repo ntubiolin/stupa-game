@@ -1121,6 +1121,119 @@ export function createAudio(ctx) {
     chime.stop(now + 0.25);
   }
 
+  // Phurba (普巴橛) — metallic wind-piercing blade + iron chime
+  function playPhurba() {
+    const context = ensureContext();
+    if (!context || muted) return;
+    const now = context.currentTime;
+
+    const osc = context.createOscillator();
+    const g = context.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(1120, now);
+    osc.frequency.exponentialRampToValueAtTime(240, now + 0.16);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.linearRampToValueAtTime(0.18, now + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+    osc.connect(g);
+    g.connect(masterGain);
+    osc.start(now);
+    osc.stop(now + 0.19);
+
+    if (noiseBuffer) {
+      const noise = context.createBufferSource();
+      noise.buffer = noiseBuffer;
+      const flt = context.createBiquadFilter();
+      flt.type = 'bandpass';
+      flt.frequency.setValueAtTime(2200, now);
+      flt.frequency.exponentialRampToValueAtTime(600, now + 0.18);
+      flt.Q.value = 4.0;
+      const ng = context.createGain();
+      ng.gain.setValueAtTime(0.0001, now);
+      ng.gain.linearRampToValueAtTime(0.2, now + 0.01);
+      ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.19);
+      noise.connect(flt);
+      flt.connect(ng);
+      ng.connect(masterGain);
+      noise.start(now, Math.random() * 2);
+      noise.stop(now + 0.2);
+    }
+  }
+
+  // Vajra Bell (金剛鈴) — high crystalline ritual drilbu bell resonance
+  function playVajraBell() {
+    const context = ensureContext();
+    if (!context || muted) return;
+    const now = context.currentTime;
+
+    const freqs = [1296, 1944, 2592, 3888];
+    const amps = [0.18, 0.12, 0.07, 0.04];
+    for (let i = 0; i < freqs.length; i++) {
+      const osc = context.createOscillator();
+      const g = context.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freqs[i], now);
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.linearRampToValueAtTime(amps[i], now + 0.006);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 1.8 - i * 0.25);
+      osc.connect(g);
+      g.connect(masterGain);
+      osc.start(now);
+      osc.stop(now + 1.85);
+    }
+  }
+
+  // Lotus Shield (蓮花結界) — warm sliding singing-bowl harmonic
+  function playLotusShield() {
+    const context = ensureContext();
+    if (!context || muted) return;
+    const now = context.currentTime;
+
+    const freqs = [324, 486, 648];
+    for (let i = 0; i < freqs.length; i++) {
+      const osc = context.createOscillator();
+      const g = context.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freqs[i] * 0.92, now);
+      osc.frequency.exponentialRampToValueAtTime(freqs[i] * 1.08, now + 0.45);
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.linearRampToValueAtTime(0.14 / (i + 1), now + 0.04);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.95);
+      osc.connect(g);
+      g.connect(masterGain);
+      osc.start(now);
+      osc.stop(now + 1.0);
+    }
+  }
+
+  // Dharma Protector Summon (護法召喚) — deep horn + ritual chime
+  function playSummon() {
+    playTermaDrop();
+  }
+
+  // Vajra Guru Mantra (蓮師心咒) — deep Tibetan overtone choir chord (2.5s)
+  function playVajraGuru() {
+    const context = ensureContext();
+    if (!context || muted) return;
+    const now = context.currentTime;
+    const dur = 2.5;
+
+    const chord = [108, 162, 216, 324, 432, 648];
+    for (let i = 0; i < chord.length; i++) {
+      const osc = context.createOscillator();
+      const g = context.createGain();
+      osc.type = i < 2 ? 'sawtooth' : 'sine';
+      osc.frequency.setValueAtTime(chord[i], now);
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.linearRampToValueAtTime(0.12 / (1 + i * 0.35), now + 0.18);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      osc.connect(g);
+      g.connect(masterGain);
+      osc.start(now);
+      osc.stop(now + dur + 0.05);
+    }
+  }
+
   // ---------------------------------------------------------------- mobile / gesture audio unlock
   if (typeof window !== 'undefined') {
     const unlockEvents = ['touchstart', 'touchend', 'pointerdown', 'mousedown', 'keydown', 'click'];
@@ -1232,6 +1345,23 @@ export function createAudio(ctx) {
         break;
       case 'humBolt':
         playHumBolt();
+        break;
+      case 'phurba':
+        playPhurba();
+        break;
+      case 'vajraBell':
+        playVajraBell();
+        break;
+      case 'lotus':
+      case 'lotusShield':
+        playLotusShield();
+        break;
+      case 'summon':
+        playSummon();
+        break;
+      case 'vajraGuru':
+      case 'guruMantra':
+        playVajraGuru();
         break;
       default:
         break;

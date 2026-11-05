@@ -1008,6 +1008,9 @@ export function createEnemies(ctx) {
         root: 0,
         stun: 0,
         slow: { mult: 1, remaining: 0, duration: 0 },
+        vuln: { mult: 0, remaining: 0, duration: 0 },
+        taunt: 0,
+        tauntTarget: null,
       },
       wasSlowed: false,
       wanderTarget: { x: spawnPos.x, z: spawnPos.z },
@@ -1517,6 +1520,25 @@ export function createEnemies(ctx) {
         enemy.wasSlowed = true;
         applyIdleMaterialEmissive(enemy);
       }
+    } else if (kind === 'vuln') {
+      const mult = Math.max(0.05, Number(extra?.mult ?? 0.25));
+      const prevRem = enemy.status.vuln?.remaining || 0;
+      const nextRem = Math.max(prevRem, dur);
+      enemy.status.vuln = {
+        mult: dur >= prevRem ? mult : (enemy.status.vuln?.mult ?? mult),
+        remaining: nextRem,
+        duration: Math.max(enemy.status.vuln?.duration || 0, dur),
+      };
+      applied.vuln = { ...enemy.status.vuln };
+    } else if (kind === 'taunt') {
+      enemy.status.taunt = Math.max(enemy.status.taunt || 0, dur);
+      enemy.status.tauntTarget = extra?.target || null;
+      if (enemy.telegraphGroup) enemy.telegraphGroup.visible = false;
+      if (enemy.animNodes?.mouthOrb) enemy.animNodes.mouthOrb.visible = false;
+      enemy.chargeData = null;
+      enemy.activeAttack = null;
+      enemy.state = 'chase';
+      applied.taunt = enemy.status.taunt;
     }
 
     if (Object.keys(applied).length > 0) {
@@ -1543,9 +1565,9 @@ export function createEnemies(ctx) {
     const source = opts.source || 'mantra';
     const crit = Boolean(opts.crit);
 
-    // Shielding affix: immune to all normal damage except Mantra, which shatters the barrier
+    // Shielding affix: immune to all normal damage except Mantra / VajraBell / VajraGuru, which shatter the barrier
     if (enemy.shielded) {
-      if (source === 'mantra') {
+      if (source === 'mantra' || source === 'vajraBell' || source === 'vajraGuru' || opts.execute) {
         shatterEnemyShield(enemy);
       } else {
         bus.emit('enemy:hit', {
@@ -1564,9 +1586,16 @@ export function createEnemies(ctx) {
 
     const def = Math.max(0, enemy.def ?? enemy.kindConfig?.def ?? 0);
     const rawAmt = typeof baseAmount === 'number' ? Math.max(0, baseAmount) : 0;
-    const incomingMult = enemy.incomingDmgMult ?? 1.0;
-    const dealt =
-      rawAmt > 0 ? Math.max(1, Math.round(rawAmt * incomingMult * (50 / (50 + def)))) : 0;
+    const vulnMult =
+      (enemy.status?.vuln?.remaining || 0) > 0
+        ? 1 + (enemy.status.vuln.mult ?? 0.25)
+        : 1.0;
+    const incomingMult = (enemy.incomingDmgMult ?? 1.0) * vulnMult;
+    const dealt = opts.execute
+      ? enemy.hp
+      : rawAmt > 0
+        ? Math.max(1, Math.round(rawAmt * incomingMult * (50 / (50 + def))))
+        : 0;
 
     enemy.hp = Math.max(0, enemy.hp - dealt);
     bus.emit('sfx', { name: 'hit' });
@@ -2002,7 +2031,7 @@ export function createEnemies(ctx) {
         continue;
       }
 
-      // Tick status effects (root, stun, slow)
+      // Tick status effects (root, stun, slow, vuln, taunt)
       if (enemy.status) {
         if (enemy.status.root > 0) {
           enemy.status.root = Math.max(0, enemy.status.root - dt);
@@ -2012,6 +2041,16 @@ export function createEnemies(ctx) {
         }
         if (enemy.status.slow && enemy.status.slow.remaining > 0) {
           enemy.status.slow.remaining = Math.max(0, enemy.status.slow.remaining - dt);
+        }
+        if (enemy.status.vuln && enemy.status.vuln.remaining > 0) {
+          enemy.status.vuln.remaining = Math.max(0, enemy.status.vuln.remaining - dt);
+        }
+        if (enemy.status.taunt > 0) {
+          enemy.status.taunt = Math.max(0, enemy.status.taunt - dt);
+          if (enemy.status.taunt <= 0 || !enemy.status.tauntTarget?.active) {
+            enemy.status.taunt = 0;
+            enemy.status.tauntTarget = null;
+          }
         }
       }
 
@@ -2081,9 +2120,14 @@ export function createEnemies(ctx) {
         continue;
       }
 
-      // Distance to player
-      const dxPlayer = playerPos ? playerPos.x - enemy.pos.x : 999;
-      const dzPlayer = playerPos ? playerPos.z - enemy.pos.z : 999;
+      // Distance to player (or taunting protector ally if taunted)
+      const tauntOrigin =
+        enemy.status?.taunt > 0 && enemy.status.tauntTarget?.pos
+          ? enemy.status.tauntTarget.pos
+          : null;
+      const chaseTargetPos = tauntOrigin || playerPos;
+      const dxPlayer = chaseTargetPos ? chaseTargetPos.x - enemy.pos.x : 999;
+      const dzPlayer = chaseTargetPos ? chaseTargetPos.z - enemy.pos.z : 999;
       const distToPlayer = Math.hypot(dxPlayer, dzPlayer);
 
       // If stunned: interrupt any windup/attack and freeze AI actions
@@ -2829,6 +2873,11 @@ export function createEnemies(ctx) {
                 mult: e.status.slow.mult,
                 remaining: Number(e.status.slow.remaining.toFixed(2)),
               } : null,
+              vuln: e.status?.vuln?.remaining > 0 ? {
+                mult: e.status.vuln.mult,
+                remaining: Number(e.status.vuln.remaining.toFixed(2)),
+              } : null,
+              taunt: Number((e.status?.taunt || 0).toFixed(2)),
             },
             dist: Number(d.toFixed(2)),
           };

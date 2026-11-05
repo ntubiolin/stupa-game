@@ -374,7 +374,18 @@ export function createInventory(ctx) {
   function give(rarityOrOpts, maybeOpts = {}) {
     let opts = {};
     if (typeof rarityOrOpts === 'string') {
-      opts = { ...maybeOpts, rarity: rarityOrOpts };
+      if (typeof maybeOpts === 'string') {
+        opts = { rarity: rarityOrOpts, legendaryId: maybeOpts };
+      } else if (
+        rarityOrOpts !== 'normal' &&
+        rarityOrOpts !== 'blessed' &&
+        rarityOrOpts !== 'rare' &&
+        rarityOrOpts !== 'terma'
+      ) {
+        opts = { ...(maybeOpts || {}), rarity: 'terma', legendaryId: rarityOrOpts };
+      } else {
+        opts = { ...(maybeOpts || {}), rarity: rarityOrOpts };
+      }
     } else if (rarityOrOpts && typeof rarityOrOpts === 'object') {
       opts = { ...rarityOrOpts };
     }
@@ -387,7 +398,9 @@ export function createInventory(ctx) {
   function scoreItemForEquipBest(item) {
     if (!item) return -1;
     const st = sumSingleItemStats(item);
+    const termaBonus = item.rarity === 'terma' ? 10000 : 0;
     return (
+      termaBonus +
       st.atk * 100 +
       st.atkPct * 50 +
       st.critChance * 40 +
@@ -450,6 +463,7 @@ export function createInventory(ctx) {
     unequip,
     discard,
     getEquipped,
+    getEquipment: getEquipped,
     getBag,
     getBagSlots,
     getEquipStats,
@@ -468,12 +482,15 @@ export function createInventory(ctx) {
 
   ctx.debug?.register('inventory', {
     give: (rarity, opts) => api.give(rarity, opts),
+    equip: (uid) => api.equip(uid),
+    unequip: (slot) => api.unequip(slot),
     equipBest: () => api.equipBest(),
     clear: () => api.clear(),
     addTurquoise: (n) => api.addTurquoise(n),
     addMaterial: (id, n) => api.addMaterial(id, n),
     getBag: () => api.getBag(),
     getEquipped: () => api.getEquipped(),
+    getEquipment: () => api.getEquipped(),
     getEquipStats: () => api.getEquipStats(),
   });
 

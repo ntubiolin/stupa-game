@@ -1,21 +1,41 @@
 /**
- * Skills Runtime System (#26) — manages the 7 skill slots, cooldowns with CDR,
+ * Skills Runtime System (#26 & #27) — manages the 7 skill slots, cooldowns with CDR,
+ * Ultimate Charge (0..30 for Vajra Guru Mantra), Dharma Protector unlock integration,
  * skill points (earned on level up + legacy save reconciliation), rank upgrades (1..5),
  * Rank 3 A/B mastery enhancements, hub-only respec, and persistence.
  */
 import { SKILLS, getSkillDef } from '../data/skills.js';
+import { createAllies } from '../gameplay/allies.js';
+import { createActiveSkills } from '../gameplay/skills/activeSkills.js';
+import { createPowers } from './powers.js';
 import { i18n } from '../i18n.js';
 
 export function createSkills(ctx) {
   const { state, bus } = ctx;
+
+  // Ensure #27 subsystems (protectors/allies, activeSkills, powers) are wired on ctx
+  // even when src/main.js is untouched in an isolated worktree.
+  if (!ctx.protectors) {
+    createAllies(ctx);
+  }
+  if (!ctx.powers || !ctx.powers.definitions) {
+    createPowers(ctx);
+  }
+  if (!ctx.activeSkills) {
+    createActiveSkills(ctx);
+  }
 
   let noCooldownFlag = false;
   let points = 0;
   let spentPoints = 0;
   let bonusPoints = 0;
   let reconciledLevel = 1;
+  let ultCharge = 0;
+  const ULT_MAX_CHARGE = 30;
 
-  // Per-skill state keyed by skill id
+  let lastSubUpdateElapsed = -1;
+
+  // Per-skill state keyed by canonical skill id
   const skillStates = {};
 
   function defaultSkillState(def) {
@@ -36,6 +56,7 @@ export function createSkills(ctx) {
     spentPoints = 0;
     bonusPoints = 0;
     reconciledLevel = 1;
+    ultCharge = 0;
   }
 
   initDefaults();
@@ -46,12 +67,17 @@ export function createSkills(ctx) {
       if (typeof saved.points === 'number') points = Math.max(0, Math.floor(saved.points));
       if (typeof saved.spentPoints === 'number') spentPoints = Math.max(0, Math.floor(saved.spentPoints));
       if (typeof saved.bonusPoints === 'number') bonusPoints = Math.max(0, Math.floor(saved.bonusPoints));
+      if (typeof saved.ultCharge === 'number') {
+        ultCharge = Math.max(0, Math.min(ULT_MAX_CHARGE, Math.floor(saved.ultCharge)));
+      }
       if (typeof saved.reconciledLevel === 'number') {
         reconciledLevel = Math.max(1, Math.floor(saved.reconciledLevel));
       }
       if (saved.skills && typeof saved.skills === 'object') {
         for (const def of SKILLS) {
-          const s = saved.skills[def.id];
+          const s =
+            saved.skills[def.id] ||
+            (def.alias ? saved.skills[def.alias] : null);
           if (s && typeof s === 'object') {
             const st = skillStates[def.id];
             st.unlocked = Boolean(s.unlocked || !def.unlock?.flag);
@@ -80,6 +106,7 @@ export function createSkills(ctx) {
       spentPoints,
       bonusPoints,
       reconciledLevel,
+      ultCharge,
       skills: serializedSkills,
     });
   }
@@ -106,7 +133,16 @@ export function createSkills(ctx) {
       st.unlocked = true;
       return true;
     }
-    const flagVal = ctx.flags?.get?.(def.unlock.flag) || state.flags?.[def.unlock.flag];
+    // Protector skill is unlocked when player has any unlocked protector or flag
+    if (def.id === 'protector' && ctx.protectors?.hasAny?.()) {
+      st.unlocked = true;
+      return true;
+    }
+    const flagVal =
+      ctx.flags?.get?.(def.unlock.flag) ||
+      state.flags?.[def.unlock.flag] ||
+      (def.unlock.altFlag &&
+        (ctx.flags?.get?.(def.unlock.altFlag) || state.flags?.[def.unlock.altFlag]));
     if (flagVal) {
       st.unlocked = true;
       return true;
@@ -118,6 +154,7 @@ export function createSkills(ctx) {
     const def = getSkillDef(slotOrId);
     if (!def) return 0;
     const baseCd = Number(def.cooldown) || 0;
+    if (baseCd <= 0) return 0;
     const rawCdr = Number(state.player?.cdr || 0);
     const cdrFrac = Math.min(0.40, Math.max(0, rawCdr > 1 ? rawCdr / 100 : rawCdr));
     const rawShrine = Number(state.player?.shrineCdr || 0);
@@ -129,11 +166,70 @@ export function createSkills(ctx) {
   function getCooldownFraction(slotOrId) {
     const def = getSkillDef(slotOrId);
     if (!def) return 0;
+    if (def.maxCharge) {
+      if (noCooldownFlag) return 0;
+      return Math.max(0, Math.min(1, 1 - ultCharge / def.maxCharge));
+    }
     if (noCooldownFlag) return 0;
     const st = skillStates[def.id];
     if (!st || st.cooldownRemaining <= 0) return 0;
     const denom = st.lastMaxCd || getEffectiveCooldown(def.id) || 1;
     return Math.max(0, Math.min(1, st.cooldownRemaining / denom));
+  }
+
+  // ---------------------------------------------------------------- Ultimate Charge (0..30)
+  function addUltCharge(delta = 1) {
+    const add = Math.max(0, Number(delta) || 0);
+    if (add <= 0) return ultCharge;
+    const prev = ultCharge;
+    ultCharge = Math.min(ULT_MAX_CHARGE, ultCharge + add);
+    if (ultCharge !== prev) {
+      persist();
+      bus?.emit('skill:ultCharge', {
+        charge: ultCharge,
+        maxCharge: ULT_MAX_CHARGE,
+        ready: ultCharge >= ULT_MAX_CHARGE,
+      });
+    }
+    return ultCharge;
+  }
+
+  function fillUlt() {
+    ultCharge = ULT_MAX_CHARGE;
+    if (skillStates.vajraGuru) {
+      skillStates.vajraGuru.cooldownRemaining = 0;
+    }
+    persist();
+    bus?.emit('skill:ultCharge', {
+      charge: ultCharge,
+      maxCharge: ULT_MAX_CHARGE,
+      ready: true,
+    });
+    return ultCharge;
+  }
+
+  function getUltCharge() {
+    return ultCharge;
+  }
+
+  function resetCooldown(slotOrId) {
+    if (!slotOrId) {
+      for (const def of SKILLS) {
+        if (skillStates[def.id]) skillStates[def.id].cooldownRemaining = 0;
+      }
+      fillUlt();
+      return true;
+    }
+    const def = getSkillDef(slotOrId);
+    if (!def) return false;
+    const st = skillStates[def.id];
+    if (st) {
+      st.cooldownRemaining = 0;
+    }
+    if (def.maxCharge) {
+      fillUlt();
+    }
+    return true;
   }
 
   function canCast(slotOrId) {
@@ -144,10 +240,15 @@ export function createSkills(ctx) {
     if (action === 'faint' || action === 'prostrate') return false;
     if (!isUnlocked(def.id)) return false;
     const st = skillStates[def.id];
-    if (!noCooldownFlag && st.cooldownRemaining > 0) return false;
+    if (def.maxCharge) {
+      if (!noCooldownFlag && ultCharge < def.maxCharge) return false;
+    } else if (!noCooldownFlag && st.cooldownRemaining > 0) {
+      return false;
+    }
     const isCombat = Boolean(ctx.world?.isCombatZone ? ctx.world.isCombatZone() : state.zone !== 'stupa');
     if (def.id === 'mantra' && !isCombat) return true;
-    if (def.mpCost > 0 && (state.player?.mp ?? 0) < def.mpCost) return false;
+    const freeMp = Boolean(state.player?.shrineFreeMp);
+    if (!freeMp && def.mpCost > 0 && (state.player?.mp ?? 0) < def.mpCost) return false;
     return true;
   }
 
@@ -164,7 +265,16 @@ export function createSkills(ctx) {
     }
 
     const st = skillStates[def.id];
-    if (!noCooldownFlag && st.cooldownRemaining > 0) return false;
+
+    // Check Ultimate Charge requirement for vajraGuru
+    if (def.maxCharge) {
+      if (!noCooldownFlag && ultCharge < def.maxCharge) {
+        bus?.emit('toast', { key: 'toast.ultNotReady', kind: 'warning' });
+        return false;
+      }
+    } else if (!noCooldownFlag && st.cooldownRemaining > 0) {
+      return false;
+    }
 
     const isCombat = Boolean(ctx.world?.isCombatZone ? ctx.world.isCombatZone() : state.zone !== 'stupa');
 
@@ -196,8 +306,9 @@ export function createSkills(ctx) {
       return true;
     }
 
-    // Spend MP if needed
-    if (def.mpCost > 0) {
+    // Spend MP if needed (respecting shrineFreeMp / Guru Blessing)
+    const freeMp = Boolean(state.player?.shrineFreeMp);
+    if (def.mpCost > 0 && !freeMp) {
       const hasMp = (state.player?.mp ?? 0) >= def.mpCost;
       const spent = hasMp && (ctx.vitals ? ctx.vitals.spendMp(def.mpCost) : true);
       if (!spent) {
@@ -215,10 +326,23 @@ export function createSkills(ctx) {
     const dir = typeof acquired?.dir === 'number' ? acquired.dir : (state.player?.heading || 0);
     const target = acquired?.target || null;
 
-    const effCd = getEffectiveCooldown(def.id);
-    st.lastMaxCd = Math.max(0.05, effCd);
-    st.cooldownRemaining = noCooldownFlag ? 0 : effCd;
+    if (def.maxCharge) {
+      if (!noCooldownFlag) {
+        ultCharge = 0;
+        persist();
+      }
+      bus?.emit('skill:ultCharge', {
+        charge: ultCharge,
+        maxCharge: ULT_MAX_CHARGE,
+        ready: ultCharge >= ULT_MAX_CHARGE,
+      });
+    } else {
+      const effCd = getEffectiveCooldown(def.id);
+      st.lastMaxCd = Math.max(0.05, effCd);
+      st.cooldownRemaining = noCooldownFlag ? 0 : effCd;
+    }
 
+    const idx = Math.max(0, Math.min((def.maxRank || 5) - 1, st.rank - 1));
     def.cast(ctx, {
       rank: st.rank,
       enh: st.enh,
@@ -226,10 +350,16 @@ export function createSkills(ctx) {
       dir,
       target,
       peaceful: false,
+      damageMult: def.rankScaling?.damageMult?.[idx] ?? 1.0,
+      radiusAdd: def.rankScaling?.radiusAdd?.[idx] ?? 0,
+      stunDuration: def.rankScaling?.stunDuration?.[idx] ?? undefined,
+      shieldPct: def.rankScaling?.shieldPct?.[idx] ?? undefined,
+      duration: def.rankScaling?.duration?.[idx] ?? undefined,
     });
 
     bus?.emit('skill:cast', {
       id: def.id,
+      alias: def.alias || null,
       slot: def.slot,
       origin,
       dir,
@@ -251,6 +381,12 @@ export function createSkills(ctx) {
     if (def.unlock?.flag && state.flags) {
       state.flags[def.unlock.flag] = true;
     }
+    if (def.unlock?.altFlag && state.flags) {
+      state.flags[def.unlock.altFlag] = true;
+    }
+    if (def.id === 'protector' && ctx.protectors && !ctx.protectors.hasAny()) {
+      ctx.protectors.unlock('tenma');
+    }
     persist();
     if (!wasUnlocked) {
       bus?.emit('skill:unlock', { id: def.id, slot: def.slot });
@@ -265,7 +401,13 @@ export function createSkills(ctx) {
       if (def.unlock?.flag && state.flags) {
         state.flags[def.unlock.flag] = true;
       }
+      if (def.unlock?.altFlag && state.flags) {
+        state.flags[def.unlock.altFlag] = true;
+      }
       bus?.emit('skill:unlock', { id: def.id, slot: def.slot });
+    }
+    if (ctx.protectors?.unlockAll) {
+      ctx.protectors.unlockAll();
     }
     persist();
     return true;
@@ -321,6 +463,9 @@ export function createSkills(ctx) {
     if (!def) return false;
     const st = skillStates[def.id];
     st.unlocked = true;
+    if (def.id === 'protector' && ctx.protectors && !ctx.protectors.hasAny()) {
+      ctx.protectors.unlock('tenma');
+    }
     const clamped = Math.max(1, Math.min(def.maxRank || 5, Math.floor(Number(rank) || 1)));
     st.rank = clamped;
     if (clamped < 3) {
@@ -356,6 +501,7 @@ export function createSkills(ctx) {
       for (const def of SKILLS) {
         skillStates[def.id].cooldownRemaining = 0;
       }
+      ultCharge = ULT_MAX_CHARGE;
     }
     return noCooldownFlag;
   }
@@ -390,8 +536,13 @@ export function createSkills(ctx) {
     const st = skillStates[def.id];
     const unlocked = isUnlocked(def.id);
     const idx = Math.max(0, Math.min((def.maxRank || 5) - 1, st.rank - 1));
+    const isUlt = Boolean(def.maxCharge);
+    const maxCharge = def.maxCharge || 0;
+    const curCharge = isUlt ? (noCooldownFlag ? maxCharge : ultCharge) : 0;
+
     return {
       id: def.id,
+      alias: def.alias || null,
       slot: def.slot,
       keyLabel: def.keyLabel,
       glyph: def.glyph,
@@ -403,12 +554,20 @@ export function createSkills(ctx) {
       effectiveCooldown: getEffectiveCooldown(def.id),
       cooldownRemaining: noCooldownFlag ? 0 : st.cooldownRemaining,
       cooldownFraction: getCooldownFraction(def.id),
+      isUltimate: isUlt,
+      charge: curCharge,
+      ultCharge: curCharge,
+      maxCharge,
+      chargeFraction: isUlt && maxCharge > 0 ? Math.min(1, curCharge / maxCharge) : 0,
       unlocked,
       rank: st.rank,
       maxRank: def.maxRank || 5,
       enh: st.enh,
       damageMult: def.rankScaling?.damageMult?.[idx] ?? 1.0,
       radiusAdd: def.rankScaling?.radiusAdd?.[idx] ?? 0,
+      stunDuration: def.rankScaling?.stunDuration?.[idx] ?? null,
+      shieldPct: def.rankScaling?.shieldPct?.[idx] ?? null,
+      duration: def.rankScaling?.duration?.[idx] ?? null,
       def,
     };
   }
@@ -425,6 +584,15 @@ export function createSkills(ctx) {
 
   function update(dt) {
     reconcileLevelPoints(false);
+
+    // Tick #27 subsystems once per frame
+    const curElapsed = state.elapsed ?? 0;
+    if (curElapsed !== lastSubUpdateElapsed) {
+      lastSubUpdateElapsed = curElapsed;
+      ctx.protectors?.update?.(dt);
+      ctx.powers?.update?.(dt);
+      ctx.activeSkills?.update?.(dt);
+    }
 
     for (const def of SKILLS) {
       const st = skillStates[def.id];
@@ -445,6 +613,25 @@ export function createSkills(ctx) {
     if (input.pressed('skill4')) cast('skill4');
     if (input.pressed('ultimate')) cast('ultimate');
   }
+
+  // Ultimate charge listeners:
+  // - Normal enemy liberated: +1 charge
+  // - Elite (champion / rare) liberated: +5 charge
+  // - Boss phase transition (boss:phase): +10 charge
+  bus?.on('enemy:liberated', (payload) => {
+    const rank = payload?.rank || 'normal';
+    if (rank === 'champion' || rank === 'rare') {
+      addUltCharge(5);
+    } else if (rank === 'boss') {
+      addUltCharge(10);
+    } else {
+      addUltCharge(1);
+    }
+  });
+
+  bus?.on('boss:phase', () => {
+    addUltCharge(10);
+  });
 
   // Listen to level up, vitals changes, and reset events
   bus?.on('level:up', ({ level, prevLevel } = {}) => {
@@ -484,10 +671,16 @@ export function createSkills(ctx) {
     canCast,
     getCooldownFraction,
     getEffectiveCooldown,
+    resetCooldown,
+    addUltCharge,
+    fillUlt,
+    getUltCharge,
     unlock,
     unlockAll,
     spendPoint,
+    upgrade: spendPoint,
     chooseEnhancement,
+    chooseEnh: chooseEnhancement,
     setRank,
     addPoints,
     noCooldown,
@@ -507,8 +700,14 @@ export function createSkills(ctx) {
     addPoints: (n = 1) => api.addPoints(n),
     setRank: (id, rank, enh) => api.setRank(id, rank, enh),
     spendPoint: (id) => api.spendPoint(id),
+    upgrade: (id) => api.spendPoint(id),
     chooseEnhancement: (id, enh) => api.chooseEnhancement(id, enh),
+    chooseEnh: (id, enh) => api.chooseEnhancement(id, enh),
     noCooldown: (bool = true) => api.noCooldown(bool),
+    fillUlt: () => api.fillUlt(),
+    addUltCharge: (n = 1) => api.addUltCharge(n),
+    getUltCharge: () => api.getUltCharge(),
+    resetCooldown: (slotOrId) => api.resetCooldown(slotOrId),
     respec: () => api.respec(),
     cast: (slotOrId) => api.cast(slotOrId),
     getEffectiveCooldown: (slotOrId) => api.getEffectiveCooldown(slotOrId),
