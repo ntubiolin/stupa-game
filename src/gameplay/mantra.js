@@ -150,13 +150,14 @@ export function createMantra(ctx) {
 
   // ---------------------------------------------------------------- Debug Wireframe Loop (init once)
   let showRadiusEnabled = false;
+  let lastWireRadius = M.radius ?? 6.0;
   const wireSegments = 64;
   const wirePositions = new Float32Array(wireSegments * 3);
   for (let i = 0; i < wireSegments; i++) {
     const theta = (i / wireSegments) * Math.PI * 2;
-    wirePositions[i * 3] = Math.cos(theta) * (M.radius ?? 6.0);
+    wirePositions[i * 3] = Math.cos(theta) * lastWireRadius;
     wirePositions[i * 3 + 1] = 0.05;
-    wirePositions[i * 3 + 2] = Math.sin(theta) * (M.radius ?? 6.0);
+    wirePositions[i * 3 + 2] = Math.sin(theta) * lastWireRadius;
   }
   const wireGeo = new THREE.BufferGeometry();
   wireGeo.setAttribute('position', new THREE.BufferAttribute(wirePositions, 3));
@@ -168,21 +169,47 @@ export function createMantra(ctx) {
   });
   const debugWire = new THREE.LineLoop(wireGeo, wireMat);
   debugWire.name = 'MantraDebugRadius';
+  debugWire.userData.radius = lastWireRadius;
   debugWire.visible = false;
   scene.add(debugWire);
+
+  function getEffectiveRadius(override = null) {
+    const baseRadius = M.radius ?? 6.0;
+    const skillState = ctx.skills?.getSkillState?.('mantra') || null;
+    const rank = Math.max(1, Number(override?.rank ?? skillState?.rank ?? 1));
+    const enh = override?.enh !== undefined ? override.enh : (skillState?.enh ?? null);
+    const radiusAdd = override?.radiusAdd !== undefined
+      ? Number(override.radiusAdd)
+      : 0.3 * Math.max(0, rank - 1);
+    const enhMult = enh === 'a' ? 1.25 : 1.0;
+    const rawBonus = Number(state.player?.mantraRadiusBonus || 0);
+    const bonusFrac = rawBonus > 1 ? rawBonus / 100 : rawBonus;
+    return Number(((baseRadius + radiusAdd) * enhMult * (1 + bonusFrac)).toFixed(4));
+  }
+
+  function syncDebugWireRadius(r) {
+    const radius = Number(r) || (M.radius ?? 6.0);
+    debugWire.userData.radius = radius;
+    if (Math.abs(radius - lastWireRadius) < 1e-4) return;
+    lastWireRadius = radius;
+    for (let i = 0; i < wireSegments; i++) {
+      const theta = (i / wireSegments) * Math.PI * 2;
+      wirePositions[i * 3] = Math.cos(theta) * radius;
+      wirePositions[i * 3 + 1] = 0.05;
+      wirePositions[i * 3 + 2] = Math.sin(theta) * radius;
+    }
+    wireGeo.attributes.position.needsUpdate = true;
+    wireGeo.computeBoundingSphere();
+  }
 
   // ---------------------------------------------------------------- State & Trigger
   let cooldownRemaining = 0;
 
-  function getEffectiveRadius(isPeaceful = false) {
-    if (isPeaceful) return M.stupaRadius ?? 1.5;
-    const baseR = M.radius ?? 6.0;
-    const bonusPct = state.player?.mantraRadiusBonus || 0;
-    return baseR * (1 + bonusPct / 100);
-  }
-
   function getEffectiveCooldown(isPeaceful = false) {
     if (isPeaceful) return M.stupaCooldown ?? 0.45;
+    if (ctx.skills?.getEffectiveCooldown) {
+      return ctx.skills.getEffectiveCooldown('chant');
+    }
     const baseCd = M.cooldown ?? 0.85;
     const gearCdr = Math.max(0, Math.min(0.4, Number(state.player?.cdr) || 0));
     const shrineCdr = Math.max(0, Number(state.player?.shrineCdr) || 0);
@@ -190,7 +217,7 @@ export function createMantra(ctx) {
     return baseCd * (1 - totalCdr);
   }
 
-  function triggerWave(isPeaceful = false) {
+  function triggerWave(isPeaceful = false, skillOpts = null) {
     let wave = pool.find((w) => !w.active);
     if (!wave) {
       let maxProgress = -1;
@@ -205,13 +232,22 @@ export function createMantra(ctx) {
     }
     if (!wave) wave = pool[0];
 
-    const waveRadius = getEffectiveRadius(isPeaceful);
+    const skillState = ctx.skills?.getSkillState?.('mantra') || null;
+    const rank = Math.max(1, Number(skillOpts?.rank ?? skillState?.rank ?? 1));
+    const enh = skillOpts?.enh !== undefined ? skillOpts.enh : (skillState?.enh ?? null);
+    const damageMult = skillOpts?.damageMult !== undefined
+      ? Number(skillOpts.damageMult)
+      : (1 + 0.08 * Math.max(0, rank - 1));
+    const radiusAdd = skillOpts?.radiusAdd !== undefined
+      ? Number(skillOpts.radiusAdd)
+      : (0.3 * Math.max(0, rank - 1));
+    const waveRadius = getEffectiveRadius({ rank, enh, radiusAdd });
 
     wave.active = true;
     wave.t = 0;
     wave.duration = M.duration ?? 0.5;
     wave.startR = M.startRadius ?? 0.5;
-    wave.endR = waveRadius;
+    wave.endR = isPeaceful ? (M.stupaRadius ?? 1.5) : waveRadius;
     wave.origin.copy(state.player.position);
     wave.group.position.copy(wave.origin);
     wave.group.visible = true;
@@ -222,29 +258,36 @@ export function createMantra(ctx) {
     if (!isPeaceful) {
       const originPos = state.player.position.clone();
       const basePower = state.player?.atk || 10;
-      const skillMult = 1 + (state.player?.skillDamage || 0) / 100;
+      const skillDmgBonus = Number(state.player?.skillDamage || 0) / 100;
+      const totalMult = damageMult * (1 + skillDmgBonus);
 
       if (ctx.world?.isCombatZone() && ctx.enemies?.queryCircle && ctx.enemies?.damage) {
         const hitEnemies = ctx.enemies.queryCircle(originPos.x, originPos.z, waveRadius);
         for (let i = 0; i < hitEnemies.length; i++) {
           const enemy = hitEnemies[i];
           const rolled = ctx.vitals?.rollDamage
-            ? ctx.vitals.rollDamage(basePower, { mult: skillMult })
-            : { amount: Math.round(basePower * skillMult), crit: false };
-          ctx.enemies.damage(enemy.id, rolled.amount, {
+            ? ctx.vitals.rollDamage(basePower, { mult: totalMult })
+            : { amount: Math.max(1, Math.round(basePower * totalMult)), crit: false };
+          ctx.enemies.damage(enemy.id, rolled.amount, 'magic', {
             type: 'magic',
             source: 'mantra',
             crit: rolled.crit,
             knockback: config.ENEMIES?.hurtKnockback ?? 1.5,
             from: { x: originPos.x, z: originPos.z },
           });
+          if (enh === 'b') {
+            ctx.enemies.applyStatus?.(enemy.id, 'slow', 2.0, { mult: 0.6 });
+          }
         }
       }
 
       bus.emit('mantra:cast', {
         origin: originPos,
         radius: waveRadius,
-        power: Math.round(basePower * skillMult),
+        power: Math.round(basePower * totalMult),
+        rank,
+        enh,
+        damageMult,
         handledByMantra: true,
       });
     }
@@ -254,8 +297,8 @@ export function createMantra(ctx) {
   function update(dt) {
     cooldownRemaining = Math.max(0, cooldownRemaining - dt);
 
-    // Trigger check
-    if (state.mode === 'play' && !state.uiOpen && ctx.input?.pressed('chant')) {
+    // Trigger check (fallback only if ctx.skills is not managing 'chant')
+    if (!ctx.skills && state.mode === 'play' && !state.uiOpen && ctx.input?.pressed('chant')) {
       const action = state.player.action;
       const cannotCast = action === 'faint' || action === 'hurt' || action === 'prostrate';
       if (!cannotCast && cooldownRemaining <= 0) {
@@ -265,7 +308,7 @@ export function createMantra(ctx) {
           triggerWave(true);
         } else {
           // Combat zone: spends MP
-          const mpCost = M.mpCost ?? 8;
+          const mpCost = M.mpCost ?? 15;
           const spent = ctx.vitals ? ctx.vitals.spendMp(mpCost) : true;
           if (!spent) {
             bus.emit('toast', { key: 'toast.noMp', kind: 'warning' });
@@ -329,6 +372,7 @@ export function createMantra(ctx) {
 
     // Debug wireframe tracking
     if (showRadiusEnabled) {
+      syncDebugWireRadius(getEffectiveRadius());
       debugWire.visible = true;
       debugWire.position.copy(state.player.position);
       const effScale = getEffectiveRadius(false) / (M.radius ?? 6.0);
@@ -340,27 +384,44 @@ export function createMantra(ctx) {
 
   const api = {
     update,
-    cast() {
-      if (state.player.action === 'faint') return;
-      triggerWave(false);
+    cast(skillOpts = null) {
+      if (state.player.action === 'faint') return false;
+      triggerWave(false, skillOpts);
+      return true;
     },
+    castFromSkill(skillOpts = {}) {
+      if (state.player.action === 'faint') return false;
+      const isPeaceful = Boolean(skillOpts?.peaceful);
+      triggerWave(isPeaceful, skillOpts);
+      return true;
+    },
+    getEffectiveRadius,
     showRadius(bool = true) {
       showRadiusEnabled = Boolean(bool);
-      if (!showRadiusEnabled) debugWire.visible = false;
+      if (showRadiusEnabled) {
+        syncDebugWireRadius(getEffectiveRadius());
+        debugWire.visible = true;
+        debugWire.position.copy(state.player.position);
+      } else {
+        debugWire.visible = false;
+      }
       return showRadiusEnabled;
     },
     getCooldownFraction() {
+      if (ctx.skills?.getCooldownFraction) {
+        return ctx.skills.getCooldownFraction('chant');
+      }
       const cd = getEffectiveCooldown(false) || 0.85;
       return Math.max(0, Math.min(1, cooldownRemaining / cd));
     },
-    getEffectiveRadius,
     getEffectiveCooldown,
   };
 
   ctx.mantra = api;
 
   ctx.debug?.register('mantra', {
-    cast: () => api.cast(),
+    cast: (opts) => api.cast(opts),
+    getEffectiveRadius: (opts) => api.getEffectiveRadius(opts),
     showRadius: (bool) => api.showRadius(bool),
   });
 

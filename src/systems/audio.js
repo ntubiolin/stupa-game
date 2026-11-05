@@ -1088,6 +1088,39 @@ export function createAudio(ctx) {
     }
   }
 
+  // Hum Bolt (ཧཱུྃ) cast — crisp golden vajra pulse + resonant 216Hz -> 432Hz harmonic whoosh
+  function playHumBolt() {
+    const context = ensureContext();
+    if (!context || muted) return;
+    const now = context.currentTime;
+
+    const osc = context.createOscillator();
+    const g = context.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(324, now);
+    osc.frequency.exponentialRampToValueAtTime(648, now + 0.06);
+    osc.frequency.exponentialRampToValueAtTime(216, now + 0.19);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.linearRampToValueAtTime(0.16, now + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.21);
+    osc.connect(g);
+    g.connect(masterGain);
+    osc.start(now);
+    osc.stop(now + 0.22);
+
+    const chime = context.createOscillator();
+    const cg = context.createGain();
+    chime.type = 'sine';
+    chime.frequency.setValueAtTime(864, now);
+    cg.gain.setValueAtTime(0.0001, now);
+    cg.gain.linearRampToValueAtTime(0.06, now + 0.01);
+    cg.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
+    chime.connect(cg);
+    cg.connect(masterGain);
+    chime.start(now);
+    chime.stop(now + 0.25);
+  }
+
   // ---------------------------------------------------------------- mobile / gesture audio unlock
   if (typeof window !== 'undefined') {
     const unlockEvents = ['touchstart', 'touchend', 'pointerdown', 'mousedown', 'keydown', 'click'];
@@ -1196,6 +1229,9 @@ export function createAudio(ctx) {
         break;
       case 'potion':
         playPotion();
+        break;
+      case 'humBolt':
+        playHumBolt();
         break;
       default:
         break;

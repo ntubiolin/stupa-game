@@ -90,7 +90,11 @@ export function createHud(ctx) {
             <span data-i18n="controls.run"></span>
           </div>
           <div class="control-chip">
-            <kbd>R / Space</kbd>
+            <kbd>Space</kbd>
+            <span data-i18n="controls.basic"></span>
+          </div>
+          <div class="control-chip">
+            <kbd>R</kbd>
             <span data-i18n="controls.chant"></span>
           </div>
           <div class="control-chip">
@@ -408,10 +412,12 @@ export function createHud(ctx) {
             <div class="controls-table" id="help-controls-table">
               <div class="controls-row"><span data-i18n="controls.move"></span><kbd>WASD / ↑←↓→</kbd></div>
               <div class="controls-row"><span data-i18n="controls.run"></span><kbd>Shift</kbd></div>
-              <div class="controls-row"><span data-i18n="controls.chant"></span><kbd>R / Space</kbd></div>
+              <div class="controls-row"><span data-i18n="controls.basic"></span><kbd>Space</kbd></div>
+              <div class="controls-row"><span data-i18n="controls.chant"></span><kbd>R</kbd></div>
+              <div class="controls-row"><span data-i18n="controls.skills"></span><kbd>K</kbd></div>
               <div class="controls-row"><span data-i18n="controls.look"></span><kbd data-i18n="keys.drag"></kbd></div>
               <div class="controls-row"><span data-i18n="controls.zoom"></span><kbd data-i18n="keys.wheel"></kbd></div>
-              <div class="controls-row"><span data-i18n="controls.prostrate"></span><kbd>Q / 1</kbd></div>
+              <div class="controls-row"><span data-i18n="controls.prostrate"></span><kbd>Q</kbd></div>
               <div class="controls-row"><span data-i18n="controls.interact"></span><kbd>E</kbd></div>
               <div class="controls-row"><span data-i18n="controls.feed"></span><kbd>F</kbd></div>
               <div class="controls-row"><span data-i18n="controls.pause"></span><kbd>P</kbd></div>

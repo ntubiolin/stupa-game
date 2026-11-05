@@ -225,7 +225,7 @@ export const CONFIG = {
   },
 
   MANTRA: {
-    mpCost: 8,
+    mpCost: 15,
     cooldown: 0.85,
     stupaCooldown: 0.45,
     radius: 6.0,

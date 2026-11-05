@@ -16,30 +16,36 @@
  *   isTouch, lastLookTime (state.elapsed-free: performance.now() ms)
  */
 const ACTION_KEYS = {
+  Space: 'basic',
+  KeyR: 'chant',
+  Digit1: 'skill1',
+  Digit2: 'skill2',
+  Digit3: 'skill3',
+  Digit4: 'skill4',
+  KeyT: 'ultimate',
+  KeyX: 'potion',
+  KeyB: 'recall',
+  KeyQ: 'prostrate',
   KeyE: 'interact',
   Enter: 'interact',
   KeyF: 'feed',
-  KeyQ: 'prostrate',
-  Digit1: 'prostrate',
-  Numpad1: 'prostrate',
-  KeyR: 'chant',
-  Space: 'chant',
-  KeyX: 'potion',
-  KeyH: 'toggleHud',
-  KeyP: 'pause',
   KeyI: 'inventory',
   KeyC: 'character',
+  KeyK: 'skills',
   KeyJ: 'quests',
+  KeyM: 'map',
   Escape: 'closeUi',
+  KeyH: 'toggleHud',
+  KeyP: 'pause',
 };
 
 const UI_ALLOWED_ACTIONS = new Set([
+  'closeUi',
   'inventory',
   'character',
-  'quests',
   'skills',
+  'quests',
   'map',
-  'closeUi',
   'toggleHud',
   'pause',
 ]);
@@ -85,7 +91,10 @@ export function createInput(ctx) {
     isTouch,
     /** performance.now() of the last manual camera input (used by cameraRig auto-follow). */
     lastLookTime: -1e9,
-    pressed(action) { return frameActions.has(action); },
+    pressed(action) {
+      if (ctx.state?.uiOpen && !UI_ALLOWED_ACTIONS.has(action)) return false;
+      return frameActions.has(action);
+    },
     trigger(action) { pendingActions.add(action); },
     isHeld(code) { return held.has(code); },
     isDown(actionOrCode) {
@@ -103,6 +112,13 @@ export function createInput(ctx) {
       pendingLook.dy = 0;
       api.zoom = pendingZoom;
       pendingZoom = 0;
+
+      if (ctx.state?.uiOpen) {
+        api.move.x = 0;
+        api.move.y = 0;
+        api.run = false;
+        return;
+      }
 
       // Keyboard vector
       let x = 0, y = 0;

@@ -148,6 +148,71 @@ export function createProjectiles(ctx) {
     opacity: 0.85,
   });
 
+  // Hum Bolt (ཧཱུྃ) Friendly Projectile Geometries & Materials (init once, zero PointLights)
+  function createHumTexture() {
+    if (typeof document === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 128;
+    const c = canvas.getContext('2d');
+    if (c) {
+      c.clearRect(0, 0, 128, 128);
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.font = 'bold 68px "Noto Sans Tibetan", "Jomolhari", "Noto Serif TC", serif';
+      c.shadowColor = 'rgba(255, 190, 45, 0.95)';
+      c.shadowBlur = 18;
+      c.fillStyle = '#fff5cc';
+      c.fillText('ཧཱུྃ', 64, 66);
+      c.shadowBlur = 0;
+      c.fillStyle = '#ffffff';
+      c.fillText('ཧཱུྃ', 64, 66);
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.generateMipmaps = false;
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.needsUpdate = true;
+    return tex;
+  }
+
+  const humTex = createHumTexture();
+  const humCoreGeo = new THREE.SphereGeometry(0.18, 12, 10);
+  const humCoreMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(2.4, 1.85, 0.55),
+    toneMapped: false,
+  });
+  const humHaloGeo = new THREE.RingGeometry(0.22, 0.35, 24);
+  const humHaloMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(2.2, 1.6, 0.35),
+    toneMapped: false,
+    blending: THREE.AdditiveBlending,
+    transparent: true,
+    opacity: 0.82,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const humTailGeo = new THREE.ConeGeometry(0.16, 0.85, 10);
+  humTailGeo.rotateX(Math.PI / 2);
+  humTailGeo.translate(0, 0, 0.42);
+  const humTailMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(2.0, 1.4, 0.25),
+    toneMapped: false,
+    blending: THREE.AdditiveBlending,
+    transparent: true,
+    opacity: 0.55,
+    depthWrite: false,
+  });
+  const humSpriteMat = new THREE.SpriteMaterial({
+    map: humTex,
+    color: new THREE.Color(2.5, 2.0, 0.65),
+    toneMapped: false,
+    blending: THREE.AdditiveBlending,
+    transparent: true,
+    depthWrite: false,
+    opacity: 0.96,
+  });
+
   // ---------------------------------------------------------------- 2. Dispel VFX Particle Pool
   const DISPEL_PARTICLE_COUNT = 80;
   const dispelGeo = new THREE.BufferGeometry();
@@ -376,8 +441,56 @@ export function createProjectiles(ctx) {
     });
   }
 
+  // --- Hum Bolt Pool (Friendly Skill Projectile)
+  const HUM_POOL_CAP = 16;
+  const humBoltPool = [];
+  for (let i = 0; i < HUM_POOL_CAP; i++) {
+    const group = new THREE.Group();
+    group.visible = false;
+
+    const core = new THREE.Mesh(humCoreGeo, humCoreMat);
+    const halo = new THREE.Mesh(humHaloGeo, humHaloMat);
+    const tail = new THREE.Mesh(humTailGeo, humTailMat);
+    const sprite = new THREE.Sprite(humSpriteMat);
+    sprite.scale.set(0.68, 0.68, 0.68);
+    sprite.position.set(0, 0.08, 0);
+
+    group.add(core, halo, tail, sprite);
+
+    const hitbox = new THREE.Mesh(hitboxSphereGeo, hitboxMat);
+    hitbox.visible = false;
+    group.add(hitbox);
+
+    projGroup.add(group);
+    humBoltPool.push({
+      id: `humBolt_${i}`,
+      type: 'humBolt',
+      friendly: true,
+      magic: true,
+      active: false,
+      group,
+      halo,
+      hitbox,
+      pos: new THREE.Vector3(),
+      dir: new THREE.Vector3(0, 0, -1),
+      heading: 0,
+      speed: 22.0,
+      maxRange: 14.0,
+      distanceTraveled: 0,
+      lifetime: 14.0 / 22.0,
+      age: 0,
+      damageMult: 0.60,
+      rank: 1,
+      enh: null,
+      maxHits: 1,
+      mpRestore: 2,
+      hitRadius: 0.55,
+      hitIds: new Set(),
+    });
+  }
+
   // ---------------------------------------------------------------- 4. Helper Counters & Clear
-  function count() {
+  function enemyCount() {
     let c = 0;
     for (let i = 0; i < POOL_CAP; i++) {
       if (ghostfirePool[i].active) c++;
@@ -388,7 +501,15 @@ export function createProjectiles(ctx) {
     return c;
   }
 
-  function clear() {
+  function count() {
+    let c = enemyCount();
+    for (let i = 0; i < HUM_POOL_CAP; i++) {
+      if (humBoltPool[i].active) c++;
+    }
+    return c;
+  }
+
+  function clearEnemyProjectiles() {
     for (let i = 0; i < POOL_CAP; i++) {
       const gf = ghostfirePool[i];
       gf.active = false;
@@ -414,6 +535,21 @@ export function createProjectiles(ctx) {
     }
   }
 
+  function clear() {
+    clearEnemyProjectiles();
+    for (let i = 0; i < HUM_POOL_CAP; i++) {
+      const hb = humBoltPool[i];
+      hb.active = false;
+      hb.group.visible = false;
+      hb.hitbox.visible = false;
+      hb.hitIds.clear();
+    }
+  }
+
+  bus.on('zone:change', () => {
+    clear();
+  });
+
   function showHitboxes(bool) {
     hitboxesVisible = Boolean(bool);
     if (!hitboxesVisible) {
@@ -423,17 +559,68 @@ export function createProjectiles(ctx) {
         boulderPool[i].hitbox.visible = false;
         frostRoarPool[i].hitbox.visible = false;
       }
+      for (let i = 0; i < HUM_POOL_CAP; i++) {
+        humBoltPool[i].hitbox.visible = false;
+      }
     }
     return hitboxesVisible;
   }
 
   // ---------------------------------------------------------------- 5. Spawning API
   function spawn(type, params = {}) {
-    if (count() >= maxActiveLimit) {
-      return null;
+    const playerPos = state.player?.position || { x: 1000, y: 0, z: 0 };
+
+    if (type === 'humBolt') {
+      const slot = humBoltPool.find((item) => !item.active);
+      if (!slot) return null;
+
+      let heading = state.player?.heading || 0;
+      if (typeof params.dir === 'number') {
+        heading = params.dir;
+        slot.dir.set(-Math.sin(heading), 0, -Math.cos(heading));
+      } else if (params.dir && typeof params.dir === 'object') {
+        slot.dir.set(params.dir.x || 0, 0, params.dir.z || 0);
+        if (slot.dir.lengthSq() < 1e-6) {
+          slot.dir.set(-Math.sin(heading), 0, -Math.cos(heading));
+        } else {
+          slot.dir.normalize();
+          heading = Math.atan2(-slot.dir.x, -slot.dir.z);
+        }
+      } else {
+        slot.dir.set(-Math.sin(heading), 0, -Math.cos(heading));
+      }
+
+      const ox = params.origin?.x ?? (playerPos.x + slot.dir.x * 0.55);
+      const oz = params.origin?.z ?? (playerPos.z + slot.dir.z * 0.55);
+      const oy = params.origin?.y ?? ((ctx.world ? ctx.world.getHeight(ox, oz) : (playerPos.y || 0)) + 1.1);
+
+      slot.active = true;
+      slot.age = 0;
+      slot.distanceTraveled = 0;
+      slot.heading = heading;
+      slot.pos.set(ox, oy, oz);
+      slot.speed = params.speed ?? 22.0;
+      slot.maxRange = params.range ?? 14.0;
+      slot.lifetime = slot.maxRange / Math.max(1, slot.speed);
+      slot.damageMult = params.damageMult ?? 0.60;
+      slot.rank = params.rank ?? 1;
+      slot.enh = params.enh ?? null;
+      slot.maxHits = params.maxHits ?? (slot.enh === 'a' ? 3 : 1);
+      slot.mpRestore = params.mpRestore ?? (slot.enh === 'b' ? 3 : 2);
+      slot.hitRadius = params.hitRadius ?? 0.55;
+      slot.hitIds.clear();
+
+      slot.group.position.copy(slot.pos);
+      slot.group.rotation.set(0, heading, 0);
+      slot.group.visible = true;
+      slot.hitbox.scale.setScalar(slot.hitRadius);
+      slot.hitbox.visible = hitboxesVisible;
+      return slot;
     }
 
-    const playerPos = state.player?.position || { x: 1000, y: 0, z: 0 };
+    if (enemyCount() >= maxActiveLimit) {
+      return null;
+    }
 
     if (type === 'ghostfire') {
       const slot = ghostfirePool.find((item) => !item.active);
@@ -606,19 +793,119 @@ export function createProjectiles(ctx) {
   // ---------------------------------------------------------------- 7. Per-Frame Update
   function update(dt) {
     const isCombat = Boolean(ctx.world?.isCombatZone());
-    projGroup.visible = isCombat;
-
-    if (!isCombat) {
-      if (count() > 0) clear();
-      return;
-    }
+    projGroup.visible = true;
 
     const currentZone = state.zone || 'stupa';
     const mapDef = ctx.world?.getMap(currentZone);
-    const mapOrigin = mapDef?.origin || wildOrigin;
+    const mapOrigin = mapDef?.origin || (currentZone === 'stupa' ? { x: 0, z: 0 } : wildOrigin);
     const mapWalkRadius = (mapDef?.walkRadius ?? walkRadius) || 70;
     const playerPos = state.player?.position;
     const playerRadius = config.PLAYER?.radius ?? 0.35;
+
+    // --- Update Hum Bolts (Friendly Skill Projectiles)
+    const enemiesList = ctx.enemies?.getActiveEnemies ? ctx.enemies.getActiveEnemies() : [];
+    for (let i = 0; i < HUM_POOL_CAP; i++) {
+      const hb = humBoltPool[i];
+      if (!hb.active) continue;
+
+      const stepDist = hb.speed * dt;
+      hb.age += dt;
+      hb.distanceTraveled += stepDist;
+
+      hb.pos.x += hb.dir.x * stepDist;
+      hb.pos.z += hb.dir.z * stepDist;
+      const gY = ctx.world ? ctx.world.getHeight(hb.pos.x, hb.pos.z) : 0;
+      hb.pos.y = gY + 1.1;
+
+      hb.halo.rotation.z += dt * 9.0;
+
+      // Check obstacle colliders
+      let hitObstacle = false;
+      if (Array.isArray(ctx.colliders)) {
+        for (let j = 0; j < ctx.colliders.length; j++) {
+          const c = ctx.colliders[j];
+          if (!c || (c.zone || 'stupa') !== currentZone) continue;
+          if (c.type === 'circle') {
+            const cdx = hb.pos.x - c.x;
+            const cdz = hb.pos.z - c.z;
+            const minDist = (c.r || 0) + 0.15;
+            if (cdx * cdx + cdz * cdz <= minDist * minDist) {
+              hitObstacle = true;
+              break;
+            }
+          }
+        }
+      }
+      if (hitObstacle) {
+        burstDispelParticles(hb.pos.x, hb.pos.y, hb.pos.z);
+        hb.active = false;
+        hb.group.visible = false;
+        hb.hitbox.visible = false;
+        continue;
+      }
+
+      // Check enemy collisions
+      if (isCombat && enemiesList.length > 0) {
+        for (let eIdx = 0; eIdx < enemiesList.length; eIdx++) {
+          const e = enemiesList[eIdx];
+          if (!e || e.state === 'liberated' || e.hp <= 0) continue;
+          if (hb.hitIds.has(e.id)) continue;
+
+          const edx = e.pos.x - hb.pos.x;
+          const edz = e.pos.z - hb.pos.z;
+          const eDist = Math.hypot(edx, edz);
+          if (eDist <= hb.hitRadius + (e.radius || 0.55)) {
+            hb.hitIds.add(e.id);
+
+            const atk = state.player?.atk || 10;
+            const skillBonus = 1 + (state.player?.skillDamage || 0) / 100;
+            const mult = hb.damageMult * skillBonus;
+            const rolled = ctx.vitals?.rollDamage
+              ? ctx.vitals.rollDamage(atk, { mult })
+              : { amount: Math.max(1, Math.round(atk * mult)), crit: false };
+
+            ctx.enemies?.damage?.(e.id, rolled.amount, 'magic', {
+              crit: rolled.crit,
+              source: 'humBolt',
+              knockback: 0.4,
+              from: { x: hb.pos.x - hb.dir.x, z: hb.pos.z - hb.dir.z },
+            });
+
+            if (hb.mpRestore > 0) {
+              bus.emit('vitals:restore', {
+                mp: hb.mpRestore,
+                source: 'humBolt',
+              });
+            }
+
+            burstDispelParticles(hb.pos.x, hb.pos.y, hb.pos.z);
+
+            if (hb.hitIds.size >= hb.maxHits) {
+              hb.active = false;
+              hb.group.visible = false;
+              hb.hitbox.visible = false;
+              break;
+            }
+          }
+        }
+      }
+
+      if (!hb.active) continue;
+
+      if (hb.distanceTraveled >= hb.maxRange || hb.age >= hb.lifetime) {
+        hb.active = false;
+        hb.group.visible = false;
+        hb.hitbox.visible = false;
+        continue;
+      }
+
+      hb.group.position.copy(hb.pos);
+      if (hitboxesVisible) hb.hitbox.visible = true;
+    }
+
+    if (!isCombat) {
+      if (enemyCount() > 0) clearEnemyProjectiles();
+    } else {
 
     // --- Update Ghostfires
     for (let i = 0; i < POOL_CAP; i++) {
@@ -874,6 +1161,7 @@ export function createProjectiles(ctx) {
 
       if (hitboxesVisible) fr.hitbox.visible = true;
     }
+    }
 
     // --- Update Dispel Particles
     const posAttr = dispelGeo.attributes.position;
@@ -905,6 +1193,7 @@ export function createProjectiles(ctx) {
     group: projGroup,
     update,
     spawn,
+    fireHumBolt: (params) => spawn('humBolt', params),
     clear,
     count,
     showHitboxes,
