@@ -37,11 +37,13 @@ import { createCameraRig } from './player/cameraRig.js';
 import { createZones } from './systems/zones.js';
 import { createSave } from './systems/save.js';
 import { createLoot } from './systems/loot.js';
+import { createInventory } from './systems/inventory.js';
 import { createVitals } from './systems/vitals.js';
 import { createInteraction } from './systems/interaction.js';
 import { createMerit } from './systems/merit.js';
 import { createAudio } from './systems/audio.js';
 import { createHud } from './ui/hud.js';
+import { createInventoryUi } from './ui/inventory.js';
 
 // ---------------------------------------------------------------- renderer
 const container = document.getElementById('app');
@@ -136,6 +138,7 @@ ctx.enemies = enemies;
 const projectiles = createProjectiles(ctx);
 ctx.projectiles = projectiles;
 const loot = createLoot(ctx);
+const inventory = createInventory(ctx);
 const groundLoot = createGroundLoot(ctx);
 const items = createItems(ctx);
 const lamps = createLamps(ctx);
@@ -147,16 +150,17 @@ const merit = createMerit(ctx);
 const interaction = createInteraction(ctx);
 const audio = createAudio(ctx);
 const hud = createHud(ctx);
+const inventoryUi = createInventoryUi(ctx);
 
 const modules = [
   ctx.input,
   ctx.save,
   sky, stupa, flags, environment,
   zones,
-  player, mantra, enemies, projectiles, loot, groundLoot, items, lamps, monkeys,
+  player, mantra, enemies, projectiles, loot, inventory, groundLoot, items, lamps, monkeys,
   vitals,
   cameraRig,
-  merit, interaction, audio, hud,
+  merit, interaction, audio, hud, inventoryUi,
 ];
 
 // ---------------------------------------------------------------- post-processing
@@ -205,4 +209,4 @@ function frame() {
 requestAnimationFrame(frame);
 
 // Debug handle (dev only)
-if (import.meta.env.DEV) window.__game = { ctx, modules: { sky, stupa, flags, environment, zones, player, mantra, enemies, projectiles, loot, groundLoot, items, lamps, monkeys, vitals, cameraRig, merit, interaction, audio, hud } };
+if (import.meta.env.DEV) window.__game = { ctx, modules: { sky, stupa, flags, environment, zones, player, mantra, enemies, projectiles, loot, inventory, groundLoot, items, lamps, monkeys, vitals, cameraRig, merit, interaction, audio, hud, inventoryUi } };
