@@ -140,6 +140,9 @@ export function createVitals(ctx) {
     let shrineExpMult = 1.0;
     let shrineFreeMp = false;
     let shrineFindMult = 1.0;
+    let buffSkillDamageAdd = 0;
+    let buffMpRegenAdd = 0;
+    let buffDmgTakenMult = 1.0;
 
     if (Array.isArray(p.buffs)) {
       for (let i = 0; i < p.buffs.length; i++) {
@@ -156,6 +159,9 @@ export function createVitals(ctx) {
         if (b.stats.expMult != null) shrineExpMult *= Number(b.stats.expMult) || 1;
         if (b.stats.freeMp === true) shrineFreeMp = true;
         if (b.stats.findMult != null) shrineFindMult *= Number(b.stats.findMult) || 1;
+        if (b.stats.skillDamageAdd != null) buffSkillDamageAdd += Number(b.stats.skillDamageAdd) || 0;
+        if (b.stats.mpRegenAdd != null) buffMpRegenAdd += Number(b.stats.mpRegenAdd) || 0;
+        if (b.stats.dmgTakenMult != null) buffDmgTakenMult *= Number(b.stats.dmgTakenMult) || 1;
       }
     }
 
@@ -164,6 +170,7 @@ export function createVitals(ctx) {
     p.shrineExpMult = shrineExpMult;
     p.shrineFreeMp = shrineFreeMp;
     p.shrineFindMult = shrineFindMult;
+    p.dmgTakenMult = buffDmgTakenMult;
 
     p.atk = Math.round(
       ((baseAtk + (perm.atk || 0) + (g.atk || 0)) *
@@ -188,12 +195,12 @@ export function createVitals(ctx) {
 
     p.moveSpeedMult = +(1 + Math.min(0.3, (g.moveSpeed || 0) / 100)).toFixed(4);
     p.cdr = +Math.min(0.4, (g.cdr || 0) / 100).toFixed(4);
-    p.mpRegen = +(g.mpRegen || 0).toFixed(2);
+    p.mpRegen = +((g.mpRegen || 0) + buffMpRegenAdd).toFixed(2);
     p.magicRes = +Math.min(0.6, (g.magicRes || 0) / 100).toFixed(4);
     p.hpOnLiberate = g.hpOnLiberate || 0;
     p.expBonus = g.expBonus || 0;
     p.findBonus = g.findBonus || 0;
-    p.skillDamage = g.skillDamage || 0;
+    p.skillDamage = (g.skillDamage || 0) + buffSkillDamageAdd;
     p.mantraRadiusBonus = g.mantraRadius || 0;
 
     if (p.hp != null) p.hp = Math.min(p.hp, p.maxHp);
@@ -230,6 +237,12 @@ export function createVitals(ctx) {
   state.player.buffs = [];
   state.player.invulnUntil = 0;
   state.player.slowUntil = 0;
+  state.player.shield = 0;
+  state.player.shieldMax = 0;
+  state.player.shieldRemaining = 0;
+  state.player.shieldAbsorbed = 0;
+  state.player.shieldEnh = null;
+  state.player.protectorDmgReduction = 0;
   state.vitals = state.vitals || {};
   state.vitals.god = false;
 
@@ -253,6 +266,8 @@ export function createVitals(ctx) {
     return {
       hp: Math.round(p.hp ?? p.maxHp),
       maxHp: p.maxHp,
+      shield: Math.max(0, Math.round(p.shield || 0)),
+      shieldMax: Math.max(0, Math.round(p.shieldMax || 0)),
       mp: Math.round((p.mp ?? p.maxMp) * 10) / 10,
       maxMp: p.maxMp,
       exp: isMax ? 0 : p.exp,
@@ -434,6 +449,11 @@ export function createVitals(ctx) {
     if (patch.hp != null) {
       p.hp = Math.max(0, Math.min(p.maxHp, Number(patch.hp)));
     }
+    if (patch.shield != null) {
+      const sh = Math.max(0, Math.round(Number(patch.shield) || 0));
+      p.shield = sh;
+      p.shieldMax = Math.max(p.shieldMax || 0, sh);
+    }
     if (patch.mp != null) {
       p.mp = Math.max(0, Math.min(p.maxMp, Number(patch.mp)));
     }
@@ -488,6 +508,36 @@ export function createVitals(ctx) {
     bus.emit('player:faint', {});
   }
 
+  function addShield(amount, duration = 6.0, opts = {}) {
+    const p = state.player;
+    const sh = Math.max(1, Math.round(Number(amount) || 0));
+    p.shield = sh;
+    p.shieldMax = sh;
+    p.shieldRemaining = Math.max(0.1, Number(duration) || 6.0);
+    p.shieldAbsorbed = 0;
+    p.shieldEnh = opts.enh || null;
+    p.shieldSource = opts.source || 'lotusShield';
+    emitChanged({ source: p.shieldSource });
+    return sh;
+  }
+
+  function clearShield(reason = 'expired') {
+    const p = state.player;
+    if ((p.shield || 0) <= 0 && (p.shieldRemaining || 0) <= 0) return;
+    const absorbed = p.shieldAbsorbed || 0;
+    const enh = p.shieldEnh;
+    const source = p.shieldSource;
+    p.shield = 0;
+    p.shieldMax = 0;
+    p.shieldRemaining = 0;
+    p.shieldEnh = null;
+    bus.emit('shield:ended', { reason, absorbed, enh, source });
+    if (reason === 'broken') {
+      bus.emit('shield:broken', { absorbed, enh, source });
+    }
+    emitChanged({ source: 'shield' });
+  }
+
   function applyDamage(amount, type = 'physical', extra = {}) {
     const p = state.player;
     if (isFainting) return 0;
@@ -519,6 +569,25 @@ export function createVitals(ctx) {
       dmg = Math.max(1, Math.round((amount * defConst) / (defConst + currentDef)));
     }
 
+    // Apply protector oath or buff damage reduction
+    const protRed = Math.max(0, Math.min(0.5, Number(p.protectorDmgReduction) || 0));
+    const buffMult = typeof p.dmgTakenMult === 'number' ? p.dmgTakenMult : 1.0;
+    if (protRed > 0 || buffMult !== 1.0) {
+      dmg = Math.max(1, Math.round(dmg * (1 - protRed) * buffMult));
+    }
+
+    // Absorb from active shield first (#27 Lotus Shield / Tenma Oath)
+    let shieldAbsorbedNow = 0;
+    if ((p.shield || 0) > 0) {
+      shieldAbsorbedNow = Math.min(p.shield, dmg);
+      p.shield = Math.max(0, p.shield - shieldAbsorbedNow);
+      p.shieldAbsorbed = (p.shieldAbsorbed || 0) + shieldAbsorbedNow;
+      dmg -= shieldAbsorbedNow;
+      if (p.shield <= 0) {
+        clearShield('broken');
+      }
+    }
+
     p.hp = Math.max(0, p.hp - dmg);
     invulnTimer = V.invulnDuration ?? 0.8;
     p.invulnUntil = state.elapsed + invulnTimer;
@@ -527,11 +596,11 @@ export function createVitals(ctx) {
       p.slowUntil = Math.max(p.slowUntil || 0, state.elapsed + extra.slow);
     }
 
-    bus.emit('player:hurt', { amount: dmg, type, sourcePos: extra.sourcePos });
-    bus.emit('player:damaged', { amount: dmg, type, sourcePos: extra.sourcePos });
+    bus.emit('player:hurt', { amount: dmg, absorbed: shieldAbsorbedNow, type, sourcePos: extra.sourcePos });
+    bus.emit('player:damaged', { amount: dmg, absorbed: shieldAbsorbedNow, type, sourcePos: extra.sourcePos });
 
     save();
-    emitChanged({ deltaHp: -dmg, type, source: extra.source });
+    emitChanged({ deltaHp: -dmg, absorbed: shieldAbsorbedNow, type, source: extra.source });
 
     if (p.hp === 0) {
       triggerFaint();
@@ -571,6 +640,12 @@ export function createVitals(ctx) {
     p._critChanceOverride = null;
     p._critDamageOverride = null;
     p.buffs = [];
+    p.shield = 0;
+    p.shieldMax = 0;
+    p.shieldRemaining = 0;
+    p.shieldAbsorbed = 0;
+    p.shieldEnh = null;
+    p.protectorDmgReduction = 0;
     invulnTimer = 0;
     p.invulnUntil = 0;
     p.slowUntil = 0;
@@ -593,6 +668,14 @@ export function createVitals(ctx) {
   const api = {
     update(dt) {
       const p = state.player;
+
+      // Shield expiration timer
+      if ((p.shieldRemaining || 0) > 0) {
+        p.shieldRemaining -= dt;
+        if (p.shieldRemaining <= 0) {
+          clearShield('expired');
+        }
+      }
 
       // Passive MP regeneration from equipment (active in both hub and combat zones)
       if (!isFainting && (p.mpRegen || 0) > 0 && p.mp < p.maxMp) {
@@ -696,6 +779,8 @@ export function createVitals(ctx) {
     addExp,
     spendMp,
     addBuff,
+    addShield,
+    clearShield,
     addPermanent,
     getStats,
     stats: getStats,
@@ -730,6 +815,8 @@ export function createVitals(ctx) {
       api.damage(amount, type, extra),
     damagePlayer: (amount, type = 'physical', extra = {}) =>
       api.damage(amount, type, extra),
+    addShield: (amount, duration, opts) => api.addShield(amount, duration, opts),
+    clearShield: (reason) => api.clearShield(reason),
     god: (bool) => api.god(bool),
     get: () => api.getStats(),
     stats: () => api.getStats(),

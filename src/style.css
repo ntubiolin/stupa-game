@@ -3558,7 +3558,7 @@ kbd {
 /* Right-side Quest Tracker */
 .quest-tracker {
   position: absolute;
-  top: 132px;
+  top: 320px;
   right: 16px;
   width: 256px;
   border-radius: 16px;
@@ -4707,5 +4707,169 @@ kbd {
     transform-origin: bottom center;
   }
 }
+
+/* ==========================================================================
+   #27 Shield Bar Overlay, Ultimate Charge Ring & Protector Selector
+   ========================================================================== */
+.vitals-bar-track--hp {
+  position: relative;
+}
+
+.vitals-bar-fill--shield {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(254, 243, 199, 0.88), rgba(251, 191, 36, 0.92), rgba(255, 255, 255, 0.95));
+  box-shadow: 0 0 10px rgba(253, 230, 138, 0.85);
+  pointer-events: none;
+  transition: width 0.18s ease, opacity 0.18s ease;
+  opacity: 0;
+  z-index: 2;
+}
+
+.vitals-bar-fill--shield.is-active {
+  opacity: 1;
+}
+
+.skill-slot__ult-ring {
+  position: absolute;
+  inset: 1px;
+  width: calc(100% - 2px);
+  height: calc(100% - 2px);
+  transform: rotate(-90deg);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.skill-slot__ult-track {
+  fill: none;
+  stroke: rgba(251, 191, 36, 0.18);
+  stroke-width: 3px;
+}
+
+.skill-slot__ult-fill {
+  fill: none;
+  stroke: #fbbf24;
+  stroke-width: 3.2px;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.2s ease;
+}
+
+.skill-slot__charge {
+  position: absolute;
+  bottom: 2px;
+  right: 4px;
+  font-family: var(--font-sans);
+  font-size: 0.54rem;
+  font-weight: 800;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: rgba(40, 22, 8, 0.88);
+  border: 1px solid rgba(251, 191, 36, 0.55);
+  color: #fde68a;
+  line-height: 1.2;
+  z-index: 4;
+}
+
+.skill-slot.is-ult-ready,
+.arc-btn.is-ult-ready {
+  border-color: #fde047 !important;
+  box-shadow: 0 0 18px rgba(250, 204, 21, 0.9), inset 0 0 14px rgba(250, 204, 21, 0.45) !important;
+  animation: ult-ready-pulse 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes ult-ready-pulse {
+  from {
+    box-shadow: 0 0 12px rgba(250, 204, 21, 0.7), inset 0 0 10px rgba(250, 204, 21, 0.35);
+  }
+  to {
+    box-shadow: 0 0 24px rgba(253, 224, 71, 1), inset 0 0 16px rgba(253, 224, 71, 0.65);
+  }
+}
+
+.skill-row__protectors {
+  padding-top: 8px;
+  border-top: 1px solid rgba(238, 195, 108, 0.14);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.skill-row__protector-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px;
+}
+
+.protector-select-card {
+  text-align: left;
+  padding: 8px 11px;
+  border-radius: 12px;
+  border: 1px solid rgba(238, 195, 108, 0.24);
+  background: rgba(255, 245, 224, 0.04);
+  color: var(--col-text);
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease;
+}
+
+.protector-select-card:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.protector-select-card.is-selected {
+  border-color: #38bdf8;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(245, 158, 11, 0.18));
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.28);
+}
+
+.protector-select-card__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+
+.protector-select-card__glyph {
+  font-size: 1rem;
+}
+
+.protector-select-card__name {
+  font-family: var(--font-serif);
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #fff6dc;
+}
+
+.protector-select-card__role {
+  font-size: 0.68rem;
+  color: #93c5fd;
+}
+
+.protector-select-card__badge {
+  margin-left: auto;
+  font-size: 0.66rem;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(238, 195, 108, 0.18);
+  color: #fde68a;
+}
+
+.protector-select-card.is-selected .protector-select-card__badge {
+  background: #38bdf8;
+  color: #082f49;
+  font-weight: 800;
+}
+
+.protector-select-card__desc {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.38;
+  color: var(--col-text-muted);
+}
+
 
 

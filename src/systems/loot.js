@@ -53,32 +53,52 @@ export function createLoot(ctx) {
   let tempTurquoise = 0;
   const manualPowers = new Set();
 
-  // Provide ctx.powers.has(id) query API
-  const powersApi = {
-    has(powerId) {
-      if (!powerId) return false;
-      if (manualPowers.has(powerId)) return true;
-      const equipped =
-        ctx.inventory?.getEquipped?.() || state.equipment || null;
-      if (equipped && typeof equipped === 'object') {
-        for (const item of Object.values(equipped)) {
-          if (
-            item &&
-            (item.powerId === powerId || item.legendaryId === powerId)
-          ) {
-            return true;
+  // Provide ctx.powers.has(id) fallback if full powers system (#27) is not yet initialized
+  if (!ctx.powers) {
+    ctx.powers = {
+      has(powerId) {
+        if (!powerId) return false;
+        if (manualPowers.has(powerId)) return true;
+        const equipped =
+          ctx.inventory?.getEquipment?.() ||
+          ctx.inventory?.getEquipped?.() ||
+          state.equipment ||
+          null;
+        if (equipped && typeof equipped === 'object') {
+          for (const item of Object.values(equipped)) {
+            if (
+              item &&
+              (item.powerId === powerId || item.legendaryId === powerId)
+            ) {
+              return true;
+            }
           }
         }
-      }
-      return false;
-    },
-    set(powerId, enabled = true) {
-      if (enabled) manualPowers.add(powerId);
-      else manualPowers.delete(powerId);
-      return manualPowers.has(powerId);
-    },
-  };
-  ctx.powers = powersApi;
+        return false;
+      },
+      listActive() {
+        const active = new Set(manualPowers);
+        const equipped =
+          ctx.inventory?.getEquipment?.() ||
+          ctx.inventory?.getEquipped?.() ||
+          state.equipment ||
+          null;
+        if (equipped && typeof equipped === 'object') {
+          for (const item of Object.values(equipped)) {
+            if (item && (item.powerId || item.legendaryId)) {
+              active.add(item.powerId || item.legendaryId);
+            }
+          }
+        }
+        return Array.from(active);
+      },
+      set(powerId, enabled = true) {
+        if (enabled) manualPowers.add(powerId);
+        else manualPowers.delete(powerId);
+        return manualPowers.has(powerId);
+      },
+    };
+  }
 
   // ---------------------------------------------------------------- Rarity Roll
   function rollRarity({ rank = 'normal', findBonus } = {}) {
@@ -242,9 +262,10 @@ export function createLoot(ctx) {
 
     let rarity = opts.rarity || null;
     let legendaryDef = null;
+    const reqLegId = opts.legendaryId || opts.id || opts.powerId;
 
-    if (opts.legendaryId && LEGENDARIES_BY_ID[opts.legendaryId]) {
-      legendaryDef = LEGENDARIES_BY_ID[opts.legendaryId];
+    if (reqLegId && LEGENDARIES_BY_ID[reqLegId]) {
+      legendaryDef = LEGENDARIES_BY_ID[reqLegId];
       rarity = 'terma';
     } else {
       if (!rarity) {
