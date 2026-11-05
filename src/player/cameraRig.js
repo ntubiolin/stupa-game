@@ -73,8 +73,12 @@ export function createCameraRig(ctx) {
     }
     currentPos.copy(desiredPos);
     currentLook.copy(desiredLook);
+    introBlend = 1;
+    wasIntro = false;
     camera.position.copy(currentPos);
     camera.lookAt(currentLook);
+    camera.updateMatrixWorld();
+    camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
   });
 
   function computeIntroCamera(elapsed) {
@@ -245,6 +249,8 @@ export function createCameraRig(ctx) {
 
     camera.position.copy(currentPos);
     camera.lookAt(currentLook);
+    camera.updateMatrixWorld();
+    camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
   }
 
   return {

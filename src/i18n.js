@@ -186,6 +186,9 @@ const STRINGS = {
     'hud.levelUpBanner': '境界提升 Lv {level}',
     'hud.levelUpStats': 'HP上限 +{deltaMaxHp} · MP上限 +{deltaMaxMp} · 攻擊 +{deltaAtk}',
     'hud.faintMessage': '你因力竭而昏厥…眾生的祈願將你帶回佛塔',
+    'hud.bossPhase': '第 {phase} / {total} 階',
+    'boss.demo.name': '雪山夜叉王・米果',
+    'boss.demo.title': '高原風雪之主',
   },
 
   en: {
@@ -365,6 +368,9 @@ const STRINGS = {
     'hud.levelUpBanner': 'Realm Ascended Lv {level}',
     'hud.levelUpStats': 'Max HP +{deltaMaxHp} · Max MP +{deltaMaxMp} · ATK +{deltaAtk}',
     'hud.faintMessage': 'You collapsed from exhaustion… The prayers of all beings carry you back to the Stupa',
+    'hud.bossPhase': 'Phase {phase} / {total}',
+    'boss.demo.name': 'Migoi King of the Snows',
+    'boss.demo.title': 'Sovereign of the Highland Gale',
   },
 };
 
