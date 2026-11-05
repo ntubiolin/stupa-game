@@ -202,10 +202,32 @@ export function createMantra(ctx) {
     bus.emit('sfx', { name: 'chant' });
 
     if (!isPeaceful) {
+      const originPos = state.player.position.clone();
+      const waveRadius = M.radius ?? 6.0;
+      const basePower = state.player?.atk || 10;
+
+      if (ctx.world?.isCombatZone() && ctx.enemies?.queryCircle && ctx.enemies?.damage) {
+        const hitEnemies = ctx.enemies.queryCircle(originPos.x, originPos.z, waveRadius);
+        for (let i = 0; i < hitEnemies.length; i++) {
+          const enemy = hitEnemies[i];
+          const rolled = ctx.vitals?.rollDamage
+            ? ctx.vitals.rollDamage(basePower)
+            : { amount: basePower, crit: false };
+          ctx.enemies.damage(enemy.id, rolled.amount, {
+            type: 'magic',
+            source: 'mantra',
+            crit: rolled.crit,
+            knockback: config.ENEMIES?.hurtKnockback ?? 1.5,
+            from: { x: originPos.x, z: originPos.z },
+          });
+        }
+      }
+
       bus.emit('mantra:cast', {
-        origin: state.player.position.clone(),
-        radius: M.radius ?? 6.0,
-        power: state.player.atk,
+        origin: originPos,
+        radius: waveRadius,
+        power: basePower,
+        handledByMantra: true,
       });
     }
   }

@@ -129,6 +129,39 @@ export function createEnemies(ctx) {
   // Preta mouth gathering green orb
   const pretaOrbGeo = new THREE.SphereGeometry(0.14, 10, 8);
 
+  // --- Status Effect Geometries & Shared Materials (Root & Stun)
+  const rootOuterRingGeo = new THREE.RingGeometry(0.62, 0.82, 32);
+  rootOuterRingGeo.rotateX(-Math.PI / 2);
+  const rootInnerRingGeo = new THREE.RingGeometry(0.34, 0.44, 24);
+  rootInnerRingGeo.rotateX(-Math.PI / 2);
+
+  const sharedRootMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(2.2, 1.75, 0.35),
+    toneMapped: false,
+    transparent: true,
+    opacity: 0.88,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+
+  const stunHubGeo = new THREE.SphereGeometry(0.085, 8, 8);
+  const stunProngGeo = new THREE.ConeGeometry(0.065, 0.24, 6);
+  const stunHaloGeo = new THREE.RingGeometry(0.24, 0.3, 18);
+  stunHaloGeo.rotateX(-Math.PI / 2);
+
+  const sharedStunMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(2.4, 1.95, 0.45),
+    toneMapped: false,
+    side: THREE.DoubleSide,
+  });
+
+  // Debug Query Visualization Group (for cone/line/circle inspection)
+  const debugQueryGroup = new THREE.Group();
+  debugQueryGroup.name = 'EnemyQueryDebug';
+  debugQueryGroup.visible = false;
+  scene.add(debugQueryGroup);
+
   // ---------------------------------------------------------------- 2. Particle System (Five-color liberation)
   const PARTICLE_COUNT = 80;
   const particleGeo = new THREE.BufferGeometry();
@@ -214,9 +247,62 @@ export function createEnemies(ctx) {
   let enemyIdCounter = 1;
   let isFrozen = false;
 
-  function createEnemyInstance(kind, spawnPos) {
+  const RANK_MULTS = {
+    normal: { hp: 1.0, dmg: 1.0, exp: 1.0 },
+    champion: { hp: 2.8, dmg: 1.35, exp: 3.0 },
+    rare: { hp: 4.5, dmg: 1.6, exp: 5.0 },
+    boss: { hp: 18.0, dmg: 1.8, exp: 20.0 },
+  };
+
+  function sampleMapLevel() {
+    const mapDef = ctx.world?.getMap(state.zone);
+    const range = mapDef?.level;
+    if (Array.isArray(range) && range.length >= 2) {
+      const min = Math.max(1, Math.floor(range[0]));
+      const max = Math.max(min, Math.floor(range[1]));
+      return min + Math.floor(Math.random() * (max - min + 1));
+    }
+    return 1;
+  }
+
+  function applyIdleMaterialEmissive(enemy) {
+    const isSlowed = (enemy.status?.slow?.remaining || 0) > 0;
+    for (const mat of enemy.materials) {
+      if (isSlowed) {
+        mat.emissive?.setRGB(0.14, 0.52, 0.95);
+        if (mat.emissiveIntensity != null) mat.emissiveIntensity = 0.6;
+      } else {
+        mat.emissive?.setHex(0x000000);
+        if (mat.emissiveIntensity != null) mat.emissiveIntensity = 0;
+      }
+    }
+  }
+
+  function createEnemyInstance(kind, spawnPos, opts = {}) {
     const kCfg = cfg.kinds[kind] || cfg.kinds.preta;
     const id = `${kind}_${enemyIdCounter++}`;
+
+    const level =
+      opts.level != null
+        ? Math.max(1, Math.floor(Number(opts.level)))
+        : sampleMapLevel();
+    const rank = opts.rank || 'normal';
+    const rMult = RANK_MULTS[rank] || RANK_MULTS.normal;
+
+    const hpScale = (1 + 0.20 * (level - 1)) * rMult.hp;
+    const dmgScale = (1 + 0.12 * (level - 1)) * rMult.dmg;
+    const expScale = (1 + 0.18 * (level - 1)) * rMult.exp;
+
+    const scaledHp = Math.max(1, Math.round(kCfg.hp * hpScale));
+    const scaledExp = Math.max(1, Math.round(kCfg.exp * expScale));
+    const displayNameKey = opts.displayNameKey || kCfg.nameKey || `enemy.${kind}`;
+    const def = opts.def ?? kCfg.def ?? 0;
+    const ccResist = opts.ccResist ?? kCfg.ccResist ?? 0;
+    const tags = Array.isArray(opts.tags)
+      ? [...opts.tags]
+      : Array.isArray(kCfg.tags)
+        ? [...kCfg.tags]
+        : [kind];
 
     const group = new THREE.Group();
     group.name = `Enemy_${id}`;
@@ -525,16 +611,49 @@ export function createEnemies(ctx) {
       enemyGroup.add(telegraphGroup);
     }
 
+    // --- Status Effect Visual Indicators (Root golden ring & Stun overhead mini-vajra)
+    const rootIndicator = new THREE.Group();
+    rootIndicator.name = `RootIndicator_${id}`;
+    rootIndicator.position.set(0, 0.04, 0);
+    const rScale = (kCfg.radius || 0.6) / 0.6;
+    rootIndicator.scale.set(rScale, 1, rScale);
+    rootIndicator.add(new THREE.Mesh(rootOuterRingGeo, sharedRootMat));
+    rootIndicator.add(new THREE.Mesh(rootInnerRingGeo, sharedRootMat));
+    rootIndicator.visible = false;
+    group.add(rootIndicator);
+
+    const stunIndicator = new THREE.Group();
+    stunIndicator.name = `StunIndicator_${id}`;
+    stunIndicator.position.set(0, (kCfg.height || 1.6) + 0.45, 0);
+    const hubMesh = new THREE.Mesh(stunHubGeo, sharedStunMat);
+    const prongL = new THREE.Mesh(stunProngGeo, sharedStunMat);
+    prongL.rotation.z = Math.PI / 2;
+    prongL.position.x = -0.18;
+    const prongR = new THREE.Mesh(stunProngGeo, sharedStunMat);
+    prongR.rotation.z = -Math.PI / 2;
+    prongR.position.x = 0.18;
+    const haloMesh = new THREE.Mesh(stunHaloGeo, sharedRootMat);
+    stunIndicator.add(hubMesh, prongL, prongR, haloMesh);
+    stunIndicator.visible = false;
+    group.add(stunIndicator);
+
     enemyGroup.add(group);
 
     const enemy = {
       id,
       kind,
       kindConfig: kCfg,
-      hp: kCfg.hp,
-      maxHp: kCfg.hp,
+      level,
+      rank,
+      displayNameKey,
+      def,
+      ccResist,
+      tags,
+      dmgScale,
+      hp: scaledHp,
+      maxHp: scaledHp,
       speed: kCfg.speed,
-      exp: kCfg.exp,
+      exp: scaledExp,
       ring: kCfg.ring,
       radius: kCfg.radius,
       height: kCfg.height,
@@ -546,6 +665,12 @@ export function createEnemies(ctx) {
       stateTimer: 0,
       activeAttack: null,
       attackCooldowns: {},
+      status: {
+        root: 0,
+        stun: 0,
+        slow: { mult: 1, remaining: 0, duration: 0 },
+      },
+      wasSlowed: false,
       wanderTarget: { x: spawnPos.x, z: spawnPos.z },
       wanderTimer: 1.0 + Math.random() * 3.0,
       homePos: { x: spawnPos.x, z: spawnPos.z },
@@ -554,6 +679,8 @@ export function createEnemies(ctx) {
       group,
       materials,
       animNodes,
+      rootIndicator,
+      stunIndicator,
       telegraphGroup,
       telegraphFill,
       chargeLineMesh,
@@ -698,118 +825,330 @@ export function createEnemies(ctx) {
     }
   });
 
-  // ---------------------------------------------------------------- 6. Damage & Liberation Bus Listeners
-  bus.on('mantra:cast', ({ origin, radius, power }) => {
-    if (!ctx.world?.isCombatZone() || !origin) return;
+  // ---------------------------------------------------------------- 6. Damage, Status, Query & Liberation APIs
+  function dirToVec(dirRad) {
+    if (typeof dirRad === 'object' && dirRad !== null) {
+      const len = Math.hypot(dirRad.x || 0, dirRad.z || 0) || 1;
+      return { x: (dirRad.x || 0) / len, z: (dirRad.z || 0) / len };
+    }
+    const a = Number(dirRad) || 0;
+    return { x: -Math.sin(a), z: -Math.cos(a) };
+  }
 
-    const dmgPower = typeof power === 'number' && power > 0 ? power : (state.player?.atk || 10);
-    const origin2D = { x: origin.x, z: origin.z };
+  function queryCircle(xOrObj, zOrR, maybeR) {
+    let cx = 0;
+    let cz = 0;
+    let r = 0;
+    if (typeof xOrObj === 'object' && xOrObj !== null) {
+      cx = xOrObj.x || 0;
+      cz = xOrObj.z || 0;
+      r = Number(zOrR) || 0;
+    } else {
+      cx = Number(xOrObj) || 0;
+      cz = Number(zOrR) || 0;
+      r = Number(maybeR) || 0;
+    }
+
+    const out = [];
+    for (let i = 0; i < activeEnemies.length; i++) {
+      const e = activeEnemies[i];
+      if (e.state === 'liberated' || e.hp <= 0) continue;
+      const dist = Math.hypot(e.pos.x - cx, e.pos.z - cz);
+      if (dist <= r) out.push(e);
+    }
+    return out;
+  }
+
+  function queryCone(origin, dirRad, range, halfAngleRad) {
+    if (!origin) return [];
+    const ox = origin.x || 0;
+    const oz = origin.z || 0;
+    const maxR = Number(range) || 0;
+    const halfAng = Number(halfAngleRad) || 0;
+    const { x: fx, z: fz } = dirToVec(dirRad);
+
+    const out = [];
+    for (let i = 0; i < activeEnemies.length; i++) {
+      const e = activeEnemies[i];
+      if (e.state === 'liberated' || e.hp <= 0) continue;
+      const dx = e.pos.x - ox;
+      const dz = e.pos.z - oz;
+      const dist = Math.hypot(dx, dz);
+      if (dist > maxR) continue;
+      if (dist <= 1e-5) {
+        out.push(e);
+        continue;
+      }
+      const dot = (dx * fx + dz * fz) / dist;
+      const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+      if (angle <= halfAng) out.push(e);
+    }
+    return out;
+  }
+
+  function queryLine(origin, dirRad, length, width) {
+    if (!origin) return [];
+    const ox = origin.x || 0;
+    const oz = origin.z || 0;
+    const len = Number(length) || 0;
+    const halfW = (Number(width) || 0) * 0.5;
+    const { x: fx, z: fz } = dirToVec(dirRad);
+
+    const out = [];
+    for (let i = 0; i < activeEnemies.length; i++) {
+      const e = activeEnemies[i];
+      if (e.state === 'liberated' || e.hp <= 0) continue;
+      const dx = e.pos.x - ox;
+      const dz = e.pos.z - oz;
+      const forward = dx * fx + dz * fz;
+      const perp = Math.abs(dx * -fz + dz * fx);
+      if (forward >= 0 && forward <= len && perp <= halfW) {
+        out.push(e);
+      }
+    }
+    return out;
+  }
+
+  function nearest(origin, maxDist = Infinity, opts = {}) {
+    if (!origin) return null;
+    const ox = origin.x || 0;
+    const oz = origin.z || 0;
+    const limit = typeof maxDist === 'number' ? maxDist : Infinity;
+    const hasCone = opts && opts.dirRad != null && opts.halfAngleRad != null;
+    const { x: fx, z: fz } = hasCone ? dirToVec(opts.dirRad) : { x: 0, z: -1 };
+    const halfAng = hasCone ? Number(opts.halfAngleRad) : Math.PI;
+
+    let best = null;
+    let bestDist = limit;
 
     for (let i = 0; i < activeEnemies.length; i++) {
-      const enemy = activeEnemies[i];
-      if (enemy.state === 'liberated') continue;
-
-      const dx = enemy.pos.x - origin2D.x;
-      const dz = enemy.pos.z - origin2D.z;
+      const e = activeEnemies[i];
+      if (e.state === 'liberated' || e.hp <= 0) continue;
+      const dx = e.pos.x - ox;
+      const dz = e.pos.z - oz;
       const dist = Math.hypot(dx, dz);
+      if (dist > bestDist) continue;
 
-      if (dist <= radius) {
-        // Hit!
-        enemy.hp = Math.max(0, enemy.hp - dmgPower);
-        bus.emit('sfx', { name: 'hit' });
+      if (hasCone && dist > 1e-5) {
+        const dot = (dx * fx + dz * fz) / dist;
+        const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+        if (angle > halfAng) continue;
+      }
 
-        bus.emit('enemy:hit', {
-          id: enemy.id,
-          kind: enemy.kind,
-          damage: dmgPower,
-          type: 'magic',
-          position: { x: enemy.pos.x, y: enemy.pos.y + enemy.height, z: enemy.pos.z },
-        });
+      bestDist = dist;
+      best = e;
+    }
+    return best;
+  }
 
-        // Cancel active telegraph/windup
-        if (enemy.telegraphGroup) enemy.telegraphGroup.visible = false;
-        if (enemy.animNodes?.mouthOrb) enemy.animNodes.mouthOrb.visible = false;
+  function damageEnemy(idOrEnemy, baseAmount, opts = {}) {
+    const targetId = typeof idOrEnemy === 'object' && idOrEnemy !== null ? idOrEnemy.id : idOrEnemy;
+    const enemy = activeEnemies.find((e) => e.id === targetId);
+    if (!enemy || enemy.state === 'liberated' || enemy.hp <= 0) {
+      return { dealt: 0, liberated: false };
+    }
 
-        if (enemy.hp > 0) {
-          // Hurt state
-          enemy.state = 'hurt';
-          enemy.stateTimer = cfg.hurtDuration ?? 0.25;
-          enemy.flashTimer = 0.2;
+    const type = opts.type || 'physical';
+    const source = opts.source || 'mantra';
+    const crit = Boolean(opts.crit);
+    const def = Math.max(0, enemy.def ?? enemy.kindConfig?.def ?? 0);
+    const rawAmt = typeof baseAmount === 'number' ? Math.max(0, baseAmount) : 0;
+    const dealt = rawAmt > 0 ? Math.max(1, Math.round(rawAmt * (50 / (50 + def)))) : 0;
 
-          // Knockback 1.5m away from mantra origin
-          const kb = cfg.hurtKnockback ?? 1.5;
-          if (dist > 1e-4) {
-            enemy.pos.x += (dx / dist) * kb;
-            enemy.pos.z += (dz / dist) * kb;
+    enemy.hp = Math.max(0, enemy.hp - dealt);
+    bus.emit('sfx', { name: 'hit' });
+
+    bus.emit('enemy:hit', {
+      id: enemy.id,
+      kind: enemy.kind,
+      damage: dealt,
+      type,
+      crit,
+      source,
+      position: { x: enemy.pos.x, y: enemy.pos.y + enemy.height, z: enemy.pos.z },
+    });
+
+    if (enemy.hp > 0) {
+      // Apply status effects if present
+      const statusIn = opts.status;
+      const resist = Math.max(0, Math.min(1, enemy.ccResist ?? enemy.kindConfig?.ccResist ?? 0));
+      const applied = {};
+
+      if (statusIn && typeof statusIn === 'object') {
+        if (typeof statusIn.root === 'number' && statusIn.root > 0) {
+          const dur = statusIn.root * (1 - resist);
+          if (dur > 0) {
+            enemy.status.root = Math.max(enemy.status.root || 0, dur);
+            applied.root = enemy.status.root;
           }
-          clampEnemyPosition(enemy);
-
-          // Flash red/white
-          for (const mat of enemy.materials) {
-            mat.emissive?.setHex(0xffffff);
-            if (mat.emissiveIntensity != null) mat.emissiveIntensity = 1.0;
+        }
+        if (typeof statusIn.stun === 'number' && statusIn.stun > 0) {
+          const dur = statusIn.stun * (1 - resist);
+          if (dur > 0) {
+            enemy.status.stun = Math.max(enemy.status.stun || 0, dur);
+            applied.stun = enemy.status.stun;
           }
-        } else {
-          // Liberated!
-          enemy.state = 'liberated';
-          enemy.liberateTimer = 0;
-          bus.emit('sfx', { name: 'liberate' });
-
-          ctx.vitals?.addExp?.(enemy.exp);
-
-          bus.emit('enemy:liberated', {
-            id: enemy.id,
-            kind: enemy.kind,
-            exp: enemy.exp,
-            position: { ...enemy.pos },
-          });
-
-          const nameKey = enemy.kindConfig.nameKey || `enemy.${enemy.kind}`;
-          const localizedName = i18n?.t ? i18n.t(nameKey) : enemy.kind;
-          bus.emit('toast', {
-            key: 'toast.enemyLiberated',
-            params: { name: localizedName, exp: enemy.exp },
-          });
-
-          // Queue respawn timer
-          const respawnTime = (cfg.respawnMin ?? 20) + Math.random() * ((cfg.respawnMax ?? 40) - (cfg.respawnMin ?? 20));
-          pendingRespawns.push({
-            kind: enemy.kind,
-            ring: enemy.ring,
-            timer: respawnTime,
-          });
-
-          // If no non-liberated enemies remain on the field and total queued < maxCount,
-          // schedule respawns from current map's spawnTable.
-          const remainingAlive = activeEnemies.filter((e) => e.state !== 'liberated').length;
-          const mapDef = ctx.world?.getMap(state.zone);
-          const spawnTable = mapDef?.spawnTable || [];
-          const mapTotalCount = spawnTable.reduce((acc, s) => acc + (s.count || 0), 0);
-          if (remainingAlive === 0 && mapTotalCount > 0 && pendingRespawns.length < mapTotalCount) {
-            for (const entry of spawnTable) {
-              for (let c = 0; c < (entry.count || 0); c++) {
-                if (pendingRespawns.length >= mapTotalCount) break;
-                const t = (cfg.respawnMin ?? 20) + Math.random() * (((cfg.respawnMax ?? 40) - 2) - (cfg.respawnMin ?? 20));
-                pendingRespawns.push({ kind: entry.kind, ring: entry.area || 'near', timer: t });
-              }
-            }
-          }
-
-          // Trigger particle burst
-          spawnLiberationBurst(enemy.pos, enemy.height);
-
-          // Turn white emissive and enable transparency for dissolve
-          for (const mat of enemy.materials) {
-            mat.transparent = true;
-            mat.emissive?.setHex(0xffffff);
-            if (mat.emissiveIntensity != null) mat.emissiveIntensity = 1.5;
+        }
+        if (statusIn.slow) {
+          const sObj =
+            typeof statusIn.slow === 'number'
+              ? { mult: 0.5, duration: statusIn.slow }
+              : statusIn.slow;
+          const dur = (Number(sObj.duration) || 0) * (1 - resist);
+          const mult = Math.max(0.05, Math.min(1, Number(sObj.mult ?? 0.5)));
+          if (dur > 0) {
+            const prevRem = enemy.status.slow?.remaining || 0;
+            const nextRem = Math.max(prevRem, dur);
+            enemy.status.slow = {
+              mult: dur >= prevRem ? mult : (enemy.status.slow?.mult ?? mult),
+              remaining: nextRem,
+              duration: Math.max(enemy.status.slow?.duration || 0, dur),
+            };
+            applied.slow = { ...enemy.status.slow };
           }
         }
       }
+
+      if (Object.keys(applied).length > 0) {
+        bus.emit('enemy:status', {
+          id: enemy.id,
+          kind: enemy.kind,
+          status: applied,
+        });
+      }
+
+      const shouldInterrupt = Boolean(applied.stun > 0 || source === 'mantra');
+      if (shouldInterrupt) {
+        if (enemy.telegraphGroup) enemy.telegraphGroup.visible = false;
+        if (enemy.animNodes?.mouthOrb) enemy.animNodes.mouthOrb.visible = false;
+        enemy.chargeData = null;
+        enemy.activeAttack = null;
+        enemy.state = 'hurt';
+        enemy.stateTimer = cfg.hurtDuration ?? 0.25;
+      } else if (enemy.state !== 'windup' && enemy.state !== 'attack') {
+        enemy.state = 'hurt';
+        enemy.stateTimer = cfg.hurtDuration ?? 0.25;
+      }
+
+      enemy.flashTimer = 0.2;
+      for (const mat of enemy.materials) {
+        mat.emissive?.setHex(0xffffff);
+        if (mat.emissiveIntensity != null) mat.emissiveIntensity = 1.0;
+      }
+
+      // Knockback (unless rooted or knockback == 0)
+      const defaultKb = statusIn?.root || statusIn?.stun ? 0 : (cfg.hurtKnockback ?? 1.5);
+      const kb = opts.knockback !== undefined ? Number(opts.knockback) : defaultKb;
+      if (kb > 0 && !(enemy.status.root > 0)) {
+        const fromPos = opts.from || state.player?.position;
+        if (fromPos) {
+          const dx = enemy.pos.x - fromPos.x;
+          const dz = enemy.pos.z - fromPos.z;
+          const dist = Math.hypot(dx, dz);
+          if (dist > 1e-4) {
+            enemy.pos.x += (dx / dist) * kb;
+            enemy.pos.z += (dz / dist) * kb;
+            clampEnemyPosition(enemy);
+          }
+        }
+      }
+
+      return { dealt, liberated: false };
+    }
+
+    // Liberated!
+    if (enemy.telegraphGroup) enemy.telegraphGroup.visible = false;
+    if (enemy.animNodes?.mouthOrb) enemy.animNodes.mouthOrb.visible = false;
+    if (enemy.rootIndicator) enemy.rootIndicator.visible = false;
+    if (enemy.stunIndicator) enemy.stunIndicator.visible = false;
+    enemy.chargeData = null;
+    enemy.activeAttack = null;
+    enemy.state = 'liberated';
+    enemy.liberateTimer = 0;
+    bus.emit('sfx', { name: 'liberate' });
+
+    ctx.vitals?.addExp?.(enemy.exp);
+
+    bus.emit('enemy:liberated', {
+      id: enemy.id,
+      kind: enemy.kind,
+      exp: enemy.exp,
+      position: { ...enemy.pos },
+      level: enemy.level,
+      rank: enemy.rank,
+      mapId: state.zone || 'wild',
+      tags: enemy.tags || [enemy.kind],
+    });
+
+    const nameKey = enemy.displayNameKey || enemy.kindConfig.nameKey || `enemy.${enemy.kind}`;
+    const localizedName = i18n?.t ? i18n.t(nameKey) : enemy.kind;
+    bus.emit('toast', {
+      key: 'toast.enemyLiberated',
+      params: { name: localizedName, exp: enemy.exp },
+    });
+
+    // Queue respawn timer
+    const respawnTime =
+      (cfg.respawnMin ?? 20) + Math.random() * ((cfg.respawnMax ?? 40) - (cfg.respawnMin ?? 20));
+    pendingRespawns.push({
+      kind: enemy.kind,
+      ring: enemy.ring,
+      timer: respawnTime,
+    });
+
+    // If no non-liberated enemies remain on the field and total queued < maxCount,
+    // schedule respawns from current map's spawnTable.
+    const remainingAlive = activeEnemies.filter((e) => e.state !== 'liberated').length;
+    const mapDef = ctx.world?.getMap(state.zone);
+    const spawnTable = mapDef?.spawnTable || [];
+    const mapTotalCount = spawnTable.reduce((acc, s) => acc + (s.count || 0), 0);
+    if (remainingAlive === 0 && mapTotalCount > 0 && pendingRespawns.length < mapTotalCount) {
+      for (const entry of spawnTable) {
+        for (let c = 0; c < (entry.count || 0); c++) {
+          if (pendingRespawns.length >= mapTotalCount) break;
+          const t =
+            (cfg.respawnMin ?? 20) +
+            Math.random() * ((cfg.respawnMax ?? 40) - 2 - (cfg.respawnMin ?? 20));
+          pendingRespawns.push({ kind: entry.kind, ring: entry.area || 'near', timer: t });
+        }
+      }
+    }
+
+    // Trigger particle burst
+    spawnLiberationBurst(enemy.pos, enemy.height);
+
+    // Turn white emissive and enable transparency for dissolve
+    for (const mat of enemy.materials) {
+      mat.transparent = true;
+      mat.emissive?.setHex(0xffffff);
+      if (mat.emissiveIntensity != null) mat.emissiveIntensity = 1.5;
+    }
+
+    return { dealt, liberated: true };
+  }
+
+  bus.on('mantra:cast', ({ origin, radius, power, handledByMantra }) => {
+    if (handledByMantra) return;
+    if (!ctx.world?.isCombatZone() || !origin) return;
+
+    const dmgPower = typeof power === 'number' && power > 0 ? power : (state.player?.atk || 10);
+    const hits = queryCircle(origin.x, origin.z, radius);
+    for (let i = 0; i < hits.length; i++) {
+      damageEnemy(hits[i].id, dmgPower, {
+        type: 'magic',
+        source: 'mantra',
+        crit: false,
+        knockback: cfg.hurtKnockback ?? 1.5,
+        from: { x: origin.x, z: origin.z },
+      });
     }
   });
 
   // ---------------------------------------------------------------- 7. Per-Frame AI Update
+  function getScaledAttackDamage(enemy, baseDamage) {
+    return Math.max(1, Math.round((baseDamage || 1) * (enemy.dmgScale || 1)));
+  }
+
   function startEnemyAttack(enemy, atk, isForced = false) {
     enemy.state = 'windup';
     enemy.activeAttack = atk;
@@ -856,7 +1195,7 @@ export function createEnemies(ctx) {
       ctx.projectiles?.spawn('boulder', {
         startPos,
         targetPos,
-        damage: atk.damage,
+        damage: getScaledAttackDamage(enemy, atk.damage),
         flightDuration: atk.flightDuration,
         hitRadius: atk.hitRadius,
         arcHeight: atk.arcHeight,
@@ -868,7 +1207,7 @@ export function createEnemies(ctx) {
       const targetPos = { x: playerPos.x, y: playerPos.y, z: playerPos.z };
       ctx.projectiles?.spawn('frostRoar', {
         targetPos,
-        damage: atk.damage,
+        damage: getScaledAttackDamage(enemy, atk.damage),
         aoeRadius: atk.aoeRadius,
         eruptDelay: atk.eruptDelay,
         slow: atk.slow,
@@ -939,10 +1278,7 @@ export function createEnemies(ctx) {
       if (enemy.flashTimer > 0) {
         enemy.flashTimer -= dt;
         if (enemy.flashTimer <= 0) {
-          for (const mat of enemy.materials) {
-            mat.emissive?.setHex(0x000000);
-            if (mat.emissiveIntensity != null) mat.emissiveIntensity = 0;
-          }
+          applyIdleMaterialEmissive(enemy);
         }
       }
 
@@ -970,6 +1306,47 @@ export function createEnemies(ctx) {
         continue;
       }
 
+      // Tick status effects (root, stun, slow)
+      if (enemy.status) {
+        if (enemy.status.root > 0) {
+          enemy.status.root = Math.max(0, enemy.status.root - dt);
+        }
+        if (enemy.status.stun > 0) {
+          enemy.status.stun = Math.max(0, enemy.status.stun - dt);
+        }
+        if (enemy.status.slow && enemy.status.slow.remaining > 0) {
+          enemy.status.slow.remaining = Math.max(0, enemy.status.slow.remaining - dt);
+        }
+      }
+
+      const isRooted = (enemy.status?.root || 0) > 0;
+      const isStunned = (enemy.status?.stun || 0) > 0;
+      const isSlowed = (enemy.status?.slow?.remaining || 0) > 0;
+      const slowMult = isSlowed ? (enemy.status.slow.mult ?? 0.5) : 1.0;
+      const effSpeed = isRooted || isStunned ? 0 : enemy.speed * slowMult;
+
+      // Update status visual indicators
+      if (enemy.rootIndicator) {
+        enemy.rootIndicator.visible = isRooted;
+        if (isRooted) {
+          enemy.rootIndicator.rotation.y += dt * 1.8;
+        }
+      }
+      if (enemy.stunIndicator) {
+        enemy.stunIndicator.visible = isStunned;
+        if (isStunned) {
+          enemy.stunIndicator.rotation.y += dt * 4.5;
+          enemy.stunIndicator.position.y =
+            enemy.height + 0.45 + Math.sin(state.elapsed * 6) * 0.05;
+        }
+      }
+
+      // Sync slow blue tint when not flashing or in windup
+      if (enemy.wasSlowed !== isSlowed && enemy.flashTimer <= 0 && enemy.state !== 'windup') {
+        enemy.wasSlowed = isSlowed;
+        applyIdleMaterialEmissive(enemy);
+      }
+
       if (isFrozen) {
         enemy.group.position.set(enemy.pos.x, enemy.pos.y, enemy.pos.z);
         enemy.group.rotation.y = enemy.heading;
@@ -980,6 +1357,27 @@ export function createEnemies(ctx) {
       const dxPlayer = playerPos ? playerPos.x - enemy.pos.x : 999;
       const dzPlayer = playerPos ? playerPos.z - enemy.pos.z : 999;
       const distToPlayer = Math.hypot(dxPlayer, dzPlayer);
+
+      // If stunned: interrupt any windup/attack and freeze AI actions
+      if (isStunned) {
+        if (enemy.state === 'windup' || enemy.state === 'attack') {
+          if (enemy.telegraphGroup) enemy.telegraphGroup.visible = false;
+          if (enemy.animNodes?.mouthOrb) enemy.animNodes.mouthOrb.visible = false;
+          enemy.chargeData = null;
+          enemy.activeAttack = null;
+          applyIdleMaterialEmissive(enemy);
+          enemy.state = 'chase';
+        } else if (enemy.state === 'hurt') {
+          enemy.stateTimer -= dt;
+          if (enemy.stateTimer <= 0) {
+            enemy.state =
+              !isPlayerInSafeZone && distToPlayer <= (cfg.leashRange ?? 25) ? 'chase' : 'wander';
+          }
+        }
+        enemy.group.position.set(enemy.pos.x, enemy.pos.y, enemy.pos.z);
+        enemy.group.rotation.y = enemy.heading;
+        continue;
+      }
 
       // --- AI State Machine Transitions
       if (enemy.state === 'hurt') {
@@ -999,32 +1397,39 @@ export function createEnemies(ctx) {
       } else if (enemy.state === 'attack') {
         // Active dash attack (Tsen spear charge)
         if (enemy.chargeData) {
-          const cd = enemy.chargeData;
-          cd.progress += dt / (enemy.activeAttack.dashDuration ?? 0.4);
-          const u = Math.min(1, cd.progress);
-
-          enemy.pos.x = cd.startPos.x + cd.dir.x * (enemy.activeAttack.dashDist * u);
-          enemy.pos.z = cd.startPos.z + cd.dir.z * (enemy.activeAttack.dashDist * u);
-          clampEnemyPosition(enemy);
-
-          // Check hit on player along charge segment
-          if (!cd.hasHit && playerPos) {
-            const curDist = Math.hypot(playerPos.x - enemy.pos.x, playerPos.z - enemy.pos.z);
-            if (curDist <= (enemy.activeAttack.hitWidth ?? 1.1) + (config.PLAYER.radius || 0.35)) {
-              cd.hasHit = true;
-              bus.emit('vitals:damage', {
-                amount: enemy.activeAttack.damage,
-                type: 'physical',
-                sourcePos: { ...enemy.pos },
-              });
-            }
-          }
-
-          if (u >= 1) {
+          if (isRooted) {
             enemy.attackCooldowns[enemy.activeAttack.id] = enemy.activeAttack.cooldown;
             enemy.state = 'recover';
             enemy.stateTimer = enemy.activeAttack.recover ?? 0.35;
             enemy.chargeData = null;
+          } else {
+            const cd = enemy.chargeData;
+            cd.progress += (dt * slowMult) / (enemy.activeAttack.dashDuration ?? 0.4);
+            const u = Math.min(1, cd.progress);
+
+            enemy.pos.x = cd.startPos.x + cd.dir.x * (enemy.activeAttack.dashDist * u);
+            enemy.pos.z = cd.startPos.z + cd.dir.z * (enemy.activeAttack.dashDist * u);
+            clampEnemyPosition(enemy);
+
+            // Check hit on player along charge segment
+            if (!cd.hasHit && playerPos) {
+              const curDist = Math.hypot(playerPos.x - enemy.pos.x, playerPos.z - enemy.pos.z);
+              if (curDist <= (enemy.activeAttack.hitWidth ?? 1.1) + (config.PLAYER.radius || 0.35)) {
+                cd.hasHit = true;
+                bus.emit('vitals:damage', {
+                  amount: getScaledAttackDamage(enemy, enemy.activeAttack.damage),
+                  type: 'physical',
+                  sourcePos: { ...enemy.pos },
+                });
+              }
+            }
+
+            if (u >= 1) {
+              enemy.attackCooldowns[enemy.activeAttack.id] = enemy.activeAttack.cooldown;
+              enemy.state = 'recover';
+              enemy.stateTimer = enemy.activeAttack.recover ?? 0.35;
+              enemy.chargeData = null;
+            }
           }
         }
       } else if (enemy.state === 'windup') {
@@ -1069,13 +1474,12 @@ export function createEnemies(ctx) {
         }
 
         if (enemy.stateTimer <= 0) {
-          // Windup complete: hide telegraph and clear emissive
+          // Windup complete: hide telegraph and restore idle/slow emissive
           if (enemy.telegraphGroup) enemy.telegraphGroup.visible = false;
           if (enemy.animNodes.mouthOrb) enemy.animNodes.mouthOrb.visible = false;
-          for (const mat of enemy.materials) {
-            mat.emissive?.setHex(0x000000);
-            if (mat.emissiveIntensity != null) mat.emissiveIntensity = 0;
-          }
+          applyIdleMaterialEmissive(enemy);
+
+          const scaledDmg = getScaledAttackDamage(enemy, atk.damage);
 
           if (atk.id === 'ghostfire') {
             const mouthPos = {
@@ -1085,7 +1489,7 @@ export function createEnemies(ctx) {
             };
             ctx.projectiles?.spawn('ghostfire', {
               origin: mouthPos,
-              damage: atk.damage,
+              damage: scaledDmg,
               speed: atk.speed,
               turnRate: atk.turnRate,
               lifetime: atk.lifetime,
@@ -1108,7 +1512,7 @@ export function createEnemies(ctx) {
             ctx.projectiles?.spawn('redArrow', {
               origin: startPos,
               dir: { x: dirX, y: 0, z: dirZ },
-              damage: atk.damage,
+              damage: scaledDmg,
               speed: atk.speed,
               lifetime: atk.lifetime,
               hitRadius: atk.hitRadius,
@@ -1119,16 +1523,22 @@ export function createEnemies(ctx) {
             enemy.state = 'recover';
             enemy.stateTimer = atk.recover ?? 0.35;
           } else if (atk.id === 'spearCharge') {
-            const lockedHeading = enemy.heading;
-            const dirX = -Math.sin(lockedHeading);
-            const dirZ = -Math.cos(lockedHeading);
-            enemy.chargeData = {
-              startPos: { ...enemy.pos },
-              dir: { x: dirX, z: dirZ },
-              progress: 0,
-              hasHit: false,
-            };
-            enemy.state = 'attack';
+            if (isRooted) {
+              enemy.attackCooldowns[atk.id] = atk.cooldown;
+              enemy.state = 'recover';
+              enemy.stateTimer = atk.recover ?? 0.35;
+            } else {
+              const lockedHeading = enemy.heading;
+              const dirX = -Math.sin(lockedHeading);
+              const dirZ = -Math.cos(lockedHeading);
+              enemy.chargeData = {
+                startPos: { ...enemy.pos },
+                dir: { x: dirX, z: dirZ },
+                progress: 0,
+                hasHit: false,
+              };
+              enemy.state = 'attack';
+            }
           } else if (atk.id === 'boulder') {
             enemy.attackCooldowns[atk.id] = atk.cooldown;
             enemy.state = 'recover';
@@ -1142,7 +1552,7 @@ export function createEnemies(ctx) {
               const slamDist = Math.hypot(playerPos.x - enemy.pos.x, playerPos.z - enemy.pos.z);
               if (slamDist <= (atk.aoeRadius ?? 3.5)) {
                 bus.emit('vitals:damage', {
-                  amount: atk.damage,
+                  amount: scaledDmg,
                   type: 'physical',
                   sourcePos: { ...enemy.pos },
                 });
@@ -1157,7 +1567,7 @@ export function createEnemies(ctx) {
               const clawDist = Math.hypot(playerPos.x - enemy.pos.x, playerPos.z - enemy.pos.z);
               if (clawDist <= (atk.hitReach ?? 1.8)) {
                 bus.emit('vitals:damage', {
-                  amount: atk.damage,
+                  amount: scaledDmg,
                   type: 'physical',
                   sourcePos: { ...enemy.pos },
                 });
@@ -1193,6 +1603,7 @@ export function createEnemies(ctx) {
 
             for (let a = 0; a < attacks.length; a++) {
               const atk = attacks[a];
+              if (isRooted && atk.type === 'charge') continue;
               const cd = enemy.attackCooldowns[atk.id] || 0;
               if (cd > 0) continue;
               const minR = atk.minRange ?? 0;
@@ -1227,11 +1638,11 @@ export function createEnemies(ctx) {
 
           if (chosenAttack) {
             startEnemyAttack(enemy, chosenAttack, false);
-          } else {
+          } else if (effSpeed > 0) {
             // Move toward player until stopDistance
             const stopDist = enemy.kindConfig.stopDistance ?? 1.2;
             if (distToPlayer > stopDist) {
-              const moveDist = Math.min(enemy.speed * dt, distToPlayer - stopDist);
+              const moveDist = Math.min(effSpeed * dt, distToPlayer - stopDist);
               enemy.pos.x += (dxPlayer / distToPlayer) * moveDist;
               enemy.pos.z += (dzPlayer / distToPlayer) * moveDist;
               clampEnemyPosition(enemy);
@@ -1253,7 +1664,7 @@ export function createEnemies(ctx) {
         if (!isPlayerInSafeZone && distToPlayer <= (cfg.sightRange ?? 14)) {
           enemy.state = 'notice';
           enemy.stateTimer = 0.25;
-        } else {
+        } else if (effSpeed > 0) {
           enemy.wanderTimer -= dt;
           if (enemy.wanderTimer <= 0) {
             enemy.wanderTimer = 3.0 + Math.random() * 4.0;
@@ -1270,7 +1681,7 @@ export function createEnemies(ctx) {
           if (wdist > 0.4) {
             const wHeading = Math.atan2(-wdx, -wdz);
             enemy.heading = lerpAngle(enemy.heading, wHeading, dt * 4);
-            const wMove = Math.min(enemy.speed * 0.5 * dt, wdist);
+            const wMove = Math.min(effSpeed * 0.5 * dt, wdist);
             enemy.pos.x += (wdx / wdist) * wMove;
             enemy.pos.z += (wdz / wdist) * wMove;
             clampEnemyPosition(enemy);
@@ -1280,11 +1691,11 @@ export function createEnemies(ctx) {
 
       // --- Contact Damage Check
       // Applies when player touches body (except during charge attack where charge damage takes priority)
-      if (playerPos && enemy.state !== 'liberated' && enemy.state !== 'hurt' && enemy.state !== 'attack') {
+      if (playerPos && enemy.state !== 'liberated' && enemy.state !== 'hurt' && enemy.state !== 'attack' && !isStunned) {
         const contactReach = enemy.radius + (config.PLAYER.radius || 0.35) + 0.15;
         if (distToPlayer <= contactReach) {
           bus.emit('vitals:damage', {
-            amount: cfg.contactDamage ?? 3,
+            amount: getScaledAttackDamage(enemy, cfg.contactDamage ?? 3),
             type: 'physical',
             sourcePos: { ...enemy.pos },
           });
@@ -1292,8 +1703,10 @@ export function createEnemies(ctx) {
       }
 
       // --- Procedural Animations
-      enemy.animTime += dt;
-      const isMoving = enemy.state === 'chase' || enemy.state === 'wander' || enemy.state === 'attack';
+      enemy.animTime += dt * (isSlowed ? slowMult : 1.0);
+      const isMoving =
+        effSpeed > 0 &&
+        (enemy.state === 'chase' || enemy.state === 'wander' || enemy.state === 'attack');
       if (enemy.kind === 'preta') {
         const pace = isMoving ? 9.5 : 2.5;
         const swing = Math.sin(enemy.animTime * pace);
@@ -1355,29 +1768,132 @@ export function createEnemies(ctx) {
   }
 
   // ---------------------------------------------------------------- 8. Lifecycle & Debug API
+  function clearDebugVisualization() {
+    while (debugQueryGroup.children.length > 0) {
+      const c = debugQueryGroup.children.pop();
+      c.geometry?.dispose?.();
+      c.material?.dispose?.();
+    }
+    debugQueryGroup.visible = false;
+  }
+
+  function visualizeQuery(spec = null) {
+    clearDebugVisualization();
+    if (!spec) return false;
+    const origin = spec.origin || state.player?.position || { x: 1000, y: 0, z: 38 };
+    const dirRad = spec.dirRad ?? (state.player?.heading || 0);
+    const y = (ctx.world ? ctx.world.getHeight(origin.x, origin.z) : 0) + 0.08;
+
+    debugQueryGroup.position.set(origin.x, y, origin.z);
+    debugQueryGroup.rotation.y = typeof dirRad === 'number' ? dirRad : 0;
+
+    if (spec.type === 'cone' || spec.type === 'both') {
+      const range = spec.range ?? 7;
+      const halfAngle = spec.halfAngleRad ?? (Math.PI / 4);
+      // Three.js CircleGeometry starts at +X (angle 0); in local space with rotation.y = dirRad,
+      // forward is -Z, which after rotateX(-PI/2) corresponds to thetaStart = PI/2 - halfAngle
+      const coneGeo = new THREE.CircleGeometry(
+        range,
+        36,
+        Math.PI * 0.5 - halfAngle,
+        halfAngle * 2
+      );
+      coneGeo.rotateX(-Math.PI / 2);
+      const coneMat = new THREE.MeshBasicMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.35,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      debugQueryGroup.add(new THREE.Mesh(coneGeo, coneMat));
+    }
+
+    if (spec.type === 'line' || spec.type === 'both') {
+      const len = spec.length ?? 12;
+      const width = spec.width ?? 1.2;
+      const lineGeo = new THREE.PlaneGeometry(width, len);
+      lineGeo.translate(0, len * 0.5, 0);
+      lineGeo.rotateX(-Math.PI / 2);
+      const lineMat = new THREE.MeshBasicMaterial({
+        color: 0xfbbf24,
+        transparent: true,
+        opacity: 0.45,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      debugQueryGroup.add(new THREE.Mesh(lineGeo, lineMat));
+    }
+
+    debugQueryGroup.visible = true;
+    return true;
+  }
+
   initRoster();
 
   const api = {
     group: enemyGroup,
     update,
-    spawn(kind = 'preta', distance = 8) {
-      const playerPos = state.player?.position || { x: 1000, y: 0, z: 57 };
-      const heading = state.player?.heading || 0;
+    damage: damageEnemy,
+    queryCircle,
+    queryCone,
+    queryLine,
+    nearest,
+    visualizeQuery,
+    damageNearest(amount = 10, opts = {}) {
+      const playerPos = state.player?.position || { x: 1000, z: 38 };
+      const target = nearest(playerPos, Infinity);
+      if (!target) return { dealt: 0, liberated: false, id: null };
+      const res = damageEnemy(target.id, amount, {
+        type: opts.type || 'magic',
+        source: opts.source || 'debug',
+        crit: Boolean(opts.crit),
+        knockback: opts.knockback ?? 0,
+        from: playerPos,
+        status: opts.status || null,
+      });
+      return { ...res, id: target.id };
+    },
+    spawn(kind = 'preta', distOrOpts = 8, maybeOpts = {}) {
+      let distance = 8;
+      let opts = {};
+      if (typeof distOrOpts === 'object' && distOrOpts !== null) {
+        opts = distOrOpts;
+        distance = typeof opts.distance === 'number' ? opts.distance : 8;
+      } else {
+        distance = typeof distOrOpts === 'number' ? distOrOpts : 8;
+        opts = maybeOpts || {};
+      }
 
-      // Spawn at `distance` meters in front of player
-      const fwdX = -Math.sin(heading);
-      const fwdZ = -Math.cos(heading);
-      const rawX = playerPos.x + fwdX * distance;
-      const rawZ = playerPos.z + fwdZ * distance;
+      let sp;
+      if (opts.position && typeof opts.position.x === 'number') {
+        const px = opts.position.x;
+        const pz = opts.position.z ?? 0;
+        sp = {
+          x: px,
+          y: opts.position.y ?? (ctx.world ? ctx.world.getHeight(px, pz) : 0),
+          z: pz,
+        };
+      } else {
+        const playerPos = state.player?.position || { x: 1000, y: 0, z: 57 };
+        const heading = state.player?.heading || 0;
 
-      const sp = {
-        x: rawX,
-        y: ctx.world ? ctx.world.getHeight(rawX, rawZ) : 0,
-        z: rawZ,
-      };
+        // Spawn at `distance` meters in front of player
+        const fwdX = -Math.sin(heading);
+        const fwdZ = -Math.cos(heading);
+        const rawX = playerPos.x + fwdX * distance;
+        const rawZ = playerPos.z + fwdZ * distance;
 
-      const enemy = createEnemyInstance(kind, sp);
+        sp = {
+          x: rawX,
+          y: ctx.world ? ctx.world.getHeight(rawX, rawZ) : 0,
+          z: rawZ,
+        };
+      }
+
+      const enemy = createEnemyInstance(kind, sp, opts);
       clampEnemyPosition(enemy);
+      enemy.group.position.set(enemy.pos.x, enemy.pos.y, enemy.pos.z);
       return enemy.id;
     },
     clear: clearAllEnemies,
@@ -1390,9 +1906,21 @@ export function createEnemies(ctx) {
           return {
             id: e.id,
             kind: e.kind,
+            level: e.level,
+            rank: e.rank,
+            displayNameKey: e.displayNameKey,
             hp: e.hp,
             maxHp: e.maxHp,
+            exp: e.exp,
             state: e.state,
+            status: {
+              root: Number((e.status?.root || 0).toFixed(2)),
+              stun: Number((e.status?.stun || 0).toFixed(2)),
+              slow: e.status?.slow?.remaining > 0 ? {
+                mult: e.status.slow.mult,
+                remaining: Number(e.status.slow.remaining.toFixed(2)),
+              } : null,
+            },
             dist: Number(d.toFixed(2)),
           };
         });

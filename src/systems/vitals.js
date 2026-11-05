@@ -133,9 +133,28 @@ export function createVitals(ctx) {
 
     p.atk = Math.round((baseAtk + (perm.atk || 0)) * atkMult + atkAdd);
     p.def = Math.round((baseDef + (perm.def || 0)) * defMult + defAdd);
+    p.critChance =
+      p._critChanceOverride != null
+        ? p._critChanceOverride
+        : (V.baseCritChance ?? 0.05);
+    p.critDamage =
+      p._critDamageOverride != null
+        ? p._critDamageOverride
+        : (V.baseCritDamage ?? 1.5);
 
     if (p.hp != null) p.hp = Math.min(p.hp, p.maxHp);
     if (p.mp != null) p.mp = Math.min(p.mp, p.maxMp);
+  }
+
+  function rollDamage(base, { mult = 1 } = {}) {
+    const p = state.player;
+    const baseVal = typeof base === 'number' ? base : (p.atk || 10);
+    const critChance = p.critChance ?? 0.05;
+    const critDamage = p.critDamage ?? 1.5;
+    const crit = Math.random() < critChance;
+    const raw = baseVal * mult * (crit ? critDamage : 1);
+    const amount = Math.max(1, Math.round(raw));
+    return { amount, crit };
   }
 
   // ---------------------------------------------------------------- Initial State
@@ -188,6 +207,8 @@ export function createVitals(ctx) {
       isMaxLevel: isMax,
       atk: p.atk,
       def: p.def,
+      critChance: p.critChance ?? 0.05,
+      critDamage: p.critDamage ?? 1.5,
       buffs: Array.isArray(p.buffs) ? [...p.buffs] : [],
       permanent: p.permanent ? { ...p.permanent } : { atk: 0, def: 0 },
     };
@@ -347,6 +368,14 @@ export function createVitals(ctx) {
     if (patch.exp != null) {
       p.exp = Math.max(0, Math.floor(Number(patch.exp)));
     }
+    if (patch.critChance != null) {
+      p._critChanceOverride = Math.max(0, Math.min(1, Number(patch.critChance)));
+      p.critChance = p._critChanceOverride;
+    }
+    if (patch.critDamage != null) {
+      p._critDamageOverride = Math.max(1, Number(patch.critDamage));
+      p.critDamage = p._critDamageOverride;
+    }
 
     invulnTimer = 0;
     p.invulnUntil = 0;
@@ -452,6 +481,8 @@ export function createVitals(ctx) {
     p.level = 1;
     p.exp = 0;
     p.permanent = { atk: 0, def: 0 };
+    p._critChanceOverride = null;
+    p._critDamageOverride = null;
     p.buffs = [];
     invulnTimer = 0;
     p.invulnUntil = 0;
@@ -562,6 +593,7 @@ export function createVitals(ctx) {
     addPermanent,
     getStats,
     set,
+    rollDamage,
     faint() {
       if (isFainting) return;
       triggerFaint();
@@ -589,6 +621,7 @@ export function createVitals(ctx) {
     get: () => api.getStats(),
     addExp: (n) => api.addExp(n),
     faint: () => api.faint(),
+    rollDamage: (base, opts) => api.rollDamage(base, opts),
   });
 
   return api;

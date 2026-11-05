@@ -110,6 +110,22 @@ export function createHud(ctx) {
 
     <!-- PLAY HUD -->
     <div id="play-hud" class="play-hud is-hidden">
+      <!-- Top-Center: Boss Health Bar -->
+      <section id="boss-bar" class="boss-bar glass-panel is-hidden" aria-label="Boss health">
+        <div class="boss-bar__header">
+          <div class="boss-bar__titles">
+            <span id="boss-bar-name" class="boss-bar__name"></span>
+            <span id="boss-bar-title" class="boss-bar__title"></span>
+          </div>
+          <span id="boss-bar-phase" class="boss-bar__phase"></span>
+        </div>
+        <div class="boss-bar__track" id="boss-bar-track">
+          <div id="boss-bar-fill" class="boss-bar__fill" style="width: 100%;"></div>
+          <div id="boss-bar-ticks" class="boss-bar__ticks"></div>
+          <span id="boss-bar-hp-text" class="boss-bar__hp-text"></span>
+        </div>
+      </section>
+
       <!-- Top-Left: Stacked Vitals & Merit Panels -->
       <div class="hud-left-stack">
         <!-- Vitals Panel -->
@@ -506,6 +522,13 @@ export function createHud(ctx) {
   const damageVignette = root.querySelector('#damage-vignette');
   const enemyHpContainer = root.querySelector('#enemy-health-bars');
   const damageNumbersContainer = root.querySelector('#damage-numbers');
+  const bossBarEl = root.querySelector('#boss-bar');
+  const bossBarNameEl = root.querySelector('#boss-bar-name');
+  const bossBarTitleEl = root.querySelector('#boss-bar-title');
+  const bossBarPhaseEl = root.querySelector('#boss-bar-phase');
+  const bossBarFillEl = root.querySelector('#boss-bar-fill');
+  const bossBarTicksEl = root.querySelector('#boss-bar-ticks');
+  const bossBarHpTextEl = root.querySelector('#boss-bar-hp-text');
   const helpModal = root.querySelector('#help-modal');
   const btnHelpClose = root.querySelector('#btn-help-close');
   const btnHelpCloseBottom = root.querySelector('#btn-help-close-bottom');
@@ -610,6 +633,9 @@ export function createHud(ctx) {
     }
     if (state.player?.buffs) {
       renderBuffs(state.player.buffs);
+    }
+    if (bossBarState.visible) {
+      renderBossBarText();
     }
   }
 
@@ -840,10 +866,185 @@ export function createHud(ctx) {
     }, 950);
   }
 
-  // ---------------------------------------------------------------- 3D Overlays (Health Bars, Damage Numbers, Vignette)
+  // ---------------------------------------------------------------- Boss Health Bar UI
+  const bossBarState = {
+    visible: false,
+    nameKey: '',
+    titleKey: '',
+    hp: 100,
+    maxHp: 100,
+    phase: 1,
+    phaseCount: 1,
+    demoActive: false,
+    demoElapsed: 0,
+    demoDuration: 3.0,
+  };
+
+  function renderBossBarText() {
+    if (!bossBarEl) return;
+    if (bossBarNameEl) {
+      bossBarNameEl.textContent = bossBarState.nameKey ? i18n.t(bossBarState.nameKey) : '';
+    }
+    if (bossBarTitleEl) {
+      const tStr = bossBarState.titleKey ? i18n.t(bossBarState.titleKey) : '';
+      bossBarTitleEl.textContent = tStr;
+      bossBarTitleEl.style.display = tStr ? '' : 'none';
+    }
+    if (bossBarPhaseEl) {
+      if (bossBarState.phaseCount > 1) {
+        bossBarPhaseEl.textContent = i18n.t('hud.bossPhase', {
+          phase: bossBarState.phase,
+          total: bossBarState.phaseCount,
+        });
+        bossBarPhaseEl.style.display = '';
+      } else {
+        bossBarPhaseEl.textContent = '';
+        bossBarPhaseEl.style.display = 'none';
+      }
+    }
+  }
+
+  function renderBossBarValues() {
+    if (!bossBarEl) return;
+    const maxHp = Math.max(1, bossBarState.maxHp || 1);
+    const hp = Math.max(0, Math.min(maxHp, bossBarState.hp ?? maxHp));
+    const pct = (hp / maxHp) * 100;
+    if (bossBarFillEl) {
+      bossBarFillEl.style.width = `${pct.toFixed(1)}%`;
+    }
+    if (bossBarHpTextEl) {
+      bossBarHpTextEl.textContent = `${Math.round(hp)} / ${Math.round(maxHp)}`;
+    }
+  }
+
+  function showBossBar({ nameKey = 'boss.demo.name', titleKey = '', hp = 1000, maxHp = 1000, phase = 1, phaseCount = 3 } = {}) {
+    bossBarState.visible = true;
+    bossBarState.nameKey = nameKey;
+    bossBarState.titleKey = titleKey;
+    bossBarState.maxHp = Math.max(1, Number(maxHp) || 1000);
+    bossBarState.hp = Math.max(0, Math.min(bossBarState.maxHp, Number(hp ?? bossBarState.maxHp)));
+    bossBarState.phaseCount = Math.max(1, Math.floor(Number(phaseCount) || 1));
+    bossBarState.phase = Math.max(1, Math.min(bossBarState.phaseCount, Math.floor(Number(phase) || 1)));
+    bossBarState.demoActive = false;
+
+    if (bossBarTicksEl) {
+      bossBarTicksEl.innerHTML = '';
+      for (let p = 1; p < bossBarState.phaseCount; p++) {
+        const tick = document.createElement('span');
+        tick.className = 'boss-bar__tick';
+        tick.style.left = `${((p / bossBarState.phaseCount) * 100).toFixed(2)}%`;
+        bossBarTicksEl.appendChild(tick);
+      }
+    }
+
+    renderBossBarText();
+    renderBossBarValues();
+
+    if (bossBarEl) {
+      bossBarEl.classList.remove('is-hidden');
+    }
+    if (playHud) {
+      playHud.classList.add('has-boss-bar');
+    }
+  }
+
+  function updateBossBar({ hp, maxHp, phase } = {}) {
+    if (maxHp != null) bossBarState.maxHp = Math.max(1, Number(maxHp));
+    if (hp != null) bossBarState.hp = Math.max(0, Math.min(bossBarState.maxHp, Number(hp)));
+    if (phase != null && phase !== bossBarState.phase) {
+      bossBarState.phase = Math.max(1, Math.min(bossBarState.phaseCount, Math.floor(Number(phase))));
+      renderBossBarText();
+    }
+    renderBossBarValues();
+  }
+
+  function hideBossBar() {
+    bossBarState.visible = false;
+    bossBarState.demoActive = false;
+    if (bossBarEl) {
+      bossBarEl.classList.add('is-hidden');
+    }
+    if (playHud) {
+      playHud.classList.remove('has-boss-bar');
+    }
+  }
+
+  function startBossBarDemo() {
+    if (titleScreen && !titleScreen.classList.contains('is-hidden')) {
+      bus.emit('game:start');
+    }
+    showBossBar({
+      nameKey: 'boss.demo.name',
+      titleKey: 'boss.demo.title',
+      hp: 1000,
+      maxHp: 1000,
+      phase: 1,
+      phaseCount: 3,
+    });
+    bossBarState.demoActive = true;
+    bossBarState.demoElapsed = 0;
+    bossBarState.demoDuration = 3.0;
+    return true;
+  }
+
+  // ---------------------------------------------------------------- 3D Overlays (Health Bars, Pooled Damage Numbers, Vignette)
+  const DMG_POOL_SIZE = 40;
+  const dmgPool = [];
+  if (damageNumbersContainer) {
+    damageNumbersContainer.innerHTML = '';
+    for (let i = 0; i < DMG_POOL_SIZE; i++) {
+      const el = document.createElement('div');
+      el.className = 'floating-damage';
+      el.style.display = 'none';
+      damageNumbersContainer.appendChild(el);
+      dmgPool.push({
+        el,
+        active: false,
+        timer: 0,
+        duration: 0.85,
+        bornAt: 0,
+      });
+    }
+  }
+
+  function spawnFloatingDamage(screenX, screenY, amount, { type = 'physical', crit = false, isEnemy = true } = {}) {
+    if (!dmgPool.length) return;
+    let slot = dmgPool.find((s) => !s.active);
+    if (!slot) {
+      // Reuse the oldest active slot so DOM node count never exceeds 40
+      let oldest = dmgPool[0];
+      for (let i = 1; i < dmgPool.length; i++) {
+        if (dmgPool[i].bornAt < oldest.bornAt) oldest = dmgPool[i];
+      }
+      slot = oldest;
+    }
+
+    slot.active = true;
+    slot.timer = 0;
+    slot.duration = crit ? 0.95 : 0.85;
+    slot.bornAt = performance.now();
+
+    const el = slot.el;
+    const isMagic = type === 'magic';
+    const typeCls = isMagic ? 'floating-damage--magic is-magic' : 'floating-damage--physical is-physical';
+    const critCls = crit ? 'floating-damage--crit is-crit' : '';
+    const targetCls = isEnemy ? 'enemy-dmg-number' : 'player-dmg-number';
+
+    // Reset animation cleanly
+    el.style.display = 'none';
+    el.className = `floating-damage ${typeCls} ${critCls} ${targetCls}`.trim();
+    el.textContent = crit ? `-${amount}!` : `-${amount}`;
+    el.style.left = `${screenX}px`;
+    el.style.top = `${screenY}px`;
+    void el.offsetWidth;
+    el.style.display = 'block';
+  }
+
   const projVec = new Vector3();
   function toScreen(pos) {
     if (!ctx.camera) return null;
+    ctx.camera.updateMatrixWorld();
+    ctx.camera.matrixWorldInverse.copy(ctx.camera.matrixWorld).invert();
     projVec.set(pos.x, pos.y, pos.z);
     projVec.project(ctx.camera);
     if (projVec.z > 1 || projVec.z < -1) return null;
@@ -880,18 +1081,12 @@ export function createHud(ctx) {
       if (playerPos) {
         const pt = toScreen({ x: playerPos.x, y: playerPos.y + 1.85, z: playerPos.z });
         if (pt) {
-          const el = document.createElement('div');
-          const isMagic = payload.type === 'magic';
-          el.className = `floating-damage ${isMagic ? 'floating-damage--magic is-magic' : 'floating-damage--physical is-physical'}`;
-          el.textContent = `-${payload.amount}`;
           const jitterX = (Math.random() - 0.5) * 16;
-          el.style.left = `${pt.x + jitterX}px`;
-          el.style.top = `${pt.y}px`;
-          damageNumbersContainer.appendChild(el);
-
-          setTimeout(() => {
-            if (el.parentNode) el.parentNode.removeChild(el);
-          }, 850);
+          spawnFloatingDamage(pt.x + jitterX, pt.y, payload.amount, {
+            type: payload.type || 'physical',
+            crit: false,
+            isEnemy: false,
+          });
         }
       }
     }
@@ -902,17 +1097,13 @@ export function createHud(ctx) {
     const pt = toScreen(payload.position);
     if (!pt) return;
 
-    const el = document.createElement('div');
-    el.className = 'floating-damage floating-damage--physical is-physical enemy-dmg-number';
-    el.textContent = `-${payload.damage}`;
-    const jitterX = (Math.random() - 0.5) * 20;
-    el.style.left = `${pt.x + jitterX}px`;
-    el.style.top = `${pt.y}px`;
-    damageNumbersContainer.appendChild(el);
-
-    setTimeout(() => {
-      if (el.parentNode) el.parentNode.removeChild(el);
-    }, 850);
+    const jitterX = (Math.random() - 0.5) * 22;
+    const jitterY = (Math.random() - 0.5) * 8;
+    spawnFloatingDamage(pt.x + jitterX, pt.y + jitterY, payload.damage, {
+      type: payload.type || 'physical',
+      crit: Boolean(payload.crit),
+      isEnemy: true,
+    });
   });
 
   const enemyBars = new Map();
@@ -948,11 +1139,18 @@ export function createHud(ctx) {
       if (!bar) {
         const wrap = document.createElement('div');
         wrap.className = 'enemy-hp-wrap';
-        wrap.innerHTML = `<div class="enemy-hp-track"><div class="enemy-hp-fill"></div></div>`;
+        wrap.innerHTML = `<span class="enemy-hp-level">Lv1</span><div class="enemy-hp-track"><div class="enemy-hp-fill"></div></div>`;
         const fill = wrap.querySelector('.enemy-hp-fill');
+        const lvl = wrap.querySelector('.enemy-hp-level');
         enemyHpContainer.appendChild(wrap);
-        bar = { wrap, fill };
+        bar = { wrap, fill, lvl, lastLevel: -1 };
         enemyBars.set(e.id, bar);
+      }
+
+      const curLvl = e.level || 1;
+      if (bar.lastLevel !== curLvl && bar.lvl) {
+        bar.lastLevel = curLvl;
+        bar.lvl.textContent = `Lv${curLvl}`;
       }
 
       bar.wrap.style.display = '';
@@ -1247,7 +1445,33 @@ export function createHud(ctx) {
     // 6. Update enemy overhead health bars
     updateEnemyHealthBars();
 
-    // 7. Update player slow status icon
+    // 7. Tick pooled floating damage numbers
+    for (let i = 0; i < dmgPool.length; i++) {
+      const slot = dmgPool[i];
+      if (!slot.active) continue;
+      slot.timer += dt;
+      if (slot.timer >= slot.duration) {
+        slot.active = false;
+        slot.el.style.display = 'none';
+      }
+    }
+
+    // 8. Tick Boss bar demo if active
+    if (bossBarState.demoActive && bossBarState.visible) {
+      bossBarState.demoElapsed += dt;
+      const u = Math.min(1, bossBarState.demoElapsed / (bossBarState.demoDuration || 3.0));
+      const nextHp = Math.round(bossBarState.maxHp * (1 - u * 0.82));
+      const ratio = nextHp / bossBarState.maxHp;
+      let nextPhase = 1;
+      if (ratio <= 0.34) nextPhase = 3;
+      else if (ratio <= 0.67) nextPhase = 2;
+      updateBossBar({ hp: nextHp, phase: nextPhase });
+      if (u >= 1) {
+        bossBarState.demoActive = false;
+      }
+    }
+
+    // 9. Update player slow status icon
     const isSlowed = state.elapsed < (state.player?.slowUntil || 0);
     if (isSlowed && state.player?.position && !hudHidden) {
       const pt = toScreen({ x: state.player.position.x, y: state.player.position.y + 2.1, z: state.player.position.z });
@@ -1263,7 +1487,24 @@ export function createHud(ctx) {
     }
   }
 
-  return {
+  const api = {
     update,
+    showBossBar,
+    updateBossBar,
+    hideBossBar,
+    bossBar: {
+      demo: startBossBarDemo,
+      show: showBossBar,
+      update: updateBossBar,
+      hide: hideBossBar,
+    },
   };
+
+  ctx.hud = api;
+  ctx.debug?.register('hud', api);
+  if (typeof window !== 'undefined' && window.__stupa) {
+    window.__stupa.hud = api;
+  }
+
+  return api;
 }
