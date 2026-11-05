@@ -1,0 +1,240 @@
+/**
+ * Equipment affix definitions (prefixes & suffixes).
+ * Covers 16 distinct stats, each with 4 item-level tiers.
+ * An item may never roll two affixes with the same `stat`.
+ */
+
+export const AFFIXES = [
+  // ================================================================ Prefixes (8)
+  {
+    id: 'fierce',
+    kind: 'prefix',
+    stat: 'atk',
+    slots: ['mainhand', 'offhand', 'hands', 'neck', 'ring'],
+    weight: 100,
+    nameKey: 'affix.fierce',
+    tiers: [
+      { minIlvl: 1, min: 1, max: 3 },
+      { minIlvl: 10, min: 4, max: 7 },
+      { minIlvl: 20, min: 8, max: 12 },
+      { minIlvl: 30, min: 13, max: 18 },
+    ],
+  },
+  {
+    id: 'blazing',
+    kind: 'prefix',
+    stat: 'atkPct',
+    slots: ['mainhand', 'offhand', 'hands', 'neck', 'ring'],
+    weight: 90,
+    nameKey: 'affix.blazing',
+    tiers: [
+      { minIlvl: 1, min: 3, max: 5 },
+      { minIlvl: 10, min: 6, max: 9 },
+      { minIlvl: 20, min: 10, max: 14 },
+      { minIlvl: 30, min: 15, max: 20 },
+    ],
+  },
+  {
+    id: 'adamantine',
+    kind: 'prefix',
+    stat: 'def',
+    slots: ['head', 'body', 'hands', 'feet', 'offhand', 'ring'],
+    weight: 100,
+    nameKey: 'affix.adamantine',
+    tiers: [
+      { minIlvl: 1, min: 2, max: 4 },
+      { minIlvl: 10, min: 5, max: 9 },
+      { minIlvl: 20, min: 10, max: 15 },
+      { minIlvl: 30, min: 16, max: 24 },
+    ],
+  },
+  {
+    id: 'vital',
+    kind: 'prefix',
+    stat: 'maxHp',
+    slots: ['head', 'body', 'hands', 'feet', 'neck', 'ring'],
+    weight: 110,
+    nameKey: 'affix.vital',
+    tiers: [
+      { minIlvl: 1, min: 10, max: 20 },
+      { minIlvl: 10, min: 22, max: 40 },
+      { minIlvl: 20, min: 42, max: 70 },
+      { minIlvl: 30, min: 75, max: 110 },
+    ],
+  },
+  {
+    id: 'clearMind',
+    kind: 'prefix',
+    stat: 'maxMp',
+    slots: ['offhand', 'head', 'body', 'feet', 'neck', 'ring'],
+    weight: 95,
+    nameKey: 'affix.clearMind',
+    tiers: [
+      { minIlvl: 1, min: 8, max: 15 },
+      { minIlvl: 10, min: 16, max: 28 },
+      { minIlvl: 20, min: 30, max: 45 },
+      { minIlvl: 30, min: 48, max: 70 },
+    ],
+  },
+  {
+    id: 'resonant',
+    kind: 'prefix',
+    stat: 'mantraRadius',
+    slots: ['mainhand', 'offhand', 'head', 'neck', 'ring'],
+    weight: 75,
+    nameKey: 'affix.resonant',
+    tiers: [
+      { minIlvl: 1, min: 3, max: 5 },
+      { minIlvl: 10, min: 6, max: 9 },
+      { minIlvl: 20, min: 10, max: 14 },
+      { minIlvl: 30, min: 15, max: 20 },
+    ],
+  },
+  {
+    id: 'vajra',
+    kind: 'prefix',
+    stat: 'skillDamage',
+    slots: ['mainhand', 'offhand', 'head', 'body', 'hands', 'neck'],
+    weight: 85,
+    nameKey: 'affix.vajra',
+    tiers: [
+      { minIlvl: 1, min: 3, max: 5 },
+      { minIlvl: 10, min: 6, max: 9 },
+      { minIlvl: 20, min: 10, max: 14 },
+      { minIlvl: 30, min: 15, max: 20 },
+    ],
+  },
+  {
+    id: 'auspicious',
+    kind: 'prefix',
+    stat: 'findBonus',
+    slots: ['head', 'hands', 'feet', 'neck', 'ring'],
+    weight: 70,
+    nameKey: 'affix.auspicious',
+    tiers: [
+      { minIlvl: 1, min: 4, max: 7 },
+      { minIlvl: 10, min: 8, max: 13 },
+      { minIlvl: 20, min: 14, max: 20 },
+      { minIlvl: 30, min: 21, max: 30 },
+    ],
+  },
+
+  // ================================================================ Suffixes (8)
+  {
+    id: 'spring',
+    kind: 'suffix',
+    stat: 'mpRegen',
+    float: true,
+    slots: ['offhand', 'head', 'body', 'feet', 'neck', 'ring'],
+    weight: 90,
+    nameKey: 'affix.spring',
+    tiers: [
+      { minIlvl: 1, min: 0.2, max: 0.4 },
+      { minIlvl: 10, min: 0.5, max: 0.8 },
+      { minIlvl: 20, min: 0.9, max: 1.3 },
+      { minIlvl: 30, min: 1.4, max: 2.0 },
+    ],
+  },
+  {
+    id: 'insight',
+    kind: 'suffix',
+    stat: 'critChance',
+    slots: ['mainhand', 'offhand', 'hands', 'neck', 'ring'],
+    weight: 85,
+    nameKey: 'affix.insight',
+    tiers: [
+      { minIlvl: 1, min: 1, max: 2 },
+      { minIlvl: 10, min: 3, max: 4 },
+      { minIlvl: 20, min: 5, max: 6 },
+      { minIlvl: 30, min: 7, max: 9 },
+    ],
+  },
+  {
+    id: 'wrath',
+    kind: 'suffix',
+    stat: 'critDamage',
+    slots: ['mainhand', 'hands', 'neck', 'ring'],
+    weight: 85,
+    nameKey: 'affix.wrath',
+    tiers: [
+      { minIlvl: 1, min: 6, max: 10 },
+      { minIlvl: 10, min: 11, max: 18 },
+      { minIlvl: 20, min: 19, max: 28 },
+      { minIlvl: 30, min: 30, max: 42 },
+    ],
+  },
+  {
+    id: 'windhorse',
+    kind: 'suffix',
+    stat: 'moveSpeed',
+    slots: ['feet', 'neck', 'ring'],
+    weight: 80,
+    nameKey: 'affix.windhorse',
+    tiers: [
+      { minIlvl: 1, min: 2, max: 3 },
+      { minIlvl: 10, min: 4, max: 5 },
+      { minIlvl: 20, min: 6, max: 8 },
+      { minIlvl: 30, min: 9, max: 12 },
+    ],
+  },
+  {
+    id: 'samadhi',
+    kind: 'suffix',
+    stat: 'cdr',
+    slots: ['offhand', 'head', 'hands', 'feet', 'neck', 'ring'],
+    weight: 85,
+    nameKey: 'affix.samadhi',
+    tiers: [
+      { minIlvl: 1, min: 2, max: 3 },
+      { minIlvl: 10, min: 4, max: 5 },
+      { minIlvl: 20, min: 6, max: 8 },
+      { minIlvl: 30, min: 9, max: 11 },
+    ],
+  },
+  {
+    id: 'warding',
+    kind: 'suffix',
+    stat: 'magicRes',
+    slots: ['head', 'body', 'hands', 'feet', 'neck', 'ring'],
+    weight: 90,
+    nameKey: 'affix.warding',
+    tiers: [
+      { minIlvl: 1, min: 3, max: 5 },
+      { minIlvl: 10, min: 6, max: 9 },
+      { minIlvl: 20, min: 10, max: 14 },
+      { minIlvl: 30, min: 15, max: 20 },
+    ],
+  },
+  {
+    id: 'compassion',
+    kind: 'suffix',
+    stat: 'hpOnLiberate',
+    slots: ['mainhand', 'offhand', 'body', 'hands', 'neck', 'ring'],
+    weight: 80,
+    nameKey: 'affix.compassion',
+    tiers: [
+      { minIlvl: 1, min: 2, max: 4 },
+      { minIlvl: 10, min: 5, max: 8 },
+      { minIlvl: 20, min: 9, max: 14 },
+      { minIlvl: 30, min: 15, max: 22 },
+    ],
+  },
+  {
+    id: 'prajna',
+    kind: 'suffix',
+    stat: 'expBonus',
+    slots: ['head', 'body', 'neck', 'ring'],
+    weight: 70,
+    nameKey: 'affix.prajna',
+    tiers: [
+      { minIlvl: 1, min: 3, max: 5 },
+      { minIlvl: 10, min: 6, max: 9 },
+      { minIlvl: 20, min: 10, max: 14 },
+      { minIlvl: 30, min: 15, max: 20 },
+    ],
+  },
+];
+
+export const AFFIXES_BY_ID = Object.fromEntries(
+  AFFIXES.map((affix) => [affix.id, affix])
+);

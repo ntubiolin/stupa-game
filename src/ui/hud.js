@@ -614,7 +614,7 @@ export function createHud(ctx) {
     lastPhase = '';
     displayedStats.koraPct = -1;
     if (currentPrompt) {
-      promptLabel.textContent = i18n.t(currentPrompt.labelKey);
+      promptLabel.textContent = i18n.t(currentPrompt.labelKey, currentPrompt.params);
     }
 
     // Re-localize active toasts
@@ -691,7 +691,7 @@ export function createHud(ctx) {
       promptBtn.classList.add('is-hidden');
     } else {
       promptKey.textContent = payload.keyHint || 'E';
-      promptLabel.textContent = i18n.t(payload.labelKey);
+      promptLabel.textContent = i18n.t(payload.labelKey, payload.params);
       promptBtn.classList.remove('is-hidden');
     }
   });

@@ -27,6 +27,7 @@ import { createEnvironment } from './world/environment.js';
 import { createLamps } from './gameplay/lamps.js';
 import { createMonkeys } from './gameplay/monkeys.js';
 import { createItems } from './gameplay/items.js';
+import { createGroundLoot } from './gameplay/groundLoot.js';
 import { createMantra } from './gameplay/mantra.js';
 import { createEnemies } from './gameplay/enemies.js';
 import { createProjectiles } from './gameplay/projectiles.js';
@@ -35,6 +36,7 @@ import { createCameraRig } from './player/cameraRig.js';
 
 import { createZones } from './systems/zones.js';
 import { createSave } from './systems/save.js';
+import { createLoot } from './systems/loot.js';
 import { createVitals } from './systems/vitals.js';
 import { createInteraction } from './systems/interaction.js';
 import { createMerit } from './systems/merit.js';
@@ -133,6 +135,8 @@ const enemies = createEnemies(ctx);
 ctx.enemies = enemies;
 const projectiles = createProjectiles(ctx);
 ctx.projectiles = projectiles;
+const loot = createLoot(ctx);
+const groundLoot = createGroundLoot(ctx);
 const items = createItems(ctx);
 const lamps = createLamps(ctx);
 const monkeys = createMonkeys(ctx);
@@ -149,7 +153,7 @@ const modules = [
   ctx.save,
   sky, stupa, flags, environment,
   zones,
-  player, mantra, enemies, projectiles, items, lamps, monkeys,
+  player, mantra, enemies, projectiles, loot, groundLoot, items, lamps, monkeys,
   vitals,
   cameraRig,
   merit, interaction, audio, hud,
@@ -201,4 +205,4 @@ function frame() {
 requestAnimationFrame(frame);
 
 // Debug handle (dev only)
-if (import.meta.env.DEV) window.__game = { ctx, modules: { sky, stupa, flags, environment, zones, player, mantra, enemies, projectiles, items, lamps, monkeys, vitals, cameraRig, merit, interaction, audio, hud } };
+if (import.meta.env.DEV) window.__game = { ctx, modules: { sky, stupa, flags, environment, zones, player, mantra, enemies, projectiles, loot, groundLoot, items, lamps, monkeys, vitals, cameraRig, merit, interaction, audio, hud } };
