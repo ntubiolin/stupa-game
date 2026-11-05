@@ -24,6 +24,7 @@ const ACTION_KEYS = {
   Numpad1: 'prostrate',
   KeyR: 'chant',
   Space: 'chant',
+  KeyX: 'potion',
   KeyH: 'toggleHud',
   KeyP: 'pause',
   KeyI: 'inventory',

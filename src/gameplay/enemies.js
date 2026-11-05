@@ -15,6 +15,12 @@
  * Strict zero-memory-leak: base geometries and particle pools allocated once.
  */
 import * as THREE from 'three';
+import {
+  pickEliteAffixes,
+  rollRareMonsterSeed,
+  formatEliteTitle,
+  formatEliteAffixSubtitle,
+} from '../data/eliteAffixes.js';
 
 const TWO_PI = Math.PI * 2;
 
@@ -156,6 +162,81 @@ export function createEnemies(ctx) {
     side: THREE.DoubleSide,
   });
 
+  // --- Elite Rank Halos & Affix Visual Geometries / Materials (Zero PointLight)
+  const championHaloGeo = new THREE.RingGeometry(0.68, 0.88, 32);
+  championHaloGeo.rotateX(-Math.PI / 2);
+  const championHaloMat = new THREE.MeshBasicMaterial({
+    color: 0x3b82f6,
+    transparent: true,
+    opacity: 0.78,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    toneMapped: false,
+  });
+
+  const rareHaloGeo = new THREE.RingGeometry(0.76, 1.02, 36);
+  rareHaloGeo.rotateX(-Math.PI / 2);
+  const rareHaloMat = new THREE.MeshBasicMaterial({
+    color: 0xfacc15,
+    transparent: true,
+    opacity: 0.85,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    toneMapped: false,
+  });
+
+  const armorPlateGeo = new THREE.BoxGeometry(0.22, 0.34, 0.08);
+  const armorPlateMat = new THREE.MeshStandardMaterial({
+    color: 0x64748b,
+    roughness: 0.4,
+    metalness: 0.72,
+    emissive: 0x1e293b,
+    emissiveIntensity: 0.45,
+  });
+
+  const shieldSphereGeo = new THREE.SphereGeometry(1.0, 18, 14);
+  const sharedShieldMat = new THREE.MeshBasicMaterial({
+    color: 0xa855f7,
+    transparent: true,
+    opacity: 0.42,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    toneMapped: false,
+  });
+
+  const frozenOrbGeo = new THREE.SphereGeometry(0.24, 12, 10);
+  const frozenOrbMat = new THREE.MeshBasicMaterial({
+    color: 0x7dd3fc,
+    transparent: true,
+    opacity: 0.9,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const frozenRingGeo = new THREE.RingGeometry(1.68, 1.8, 32);
+  frozenRingGeo.rotateX(-Math.PI / 2);
+  const frozenFillGeo = new THREE.CircleGeometry(1.75, 32);
+  frozenFillGeo.rotateX(-Math.PI / 2);
+
+  const moltenPatchGeo = new THREE.CircleGeometry(1.3, 28);
+  moltenPatchGeo.rotateX(-Math.PI / 2);
+  const moltenPatchRingGeo = new THREE.RingGeometry(1.18, 1.3, 28);
+  moltenPatchRingGeo.rotateX(-Math.PI / 2);
+
+  const moltenBombRingGeo = new THREE.RingGeometry(2.36, 2.5, 36);
+  moltenBombRingGeo.rotateX(-Math.PI / 2);
+  const moltenBombFillGeo = new THREE.CircleGeometry(2.45, 36);
+  moltenBombFillGeo.rotateX(-Math.PI / 2);
+
+  const puffSphereGeo = new THREE.SphereGeometry(0.45, 10, 8);
+
+  const eliteHazardGroup = new THREE.Group();
+  eliteHazardGroup.name = 'EliteHazards';
+  enemyGroup.add(eliteHazardGroup);
+
   // Debug Query Visualization Group (for cone/line/circle inspection)
   const debugQueryGroup = new THREE.Group();
   debugQueryGroup.name = 'EnemyQueryDebug';
@@ -244,15 +325,208 @@ export function createEnemies(ctx) {
   // ---------------------------------------------------------------- 3. Enemy Instance Builder
   const activeEnemies = [];
   const pendingRespawns = [];
+  const pendingElitePackRespawns = [];
+  const activeFrozenOrbs = [];
+  const activeMoltenPatches = [];
+  const activeMoltenBombs = [];
+  const activePuffs = [];
   let enemyIdCounter = 1;
+  let packIdCounter = 1;
   let isFrozen = false;
 
   const RANK_MULTS = {
     normal: { hp: 1.0, dmg: 1.0, exp: 1.0 },
-    champion: { hp: 2.8, dmg: 1.35, exp: 3.0 },
-    rare: { hp: 4.5, dmg: 1.6, exp: 5.0 },
+    champion: { hp: 2.5, dmg: 1.3, exp: 3.0 },
+    rare: { hp: 4.0, dmg: 1.5, exp: 5.0 },
     boss: { hp: 18.0, dmg: 1.8, exp: 20.0 },
   };
+
+  function spawnSmokePuff(pos, colorHex = 0x1e1b4b, maxScale = 1.8, duration = 0.45) {
+    const mat = new THREE.MeshBasicMaterial({
+      color: colorHex,
+      transparent: true,
+      opacity: 0.75,
+      blending: colorHex === 0x1e1b4b ? THREE.NormalBlending : THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const mesh = new THREE.Mesh(puffSphereGeo, mat);
+    mesh.position.set(pos.x, (pos.y || 0) + 0.85, pos.z);
+    eliteHazardGroup.add(mesh);
+    activePuffs.push({ mesh, mat, age: 0, duration, maxScale });
+  }
+
+  function spawnFrozenOrbHazard(x, z, dmgScale = 1) {
+    const y = ctx.world ? ctx.world.getHeight(x, z) : 0;
+    const grp = new THREE.Group();
+    grp.position.set(x, y + 0.03, z);
+
+    const orbMesh = new THREE.Mesh(frozenOrbGeo, frozenOrbMat);
+    orbMesh.position.y = 0.55;
+    grp.add(orbMesh);
+
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      transparent: true,
+      opacity: 0.85,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const ringMesh = new THREE.Mesh(frozenRingGeo, ringMat);
+    grp.add(ringMesh);
+
+    const fillMat = new THREE.MeshBasicMaterial({
+      color: 0xef4444,
+      transparent: true,
+      opacity: 0.36,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const fillMesh = new THREE.Mesh(frozenFillGeo, fillMat);
+    fillMesh.scale.set(0.01, 1, 0.01);
+    grp.add(fillMesh);
+
+    eliteHazardGroup.add(grp);
+    activeFrozenOrbs.push({
+      group: grp,
+      orbMesh,
+      ringMat,
+      fillMat,
+      fillMesh,
+      x,
+      y,
+      z,
+      age: 0,
+      fuseTime: 1.5,
+      radius: 1.8,
+      damage: Math.max(1, Math.round(8 * dmgScale)),
+      slow: 2.0,
+    });
+  }
+
+  function spawnMoltenPatchHazard(x, z, dmgScale = 1) {
+    const y = ctx.world ? ctx.world.getHeight(x, z) : 0;
+    const grp = new THREE.Group();
+    grp.position.set(x, y + 0.025, z);
+
+    const fillMat = new THREE.MeshBasicMaterial({
+      color: 0xf97316,
+      transparent: true,
+      opacity: 0.48,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const fillMesh = new THREE.Mesh(moltenPatchGeo, fillMat);
+    grp.add(fillMesh);
+
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xef4444,
+      transparent: true,
+      opacity: 0.82,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const ringMesh = new THREE.Mesh(moltenPatchRingGeo, ringMat);
+    grp.add(ringMesh);
+
+    eliteHazardGroup.add(grp);
+    activeMoltenPatches.push({
+      group: grp,
+      fillMat,
+      ringMat,
+      x,
+      y,
+      z,
+      age: 0,
+      duration: 3.5,
+      radius: 1.3,
+      tickTimer: 0.1,
+      tickInterval: 0.5,
+      damage: Math.max(1, Math.round(2 * dmgScale)),
+    });
+  }
+
+  function spawnMoltenDeathBomb(x, z, dmgScale = 1) {
+    const y = ctx.world ? ctx.world.getHeight(x, z) : 0;
+    const grp = new THREE.Group();
+    grp.position.set(x, y + 0.035, z);
+
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xef4444,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const ringMesh = new THREE.Mesh(moltenBombRingGeo, ringMat);
+    grp.add(ringMesh);
+
+    const fillMat = new THREE.MeshBasicMaterial({
+      color: 0xf97316,
+      transparent: true,
+      opacity: 0.42,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const fillMesh = new THREE.Mesh(moltenBombFillGeo, fillMat);
+    fillMesh.scale.set(0.01, 1, 0.01);
+    grp.add(fillMesh);
+
+    eliteHazardGroup.add(grp);
+    activeMoltenBombs.push({
+      group: grp,
+      ringMat,
+      fillMat,
+      fillMesh,
+      x,
+      y,
+      z,
+      age: 0,
+      fuseTime: 1.5,
+      radius: 2.5,
+      damage: Math.max(1, Math.round(14 * dmgScale)),
+    });
+  }
+
+  function clearEliteHazards() {
+    for (const o of activeFrozenOrbs) {
+      eliteHazardGroup.remove(o.group);
+      o.ringMat.dispose();
+      o.fillMat.dispose();
+    }
+    activeFrozenOrbs.length = 0;
+
+    for (const p of activeMoltenPatches) {
+      eliteHazardGroup.remove(p.group);
+      p.fillMat.dispose();
+      p.ringMat.dispose();
+    }
+    activeMoltenPatches.length = 0;
+
+    for (const b of activeMoltenBombs) {
+      eliteHazardGroup.remove(b.group);
+      b.ringMat.dispose();
+      b.fillMat.dispose();
+    }
+    activeMoltenBombs.length = 0;
+
+    for (const pf of activePuffs) {
+      eliteHazardGroup.remove(pf.mesh);
+      pf.mat.dispose();
+    }
+    activePuffs.length = 0;
+  }
 
   function sampleMapLevel() {
     const mapDef = ctx.world?.getMap(state.zone);
@@ -637,7 +911,63 @@ export function createEnemies(ctx) {
     stunIndicator.visible = false;
     group.add(stunIndicator);
 
+    // --- Elite Rank & Affix Setup
+    const affixes = Array.isArray(opts.affixes) ? [...opts.affixes] : [];
+    const hasAffix = (affixId) => affixes.includes(affixId);
+    const eliteNameSeed =
+      opts.eliteNameSeed || (rank === 'rare' ? rollRareMonsterSeed() : null);
+
+    if (rank === 'rare') {
+      group.scale.setScalar(1.2);
+    }
+
+    let rankHaloMesh = null;
+    if (rank === 'champion') {
+      rankHaloMesh = new THREE.Mesh(championHaloGeo, championHaloMat);
+      rankHaloMesh.position.set(0, 0.03, 0);
+      rankHaloMesh.scale.set(rScale * 1.15, 1, rScale * 1.15);
+      group.add(rankHaloMesh);
+    } else if (rank === 'rare') {
+      rankHaloMesh = new THREE.Mesh(rareHaloGeo, rareHaloMat);
+      rankHaloMesh.position.set(0, 0.035, 0);
+      rankHaloMesh.scale.set(rScale * 1.2, 1, rScale * 1.2);
+      group.add(rankHaloMesh);
+    }
+
+    let armorRingGroup = null;
+    if (hasAffix('armored')) {
+      armorRingGroup = new THREE.Group();
+      armorRingGroup.position.set(0, (kCfg.height || 1.6) * 0.55, 0);
+      const orbitR = (kCfg.radius || 0.6) + 0.26;
+      for (let pIdx = 0; pIdx < 3; pIdx++) {
+        const ang = (pIdx / 3) * Math.PI * 2;
+        const plate = new THREE.Mesh(armorPlateGeo, armorPlateMat);
+        plate.position.set(Math.cos(ang) * orbitR, 0, Math.sin(ang) * orbitR);
+        plate.rotation.y = -ang + Math.PI / 2;
+        armorRingGroup.add(plate);
+      }
+      group.add(armorRingGroup);
+      for (const mat of materials) {
+        if (mat.metalness != null) mat.metalness = Math.min(0.9, mat.metalness + 0.35);
+      }
+    }
+
+    let shieldMesh = null;
+    const hasShielding = hasAffix('shielding');
+    if (hasShielding) {
+      shieldMesh = new THREE.Mesh(shieldSphereGeo, sharedShieldMat);
+      const shieldRadius = Math.max(0.95, (kCfg.height || 1.6) * 0.65);
+      shieldMesh.scale.setScalar(shieldRadius);
+      shieldMesh.position.set(0, (kCfg.height || 1.6) * 0.5, 0);
+      shieldMesh.visible = true;
+      group.add(shieldMesh);
+    }
+
     enemyGroup.add(group);
+
+    const speedMult = hasAffix('swift') ? 1.5 : 1.0;
+    const cooldownMult = hasAffix('swift') ? 0.8 : 1.0;
+    const incomingDmgMult = hasAffix('armored') ? 0.7 : 1.0;
 
     const enemy = {
       id,
@@ -645,18 +975,26 @@ export function createEnemies(ctx) {
       kindConfig: kCfg,
       level,
       rank,
+      affixes,
+      eliteNameSeed,
+      packId: opts.packId || null,
+      packRank: opts.packRank || null,
+      minionOf: opts.minionOf || null,
+      noSplit: Boolean(opts.noSplit),
       displayNameKey,
       def,
       ccResist,
       tags,
       dmgScale,
+      cooldownMult,
+      incomingDmgMult,
       hp: scaledHp,
       maxHp: scaledHp,
-      speed: kCfg.speed,
+      speed: kCfg.speed * speedMult,
       exp: scaledExp,
       ring: kCfg.ring,
-      radius: kCfg.radius,
-      height: kCfg.height,
+      radius: kCfg.radius * (rank === 'rare' ? 1.2 : 1.0),
+      height: kCfg.height * (rank === 'rare' ? 1.2 : 1.0),
       pos: { x: spawnPos.x, y: spawnPos.y, z: spawnPos.z },
       heading: 0,
       lockedHeading: 0,
@@ -676,11 +1014,20 @@ export function createEnemies(ctx) {
       homePos: { x: spawnPos.x, z: spawnPos.z },
       flashTimer: 0,
       liberateTimer: 0,
+      shielded: hasShielding,
+      shieldTimer: hasShielding ? 3.0 : 0,
+      shieldCooldown: 8.0,
+      frozenTimer: 6.0,
+      moltenTimer: 0.25,
+      teleportTimer: 5.0,
       group,
       materials,
       animNodes,
       rootIndicator,
       stunIndicator,
+      rankHaloMesh,
+      armorRingGroup,
+      shieldMesh,
       telegraphGroup,
       telegraphFill,
       chargeLineMesh,
@@ -688,6 +1035,26 @@ export function createEnemies(ctx) {
       chargeData: null,
       animTime: Math.random() * 10,
     };
+
+    Object.defineProperty(enemy, 'eliteName', {
+      enumerable: true,
+      get() {
+        if (enemy.rank === 'champion' || enemy.rank === 'rare') {
+          return formatEliteTitle(enemy);
+        }
+        return i18n?.t ? i18n.t(enemy.displayNameKey) : enemy.kind;
+      },
+    });
+
+    Object.defineProperty(enemy, 'eliteSubtitle', {
+      enumerable: true,
+      get() {
+        if (enemy.rank === 'rare' || enemy.rank === 'champion') {
+          return formatEliteAffixSubtitle(enemy.affixes);
+        }
+        return '';
+      },
+    });
 
     activeEnemies.push(enemy);
     return enemy;
@@ -776,6 +1143,141 @@ export function createEnemies(ctx) {
     }
     activeEnemies.length = 0;
     pendingRespawns.length = 0;
+    pendingElitePackRespawns.length = 0;
+    clearEliteHazards();
+  }
+
+  function pickEliteKindForMap(mapDef) {
+    const spawnTable = mapDef?.spawnTable || [];
+    if (spawnTable.length > 0) {
+      const idx = Math.floor(Math.random() * spawnTable.length);
+      return spawnTable[idx].kind || 'preta';
+    }
+    return 'preta';
+  }
+
+  let nextPackId = 1;
+
+  function spawnElitePack(kind = 'preta', rank = 'champion', affixIds = null, centerPos = null) {
+    const resolvedRank = rank === 'rare' ? 'rare' : 'champion';
+    const resolvedKind = cfg.kinds?.[kind] ? kind : 'preta';
+    const packId = `elite_pack_${nextPackId++}`;
+
+    let center = centerPos;
+    if (!center) {
+      if (ctx.world?.sampleSpawnPoint) {
+        const area = resolvedRank === 'rare' ? 'deep' : 'mid';
+        center = ctx.world.sampleSpawnPoint(area, { minDistFromGate: 14 });
+      } else {
+        const playerPos = state.player?.position || { x: 1000, y: 0, z: 57 };
+        center = { x: playerPos.x, y: playerPos.y || 0, z: playerPos.z - 6 };
+      }
+    }
+
+    const normalizedAffixes = Array.isArray(affixIds)
+      ? affixIds.filter(Boolean)
+      : typeof affixIds === 'string' && affixIds
+        ? [affixIds]
+        : null;
+
+    if (resolvedRank === 'champion') {
+      const chosenAffixes =
+        normalizedAffixes && normalizedAffixes.length > 0
+          ? [normalizedAffixes[0]]
+          : pickEliteAffixes(1);
+      const count = 3 + Math.floor(Math.random() * 2); // 3-4 champions
+      const spawned = [];
+      for (let i = 0; i < count; i++) {
+        const angle = (i / count) * Math.PI * 2;
+        const offsetR = 1.65;
+        const ox = center.x + Math.cos(angle) * offsetR;
+        const oz = center.z + Math.sin(angle) * offsetR;
+        const oy = ctx.world ? ctx.world.getHeight(ox, oz) : (center.y || 0);
+        const inst = createEnemyInstance(
+          resolvedKind,
+          { x: ox, y: oy, z: oz },
+          {
+            rank: 'champion',
+            affixes: chosenAffixes,
+            packId,
+            packRank: 'champion',
+          }
+        );
+        inst.ring = 'mid';
+        clampEnemyPosition(inst);
+        inst.group.position.set(inst.pos.x, inst.pos.y, inst.pos.z);
+        spawned.push(inst);
+      }
+      return {
+        packId,
+        rank: 'champion',
+        kind: resolvedKind,
+        affixes: [...chosenAffixes],
+        leaderId: spawned[0]?.id || null,
+        ids: spawned.map((e) => e.id),
+        eliteName: spawned[0]?.eliteName || '',
+      };
+    }
+
+    // Rare leader + 3 normal minions
+    const rareAffixCount = 2 + Math.floor(Math.random() * 2); // 2-3 affixes
+    const chosenAffixes =
+      normalizedAffixes && normalizedAffixes.length > 0
+        ? normalizedAffixes.slice(0, 3)
+        : pickEliteAffixes(rareAffixCount);
+    const seed = rollRareMonsterSeed();
+    const ly = ctx.world ? ctx.world.getHeight(center.x, center.z) : (center.y || 0);
+    const leader = createEnemyInstance(
+      resolvedKind,
+      { x: center.x, y: ly, z: center.z },
+      {
+        rank: 'rare',
+        affixes: chosenAffixes,
+        eliteNameSeed: seed,
+        packId,
+        packRank: 'rare',
+      }
+    );
+    leader.ring = 'deep';
+    clampEnemyPosition(leader);
+    leader.group.position.set(leader.pos.x, leader.pos.y, leader.pos.z);
+
+    const minionIds = [];
+    for (let i = 0; i < 3; i++) {
+      const angle = (i / 3) * Math.PI * 2 + 0.35;
+      const offsetR = 2.1;
+      const mx = leader.pos.x + Math.cos(angle) * offsetR;
+      const mz = leader.pos.z + Math.sin(angle) * offsetR;
+      const my = ctx.world ? ctx.world.getHeight(mx, mz) : leader.pos.y;
+      const minion = createEnemyInstance(
+        resolvedKind,
+        { x: mx, y: my, z: mz },
+        {
+          rank: 'normal',
+          affixes: [],
+          minionOf: leader.id,
+          packId,
+          packRank: 'rare',
+          level: leader.level,
+        }
+      );
+      minion.ring = 'deep';
+      clampEnemyPosition(minion);
+      minion.group.position.set(minion.pos.x, minion.pos.y, minion.pos.z);
+      minionIds.push(minion.id);
+    }
+
+    return {
+      packId,
+      rank: 'rare',
+      kind: resolvedKind,
+      affixes: [...chosenAffixes],
+      leaderId: leader.id,
+      minionIds,
+      ids: [leader.id, ...minionIds],
+      eliteName: leader.eliteName,
+      eliteSubtitle: leader.eliteSubtitle,
+    };
   }
 
   function initRoster() {
@@ -814,6 +1316,22 @@ export function createEnemies(ctx) {
           e.ring = area;
           clampEnemyPosition(e);
         }
+      }
+    }
+
+    const elitePacks = mapDef?.elitePacks;
+    if (elitePacks && typeof elitePacks === 'object') {
+      const champCount = Math.max(0, Number(elitePacks.champion) || 0);
+      const rareCount = Math.max(0, Number(elitePacks.rare) || 0);
+      for (let c = 0; c < champCount; c++) {
+        const k = pickEliteKindForMap(mapDef);
+        const center = ctx.world.sampleSpawnPoint('mid', { minDistFromGate: 15 });
+        spawnElitePack(k, 'champion', null, center);
+      }
+      for (let r = 0; r < rareCount; r++) {
+        const k = pickEliteKindForMap(mapDef);
+        const center = ctx.world.sampleSpawnPoint('deep', { minDistFromGate: 18 });
+        spawnElitePack(k, 'rare', null, center);
       }
     }
   }
@@ -941,6 +1459,25 @@ export function createEnemies(ctx) {
     return best;
   }
 
+  function shatterEnemyShield(enemy) {
+    if (!enemy || !enemy.shielded) return false;
+    enemy.shielded = false;
+    enemy.shieldTimer = 0;
+    enemy.shieldCooldown = 8.0;
+    if (enemy.shieldMesh) {
+      enemy.shieldMesh.visible = false;
+    }
+    spawnSmokePuff(
+      { x: enemy.pos.x, y: enemy.pos.y + enemy.height * 0.5, z: enemy.pos.z },
+      0xc084fc,
+      2.2,
+      0.45
+    );
+    bus.emit('sfx', { name: 'dispel' });
+    bus.emit('enemy:shieldShattered', { id: enemy.id, kind: enemy.kind });
+    return true;
+  }
+
   function damageEnemy(idOrEnemy, baseAmount, opts = {}) {
     const targetId = typeof idOrEnemy === 'object' && idOrEnemy !== null ? idOrEnemy.id : idOrEnemy;
     const enemy = activeEnemies.find((e) => e.id === targetId);
@@ -951,9 +1488,31 @@ export function createEnemies(ctx) {
     const type = opts.type || 'physical';
     const source = opts.source || 'mantra';
     const crit = Boolean(opts.crit);
+
+    // Shielding affix: immune to all normal damage except Mantra, which shatters the barrier
+    if (enemy.shielded) {
+      if (source === 'mantra') {
+        shatterEnemyShield(enemy);
+      } else {
+        bus.emit('enemy:hit', {
+          id: enemy.id,
+          kind: enemy.kind,
+          damage: 0,
+          type,
+          crit: false,
+          source,
+          shielded: true,
+          position: { x: enemy.pos.x, y: enemy.pos.y + enemy.height, z: enemy.pos.z },
+        });
+        return { dealt: 0, liberated: false, shielded: true };
+      }
+    }
+
     const def = Math.max(0, enemy.def ?? enemy.kindConfig?.def ?? 0);
     const rawAmt = typeof baseAmount === 'number' ? Math.max(0, baseAmount) : 0;
-    const dealt = rawAmt > 0 ? Math.max(1, Math.round(rawAmt * (50 / (50 + def)))) : 0;
+    const incomingMult = enemy.incomingDmgMult ?? 1.0;
+    const dealt =
+      rawAmt > 0 ? Math.max(1, Math.round(rawAmt * incomingMult * (50 / (50 + def)))) : 0;
 
     enemy.hp = Math.max(0, enemy.hp - dealt);
     bus.emit('sfx', { name: 'hit' });
@@ -1061,6 +1620,10 @@ export function createEnemies(ctx) {
     if (enemy.animNodes?.mouthOrb) enemy.animNodes.mouthOrb.visible = false;
     if (enemy.rootIndicator) enemy.rootIndicator.visible = false;
     if (enemy.stunIndicator) enemy.stunIndicator.visible = false;
+    if (enemy.rankHaloMesh) enemy.rankHaloMesh.visible = false;
+    if (enemy.armorRingGroup) enemy.armorRingGroup.visible = false;
+    if (enemy.shieldMesh) enemy.shieldMesh.visible = false;
+    enemy.shielded = false;
     enemy.chargeData = null;
     enemy.activeAttack = null;
     enemy.state = 'liberated';
@@ -1069,6 +1632,38 @@ export function createEnemies(ctx) {
 
     ctx.vitals?.addExp?.(enemy.exp);
 
+    // Elite affix on-death effects:
+    // 1. Molten: leaves a 1.5s red warning circle (radius 2.5m) that explodes for 14 * dmgMult magic damage
+    if (Array.isArray(enemy.affixes) && enemy.affixes.includes('molten')) {
+      spawnMoltenDeathBomb(enemy.pos.x, enemy.pos.z, enemy.dmgScale || 1.0);
+    }
+
+    // 2. Vengeful: splits into 2 normal preta at death position (noSplit: true so no recursion)
+    if (Array.isArray(enemy.affixes) && enemy.affixes.includes('vengeful') && !enemy.noSplit) {
+      const baseAngle = Math.random() * Math.PI * 2;
+      for (let sIdx = 0; sIdx < 2; sIdx++) {
+        const ang = baseAngle + sIdx * Math.PI;
+        const sx = enemy.pos.x + Math.cos(ang) * 0.95;
+        const sz = enemy.pos.z + Math.sin(ang) * 0.95;
+        const sy = ctx.world ? ctx.world.getHeight(sx, sz) : enemy.pos.y;
+        const splitPreta = createEnemyInstance(
+          'preta',
+          { x: sx, y: sy, z: sz },
+          {
+            rank: 'normal',
+            affixes: [],
+            noSplit: true,
+            level: enemy.level,
+          }
+        );
+        splitPreta.ring = enemy.ring || 'near';
+        splitPreta.state = 'chase';
+        clampEnemyPosition(splitPreta);
+        splitPreta.group.position.set(splitPreta.pos.x, splitPreta.pos.y, splitPreta.pos.z);
+      }
+      spawnSmokePuff(enemy.pos, 0x4c1d95, 1.8, 0.45);
+    }
+
     bus.emit('enemy:liberated', {
       id: enemy.id,
       kind: enemy.kind,
@@ -1076,25 +1671,46 @@ export function createEnemies(ctx) {
       position: { ...enemy.pos },
       level: enemy.level,
       rank: enemy.rank,
+      affixes: Array.isArray(enemy.affixes) ? [...enemy.affixes] : [],
+      eliteName: enemy.eliteName,
       mapId: state.zone || 'wild',
       tags: enemy.tags || [enemy.kind],
     });
 
     const nameKey = enemy.displayNameKey || enemy.kindConfig.nameKey || `enemy.${enemy.kind}`;
-    const localizedName = i18n?.t ? i18n.t(nameKey) : enemy.kind;
+    const localizedName =
+      enemy.rank === 'champion' || enemy.rank === 'rare'
+        ? enemy.eliteName
+        : i18n?.t
+          ? i18n.t(nameKey)
+          : enemy.kind;
     bus.emit('toast', {
       key: 'toast.enemyLiberated',
       params: { name: localizedName, exp: enemy.exp },
     });
 
     // Queue respawn timer
-    const respawnTime =
-      (cfg.respawnMin ?? 20) + Math.random() * ((cfg.respawnMax ?? 40) - (cfg.respawnMin ?? 20));
-    pendingRespawns.push({
-      kind: enemy.kind,
-      ring: enemy.ring,
-      timer: respawnTime,
-    });
+    if (enemy.packId) {
+      const packStillAlive = activeEnemies.some(
+        (e) => e.id !== enemy.id && e.state !== 'liberated' && e.hp > 0 && e.packId === enemy.packId
+      );
+      if (!packStillAlive) {
+        const packRespawnTime = 90 + Math.random() * 60; // 90-150s
+        pendingElitePackRespawns.push({
+          rank: enemy.packRank || (enemy.rank === 'rare' ? 'rare' : 'champion'),
+          kind: enemy.kind,
+          timer: packRespawnTime,
+        });
+      }
+    } else if (!enemy.noSplit) {
+      const respawnTime =
+        (cfg.respawnMin ?? 20) + Math.random() * ((cfg.respawnMax ?? 40) - (cfg.respawnMin ?? 20));
+      pendingRespawns.push({
+        kind: enemy.kind,
+        ring: enemy.ring,
+        timer: respawnTime,
+      });
+    }
 
     // If no non-liberated enemies remain on the field and total queued < maxCount,
     // schedule respawns from current map's spawnTable.
@@ -1128,11 +1744,19 @@ export function createEnemies(ctx) {
   }
 
   bus.on('mantra:cast', ({ origin, radius, power, handledByMantra }) => {
-    if (handledByMantra) return;
     if (!ctx.world?.isCombatZone() || !origin) return;
+    const hits = queryCircle(origin.x, origin.z, radius);
+    if (handledByMantra) {
+      // Ensure any shielded enemy in Mantra radius has its barrier shattered even if Mantra already processed damage
+      for (let i = 0; i < hits.length; i++) {
+        if (hits[i].shielded) {
+          shatterEnemyShield(hits[i]);
+        }
+      }
+      return;
+    }
 
     const dmgPower = typeof power === 'number' && power > 0 ? power : (state.player?.atk || 10);
-    const hits = queryCircle(origin.x, origin.z, radius);
     for (let i = 0; i < hits.length; i++) {
       damageEnemy(hits[i].id, dmgPower, {
         type: 'magic',
@@ -1263,6 +1887,24 @@ export function createEnemies(ctx) {
       }
     }
 
+    // 1b. Process Elite Pack Respawn Timers (90-150s)
+    for (let i = pendingElitePackRespawns.length - 1; i >= 0; i--) {
+      const ep = pendingElitePackRespawns[i];
+      ep.timer -= dt;
+      if (ep.timer <= 0) {
+        pendingElitePackRespawns.splice(i, 1);
+        const k = ep.kind || pickEliteKindForMap(mapDef);
+        const area = ep.rank === 'rare' ? 'deep' : 'mid';
+        const center = ctx.world?.sampleSpawnPoint
+          ? ctx.world.sampleSpawnPoint(area, {
+              minDistFromGate: 15,
+              minPlayerDist: cfg.respawnMinPlayerDist ?? 20,
+            })
+          : null;
+        spawnElitePack(k, ep.rank, null, center);
+      }
+    }
+
     // 2. Update Active Enemies
     for (let i = activeEnemies.length - 1; i >= 0; i--) {
       const enemy = activeEnemies[i];
@@ -1341,6 +1983,38 @@ export function createEnemies(ctx) {
         }
       }
 
+      // Orbiting stone plates for `armored` affix
+      if (enemy.armorRingGroup) {
+        enemy.armorRingGroup.rotation.y += dt * 1.8;
+      }
+
+      // `shielding` affix cycle: every 8s, activates a 3s purple spherical barrier
+      if (Array.isArray(enemy.affixes) && enemy.affixes.includes('shielding')) {
+        if (enemy.shielded) {
+          enemy.shieldTimer -= dt;
+          if (enemy.shieldMesh) {
+            enemy.shieldMesh.visible = true;
+            const pulseS = 1.0 + Math.sin(state.elapsed * 7) * 0.04;
+            const baseR = Math.max(0.95, (enemy.kindConfig.height || 1.6) * 0.65);
+            enemy.shieldMesh.scale.setScalar(baseR * pulseS);
+          }
+          if (enemy.shieldTimer <= 0) {
+            enemy.shielded = false;
+            enemy.shieldCooldown = 8.0;
+            if (enemy.shieldMesh) enemy.shieldMesh.visible = false;
+          }
+        } else {
+          if (enemy.shieldMesh) enemy.shieldMesh.visible = false;
+          enemy.shieldCooldown -= dt;
+          if (enemy.shieldCooldown <= 0) {
+            enemy.shielded = true;
+            enemy.shieldTimer = 3.0;
+            enemy.shieldCooldown = 8.0;
+            if (enemy.shieldMesh) enemy.shieldMesh.visible = true;
+          }
+        }
+      }
+
       // Sync slow blue tint when not flashing or in windup
       if (enemy.wasSlowed !== isSlowed && enemy.flashTimer <= 0 && enemy.state !== 'windup') {
         enemy.wasSlowed = isSlowed;
@@ -1379,6 +2053,55 @@ export function createEnemies(ctx) {
         continue;
       }
 
+      // --- Elite Affix Active Behaviors (`frozen`, `teleporter`)
+      if (Array.isArray(enemy.affixes) && enemy.affixes.length > 0 && playerPos && !isPlayerInSafeZone) {
+        // `frozen`: every 6s when within 14m of player, spawns 3 ice orbs around player (~1.5-2.5m offset)
+        if (enemy.affixes.includes('frozen') && distToPlayer <= 14) {
+          enemy.frozenTimer -= dt;
+          if (enemy.frozenTimer <= 0) {
+            enemy.frozenTimer = 6.0;
+            const baseAng = Math.random() * Math.PI * 2;
+            for (let fIdx = 0; fIdx < 3; fIdx++) {
+              const ang = baseAng + (fIdx / 3) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+              const dist = 1.5 + Math.random() * 1.0; // 1.5-2.5m
+              const ox = playerPos.x + Math.cos(ang) * dist;
+              const oz = playerPos.z + Math.sin(ang) * dist;
+              spawnFrozenOrbHazard(ox, oz, enemy.dmgScale || 1.0);
+            }
+            bus.emit('sfx', { name: 'frost' });
+          }
+        }
+
+        // `teleporter`: when distance to player > 8m, every 5s teleports to a random spot ~2.2m from player
+        if (enemy.affixes.includes('teleporter') && distToPlayer > 8 && !isRooted) {
+          enemy.teleportTimer -= dt;
+          if (enemy.teleportTimer <= 0) {
+            enemy.teleportTimer = 5.0;
+            spawnSmokePuff(
+              { x: enemy.pos.x, y: enemy.pos.y + 0.5, z: enemy.pos.z },
+              0x1e1b4b,
+              1.6,
+              0.45
+            );
+            const tAng = Math.random() * Math.PI * 2;
+            const tDist = 2.2;
+            enemy.pos.x = playerPos.x + Math.cos(tAng) * tDist;
+            enemy.pos.z = playerPos.z + Math.sin(tAng) * tDist;
+            clampEnemyPosition(enemy);
+            spawnSmokePuff(
+              { x: enemy.pos.x, y: enemy.pos.y + 0.5, z: enemy.pos.z },
+              0x312e81,
+              1.5,
+              0.4
+            );
+          }
+        }
+      }
+
+      const prevX = enemy.pos.x;
+      const prevZ = enemy.pos.z;
+      const cdMult = enemy.cooldownMult ?? 1.0;
+
       // --- AI State Machine Transitions
       if (enemy.state === 'hurt') {
         enemy.stateTimer -= dt;
@@ -1398,7 +2121,7 @@ export function createEnemies(ctx) {
         // Active dash attack (Tsen spear charge)
         if (enemy.chargeData) {
           if (isRooted) {
-            enemy.attackCooldowns[enemy.activeAttack.id] = enemy.activeAttack.cooldown;
+            enemy.attackCooldowns[enemy.activeAttack.id] = enemy.activeAttack.cooldown * cdMult;
             enemy.state = 'recover';
             enemy.stateTimer = enemy.activeAttack.recover ?? 0.35;
             enemy.chargeData = null;
@@ -1425,7 +2148,7 @@ export function createEnemies(ctx) {
             }
 
             if (u >= 1) {
-              enemy.attackCooldowns[enemy.activeAttack.id] = enemy.activeAttack.cooldown;
+              enemy.attackCooldowns[enemy.activeAttack.id] = enemy.activeAttack.cooldown * cdMult;
               enemy.state = 'recover';
               enemy.stateTimer = enemy.activeAttack.recover ?? 0.35;
               enemy.chargeData = null;
@@ -1497,7 +2220,7 @@ export function createEnemies(ctx) {
               magic: true,
             });
             bus.emit('sfx', { name: 'fireball' });
-            enemy.attackCooldowns[atk.id] = atk.cooldown;
+            enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
             enemy.state = 'recover';
             enemy.stateTimer = atk.recover ?? 0.35;
           } else if (atk.id === 'redArrow') {
@@ -1519,12 +2242,12 @@ export function createEnemies(ctx) {
               magic: false,
             });
             bus.emit('sfx', { name: 'arrow' });
-            enemy.attackCooldowns[atk.id] = atk.cooldown;
+            enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
             enemy.state = 'recover';
             enemy.stateTimer = atk.recover ?? 0.35;
           } else if (atk.id === 'spearCharge') {
             if (isRooted) {
-              enemy.attackCooldowns[atk.id] = atk.cooldown;
+              enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
               enemy.state = 'recover';
               enemy.stateTimer = atk.recover ?? 0.35;
             } else {
@@ -1540,11 +2263,11 @@ export function createEnemies(ctx) {
               enemy.state = 'attack';
             }
           } else if (atk.id === 'boulder') {
-            enemy.attackCooldowns[atk.id] = atk.cooldown;
+            enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
             enemy.state = 'recover';
             enemy.stateTimer = atk.recover ?? 0.45;
           } else if (atk.id === 'frostRoar') {
-            enemy.attackCooldowns[atk.id] = atk.cooldown;
+            enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
             enemy.state = 'recover';
             enemy.stateTimer = atk.recover ?? 0.5;
           } else if (atk.id === 'groundSlam') {
@@ -1558,7 +2281,7 @@ export function createEnemies(ctx) {
                 });
               }
             }
-            enemy.attackCooldowns[atk.id] = atk.cooldown;
+            enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
             enemy.state = 'recover';
             enemy.stateTimer = atk.recover ?? 0.5;
           } else {
@@ -1573,7 +2296,7 @@ export function createEnemies(ctx) {
                 });
               }
             }
-            enemy.attackCooldowns[atk.id] = atk.cooldown;
+            enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
             enemy.state = 'recover';
             enemy.stateTimer = atk.recover ?? 0.35;
           }
@@ -1702,11 +2425,22 @@ export function createEnemies(ctx) {
         }
       }
 
-      // --- Procedural Animations
+      // ---Procedural Animations & `molten` Fire Patch Trail
       enemy.animTime += dt * (isSlowed ? slowMult : 1.0);
+      const movedDist = Math.hypot(enemy.pos.x - prevX, enemy.pos.z - prevZ);
       const isMoving =
-        effSpeed > 0 &&
-        (enemy.state === 'chase' || enemy.state === 'wander' || enemy.state === 'attack');
+        movedDist > 0.002 ||
+        (effSpeed > 0 &&
+          (enemy.state === 'chase' || enemy.state === 'wander' || enemy.state === 'attack'));
+
+      if (isMoving && Array.isArray(enemy.affixes) && enemy.affixes.includes('molten')) {
+        enemy.moltenTimer -= dt;
+        if (enemy.moltenTimer <= 0) {
+          enemy.moltenTimer = 0.8;
+          spawnMoltenPatchHazard(enemy.pos.x, enemy.pos.z, enemy.dmgScale || 1.0);
+        }
+      }
+
       if (enemy.kind === 'preta') {
         const pace = isMoving ? 9.5 : 2.5;
         const swing = Math.sin(enemy.animTime * pace);
@@ -1741,6 +2475,106 @@ export function createEnemies(ctx) {
       // Sync 3D Transform
       enemy.group.position.set(enemy.pos.x, enemy.pos.y, enemy.pos.z);
       enemy.group.rotation.y = enemy.heading;
+    }
+
+    // 2b. Update Elite Hazards (`frozen` orbs, `molten` fire patches, `molten` death bombs, smoke puffs)
+    for (let i = activeFrozenOrbs.length - 1; i >= 0; i--) {
+      const f = activeFrozenOrbs[i];
+      f.timer -= dt;
+      const u = Math.min(1, 1 - Math.max(0, f.timer) / f.maxTimer);
+      f.orbMesh.rotation.y += dt * 4.5;
+      f.orbMesh.rotation.x += dt * 3.0;
+      f.orbMesh.scale.setScalar(0.3 + u * 0.85);
+      f.fillMesh.scale.set(Math.max(0.05, u * f.radius), 1, Math.max(0.05, u * f.radius));
+
+      if (f.timer <= 0) {
+        if (playerPos && !isPlayerInSafeZone) {
+          const d = Math.hypot(playerPos.x - f.x, playerPos.z - f.z);
+          if (d <= f.radius) {
+            const dmg = Math.max(1, Math.round(8 * f.dmgMult));
+            bus.emit('vitals:damage', {
+              amount: dmg,
+              type: 'magic',
+              slow: 2.0,
+              sourcePos: { x: f.x, y: f.y, z: f.z },
+            });
+          }
+        }
+        spawnSmokePuff({ x: f.x, y: f.y + 0.35, z: f.z }, 0x38bdf8, f.radius * 1.1, 0.35);
+        enemyGroup.remove(f.group);
+        activeFrozenOrbs.splice(i, 1);
+      }
+    }
+
+    for (let i = activeMoltenPatches.length - 1; i >= 0; i--) {
+      const mp = activeMoltenPatches[i];
+      mp.timer -= dt;
+      mp.tickTimer -= dt;
+      const lifeRatio = Math.max(0, mp.timer / mp.maxTimer);
+      mp.mat.opacity = 0.5 * Math.min(1, lifeRatio * 2.5);
+
+      if (mp.tickTimer <= 0) {
+        mp.tickTimer += 0.5;
+        if (playerPos && !isPlayerInSafeZone) {
+          const d = Math.hypot(playerPos.x - mp.x, playerPos.z - mp.z);
+          if (d <= mp.radius) {
+            const dmg = Math.max(1, Math.round(2 * mp.dmgMult));
+            bus.emit('vitals:damage', {
+              amount: dmg,
+              type: 'magic',
+              ignoreInvuln: true,
+              knockback: 0,
+              sourcePos: { x: mp.x, y: mp.y, z: mp.z },
+            });
+          }
+        }
+      }
+
+      if (mp.timer <= 0) {
+        enemyGroup.remove(mp.mesh);
+        mp.mat.dispose();
+        activeMoltenPatches.splice(i, 1);
+      }
+    }
+
+    for (let i = activeMoltenBombs.length - 1; i >= 0; i--) {
+      const b = activeMoltenBombs[i];
+      b.timer -= dt;
+      const u = Math.min(1, 1 - Math.max(0, b.timer) / b.maxTimer);
+      b.fillMesh.scale.set(Math.max(0.05, u * b.radius), 1, Math.max(0.05, u * b.radius));
+      b.coreMesh.scale.setScalar(0.5 + u * 1.3);
+
+      if (b.timer <= 0) {
+        if (playerPos && !isPlayerInSafeZone) {
+          const d = Math.hypot(playerPos.x - b.x, playerPos.z - b.z);
+          if (d <= b.radius) {
+            const dmg = Math.max(1, Math.round(14 * b.dmgMult));
+            bus.emit('vitals:damage', {
+              amount: dmg,
+              type: 'magic',
+              sourcePos: { x: b.x, y: b.y, z: b.z },
+            });
+          }
+        }
+        bus.emit('sfx', { name: 'fireball' });
+        spawnSmokePuff({ x: b.x, y: b.y + 0.5, z: b.z }, 0xf97316, b.radius * 1.15, 0.45);
+        enemyGroup.remove(b.group);
+        activeMoltenBombs.splice(i, 1);
+      }
+    }
+
+    for (let i = activePuffs.length - 1; i >= 0; i--) {
+      const pf = activePuffs[i];
+      pf.timer -= dt;
+      const u = Math.min(1, 1 - Math.max(0, pf.timer) / pf.maxTimer);
+      const s = pf.startScale + (pf.endScale - pf.startScale) * u;
+      pf.mesh.scale.setScalar(s);
+      pf.mat.opacity = 0.65 * (1 - u);
+      if (pf.timer <= 0) {
+        enemyGroup.remove(pf.mesh);
+        pf.mat.dispose();
+        activePuffs.splice(i, 1);
+      }
     }
 
     // 3. Update Liberation Particles
@@ -1896,6 +2730,20 @@ export function createEnemies(ctx) {
       enemy.group.position.set(enemy.pos.x, enemy.pos.y, enemy.pos.z);
       return enemy.id;
     },
+    spawnElite(kind = 'preta', rank = 'champion', affixIds = null) {
+      const playerPos = state.player?.position || { x: 1000, y: 0, z: 57 };
+      const heading = state.player?.heading || 0;
+      const fwdX = -Math.sin(heading);
+      const fwdZ = -Math.cos(heading);
+      const cx = playerPos.x + fwdX * 5;
+      const cz = playerPos.z + fwdZ * 5;
+      const cy = ctx.world ? ctx.world.getHeight(cx, cz) : (playerPos.y || 0);
+      const info = spawnElitePack(kind, rank, affixIds, { x: cx, y: cy, z: cz });
+      return {
+        id: info.leaderId,
+        ...info,
+      };
+    },
     clear: clearAllEnemies,
     list() {
       const playerPos = state.player?.position;
@@ -1908,6 +2756,11 @@ export function createEnemies(ctx) {
             kind: e.kind,
             level: e.level,
             rank: e.rank,
+            affixes: Array.isArray(e.affixes) ? [...e.affixes] : [],
+            eliteName: e.eliteName,
+            eliteSubtitle: e.eliteSubtitle,
+            shielded: Boolean(e.shielded),
+            minionOf: e.minionOf || null,
             displayNameKey: e.displayNameKey,
             hp: e.hp,
             maxHp: e.maxHp,

@@ -86,7 +86,8 @@ export function createLoot(ctx) {
       findBonus != null
         ? Number(findBonus) || 0
         : Number(state.player?.findBonus) || 0;
-    const mfMult = Math.max(0, 1 + bonus / 100);
+    const shrineMult = Number(state.player?.shrineFindMult) || 1;
+    const mfMult = Math.max(0, 1 + bonus / 100) * shrineMult;
 
     const wNormal = RARITY_WEIGHTS.normal;
     const wBlessed = RARITY_WEIGHTS.blessed * mfMult;
@@ -461,7 +462,11 @@ export function createLoot(ctx) {
 
     // 2. Turquoise drop: 35% chance, amount = randInt(1,3) * (1 + floor(L/5))
     if (Math.random() < 0.35) {
-      const amount = randInt(1, 3) * (1 + Math.floor(level / 5));
+      const shrineMult = Number(state.player?.shrineFindMult) || 1;
+      const amount = Math.max(
+        1,
+        Math.round(randInt(1, 3) * (1 + Math.floor(level / 5)) * shrineMult)
+      );
       const turqItem = {
         uid: nextUid('tq_'),
         kind: 'turquoise',

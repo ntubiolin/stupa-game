@@ -184,8 +184,10 @@ export function createMantra(ctx) {
   function getEffectiveCooldown(isPeaceful = false) {
     if (isPeaceful) return M.stupaCooldown ?? 0.45;
     const baseCd = M.cooldown ?? 0.85;
-    const cdr = Math.max(0, Math.min(0.4, state.player?.cdr || 0));
-    return baseCd * (1 - cdr);
+    const gearCdr = Math.max(0, Math.min(0.4, Number(state.player?.cdr) || 0));
+    const shrineCdr = Math.max(0, Number(state.player?.shrineCdr) || 0);
+    const totalCdr = Math.min(0.85, gearCdr + shrineCdr);
+    return baseCd * (1 - totalCdr);
   }
 
   function triggerWave(isPeaceful = false) {

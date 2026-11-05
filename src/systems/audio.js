@@ -1050,6 +1050,44 @@ export function createAudio(ctx) {
     }
   }
 
+  // Amrita potion — crisp water drop + pure bell chime
+  function playPotion() {
+    const context = ensureContext();
+    if (!context || muted) return;
+    const now = context.currentTime;
+
+    // 1. Crisp water droplet (upward pitch-bent sine)
+    const drop = context.createOscillator();
+    const dropG = context.createGain();
+    drop.type = 'sine';
+    drop.frequency.setValueAtTime(420, now);
+    drop.frequency.exponentialRampToValueAtTime(1180, now + 0.09);
+    dropG.gain.setValueAtTime(0.0001, now);
+    dropG.gain.linearRampToValueAtTime(0.18, now + 0.015);
+    dropG.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+    drop.connect(dropG);
+    dropG.connect(masterGain);
+    drop.start(now);
+    drop.stop(now + 0.16);
+
+    // 2. Warm crystalline bell chime (A5, E6, A6)
+    const chimes = [880, 1318.5, 1760];
+    for (let i = 0; i < chimes.length; i++) {
+      const t0 = now + 0.05 + i * 0.035;
+      const osc = context.createOscillator();
+      const g = context.createGain();
+      osc.type = i === 1 ? 'triangle' : 'sine';
+      osc.frequency.setValueAtTime(chimes[i], t0);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.linearRampToValueAtTime(0.12 / (i + 1), t0 + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.85);
+      osc.connect(g);
+      g.connect(masterGain);
+      osc.start(t0);
+      osc.stop(t0 + 0.9);
+    }
+  }
+
   // ---------------------------------------------------------------- mobile / gesture audio unlock
   if (typeof window !== 'undefined') {
     const unlockEvents = ['touchstart', 'touchend', 'pointerdown', 'mousedown', 'keydown', 'click'];
@@ -1155,6 +1193,9 @@ export function createAudio(ctx) {
         break;
       case 'pickupGear':
         playPickupGear();
+        break;
+      case 'potion':
+        playPotion();
         break;
       default:
         break;
