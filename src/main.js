@@ -35,6 +35,7 @@ import { createProjectiles } from './gameplay/projectiles.js';
 import { createNpcs } from './gameplay/npcs.js';
 import { createPotions } from './gameplay/potions.js';
 import { createShrines } from './gameplay/shrines.js';
+import { createWaypoints } from './gameplay/waypoints.js';
 import { createTargeting } from './gameplay/targeting.js';
 import { createPlayer } from './player/player.js';
 import { createCameraRig } from './player/cameraRig.js';
@@ -46,6 +47,7 @@ import { createInventory } from './systems/inventory.js';
 import { createVitals } from './systems/vitals.js';
 import { createSkills } from './systems/skills.js';
 import { createQuests } from './systems/quests.js';
+import { createCodex } from './systems/codex.js';
 import { createInteraction } from './systems/interaction.js';
 import { createMerit } from './systems/merit.js';
 import { createAudio } from './systems/audio.js';
@@ -54,6 +56,8 @@ import { createSkillbar } from './ui/skillbar.js';
 import { createInventoryUi } from './ui/inventory.js';
 import { createDialogue } from './ui/dialogue.js';
 import { createQuestUi } from './ui/quests.js';
+import { createWorldMap } from './ui/worldmap.js';
+import { createMinimap } from './ui/minimap.js';
 
 // ---------------------------------------------------------------- renderer
 const container = document.getElementById('app');
@@ -158,6 +162,8 @@ const vitals = createVitals(ctx);
 const skills = createSkills(ctx);
 const potions = createPotions(ctx);
 const shrines = createShrines(ctx);
+const codex = createCodex(ctx);
+const waypoints = createWaypoints(ctx);
 const quests = createQuests(ctx);
 const npcs = createNpcs(ctx);
 const cameraRig = createCameraRig(ctx);
@@ -170,6 +176,8 @@ const skillbar = createSkillbar(ctx);
 const inventoryUi = createInventoryUi(ctx);
 const dialogue = createDialogue(ctx);
 const questUi = createQuestUi(ctx);
+const worldmap = createWorldMap(ctx);
+const minimap = createMinimap(ctx);
 const bosses = createBosses(ctx);
 
 const modules = [
@@ -179,9 +187,9 @@ const modules = [
   zones,
   player, mantra, enemies, bosses, projectiles, targeting, loot, inventory, groundLoot, items, lamps, monkeys,
   vitals, skills, potions, shrines,
-  quests, npcs,
+  codex, waypoints, quests, npcs,
   cameraRig,
-  merit, interaction, audio, hud, skillbar, inventoryUi, dialogue, questUi,
+  merit, interaction, audio, hud, skillbar, inventoryUi, dialogue, questUi, minimap,
 ];
 
 // ---------------------------------------------------------------- post-processing
@@ -230,4 +238,4 @@ function frame() {
 requestAnimationFrame(frame);
 
 // Debug handle (dev only)
-if (import.meta.env.DEV) window.__game = { ctx, modules: { sky, stupa, flags, environment, zones, player, mantra, enemies, projectiles, loot, inventory, groundLoot, items, lamps, monkeys, vitals, quests, npcs, cameraRig, merit, interaction, audio, hud, inventoryUi, dialogue, questUi } };
+if (import.meta.env.DEV) window.__game = { ctx, modules: { sky, stupa, flags, environment, zones, player, mantra, enemies, bosses, projectiles, loot, inventory, groundLoot, items, lamps, monkeys, vitals, skills, potions, shrines, codex, waypoints, quests, npcs, cameraRig, merit, interaction, audio, hud, skillbar, inventoryUi, dialogue, questUi, worldmap, minimap } };

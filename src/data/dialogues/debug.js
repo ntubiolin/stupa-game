@@ -163,4 +163,22 @@ export const DEBUG_DIALOGUES = {
       },
     },
   },
+
+  'debug.codexLink': {
+    id: 'debug.codexLink',
+    debugOnly: true,
+    nodes: {
+      start: {
+        speaker: 'dialogue.debug.codexLink.speaker',
+        look: 'abbot',
+        textKey: 'dialogue.debug.codexLink.line1',
+        choices: [
+          {
+            textKey: 'dialogue.debug.codexLink.close',
+            next: null,
+          },
+        ],
+      },
+    },
+  },
 };

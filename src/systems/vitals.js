@@ -717,6 +717,9 @@ export function createVitals(ctx) {
     damage(amount, type = 'physical', extra = {}) {
       return applyDamage(amount, type, extra);
     },
+    damagePlayer(amount, type = 'physical', extra = {}) {
+      return applyDamage(amount, type, extra);
+    },
   };
 
   ctx.vitals = api;
@@ -724,6 +727,8 @@ export function createVitals(ctx) {
   ctx.debug?.register('vitals', {
     set: (patch) => api.set(patch),
     damage: (amount, type = 'physical', extra = {}) =>
+      api.damage(amount, type, extra),
+    damagePlayer: (amount, type = 'physical', extra = {}) =>
       api.damage(amount, type, extra),
     god: (bool) => api.god(bool),
     get: () => api.getStats(),
