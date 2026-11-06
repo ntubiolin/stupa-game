@@ -20,6 +20,7 @@
  */
 import * as THREE from 'three';
 import '../i18n/ch5.js';
+import '../i18n/coop.js';
 import { i18n } from '../i18n.js';
 
 export const GRID_W = 6;
@@ -423,6 +424,9 @@ export function createDungeon(ctx) {
   function syncState() {
     const monsterLevel = 30 + currentTier;
     const tierHpMult = Number((1 + 0.1 * currentTier).toFixed(2));
+    const partySize = Math.max(1, ctx.coop?.getPartySize?.() || 1);
+    const coopHpMult = Number((1 + 0.45 * (partySize - 1)).toFixed(2));
+    const partyFindBonus = (partySize - 1) * 25;
     state.dungeon = {
       active,
       tier: currentTier,
@@ -431,6 +435,9 @@ export function createDungeon(ctx) {
       floorSeed: floorLayout?.seed ?? baseSeed,
       monsterLevel,
       tierHpMult,
+      partySize,
+      coopHpMult,
+      partyFindBonus,
       highestClearedTier,
       maxSelectableTier: highestClearedTier + 1,
       showLayout: showLayoutFlag,
@@ -938,6 +945,8 @@ export function createDungeon(ctx) {
 
     const monsterLevel = 30 + currentTier;
     const tierHpMult = Number((1 + 0.1 * currentTier).toFixed(2));
+    const partySize = Math.max(1, ctx.coop?.getPartySize?.() || 1);
+    const coopHpMult = Number((1 + 0.45 * (partySize - 1)).toFixed(2));
     const rng = mulberry32(layout.seed + 505);
 
     const combatRooms = layout.rooms.filter(
@@ -956,7 +965,8 @@ export function createDungeon(ctx) {
       if (enemy) {
         enemy.level = monsterLevel;
         enemy.tierHpMult = tierHpMult;
-        enemy.maxHp = Math.max(1, Math.round(enemy.maxHp * tierHpMult));
+        enemy.coopHpMult = coopHpMult;
+        enemy.maxHp = Math.max(1, Math.round(enemy.maxHp * tierHpMult * coopHpMult));
         enemy.hp = enemy.maxHp;
         enemy.dungeonFloor = layout.floor;
       }
@@ -1040,13 +1050,19 @@ export function createDungeon(ctx) {
     if (!crystal || crystal.broken) return null;
     crystal.broken = true;
 
+    if (!opts.fromCoop && ctx.coop?.getState?.()?.active) {
+      ctx.coop.broadcastEvent('crystal:broken', { id: crystal.id });
+    }
+
     const meshGrp = crystalMeshes.get(crystal.id);
     if (meshGrp && meshGrp.userData?.shardsGroup) {
       meshGrp.userData.shardsGroup.visible = false;
     }
 
     const ilvl = 30 + currentTier;
-    const turq = 12 + currentTier * 4;
+    const partySize = Math.max(1, ctx.coop?.getPartySize?.() || 1);
+    const partyFindChance = 0.25 * (partySize - 1);
+    const turq = Math.round((12 + currentTier * 4) * (1 + partyFindChance));
     ctx.loot?.addTurquoise?.(turq);
 
     const droppedItems = [];
@@ -1056,6 +1072,16 @@ export function createDungeon(ctx) {
       inDungeon: true,
     });
     if (baseItem) droppedItems.push(baseItem);
+
+    // Co-op Party Find Bonus (+25% per extra party member)
+    if (partyFindChance > 0 && Math.random() < partyFindChance) {
+      const coopBonusItem = ctx.loot?.drop?.({
+        ilvl,
+        tier: currentTier,
+        inDungeon: true,
+      });
+      if (coopBonusItem) droppedItems.push(coopBonusItem);
+    }
 
     // Check `tertonFind` (伏藏師之戒): 20% chance to drop an extra rare/terma item
     let tertonProc = false;
@@ -1114,10 +1140,14 @@ export function createDungeon(ctx) {
   /**
    * Builds and loads a specific floor (1, 2, or 3) of the current run.
    */
-  function loadFloor(floorNum) {
+  function loadFloor(floorNum, opts = {}) {
     currentFloor = Math.max(1, Math.min(3, Math.floor(Number(floorNum) || 1)));
     const floorSeedOffset = currentFloor === 1 ? 0 : currentFloor === 2 ? 1009 : 2017;
     const fSeed = (Number(baseSeed) || 123) + floorSeedOffset;
+
+    if (!opts.fromCoop && currentFloor > 1 && ctx.coop?.getState?.()?.active) {
+      ctx.coop.broadcastEvent('terma:floor', { floor: currentFloor });
+    }
 
     bossSubduedOnFloor = false;
     chestOpened = false;
@@ -1176,7 +1206,7 @@ export function createDungeon(ctx) {
   /**
    * Enters the Terma Realm at the specified `tier` and optional `seed`.
    */
-  function enter(tier = 1, seed = undefined) {
+  function enter(tier = 1, seed = undefined, opts = {}) {
     closeTierSelect();
     const maxAllowed = Math.max(1, highestClearedTier + 1);
     const reqTier = Math.max(1, Math.floor(Number(tier) || 1));
@@ -1200,6 +1230,14 @@ export function createDungeon(ctx) {
     active = true;
     runStartElapsed = state.elapsed || 0;
 
+    if (!opts.fromCoop && ctx.coop?.getState?.()?.active) {
+      ctx.coop.broadcastEvent('terma:entered', {
+        tier: currentTier,
+        seed: baseSeed,
+        floor: 1,
+      });
+    }
+
     // Switch zone to 'terma' synchronously and load Floor 1 immediately so callers
     // inspecting state/enemies right after `enter(tier, seed)` see everything ready!
     state.zone = 'terma';
@@ -1216,7 +1254,7 @@ export function createDungeon(ctx) {
       });
     }
 
-    const result = loadFloor(1);
+    const result = loadFloor(1, opts);
     // Re-ensure player position at Start Room after teleport promise
     if (floorLayout?.startRoom && state.player?.position) {
       state.player.position.set(floorLayout.startRoom.wx, 0, floorLayout.startRoom.wz);
@@ -1336,7 +1374,10 @@ export function createDungeon(ctx) {
 
     const ilvl = 30 + tier;
     const rng = mulberry32(baseSeed + tier * 97 + 999);
-    const dropCount = 4 + Math.floor(rng() * 3); // 4..6 items
+    const partySize = Math.max(1, ctx.coop?.getPartySize?.() || 1);
+    const partyFindChance = 0.25 * (partySize - 1);
+    const extraPartyDrops = partySize > 1 ? Math.floor(partyFindChance + rng()) : 0;
+    const dropCount = 4 + Math.floor(rng() * 3) + extraPartyDrops; // 4..6 items (+ party find bonus)
 
     for (let i = 0; i < dropCount; i++) {
       const forcedRarity = i === 0 ? (rng() < 0.35 ? 'terma' : 'rare') : undefined;
@@ -1349,10 +1390,10 @@ export function createDungeon(ctx) {
       });
     }
 
-    // Grant Terma Essence (`伏藏精華`) & Turquoise
+    // Grant Terma Essence (`伏藏精華`) & Turquoise (+ party find bonus)
     const essenceCount = 1 + Math.floor(tier / 3);
     ctx.inventory?.addMaterial?.('termaEssence', essenceCount);
-    ctx.loot?.addTurquoise?.(60 + tier * 25);
+    ctx.loot?.addTurquoise?.(Math.round((60 + tier * 25) * (1 + partyFindChance)));
     bus.emit('toast', {
       text: i18n.t('toast.termaEssenceGained', { count: essenceCount }),
       kind: 'merit',
@@ -1555,11 +1596,14 @@ export function createDungeon(ctx) {
     if (selectedModalTier > maxTier) selectedModalTier = maxTier;
 
     const lv = 30 + selectedModalTier;
-    const hpMult = (1 + 0.1 * selectedModalTier).toFixed(1);
+    const partySize = Math.max(1, ctx.coop?.getPartySize?.() || 1);
+    const coopHpMult = 1 + 0.45 * (partySize - 1);
+    const partyFindBonus = (partySize - 1) * 25;
+    const hpMult = ((1 + 0.1 * selectedModalTier) * coopHpMult).toFixed(2);
     const elites = 1 + Math.floor(selectedModalTier / 2);
     const affixes = Math.min(3, 1 + Math.floor(selectedModalTier / 3));
     const bossAffixes = Math.min(3, Math.floor(selectedModalTier / 3));
-    const termaBonus = (0.3 * selectedModalTier).toFixed(1);
+    const termaBonus = (0.3 * selectedModalTier + partyFindBonus).toFixed(1);
 
     const tierButtons = [];
     const displayMax = Math.max(5, maxTier);
@@ -1586,7 +1630,7 @@ export function createDungeon(ctx) {
 
     modalEl.innerHTML = `
       <div style="
-        width:min(520px, 92vw);
+        width:min(540px, 92vw);
         padding:24px 28px;
         border-radius:14px;
         background:linear-gradient(165deg, rgba(17, 24, 39, 0.96), rgba(15, 18, 34, 0.98));
@@ -1596,9 +1640,66 @@ export function createDungeon(ctx) {
         <div style="color:#5eead4;font-size:13px;letter-spacing:0.08em;">ཨོཾ་ཨཱཿ་ཧཱུྃ · གཏེར་མ</div>
         <h2 style="margin:4px 0 8px;color:#fde68a;font-size:22px;">${i18n.t('dungeon.ui.title')}</h2>
         <p style="margin:0 0 12px;color:#cbd5e1;font-size:13px;">${i18n.t('dungeon.ui.subtitle', { maxTier })}</p>
-        <div style="margin-bottom:14px;color:#fbbf24;font-size:13px;">
+        <div style="margin-bottom:12px;color:#fbbf24;font-size:13px;">
           ${i18n.t('dungeon.ui.highestCleared', { tier: highestClearedTier })}
         </div>
+
+        <!-- Co-op Party Status Banner -->
+        <div id="terma-coop-banner" style="
+          padding:10px 12px;
+          border-radius:10px;
+          background:rgba(20, 184, 166, 0.14);
+          border:1px solid rgba(45, 212, 191, 0.45);
+          margin-bottom:14px;
+          font-size:12.5px;
+        ">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+            <strong style="color:#5eead4;">
+              ${i18n.t('dungeon.coop.bannerTitle', { size: partySize })}
+            </strong>
+            <div style="display:flex;gap:6px;">
+              <button
+                type="button"
+                id="terma-summon-ai-btn"
+                style="
+                  padding:4px 9px;
+                  border-radius:6px;
+                  border:1px solid rgba(251,191,36,0.55);
+                  background:rgba(217,119,6,0.28);
+                  color:#fef08a;
+                  font-size:11.5px;
+                  font-weight:600;
+                  cursor:pointer;
+                "
+              >${i18n.t('dungeon.coop.summonAiBtn')}</button>
+              <button
+                type="button"
+                id="terma-open-coop-btn"
+                style="
+                  padding:4px 9px;
+                  border-radius:6px;
+                  border:1px solid rgba(45,212,191,0.55);
+                  background:rgba(15,118,110,0.35);
+                  color:#f0fdfa;
+                  font-size:11.5px;
+                  font-weight:600;
+                  cursor:pointer;
+                "
+              >${i18n.t('dungeon.coop.openLobbyBtn')}</button>
+            </div>
+          </div>
+          <div style="color:#e2e8f0;margin-top:4px;font-size:11.5px;">
+            ${
+              partySize > 1
+                ? i18n.t('dungeon.coop.stats', {
+                    hpMult: coopHpMult.toFixed(2),
+                    findBonus: partyFindBonus,
+                  })
+                : i18n.t('dungeon.coop.soloHint')
+            }
+          </div>
+        </div>
+
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
           ${tierButtons.join('')}
         </div>
@@ -1667,6 +1768,16 @@ export function createDungeon(ctx) {
         </div>
       </div>
     `;
+
+    modalEl.querySelector('#terma-summon-ai-btn')?.addEventListener('click', () => {
+      ctx.coop?.addAiCompanion?.();
+      renderTierModal();
+    });
+
+    modalEl.querySelector('#terma-open-coop-btn')?.addEventListener('click', () => {
+      closeTierSelect();
+      ctx.coopLobbyUi?.open?.();
+    });
 
     modalEl.querySelectorAll('[data-tier-btn]').forEach((btn) => {
       btn.addEventListener('click', () => {

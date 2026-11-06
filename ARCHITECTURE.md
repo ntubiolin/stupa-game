@@ -13,7 +13,7 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/core/events.js` | **Architect** | event bus (`on`, `off`, `emit`) |
 | `src/core/debug.js` | **Architect** | console inspection & debug API (`window.__stupa`) |
 | `src/core/input.js` | Gameplay | keyboard / mouse-drag / touch virtual joystick (`JOY_RADIUS = 60`) + mobile arc skill pad → action state |
-| `src/i18n.js`, `src/i18n/*.js` | Gameplay | `zh-Hant` / `en` strings (`1,580` keys), `i18n.register(dict)`, dynamic substitution (`maps`, `quests`, `items`, `skills`, `codex`, `murals`, `prologue`, `ch1`–`ch5`) |
+| `src/i18n.js`, `src/i18n/*.js` | Gameplay | `zh-Hant` / `en` strings (`1,827` keys), `i18n.register(dict)`, dynamic substitution (`maps`, `quests`, `items`, `skills`, `codex`, `murals`, `community`, `stupaBuild`, `coop`, `prologue`, `ch1`–`ch5`) |
 | `src/world/sky.js` | World | sky dome, sun/moon, stars, lights, fog, exposure — writes `state.time.sunDir/nightFactor` |
 | `src/world/stupa.js` | World | stupa, wall, prayer wheels, night string lights; exports `flagAnchors` |
 | `src/world/prayerFlags.js` | World | wind-animated five-color flags (vertex shader) |
@@ -36,6 +36,7 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/data/quests/*.js`, `src/data/dialogues/*.js` | Data | Prologue + Ch1–Ch5 quest chains (`22` main quests) and conditional branching dialogue trees |
 | `src/data/codex.js`, `src/data/codex/*.js` | Data | 38 Dharma Codex entries (`place`, `person`, `deity`, `concept`, `practice`) with `[史實]`/`[傳說]` tags & 59 external URLs |
 | `src/data/murals.js`, `public/murals/*.webp` | Data / Art | 20 offline Tibetan mural cutout sprites & 6 chapter mural scroll layouts (`prologue`, `ch1`–`ch5`, 22 quest episodes) |
+| `src/data/stupaMaterials.js` | Data | Kora/Prostration-unlocked votive stupa parts (`plinth`, `dome`, `spire`, `ornament`) & Samye 1,008-stupa global milestones |
 | `src/player/player.js` | Gameplay | pilgrim mesh, movement, collision, prostration animation, kora tracking |
 | `src/player/cameraRig.js` | Gameplay | third-person follow camera + intro orbit + cutscene camera override |
 | `src/gameplay/mantra.js` | Gameplay | Six-Syllable Mantra (六字大明咒) area wave, syllables pool, cooldown & MP handling |
@@ -48,7 +49,9 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/gameplay/projectiles.js` | Gameplay | object-pooled projectiles (`ghostfire`, `redArrow`, `boulder`, `frostRoar`), parabolic/homing flight, mantra dispel |
 | `src/gameplay/items.js`, `groundLoot.js` | Gameplay | monkey sacred artifacts + Diablo-style ground loot drops, rarity light beams, `Alt` label plate layout, auto-pickup |
 | `src/gameplay/potions.js`, `shrines.js`, `waypoints.js` | Gameplay | Amrita potion charges (`X`), 4 blessing shrine types, lotus waypoints & Recall portal (`B`) |
-| `src/gameplay/lamps.js`, `monkeys.js`, `npcs.js` | Gameplay | butter-lamp stations, monkey wander/feeding, procedural 3D NPC builder (8 looks) & overhead quest markers (`!`/`?`) |
+| `src/gameplay/lamps.js`, `monkeys.js`, `npcs.js` | Gameplay | butter-lamp stations + floating prayer plaques, monkey wander/feeding, procedural 3D NPC builder (8 looks) & overhead quest markers (`!`/`?`) |
+| `src/gameplay/personalStupa.js`, `remotePilgrims.js` | Gameplay | procedural 3D Pilgrim Votive Stupa groves (`stupa` & `samye`), Samye 1,008 perimeter consecration crowns, and 3D Co-op party teammates + Mantra Resonance VFX |
+| `src/systems/community.js`, `coop.js` | Gameplay | async social sync (`BroadcastChannel` + `/api/community` + share codes for lamps, stupas, Samye co-op) & real-time 2–4 player Co-op room/AI companion system |
 | `src/systems/zones.js` | Gameplay | data-driven zone manager (`MAPS`), lazy `import()` loading, gate transitions, `ctx.world` API |
 | `src/systems/save.js` | Gameplay | unified v2 save system (`stupa.save.v2`), v1 migration, per-section fault tolerance, throttled writes |
 | `src/systems/vitals.js` | Gameplay | vitals system (HP/MP/EXP/ATK/DEF/Crit/Subdue/CDR/Find), Lv 1–40 curve, equipment stat aggregation |
@@ -64,6 +67,7 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/ui/mural/scroll.js` | Gameplay | `MuralScrollCanvas` (`1600×900`): Sobel sepia-ink `白描粉本` (`sketch`) extractor, procedural mineral-green mountains/rivers/cloud borders, pan tour, and wet-brush coloring reveal (`playColoringReveal`) |
 | `src/ui/dialogue.js`, `src/ui/quests.js` | Gameplay | bottom glassmorphic dialogue box with `[codex:id|text]` links, right-side Quest Tracker, `J` Quest Journal, Chapter Intro Mural Scroll & Quest Completion Wet-Brush Coloring Reveal |
 | `src/ui/worldmap.js`, `src/ui/minimap.js`, `src/ui/credits.js` | Gameplay | `M`/`L` 4-tab World Map / Zone Map / Dharma Codex / Mural Scrolls (`壁畫長卷`) modal, top-right circular radar minimap (`Tab`), Finale Ending Credits |
+| `src/ui/lampOffering.js`, `stupaBuilder.js`, `coopLobby.js` | Gameplay | Pilgrim Butter-Lamp Offering & Prayer Wall (`🪔`), Personal Votive Stupa Builder & Samye 1,008 Co-op Monument (`🏛️`), Co-op Party HUD & Terma Room Lobby (`🤝`) |
 | `scripts/balance-report.mjs`, `check-i18n.mjs`, `check-links.mjs` | Tooling | Lv 1–40 TTK & economy balance simulator, bilingual i18n key verifier, and Codex URL link checker |
 
 Subagents edit **only** files they own. If a contract change is needed, report it to the architect instead of editing shared files.
@@ -144,6 +148,11 @@ export function createX(ctx, ...extra) {
 | `skillbar` | `{ update(dt), openSkillsModal(), closeSkillsModal(), toggleSkillsModal() }` |
 | `shop` / `crafting` | `{ update(dt), open(), close(), isOpen() }` |
 | `credits` | `{ update(dt), play(), hide(), isOpen() }` |
+| `community` | `{ update(dt), getPilgrimName(), setPilgrimName(name), getLamps(), offerLamp(opts), rejoiceLamp(id), getStupas(), getOwnStupa(), saveOwnStupa(opts), rejoiceStupa(id), getSamyeProgress(), contributeSamye(opts), exportShareCode(), importShareCode(code) }` |
+| `personalStupa` | `{ update(dt), rebuildGrove(), buildVotiveStupaMesh(THREE, spec, opts), getGroveStupas() }` |
+| `coop` | `{ update(dt), getState(), getPartySize(), getMembers(), createRoom(code?), joinRoom(code), leaveRoom(), addAiCompanion(idx?), removeAiCompanion(id?), broadcastEvent(type, payload), reviveMember(id), teleportToLeader() }` |
+| `remotePilgrims` | `{ update(dt), getMeshes(), getCount(), spawnResonanceMandalaVfx(pos) }` |
+| `lampOfferingUi` / `stupaBuilderUi` / `coopLobbyUi` | `{ update(dt), open(tab?), close(), toggle(), isOpen() }` |
 | `merit` | `{ update(dt), reset, getStats, getAchievementsList }` |
 | `audio` | `{ update(dt), isMuted, setMuted, toggleMute, getVolume, setVolume, isMusicEnabled, setMusicEnabled, toggleMusic, getMusicVolume, setMusicVolume, getMusicTrack, forceMusic(id, vars), playMusicStinger(id), playEagleCry, playDistantBell }` |
 
@@ -224,7 +233,9 @@ state.interactionTarget  // currently targeted interactable or null
 | `flag:set` | `{ flag, value }` | quests |
 | `chapter:intro` / `chapter:banner` | `{ chapterId, titleKey, subKey }` | quests → questUi / audio |
 | `codex:open` / `codex:unlock` / `codex:changed` | `{ id }` | codex / dialogue / worldmap |
-| `terma:entered` / `terma:floor` / `terma:cleared` | `{ tier, floor, seed }` | dungeon → quests / UI |
+| `terma:entered` / `terma:floor` / `terma:cleared` | `{ tier, floor, seed }` | dungeon → quests / UI / coop |
+| `community:lampOffered` / `community:lampRejoiced` / `community:stupaBuilt` / `community:samyeContributed` / `community:changed` | `{ id?, type? }` | community → lamps / personalStupa / UI |
+| `coop:joined` / `coop:left` / `coop:updated` / `coop:remoteSkill` / `coop:resonance` / `coop:revived` | `{ roomCode?, x?, z? }` | coop → remotePilgrims / dungeon / UI |
 | `credits:play` / `credits:opened` / `credits:closed` | `{}` | credits |
 
 ---
@@ -268,6 +279,7 @@ Maps are registered in `src/data/maps.js` (`MAPS`):
   | `waypoints` | `src/gameplay/waypoints.js` | `{ unlocked: string[], returnPortal }` |
   | `protectors` | `src/gameplay/allies.js` | `{ unlocked: string[], active: string }` |
   | `dungeon` | `src/gameplay/dungeon.js` | `{ highestClearedTier: number }` |
+  | `community` | `src/systems/community.js` | `{ pilgrimName, ownStupa, myLamps, rejoicedLampIds, rejoicedStupaIds, samye }` |
 
 ### 4. Performance, Code Splitting & Audio Crossfade
 - **PointLight Budget**: Total active PointLights $\le 6$. All combat, chapter, and dungeon maps use **0 PointLights** (relying on emissive materials and additive meshes); Stupa zone uses 3 (1 per lamp station, disabled when `state.zone !== 'stupa'`).
