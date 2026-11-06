@@ -1,6 +1,7 @@
 // Adapted from the opening of 《鏡中之人》. All replies lead to the same handover.
 export const openingMessage = 'phone.line.opening';
 export const identityStep = 3;
+export const prologueRecordingReadFlag = 'prologue.recordingRead';
 
 export const prologueTurns = [
   {
@@ -57,9 +58,17 @@ export function selectPrologueReply(replies, replyId) {
   return reply ? [...replies, reply] : replies;
 }
 
-export function prologueChoices(replies) {
-  if (replies.length !== prologueTurns.length) return null;
-  return Object.fromEntries(prologueTurns.map((turn, index) => [
-    `prologue.${turn.id}`, replies[index].id,
-  ]));
+export function prologueChoiceKey(turn) {
+  return `prologue.${turn.id}`;
+}
+
+export function readPrologueReplies(choices, { fallbackToScript = false } = {}) {
+  const replies = [];
+  for (const turn of prologueTurns) {
+    const selected = choices[prologueChoiceKey(turn)];
+    const reply = turn.replies.find(({ id }) => id === selected);
+    if (!reply && !fallbackToScript) break;
+    replies.push(reply ?? turn.replies[0]);
+  }
+  return replies;
 }
