@@ -6,7 +6,7 @@ import { SAMYE_CHAPTER } from '../../data/story/chapters/samye.js';
 const approaches = {
   stone: [5008, 38, 5008, 35, 0.6],
   wood: [5016, 38, 5017, 35, 0.8],
-  night: [5012, 42, 5012, 34, 1.3],
+  night: [5012, 39.5, 5012, 34, 1.3],
   rebuild: [5004, 34, 5010, 34, 0.7],
   hepori: [5063, 5, 5075, -10, 1.0],
   memory: [5063, 5, 5000, 0, 9],
