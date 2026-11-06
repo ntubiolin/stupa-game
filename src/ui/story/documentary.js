@@ -44,6 +44,7 @@ export function createDocumentary(ctx) {
   function refreshLabels() {
     if (!session) return;
     const { clip, index, paused } = session;
+    dialog.dataset.paused = String(paused);
     const cue = clip.cues[index];
     title.textContent = i18n.t(clip.titleKey);
     source.textContent = i18n.t(cue.sourceKey);
@@ -96,6 +97,7 @@ export function createDocumentary(ctx) {
   function pause() {
     if (!session || session.paused) return false;
     session.paused = true;
+    dialog.dataset.paused = 'true';
     toggleButton.textContent = t('resume');
     return true;
   }
@@ -103,6 +105,7 @@ export function createDocumentary(ctx) {
   function resume() {
     if (!session?.paused) return false;
     session.paused = false;
+    dialog.dataset.paused = 'false';
     toggleButton.textContent = t('pause');
     return true;
   }

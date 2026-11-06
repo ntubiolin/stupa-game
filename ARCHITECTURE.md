@@ -313,3 +313,59 @@ Because maps, enemies, bosses, quests, dialogues, codex entries, and i18n dictio
 6. **Register Bilingual Strings (`src/i18n/chX.js`) & Verify**:
    - Call `i18n.register({ 'zh-Hant': { ... }, en: { ... } })`.
    - Run `npm run check:i18n`, `npm run check:links`, `node scripts/balance-report.mjs`, and `npm run build`.
+
+## Mirror narrative demo (Epic #68)
+
+The launcher `src/main.js` selects exactly one dynamic entry: `src/adventure.js`
+(the previous bootstrap, unchanged) or `src/story/runtime.js`. Use `?mode=story`
+for the demo and `?mode=adventure` for the original game. Mode changes navigate
+and rebuild the document; they do not reuse listeners or serializers.
+Narrative does not construct `createZones`, quests, combat, inventory, community,
+coop, adventure player, HUD, or input. Its lightweight world adapter reuses
+stupa/sky/environment and lazy Pharping geometry without adventure persistence.
+
+Public narrative APIs and ordered beat/event schemas are specified in
+[docs/story/contracts.md](docs/story/contracts.md). Module ownership:
+
+| Module | Runtime API | Purpose |
+|---|---|---|
+| `story/storyDirector.js` | `ctx.story` | Validated nine-beat state machine, evidence, fixed signals, replay guards |
+| `story/narrativeCamera.js` | `ctx.storyCamera` | Eye-pose camera, keyboard/mouse/touch movement with collisions |
+| `story/cinematicArt.js` | `ctx.storyArt` | Reversible material/light grade, three light presets, two quality settings |
+| `ui/story/phone.js` | `ctx.phone` | Novel-based fixed messages, diaries, evidence, train transcript |
+| `ui/story/documentary.js` | `ctx.documentary` | Lazy still cues, captions, pause/replay/skip/cancel and fallback |
+| `story/memorySystem.js` | `ctx.memory` | Pose threshold evaluation, accessible camera assistance and explicit capture |
+| `story/runtime.js` | bootstrap owner only | World exploration, Losang, map, three spring interactions, return, focus/overlay integration |
+
+Only `ctx.save.set('story', ...)` persists narrative state in `stupa.save.v2`.
+`story.version=1` contains beat, evidence, choices, flags, clipsSeen,
+elapsedSeconds. Director sanitizes fields and reconstructs necessary evidence.
+Future story schemas remain untouched until explicit reset. Reset sets only the
+story section and reloads scene state. Existing v1 migration remains in the shared
+save service. Story mode never registers adventure serializers. Language uses
+existing i18n settings; narrative does not bind i18n to the adventure save service.
+
+Narrative uses original procedural maps plus local image/audio/document assets
+under `public/story`, allowing attributed, authorized or generated still images.
+Provenance and budgets live in `public/story/manifest.json`; no asset represents
+itself as a historical photograph. The fixed photograph reference is a pose
+exercise, not computer-vision evidence of historical identity. No real LLM or
+synthetic impersonation of the deceased is used. New PointLights: zero.
+
+Runtime frame order is camera → sky/world → cinematic grade → story/UI/save →
+render. UI ownership is derived from actual modal visibility every frame. Scene
+loading has retry and an epoch guard; delayed loads cannot replace a later beat.
+Optional world navigation assistance is a visible player control. Photo assist
+sets a real pose and still requires capture. Core story progress has no timed lock.
+
+Validation: `npm test`, `npm run build`, `npm run check:i18n`, and
+`npm run test:browser`. Browser evidence and hardware limitations are reported in
+`docs/story/validation.md`. Source-boundary and merge decisions are in the ADR;
+all #68 work stops at PRs for human acceptance, never automatic master merge.
+
+Narrative calls `createSave(ctx, {writableSections:['story']})`. This optional
+scope rejects unrelated set() writes and merges current storage's non-story
+sections at flush time, preserving progression made by a simultaneously open
+adventure tab. Default adventure behavior is unchanged. Scoped reset removes
+only permitted sections. This is a defensive write boundary, not a distributed
+transaction/locking protocol between multiple story sessions.

@@ -228,7 +228,10 @@ function validateSectionValue(sectionName, val, fallback) {
   return deepClone(val);
 }
 
-export function createSave(ctx) {
+export function createSave(ctx, { writableSections = null } = {}) {
+  // Narrative sessions may only persist their own section. Refresh unrelated
+  // sections at flush time so another open adventure tab is not rolled back.
+  const allowedSections = writableSections ? new Set(writableSections) : null;
   let store = {
     version: SAVE_VERSION,
     savedAt: Date.now(),
@@ -257,6 +260,19 @@ export function createSave(ctx) {
     store.version = SAVE_VERSION;
     store.savedAt = Date.now();
     try {
+      if (allowedSections) {
+        const latestRaw = localStorage.getItem(SAVE_STORAGE_KEY);
+        const latest = latestRaw ? safeParseJson(latestRaw, 'scoped flush') : null;
+        if (latest?.version > SAVE_VERSION) return;
+        if (latest?.version === SAVE_VERSION && latest.sections && !Array.isArray(latest.sections) && typeof latest.sections === 'object') {
+          const merged = deepClone(latest.sections);
+          for (const section of allowedSections) {
+            if (Object.hasOwn(store.sections, section)) merged[section] = deepClone(store.sections[section]);
+            else delete merged[section];
+          }
+          store.sections = merged;
+        }
+      }
       localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(store));
       writeCount += 1;
     } catch (err) {
@@ -337,7 +353,7 @@ export function createSave(ctx) {
   }
 
   function set(section, data) {
-    if (!section) return;
+    if (!section || (allowedSections && !allowedSections.has(section))) return;
     store.sections[section] = deepClone(data);
     isDirty = true;
   }
@@ -352,6 +368,11 @@ export function createSave(ctx) {
   }
 
   function reset() {
+    if (allowedSections) {
+      for (const section of allowedSections) delete store.sections[section];
+      writeToStorage();
+      return;
+    }
     const preservedSettings = store.sections.settings
       ? deepClone(store.sections.settings)
       : undefined;

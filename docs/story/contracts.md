@@ -33,3 +33,20 @@ Each worktree branches from contract commit. No shared-file writes by workers. E
 ## Validation
 
 Build + i18n on every component. Node tests for state transitions, save validation and photo thresholds. Lead runs independent whole-flow desktop/touch browser tests, restart/resume, keyboard, missing media, adventure regressions, same-pose A/B at 3 lighting x 2 quality settings, PointLight/draw calls/frame timing. AGY architecture reviews read-only with gemini-4-argon-high JSON output; results consolidated under .agent/reviews. No production deployment needed for preview.
+
+### Integration refinements
+
+`createSave(ctx,{writableSections:['story']})` is an optional write scope supplied
+only by narrative. Before flushing it refreshes unrelated stored sections, so
+an older story snapshot cannot roll back newer adventure progression in another
+tab. The default adventure service API/behavior remains intact. Root save v1
+migration and cross-tab preservation have independent regression tests.
+
+Runtime owns modal arbitration; all UI is closed before a beat changes and
+`uiOpen` is recomputed from actual modal visibility. Prologue and final vision
+cards retain a visible reopening route. Restart flushes only story and reloads
+the document to reset one-way shared-map effects such as Pharping rain.
+
+Optional photo memory overlay is a labeled AI reconstruction, not historical
+geometric evidence. The line guide uses game-world coordinates; acceptance is
+based on actual camera pose, not the generated illustration.

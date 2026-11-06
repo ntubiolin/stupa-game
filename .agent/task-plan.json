@@ -1,0 +1,315 @@
+{
+  "spec": {
+    "google_doc_url": "https://docs.google.com/document/d/1j7xtbVYcviIUwD9j2QQT0Lfze_Mq3iRZLdo3K3M0sgA/edit",
+    "document_id": "1j7xtbVYcviIUwD9j2QQT0Lfze_Mq3iRZLdo3K3M0sgA",
+    "revision_id": "AHj4eMQl5Oo-GZBMSeoD01t5RjL3tcI8hEKnoUgPTvpgBdAARVh7G93hafpMHcznXU0qaWZGoE6xCERdog75-dA-Xj0E59Js3CwE6QPGW4A"
+  },
+  "epic": 68,
+  "merge_policy": "HUMAN_ONLY",
+  "contract_commit": "209108f",
+  "tasks": [
+    {
+      "id": "STORY-1",
+      "title": "Mode & Story Director",
+      "goal": "Versioned story save and idempotent beat director, isolated from adventure.",
+      "requirements": [
+        "REQ-STORY-1"
+      ],
+      "scope": [
+        "director"
+      ],
+      "non_goals": [
+        "Full 2–4 hour game",
+        "Live LLM dialogue",
+        "Finale",
+        "Master merge"
+      ],
+      "constraints": [
+        "ctx.save only",
+        "Bilingual zh-Hant/en",
+        "0 new PointLights"
+      ],
+      "depends_on": [
+        "CONTRACTS"
+      ],
+      "blocked_by": [
+        "CONTRACTS"
+      ],
+      "acceptance_criteria": [
+        "Cold start and resume at every beat; only story section changes.",
+        "Guard event order, duplicate signals and corrupt/future state; reset only story.",
+        "Expose createStoryDirector(ctx), start, signal, getState, skipTo, reset, grantEvidence, playClip."
+      ],
+      "validation": [
+        "npm run build",
+        "npm run check:i18n",
+        "npm test",
+        "npm run test:browser"
+      ],
+      "risk_notes": [
+        "Human pacing/cultural acceptance",
+        "No physical low-end phone measured"
+      ],
+      "issue_number": 69,
+      "issue_url": "https://github.com/ntubiolin/stupa-game/issues/69",
+      "pr_number": 75,
+      "status": "VERIFIED_LOCAL",
+      "claim": null,
+      "owner": "director"
+    },
+    {
+      "id": "STORY-2",
+      "title": "Cinematic Art & First-person Camera",
+      "goal": "Reversible cinematic/legacy presets and accessible first-person exploration.",
+      "requirements": [
+        "REQ-STORY-2"
+      ],
+      "scope": [
+        "art"
+      ],
+      "non_goals": [
+        "Full 2–4 hour game",
+        "Live LLM dialogue",
+        "Finale",
+        "Master merge"
+      ],
+      "constraints": [
+        "ctx.save only",
+        "Bilingual zh-Hant/en",
+        "0 new PointLights"
+      ],
+      "depends_on": [
+        "CONTRACTS"
+      ],
+      "blocked_by": [
+        "CONTRACTS"
+      ],
+      "acceptance_criteria": [
+        "Keyboard and touch look/move with bounds/collisions; photograph pose API.",
+        "Three lighting presets, two quality settings, reversible same-pose A/B.",
+        "Zero new PointLights; measurements and screenshots in integration."
+      ],
+      "validation": [
+        "npm run build",
+        "npm run check:i18n",
+        "npm test",
+        "npm run test:browser"
+      ],
+      "risk_notes": [
+        "Human pacing/cultural acceptance",
+        "No physical low-end phone measured"
+      ],
+      "issue_number": 70,
+      "issue_url": "https://github.com/ntubiolin/stupa-game/issues/70",
+      "pr_number": 76,
+      "status": "VERIFIED_LOCAL",
+      "claim": null,
+      "owner": "art"
+    },
+    {
+      "id": "STORY-3",
+      "title": "Phone & Scripted AI",
+      "goal": "Bilingual fixed novel-based messages, photos, diaries and evidence notebook.",
+      "requirements": [
+        "REQ-STORY-3"
+      ],
+      "scope": [
+        "phone"
+      ],
+      "non_goals": [
+        "Full 2–4 hour game",
+        "Live LLM dialogue",
+        "Finale",
+        "Master merge"
+      ],
+      "constraints": [
+        "ctx.save only",
+        "Bilingual zh-Hant/en",
+        "0 new PointLights"
+      ],
+      "depends_on": [
+        "CONTRACTS"
+      ],
+      "blocked_by": [
+        "CONTRACTS"
+      ],
+      "acceptance_criteria": [
+        "Prologue identifies digital proxy as not Yingzhen; no generated dialogue.",
+        "Evidence locks, replay and phone close/reopen persist without progression exploits.",
+        "Keyboard/touch accessible UI and translation parity."
+      ],
+      "validation": [
+        "npm run build",
+        "npm run check:i18n",
+        "npm test",
+        "npm run test:browser"
+      ],
+      "risk_notes": [
+        "Human pacing/cultural acceptance",
+        "No physical low-end phone measured"
+      ],
+      "issue_number": 71,
+      "issue_url": "https://github.com/ntubiolin/stupa-game/issues/71",
+      "pr_number": 77,
+      "status": "VERIFIED_LOCAL",
+      "claim": null,
+      "owner": "phone"
+    },
+    {
+      "id": "STORY-4",
+      "title": "Documentary Player",
+      "goal": "Lazy local still cue sheets with subtitles, controls and missing-media fallback.",
+      "requirements": [
+        "REQ-STORY-4"
+      ],
+      "scope": [
+        "documentary"
+      ],
+      "non_goals": [
+        "Full 2–4 hour game",
+        "Live LLM dialogue",
+        "Finale",
+        "Master merge"
+      ],
+      "constraints": [
+        "ctx.save only",
+        "Bilingual zh-Hant/en",
+        "0 new PointLights"
+      ],
+      "depends_on": [
+        "CONTRACTS"
+      ],
+      "blocked_by": [
+        "CONTRACTS"
+      ],
+      "acceptance_criteria": [
+        "Pause, skip, replay, captions and fallback work without video/network.",
+        "Completion once per play session, replay does not duplicate progression.",
+        "Manifest documents generated/self-created assets and fiction vs history."
+      ],
+      "validation": [
+        "npm run build",
+        "npm run check:i18n",
+        "npm test",
+        "npm run test:browser"
+      ],
+      "risk_notes": [
+        "Human pacing/cultural acceptance",
+        "No physical low-end phone measured"
+      ],
+      "issue_number": 72,
+      "issue_url": "https://github.com/ntubiolin/stupa-game/issues/72",
+      "pr_number": 78,
+      "status": "VERIFIED_LOCAL",
+      "claim": null,
+      "owner": "director / lead"
+    },
+    {
+      "id": "STORY-5",
+      "title": "Memory Photography",
+      "goal": "Measurable position/yaw/pitch/FOV match with historical-reference overlay.",
+      "requirements": [
+        "REQ-STORY-5"
+      ],
+      "scope": [
+        "photography"
+      ],
+      "non_goals": [
+        "Full 2–4 hour game",
+        "Live LLM dialogue",
+        "Finale",
+        "Master merge"
+      ],
+      "constraints": [
+        "ctx.save only",
+        "Bilingual zh-Hant/en",
+        "0 new PointLights"
+      ],
+      "depends_on": [
+        "CONTRACTS",
+        "STORY-2"
+      ],
+      "blocked_by": [
+        "CONTRACTS"
+      ],
+      "acceptance_criteria": [
+        "Cannot match wrong pose; threshold boundary tests and explicit capture.",
+        "Keyboard and touch assist reach a real matching camera pose.",
+        "Match unlocks restoration evidence once; reopen/reload safe."
+      ],
+      "validation": [
+        "npm run build",
+        "npm run check:i18n",
+        "npm test",
+        "npm run test:browser"
+      ],
+      "risk_notes": [
+        "Human pacing/cultural acceptance",
+        "No physical low-end phone measured"
+      ],
+      "issue_number": 73,
+      "issue_url": "https://github.com/ntubiolin/stupa-game/issues/73",
+      "pr_number": 79,
+      "status": "VERIFIED_LOCAL",
+      "claim": null,
+      "owner": "director / lead"
+    },
+    {
+      "id": "STORY-6",
+      "title": "Vertical Slice Integration",
+      "goal": "Playable prologue → Boudha → restoration → Losang/map → Pharping vision → new diary.",
+      "requirements": [
+        "REQ-STORY-6"
+      ],
+      "scope": [
+        "integration"
+      ],
+      "non_goals": [
+        "Full 2–4 hour game",
+        "Live LLM dialogue",
+        "Finale",
+        "Master merge"
+      ],
+      "constraints": [
+        "ctx.save only",
+        "Bilingual zh-Hant/en",
+        "0 new PointLights"
+      ],
+      "depends_on": [
+        "STORY-1",
+        "STORY-2",
+        "STORY-3",
+        "STORY-4",
+        "STORY-5"
+      ],
+      "blocked_by": [
+        "STORY-1",
+        "STORY-2",
+        "STORY-3",
+        "STORY-4",
+        "STORY-5"
+      ],
+      "acceptance_criteria": [
+        "Independent adventure boot and v1/v2 saves unchanged by narrative play.",
+        "Full desktop/mobile playthrough, reload checkpoints, no softlocks, bilingual.",
+        "Build/i18n/regression pass; A/B screenshot/performance evidence; human merge only."
+      ],
+      "validation": [
+        "npm run build",
+        "npm run check:i18n",
+        "npm test",
+        "npm run test:browser"
+      ],
+      "risk_notes": [
+        "Human pacing/cultural acceptance",
+        "No physical low-end phone measured"
+      ],
+      "issue_number": 74,
+      "issue_url": "https://github.com/ntubiolin/stupa-game/issues/74",
+      "pr_number": null,
+      "status": "VERIFIED_LOCAL",
+      "claim": null,
+      "owner": "lead"
+    }
+  ]
+}

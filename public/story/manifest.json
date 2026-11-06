@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "scope": "Epic #68, Stories 1–6 demo only",
+  "policy": "Illustrative reconstructions are never presented as archival photographs. No synthesized deceased voice or generated Tibetan text. Core dialogue follows the supplied novel; English is an adaptation.",
+  "assets": [
+    {
+      "path": "restoration-memory.jpg",
+      "purpose": "Restoration documentary still and unlocked phone photograph, with illustrative provenance shown in UI",
+      "source": "OpenAI built-in image_gen, generated for this project on 2026-11-06",
+      "method": "AI-generated illustration, PNG converted to quality-78 JPEG using sips",
+      "rights": "Generated for the project; no third-party archival photograph is incorporated. Cultural and historical fidelity requires human review.",
+      "classification": "fictional illustrative reconstruction with historical background",
+      "notArchival": true,
+      "prompt": "docs/story/image-prompt.txt",
+      "lazy": true
+    },
+    {
+      "path": "src/story/runtime.js#mapDrawing",
+      "purpose": "Six-stop old-map diagram",
+      "source": "Original code-authored SVG route diagram",
+      "method": "SVG geometry and localized labels, not geographically accurate",
+      "rights": "Project-authored",
+      "classification": "fictional document"
+    },
+    {
+      "path": "src/ui/story/documentary.css#slate",
+      "purpose": "Uninscribed stone silhouette",
+      "source": "Original CSS geometry",
+      "method": "Abstract material diagram, no purported ancient writing",
+      "rights": "Project-authored",
+      "classification": "fictional document"
+    },
+    {
+      "path": "src/ui/story/phone.js#createTrainSource",
+      "purpose": "Optional train ambience accompanying text transcript",
+      "source": "Original Web Audio sound design",
+      "method": "Noise and wheel rhythm; contains no speech",
+      "rights": "Project-authored",
+      "classification": "fictional reconstruction"
+    }
+  ],
+  "textSources": [
+    { "url": "https://docs.google.com/document/d/1fUhMiSfSkdkKEUU63s2gojF5Br6rqfdXyeVjsIb3zJw/edit", "title": "鏡中之人 — supplied novel", "readDate": "2026-11-06", "scope": "Prologue and chapters 1–3; no finale adaptation" },
+    { "url": "https://docs.google.com/document/d/1j7xtbVYcviIUwD9j2QQT0Lfze_Mq3iRZLdo3K3M0sgA/edit", "title": "Narrative integration and Vertical Slice plan", "readDate": "2026-11-06" }
+  ],
+  "budgets": { "initialBytes": 2097152, "imageBytes": 1048576, "totalMediaBytes": 8388608 },
+  "reviewRequired": ["Cultural/religious depiction", "Human pacing and emotional clarity", "English adaptation"]
+}

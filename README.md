@@ -171,3 +171,31 @@ npm run preview
 - **零 Magic Number**：所有數值統一收斂於 `src/config.js` 與 `src/data/**`。
 - **完全國際化**：繁體中文與英文雙語即時切換（`src/i18n.js` + `npm run check:i18n` CI 自動驗證）。
 - **效能預算與無縫分塊**：保持 60 FPS，全場景動態 PointLight $\le 6$（原野與章節地圖為 0 PointLight），所有章節地圖動態 `import()` 延遲載入，Draw Calls $< 400$。
+
+## 《鏡中之人》敘事 Demo / The Person in the Mirror
+
+The main menu offers the original **Footsteps adventure** and an independent
+**Mirror narrative journey**. Existing ARPG saves remain in their original
+sections; narrative progress is autosaved in its own `story` section.
+
+- Open `/?mode=story` for the approximately 15-minute reading/exploration slice.
+- Open `/?mode=adventure` for the original ARPG, historical maps and multiplayer.
+- Walk with WASD/arrows; drag or use IJKL to look; E to interact. On touch screens,
+  drag the left side to walk and the right side to look.
+- The visible clue-assist button and camera-assist control support players who
+  prefer accessible navigation. Open the phone to revisit unlocked records.
+- Settings offer Cinematic/Legacy, dawn/day/dusk, low/high quality, language,
+  ambience, documentary replay and story-only restart.
+- Prologue → Boudha exploration → photo alignment → restoration documentary →
+  Losang's map → a brief Pharping vision → a new diary. No combat or leveling.
+
+Both the novel and plan were read for this implementation. Still images are
+clearly labeled illustrative reconstructions, not archival photos. The digital
+proxy uses fixed authored dialogue and is explicitly **not Yingzhen herself**.
+The demo does not adapt the Chimphu letter or final farewell.
+
+Run `npm test` for regressions. For browser acceptance, start `npm run dev -- --host
+127.0.0.1 --port 4173`, install Playwright Chromium (`npx playwright install
+chromium`), then `npm run test:browser`. Set `BROWSER_CHANNEL=chrome` to use an
+installed Chrome. See [contracts](docs/story/contracts.md),
+[validation](docs/story/validation.md), and [asset provenance](public/story/manifest.json).

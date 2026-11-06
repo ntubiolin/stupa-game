@@ -3,7 +3,8 @@ import { i18n } from '../i18n.js';
 i18n.register({
   zh: {
     'story.photography.title': '記憶攝影',
-    'story.photography.reference': '佛塔構圖示意',
+    'story.photography.reference': '構圖示意 · 修復影像為 AI 插畫重建，非歷史照片',
+    'story.photography.overlay': '記憶疊影',
     'story.photography.keyboard': 'WASD 移動 · 方向鍵或拖曳轉向 · C 拍攝',
     'story.photography.touch': '拖曳轉向 · 用輔助對齊調整站位',
     'story.photography.errors': '距離 {position} 公尺 · 左右 {yaw}° · 上下 {pitch}° · 視角 {fov}°',
@@ -17,7 +18,8 @@ i18n.register({
   },
   en: {
     'story.photography.title': 'Memory Photography',
-    'story.photography.reference': 'Illustrated framing guide',
+    'story.photography.reference': 'Framing guide · Repair image is AI illustration, not an archival photo',
+    'story.photography.overlay': 'Memory overlay',
     'story.photography.keyboard': 'WASD to move · Arrows or drag to look · C to capture',
     'story.photography.touch': 'Drag to look · Use Align assist to adjust your position',
     'story.photography.errors': 'Distance {position} m · Horizontal {yaw}° · Vertical {pitch}° · View angle {fov}°',

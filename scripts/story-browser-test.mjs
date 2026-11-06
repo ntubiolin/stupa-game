@@ -1,0 +1,161 @@
+import assert from 'node:assert/strict';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { chromium } from 'playwright';
+
+const base = process.env.STORY_BASE_URL || 'http://127.0.0.1:4173';
+const output = process.env.STORY_ARTIFACTS || 'artifacts/story';
+await mkdir(output, { recursive: true });
+const browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : {}), args: ['--enable-unsafe-swiftshader'] });
+const report = { startedAt: new Date().toISOString(), browser: browser.version(), scenarios: [], errors: [], metrics: [] };
+const seedSections = { vitals: { level: 12, exp: 77, hp: 150, mp: 60 }, quests: { active: {}, done: ['prologue.kora'], flags: { 'sentinel': true } }, inventory: { bag: [], equipped: {}, turquoise: 321 }, appearance: { displayName: 'Save sentinel' }, coop: { sentinel: 'preserve' }, merit: { points: 987 }, settings: { lang: 'zh', muted: true }, unknownFutureSection: { keep: [1, 2, 3] } };
+const shot = (page, name) => page.screenshot({ path: `${output}/${name}.png` });
+const waitBeat = (page, beat) => page.waitForFunction(b => window.__stupa?.story?.getState().beat === b, beat);
+async function fixture(context, beat, lang = 'zh') {
+  await context.addInitScript(({ sections, beat, lang }) => {
+    if (!localStorage.getItem('stupa.save.v2')) {
+      const all = structuredClone(sections); all.settings.lang = lang;
+      if (beat) all.story = { version: 1, beat, evidence: [], choices: {}, flags: {}, clipsSeen: [], elapsedSeconds: 30 };
+      localStorage.setItem('stupa.save.v2', JSON.stringify({ version: 2, savedAt: 1, sections: all }));
+    }
+  }, { sections: seedSections, beat, lang });
+}
+function monitor(page, name) {
+  page.on('pageerror', e => report.errors.push({ scenario: name, error: e.message }));
+}
+async function ready(page) {
+  await page.goto(`${base}/?mode=story&debug=1`);
+  await page.waitForFunction(() => window.__stupa?.storyRuntime);
+}
+async function fullJourney(name, mobile, lang) {
+  const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 }, deviceScaleFactor: mobile ? 2 : 1, isMobile: mobile, hasTouch: mobile, reducedMotion: 'reduce', recordVideo: { dir: `${output}/video`, size: mobile ? { width: 390, height: 844 } : { width: 1280, height: 800 } } });
+  await fixture(context, null, lang);
+  const page = await context.newPage(); monitor(page, name);
+  const wallStart = Date.now();
+  const click = async locator => mobile ? locator.tap() : locator.click();
+  const action = () => page.locator('.story-objective [data-action="interact"]');
+  const cardContinue = () => page.locator('[data-card="continue"]');
+  const guide = () => page.locator('[data-action="guide"]');
+  await ready(page);
+  await page.locator('.story-phone[open]').waitFor();
+  await shot(page, `${name}-01-prologue`);
+  await click(page.locator('.story-phone__close'));
+  await click(page.locator('[data-action="phone"]'));
+  for (let i = 0; i < 7; i++) await click(page.locator('.story-phone__actions button').first());
+  await click(page.locator('.story-phone__actions button').first()); // transcript
+  await shot(page, `${name}-02-recording`);
+  await click(page.locator('.story-phone__actions button').first()); // depart
+  await waitBeat(page, 'arrival');
+  await click(cardContinue());
+  // Verify real input changes the ground pose before using accessible journey controls.
+  const before = await page.evaluate(() => __stupa.storyCamera.getPose());
+  if (mobile) {
+    const cdp = await context.newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 60, y: 400 }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 60, y: 355 }] });
+    await page.waitForTimeout(350);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  } else {
+    await page.locator('#app canvas').focus(); await page.keyboard.down('KeyW'); await page.waitForTimeout(350); await page.keyboard.up('KeyW');
+  }
+  const after = await page.evaluate(() => __stupa.storyCamera.getPose());
+  assert(Math.hypot(after.x - before.x, after.z - before.z) > .1, `${name} movement`);
+  for (let i = 0; i < 3; i++) {
+    await click(guide()); await click(action());
+    if (i === 1) await shot(page, `${name}-03-history`);
+    await click(cardContinue());
+  }
+  await waitBeat(page, 'photography'); await click(guide()); await click(action());
+  await page.locator('.story-photography[open]').waitFor();
+  await click(page.locator('.story-photography [data-action="capture"]'));
+  await waitBeat(page, 'photography');
+  await click(page.locator('.story-photography [data-action="overlay"]'));
+  await click(page.locator('.story-photography [data-action="overlay"]'));
+  await click(page.locator('.story-photography [data-action="assist"]'));
+  await shot(page, `${name}-04-photography`);
+  await click(page.locator('.story-photography [data-action="capture"]'));
+  await waitBeat(page, 'restoration'); await page.locator('.story-documentary[open]').waitFor();
+  await click(page.locator('.story-documentary-controls button').nth(0));
+  await shot(page, `${name}-05-documentary`);
+  await click(page.locator('.story-documentary-controls button').nth(1)); // replay
+  await click(page.locator('.story-documentary-controls button').nth(2)); // skip
+  await waitBeat(page, 'losang'); await click(guide()); await click(action());
+  for (let i = 0; i < 6; i++) await click(cardContinue());
+  await waitBeat(page, 'map'); await shot(page, `${name}-06-map`);
+  await click(cardContinue()); await click(cardContinue());
+  await waitBeat(page, 'vision'); await cardContinue().waitFor(); await click(cardContinue());
+  await shot(page, `${name}-07-vision`);
+  for (let i = 0; i < 3; i++) { await click(guide()); await click(action()); await click(cardContinue()); }
+  // Reproduce and guard the former last-card-close soft lock.
+  await click(page.locator('[data-card="close"]')); await click(action()); await click(cardContinue());
+  await waitBeat(page, 'return'); await click(cardContinue());
+  await page.locator('.story-phone[open]').waitFor(); await shot(page, `${name}-08-diary`);
+  await click(page.locator('.story-phone__record .story-phone__action--primary'));
+  await waitBeat(page, 'complete'); await shot(page, `${name}-09-complete`); await click(cardContinue());
+  const final = await page.evaluate(() => { __stupa.save.export(); return JSON.parse(localStorage.getItem('stupa.save.v2')); });
+  const expected = structuredClone(seedSections); expected.settings.lang = lang;
+  for (const [key, value] of Object.entries(expected)) assert.deepEqual(final.sections[key], value, `${name} preserves ${key}`);
+  assert.equal(final.sections.story.evidence.length, 5);
+  await page.reload(); await waitBeat(page, 'complete'); await click(cardContinue());
+  if (!mobile) {
+    // Same pose, all 3 lighting × 2 quality × 2 art combinations.
+    await page.evaluate(() => __stupa.storyCamera.setPose({ x: 0, y: 1.68, z: 31, yaw: 0, pitch: .34, fov: 55 }));
+    for (const lighting of ['dawn', 'day', 'dusk']) for (const quality of ['high', 'low']) for (const preset of ['legacy', 'cinematic']) {
+      await page.evaluate(({ lighting, quality, preset }) => { __stupa.storyArt.setLighting(lighting); __stupa.storyArt.setQuality(quality); __stupa.storyArt.setPreset(preset); __stupa.storyRuntime.resetMetrics(); }, { lighting, quality, preset });
+      await page.waitForTimeout(1200);
+      await shot(page, `art-${lighting}-${quality}-${preset}`);
+      const metric = await page.evaluate(() => __stupa.storyRuntime.getMetrics());
+      assert.equal(metric.pointLights, 0); report.metrics.push(metric);
+    }
+  }
+  report.scenarios.push({ name, result: 'PASS', mode: 'complete user-facing flow, assisted navigation, no debug beat progression', language: lang, gameElapsedSeconds: final.sections.story.elapsedSeconds, automatedWallSeconds: (Date.now() - wallStart) / 1000, pacingNote: 'Fast automated path with assist and skip; not a 15-minute human reading test' });
+  await context.close();
+}
+
+try {
+  await fullJourney('desktop', false, 'zh');
+  await fullJourney('mobile', true, 'en');
+  // Resume every checkpoint with genuine saved data, never a debug transition.
+  for (const beat of ['prologue', 'arrival', 'photography', 'restoration', 'losang', 'map', 'vision', 'return', 'complete']) {
+    const context = await browser.newContext(); await fixture(context, beat);
+    const page = await context.newPage(); monitor(page, `resume-${beat}`); await ready(page); await waitBeat(page, beat);
+    await page.waitForFunction(() => document.querySelector('dialog[open]') || !document.querySelector('.story-modal').hidden || !document.querySelector('[data-action="interact"]').hidden);
+    report.scenarios.push({ name: `resume-${beat}`, result: 'PASS' }); await context.close();
+  }
+  const fallback = await browser.newContext(); await fixture(fallback, 'restoration');
+  await fallback.route('**/story/restoration-memory.jpg', route => route.abort());
+  const fp = await fallback.newPage(); monitor(fp, 'media-fallback'); await ready(fp);
+  await fp.locator('.story-documentary-fallback').waitFor({ state: 'visible' });
+  await shot(fp, 'missing-media-fallback');
+  await fp.locator('.story-documentary-controls button').nth(2).click(); await waitBeat(fp, 'losang');
+  report.scenarios.push({ name: 'missing-media-fallback', result: 'PASS' }); await fallback.close();
+  const adventure = await browser.newContext(); const ap = await adventure.newPage(); monitor(ap, 'adventure');
+  await ap.goto(`${base}/?mode=adventure&debug=1`);
+  await ap.waitForFunction(() => window.__stupa?.quests && window.__stupa?.save);
+  assert.equal(await ap.evaluate(() => Boolean(__stupa.story)), false);
+  await ap.locator('#btn-begin').click();
+  await ap.waitForFunction(() => __stupa.state.mode === 'play');
+  const adventureChecks = await ap.evaluate(async () => {
+    __stupa.inventory.give('magic');
+    const bag = __stupa.inventory.getBag();
+    const item = bag[0];
+    if (item) __stupa.inventory.equip(item.uid);
+    const equipped = Object.values(__stupa.inventory.getEquipped()).filter(Boolean).length;
+    const cast = __stupa.skills.cast('humBolt');
+    await __stupa.zones.teleport('pharping');
+    const mapLoaded = __stupa.state.zone === 'pharping';
+    await __stupa.zones.teleport('stupa');
+    return { item: Boolean(item), equipped, cast, mapLoaded, mapCount: __stupa.zones.list().length, coopAvailable: Boolean(__stupa.coop) };
+  });
+  assert.equal(adventureChecks.item, true); assert(adventureChecks.equipped > 0); assert.equal(adventureChecks.mapLoaded, true); assert(adventureChecks.mapCount >= 9); assert.equal(adventureChecks.coopAvailable, true);
+  report.scenarios.push({ name: 'adventure-equipment-skills-historical-maps', result: 'PASS', checks: adventureChecks });
+  await shot(ap, 'adventure-preserved');
+  report.scenarios.push({ name: 'adventure-bootstrap', result: 'PASS' }); await adventure.close();
+  assert.deepEqual(report.errors, [], 'No uncaught browser errors');
+  report.result = 'PASS';
+} catch (error) {
+  report.result = 'FAIL'; report.failure = error.stack; throw error;
+} finally {
+  await writeFile(`${output}/report.json`, JSON.stringify(report, null, 2));
+  await browser.close();
+}
+console.log(JSON.stringify({ result: report.result, scenarios: report.scenarios.length, errors: report.errors, metrics: report.metrics.length }));

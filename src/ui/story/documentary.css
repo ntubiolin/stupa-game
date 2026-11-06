@@ -108,3 +108,9 @@
   outline: 2px solid #ffd383;
   outline-offset: 2px;
 }
+
+/* Slow push-in adds depth without claiming moving archival footage. */
+.story-documentary-still img { animation: story-memory-drift 18s ease-in-out infinite alternate; }
+.story-documentary[data-paused="true"] img { animation-play-state: paused; }
+@keyframes story-memory-drift { from { transform: scale(1); } to { transform: scale(1.065) translateY(-1%); } }
+@media (prefers-reduced-motion: reduce) { .story-documentary-still img { animation: none; } }

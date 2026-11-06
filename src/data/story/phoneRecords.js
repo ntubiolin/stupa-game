@@ -21,7 +21,6 @@ export const phoneRecords = [
     titleKey: 'phone.record.stone',
     sourceKey: 'phone.source.illustration',
     bodyKey: 'phone.record.stoneBody',
-    textKey: 'phone.record.stoneNote',
   },
   {
     id: 'old-map',
