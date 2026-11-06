@@ -85,6 +85,94 @@
       "sha256": "47f556ecd98bfb68e8ca7a44d35fba6fee664f188a96e0ebba4a0d531c0d5489",
       "lazy": true,
       "review": "docs/story/stills-qc-84.md"
+    },
+    {
+      "path": "video/V1.mp4",
+      "purpose": "Optional motion cue V1",
+      "source": "Google Flow Omni 1.1 Flash, project-approved 360p export (#85), 2026-11-06",
+      "classification": "AI illustrative reconstruction, not archival footage",
+      "notArchival": true,
+      "lazy": true,
+      "bytes": 635995,
+      "sha256": "46817799c1dc3d81982f71d77f760545331860ae60bf8697e523b4dd010242da",
+      "review": "docs/story/video-qc-85.md"
+    },
+    {
+      "path": "video/V1.jpg",
+      "purpose": "Static fallback V1",
+      "source": "Google Flow Omni 1.1 Flash, project-approved 360p export (#85), 2026-11-06",
+      "classification": "AI illustrative reconstruction, not archival footage",
+      "notArchival": true,
+      "lazy": true,
+      "bytes": 31317,
+      "sha256": "b5167c8ef5d84abac9dc4ac4ce1ae55c28132122ac774d522bd6d33ee7f7837c",
+      "review": "docs/story/video-qc-85.md"
+    },
+    {
+      "path": "video/V2.mp4",
+      "purpose": "Optional motion cue V2",
+      "source": "Google Flow Omni 1.1 Flash, project-approved 360p export (#85), 2026-11-06",
+      "classification": "AI illustrative reconstruction, not archival footage",
+      "notArchival": true,
+      "lazy": true,
+      "bytes": 360021,
+      "sha256": "c806fe108a8cf3680d5ea0bf70fce8c79bd45cffad5ddff13f5af0cf324048ae",
+      "review": "docs/story/video-qc-85.md"
+    },
+    {
+      "path": "video/V2.jpg",
+      "purpose": "Static fallback V2",
+      "source": "Google Flow Omni 1.1 Flash, project-approved 360p export (#85), 2026-11-06",
+      "classification": "AI illustrative reconstruction, not archival footage",
+      "notArchival": true,
+      "lazy": true,
+      "bytes": 23397,
+      "sha256": "2f7fe3e38c28bda85a994ce7407c029bdb601f1952dd7f19152a1d0617f8f8d5",
+      "review": "docs/story/video-qc-85.md"
+    },
+    {
+      "path": "video/V3.mp4",
+      "purpose": "Optional motion cue V3",
+      "source": "Google Flow Omni 1.1 Flash, project-approved 360p export (#85), 2026-11-06",
+      "classification": "AI illustrative reconstruction, not archival footage",
+      "notArchival": true,
+      "lazy": true,
+      "bytes": 330837,
+      "sha256": "5edd1099c4aabbece950d41e2902ac4142c69e8c9720896b779c8525ceb07e20",
+      "review": "docs/story/video-qc-85.md"
+    },
+    {
+      "path": "video/V3.jpg",
+      "purpose": "Static fallback V3",
+      "source": "Google Flow Omni 1.1 Flash, project-approved 360p export (#85), 2026-11-06",
+      "classification": "AI illustrative reconstruction, not archival footage",
+      "notArchival": true,
+      "lazy": true,
+      "bytes": 28968,
+      "sha256": "951e255a06e05aa10ae650b7acb78f3987229afff9834b5eea050f15a489a18f",
+      "review": "docs/story/video-qc-85.md"
+    },
+    {
+      "path": "video/V4.mp4",
+      "purpose": "Optional motion cue V4",
+      "source": "Google Flow Omni 1.1 Flash, project-approved 360p export (#85), 2026-11-06",
+      "classification": "AI illustrative reconstruction, not archival footage",
+      "notArchival": true,
+      "lazy": true,
+      "bytes": 877529,
+      "sha256": "a37b64154dadfd3ec3f46fa80bf431ba0d466c890e997be32a5a8efb6e9acc58",
+      "review": "docs/story/video-qc-85.md"
+    },
+    {
+      "path": "video/V4.jpg",
+      "purpose": "Static fallback V4",
+      "source": "Google Flow Omni 1.1 Flash, project-approved 360p export (#85), 2026-11-06",
+      "classification": "AI illustrative reconstruction, not archival footage",
+      "notArchival": true,
+      "lazy": true,
+      "bytes": 44717,
+      "sha256": "e97fbfb4bed6955c97837e9e98cf3fe1d054cb8dde505fac72552661362bd814",
+      "review": "docs/story/video-qc-85.md"
     }
   ],
   "textSources": [

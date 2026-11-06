@@ -123,7 +123,7 @@ test('lazy still failure leaves captions readable through pause, replay and comp
   assert.equal(state.uiOpen, true);
   assert.equal(dialog.open, true);
   const [image, fallback] = still.children;
-  assert.equal(image.getAttribute('src'), '/story/restoration/A.webp');
+  assert.equal(image.getAttribute('src'), '/story/restoration-memory.jpg');
   image.dispatchEvent(new Event('error'));
   assert.equal(image.hidden, true);
   assert.equal(fallback.hidden, false);
@@ -141,7 +141,7 @@ test('lazy still failure leaves captions readable through pause, replay and comp
   assert.notEqual(still.children[0], image);
   player.update(29);
   assert.match(caption.textContent, /stone$/);
-  assert.equal(still.children[0].getAttribute('src'), '/story/restoration/D.webp');
+  assert.equal(still.children.some(node => node.tag === 'img'), false);
   player.update(13);
   next.dispatchEvent(new Event('click'));
   player.update(10);
@@ -155,7 +155,7 @@ test('manual advance resets the timer and autoplay still advances the next cue',
   player.play('restoration');
   player.update(8);
   next.dispatchEvent(new Event('click'));
-  assert.equal(still.dataset.frame, 'full');
+  assert.equal(still.dataset.frame, 'work');
   assert.match(caption.textContent, /volunteer$/);
   assert.match(progress.textContent, /2\/4$/);
   player.update(10);
@@ -173,8 +173,7 @@ test('paused manual advance works through missing images and finishes only once'
   image.dispatchEvent(new Event('error'));
   assert.match(next.textContent, /\.next$/);
   next.dispatchEvent(new Event('click'));
-  // Failure of A must not mark the independent B image as failed.
-  assert.equal(fallback.hidden, true);
+  assert.equal(fallback.hidden, false);
   assert.match(caption.textContent, /volunteer$/);
   player.update(60);
   assert.equal(dialog.dataset.paused, 'true');
@@ -184,7 +183,7 @@ test('paused manual advance works through missing images and finishes only once'
   next.dispatchEvent(new Event('click'));
   assert.match(caption.textContent, /stone$/);
   assert.match(progress.textContent, /4\/4$/);
-  assert.equal(still.dataset.frame, 'full');
+  assert.equal(still.dataset.frame, 'slate');
   assert.equal(fallback.hidden, true);
   assert.match(next.textContent, /\.finish$/);
   assert.deepEqual(events, []);
