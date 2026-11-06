@@ -1,0 +1,24 @@
+.story-joystick {
+  position: fixed;
+  z-index: 8;
+  box-sizing: border-box;
+  width: 108px;
+  height: 108px;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgb(255 244 220 / 55%);
+  border-radius: 50%;
+  background: rgb(30 28 24 / 30%);
+  pointer-events: none;
+}
+
+.story-joystick::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 22px;
+  height: 22px;
+  transform: translate(-50%, -50%) translate(var(--stick-x, 0px), var(--stick-y, 0px));
+  border-radius: 50%;
+  background: rgb(255 244 220 / 70%);
+}
