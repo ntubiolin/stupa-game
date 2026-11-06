@@ -176,7 +176,7 @@ try {
       report.scenarios.push({ name: `resume-${beat}`, result: 'PASS' }); await context.close();
     }
     const fallback = await browser.newContext(ciDevice); await fixture(fallback, 'restoration');
-    await fallback.route('**/story/restoration-memory.jpg', route => route.abort());
+    await fallback.route(/\/story\/(restoration-memory\.jpg|restoration\/|video\/)/, route => route.abort());
     const fp = await fallback.newPage(); monitor(fp, 'media-fallback'); await ready(fp);
     await fp.locator('.story-documentary-fallback').waitFor({ state: 'visible' });
     await shot(fp, 'missing-media-fallback');

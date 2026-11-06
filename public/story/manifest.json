@@ -37,12 +37,77 @@
       "method": "Noise and wheel rhythm; contains no speech",
       "rights": "Project-authored",
       "classification": "fictional reconstruction"
+    },
+    {
+      "path": "restoration/A.webp",
+      "purpose": "Approved restoration documentary still A (#84)",
+      "source": "Google Flow Nano Banana 2.1, project-generated export, 2026-11-06",
+      "method": "Approved WebP game export; displayed without cropping; 2752 × 1536 export does not imply native generation resolution",
+      "classification": "AI illustrative reconstruction, not an archival photograph",
+      "notArchival": true,
+      "bytes": 395820,
+      "sha256": "95dd04df5f564f9ea43692810fa648d7362c9f522984b0a8d195578f6b90b206",
+      "lazy": true,
+      "review": "docs/story/stills-qc-84.md"
+    },
+    {
+      "path": "restoration/B.webp",
+      "purpose": "Approved restoration documentary still B (#84)",
+      "source": "Google Flow Nano Banana 2.1, project-generated export, 2026-11-06",
+      "method": "Approved WebP game export; displayed without cropping; 2752 × 1536 export does not imply native generation resolution",
+      "classification": "AI illustrative reconstruction, not an archival photograph",
+      "notArchival": true,
+      "bytes": 219380,
+      "sha256": "d88d713ec3c9d2eb6937e0f8bc8676e392f0e4b56b5a68a9a9bf069b0091dce2",
+      "lazy": true,
+      "review": "docs/story/stills-qc-84.md"
+    },
+    {
+      "path": "restoration/C.webp",
+      "purpose": "Approved restoration documentary still C (#84)",
+      "source": "Google Flow Nano Banana 2.1, project-generated export, 2026-11-06",
+      "method": "Approved WebP game export; displayed without cropping; 2752 × 1536 export does not imply native generation resolution",
+      "classification": "AI illustrative reconstruction, not an archival photograph",
+      "notArchival": true,
+      "bytes": 176948,
+      "sha256": "93a42bdbdf4be1a1830ab47e7afab21973b6acab82d283a032b2d276e5c08fec",
+      "lazy": true,
+      "review": "docs/story/stills-qc-84.md"
+    },
+    {
+      "path": "restoration/D.webp",
+      "purpose": "Approved restoration documentary still D (#84)",
+      "source": "Google Flow Nano Banana 2.1, project-generated export, 2026-11-06",
+      "method": "Approved WebP game export; displayed without cropping; 2752 × 1536 export does not imply native generation resolution",
+      "classification": "AI illustrative reconstruction, not an archival photograph",
+      "notArchival": true,
+      "bytes": 376630,
+      "sha256": "47f556ecd98bfb68e8ca7a44d35fba6fee664f188a96e0ebba4a0d531c0d5489",
+      "lazy": true,
+      "review": "docs/story/stills-qc-84.md"
     }
   ],
   "textSources": [
-    { "url": "https://docs.google.com/document/d/1fUhMiSfSkdkKEUU63s2gojF5Br6rqfdXyeVjsIb3zJw/edit", "title": "鏡中之人 — supplied novel", "readDate": "2026-11-06", "scope": "Prologue and chapters 1–3; no finale adaptation" },
-    { "url": "https://docs.google.com/document/d/1j7xtbVYcviIUwD9j2QQT0Lfze_Mq3iRZLdo3K3M0sgA/edit", "title": "Narrative integration and Vertical Slice plan", "readDate": "2026-11-06" }
+    {
+      "url": "https://docs.google.com/document/d/1fUhMiSfSkdkKEUU63s2gojF5Br6rqfdXyeVjsIb3zJw/edit",
+      "title": "鏡中之人 — supplied novel",
+      "readDate": "2026-11-06",
+      "scope": "Prologue, six exploration chapters and finale adaptation"
+    },
+    {
+      "url": "https://docs.google.com/document/d/1j7xtbVYcviIUwD9j2QQT0Lfze_Mq3iRZLdo3K3M0sgA/edit",
+      "title": "Narrative integration and Vertical Slice plan",
+      "readDate": "2026-11-06"
+    }
   ],
-  "budgets": { "initialBytes": 2097152, "imageBytes": 1048576, "totalMediaBytes": 8388608 },
-  "reviewRequired": ["Cultural/religious depiction", "Human pacing and emotional clarity", "English adaptation"]
+  "budgets": {
+    "initialBytes": 2097152,
+    "imageBytes": 1048576,
+    "totalMediaBytes": 8388608
+  },
+  "reviewRequired": [
+    "Cultural/religious depiction",
+    "Human pacing and emotional clarity",
+    "English adaptation"
+  ]
 }
