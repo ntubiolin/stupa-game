@@ -19,11 +19,13 @@ import './narrativeCamera.css';
 import '../i18n/storyArt.js';
 import { createPhone } from '../ui/story/phone.js';
 import { createDocumentary } from '../ui/story/documentary.js';
+import { DOCUMENTARY_CLIPS } from '../data/story/documentary.js';
 import { createMemorySystem } from './memorySystem.js';
 import { createLosang } from './characters/losang.js';
 import { createChapterDirector } from './chapterDirector.js';
 import { getChapter } from '../data/story/chapters.js';
 import { createChapterJournal } from '../ui/story/chapterJournal.js';
+import { createStoryDebugPanel } from '../ui/story/debugPanel.js';
 import { createModeSwitch } from '../ui/modeSwitch.js';
 import '../i18n/storyChapters.js';
 import './runtime.css';
@@ -52,6 +54,7 @@ const ctx = { THREE, scene, camera, renderer, config: CONFIG, state, bus: create
 createDebug(ctx); createSave(ctx, { writableSections: ['story'] }); // Deliberately no i18n.bindSave: narrative writes only story.
 const mapInstances = {};
 let chapterScene = null, stagedScene = null, activeChapter = null, chapterCheckpoint = null, prepareToken = 0;
+let testingChapter = false, previewLoading = false;
 ctx.world = {
   getMap: (id = state.zone) => getMapDef(id),
   getHeight: (x, z, id = state.zone) => (activeChapter && id === getChapter(activeChapter)?.mapId ? chapterScene?.getHeight(x,z) : mapInstances[id]?.getHeight(x, z)) || 0,
@@ -64,6 +67,7 @@ const environment = createEnvironment(ctx);
 const story = createStoryDirector(ctx); ctx.story = story;
 const chapters = createChapterDirector(ctx);
 const journal = createChapterJournal(ctx);
+const debugPanel = createStoryDebugPanel(ctx);
 const storyCamera = createNarrativeCamera(ctx); ctx.storyCamera = storyCamera;
 const art = createCinematicArt(ctx); ctx.storyArt = art;
 const phone = createPhone(ctx); ctx.phone = phone;
@@ -88,10 +92,10 @@ function closeModal() {
   state.uiOpen = isAnyModalOpen();
   renderer.domElement.focus({ preventScroll: true });
 }
-function isAnyModalOpen() { return !modal.hidden || phone.isOpen() || documentary.isOpen() || memory.isOpen() || journal.isOpen() || modeSwitch.isOpen() || loading; }
-function clearModals() { closeModal(); phone.close(); documentary.close(); memory.close(); journal.close(); modeSwitch.close(); state.uiOpen = loading; }
+function isAnyModalOpen() { return !modal.hidden || phone.isOpen() || documentary.isOpen() || memory.isOpen() || journal.isOpen() || modeSwitch.isOpen() || debugPanel.isOpen() || loading; }
+function clearModals() { closeModal(); phone.close(); documentary.close(); memory.close(); journal.close(); modeSwitch.close(); debugPanel.close(); state.uiOpen = loading; }
 function showCard(titleKey, bodyKey, actionKey, callback, category = 'fiction', extra = '', choices = null) {
-  if (phone.isOpen() || documentary.isOpen() || memory.isOpen() || journal.isOpen() || modeSwitch.isOpen()) return;
+  if (phone.isOpen() || documentary.isOpen() || memory.isOpen() || journal.isOpen() || modeSwitch.isOpen() || debugPanel.isOpen()) return;
   previousFocus = document.activeElement;
   modal.hidden = false; state.uiOpen = true; modalCallback = callback;
   modalKeys = { titleKey, bodyKey, actionKey, category, extra, choices };
@@ -187,10 +191,12 @@ function setTarget(point, label, action) {
 function refreshHud() {
   const key = currentBeat === 'photography' ? 'photo' : currentBeat;
   hud.querySelector('h2').textContent = activeChapter ? chapterText('title') : currentBeat === 'prologue' ? i18n.t('story.beat.prologue.title') : t(`${key}.title`);
-  hud.querySelector('.story-category').textContent = currentBeat === 'restoration' ? t('history') : t('fiction');
+  hud.querySelector('.story-category').textContent = testingChapter ? t('debug.banner') : currentBeat === 'restoration' ? t('history') : t('fiction');
   const act = hud.querySelector('[data-action="interact"]'); act.textContent = activeChapter ? chapterText('action') : currentLabel ? t(currentLabel) : t('phone'); act.hidden = !currentAction;
   hud.querySelector('[data-action="guide"]').hidden = !currentTarget;
-  hud.querySelector('[data-action="phone"]').textContent = t('phone');
+  const phoneButton = hud.querySelector('[data-action="phone"]');
+  phoneButton.textContent = t('phone');
+  phoneButton.disabled = testingChapter;
   hud.querySelector('[data-action="settings"]').setAttribute('aria-label', t('settings'));
   hud.querySelector('.story-wordmark').firstChild.textContent = t('title');
   hud.querySelector('.story-controls').textContent = t(matchMedia('(pointer:coarse)').matches ? 'controlsTouch' : 'controls');
@@ -288,7 +294,9 @@ function showSettings() {
   if (isAnyModalOpen()) return;
   previousFocus = document.activeElement; modal.hidden = false; state.uiOpen = true; modalKeys = null;
   const selected = art.getState();
-  modal.innerHTML = `<div class="story-card story-settings"><p class="story-category">${t('title')}</p><h2>${t('settings')}</h2><label>${t('preset')}<select data-setting="preset"><option value="cinematic">${t('cinematic')}</option><option value="legacy">${t('legacy')}</option></select></label><label>${t('lighting')}<select data-setting="lighting">${['dawn', 'day', 'dusk'].map(v => `<option value="${v}">${t(v)}</option>`).join('')}</select></label><label>${t('quality')}<select data-setting="quality"><option value="high">${t('high')}</option><option value="low">${t('low')}</option></select></label><label>${t('language')}<select data-setting="language"><option value="zh">繁體中文</option><option value="en">English</option></select></label><label>${t('sound')}<input type="checkbox" data-setting="sound" ${soundOn ? 'checked' : ''}/></label><details><summary>${t('sources.title')}</summary><p>${t('sources.body')}</p><a href="https://docs.google.com/document/d/1fUhMiSfSkdkKEUU63s2gojF5Br6rqfdXyeVjsIb3zJw/edit" target="_blank" rel="noopener">${t('sources.link')}</a></details><div class="story-card-actions"><button data-settings="close" class="story-primary">${t('resume')}</button>${story.getState().evidence.includes('restoration-record') ? `<button data-settings="replay">${t('restoration.action')}</button>` : ''}<button data-settings="restart">${t('complete.replay')}</button><a href="?">${t('menu')}</a></div></div>`;
+  const canViewVision = Object.hasOwn(DOCUMENTARY_CLIPS, 'vision-cutaway')
+    && ['vision', 'return', 'complete'].includes(story.getState().beat);
+  modal.innerHTML = `<div class="story-card story-settings"><p class="story-category">${t('title')}</p><h2>${t('settings')}</h2><label>${t('preset')}<select data-setting="preset"><option value="cinematic">${t('cinematic')}</option><option value="legacy">${t('legacy')}</option></select></label><label>${t('lighting')}<select data-setting="lighting">${['dawn', 'day', 'dusk'].map(v => `<option value="${v}">${t(v)}</option>`).join('')}</select></label><label>${t('quality')}<select data-setting="quality"><option value="high">${t('high')}</option><option value="low">${t('low')}</option></select></label><label>${t('language')}<select data-setting="language"><option value="zh">繁體中文</option><option value="en">English</option></select></label><label>${t('sound')}<input type="checkbox" data-setting="sound" ${soundOn ? 'checked' : ''}/></label><details><summary>${t('sources.title')}</summary><p>${t('sources.body')}</p><a href="https://docs.google.com/document/d/1fUhMiSfSkdkKEUU63s2gojF5Br6rqfdXyeVjsIb3zJw/edit" target="_blank" rel="noopener">${t('sources.link')}</a></details><div class="story-card-actions"><button data-settings="close" class="story-primary">${t('resume')}</button><button data-settings="debug">${t('debug.settings')}</button>${canViewVision ? `<button data-settings="vision-video">${i18n.t('story.documentary.vision.title')}</button>` : ''}${!testingChapter && story.getState().evidence.includes('restoration-record') ? `<button data-settings="replay">${t('restoration.action')}</button>` : ''}${testingChapter ? '' : `<button data-settings="restart">${t('complete.replay')}</button>`}<a href="?">${t('menu')}</a></div></div>`;
   for (const key of ['preset', 'lighting', 'quality']) {
     const sel = modal.querySelector(`[data-setting="${key}"]`); sel.value = selected[key]; sel.onchange = () => art[`set${key[0].toUpperCase() + key.slice(1)}`](sel.value);
   }
@@ -296,12 +304,16 @@ function showSettings() {
   modal.querySelector('[data-setting="language"]').onchange = e => { i18n.setLang(e.target.value); closeModal(); showSettings(); };
   modal.querySelector('[data-setting="sound"]').onchange = e => { soundOn = e.target.checked; if (soundOn) beginSound(); else ambient?.audio.suspend(); };
   modal.querySelector('[data-settings="close"]').onclick = closeModal;
+  modal.querySelector('[data-settings="debug"]').onclick = () => { closeModal(); debugPanel.open(); };
+  const visionVideo = modal.querySelector('[data-settings="vision-video"]');
+  if (visionVideo) visionVideo.onclick = () => { closeModal(); documentary.play('vision-cutaway'); };
   const replay = modal.querySelector('[data-settings="replay"]');
   if (replay) replay.onclick = () => { closeModal(); story.playClip('restoration'); };
-  modal.querySelector('[data-settings="restart"]').onclick = () => { if (confirm(t('restart.confirm'))) { closeModal(); story.reset(); ctx.save.flush(); location.reload(); } };
+  const restart = modal.querySelector('[data-settings="restart"]');
+  if (restart) restart.onclick = () => { if (confirm(t('restart.confirm'))) { closeModal(); story.reset(); ctx.save.flush(); location.reload(); } };
   modal.querySelector('select').focus();
 }
-hud.querySelector('[data-action="phone"]').onclick = () => { if (!isAnyModalOpen()) phone.open(); };
+hud.querySelector('[data-action="phone"]').onclick = () => { if (!testingChapter && !isAnyModalOpen()) phone.open(); };
 hud.querySelector('[data-action="settings"]').onclick = showSettings;
 hud.querySelector('[data-action="interact"]').onclick = interact;
 hud.querySelector('[data-action="guide"]').onclick = guide;
@@ -355,6 +367,23 @@ ctx.requestChapter=async (id,replay=false)=>{
   const ok=await chapters.start(id,{replay});
   if(!ok){stagedScene?.dispose();stagedScene=null;chapterError(()=>ctx.requestChapter(id,replay));}
 };
+ctx.requestChapterPreview = async (id, checkpointId, options) => {
+  if (isAnyModalOpen()) return false;
+  previewLoading = true;
+  const request = chapters.preview(id, checkpointId, options);
+  const token = prepareToken;
+  try {
+    const ok = await request;
+    if (ok || token !== prepareToken) return ok;
+    stagedScene?.dispose();
+    stagedScene = null;
+    closeModal();
+    showCard('debug.title', 'debug.loadError', 'debug.settings', () => debugPanel.open());
+    return false;
+  } finally {
+    previewLoading = false;
+  }
+};
 async function resumeChapter(){
   const ok=await chapters.resume();
   if(!ok){stagedScene?.dispose();stagedScene=null;chapterError(resumeChapter);}
@@ -389,12 +418,12 @@ function chapterInteract(){
   }
   else advance();
 }
-ctx.bus.on('story:chapter-change',({chapterId,checkpointId,replaying})=>{
+ctx.bus.on('story:chapter-change',({chapterId,checkpointId,replaying,testing=false})=>{
   const fresh=Boolean(stagedScene);loading=false;clearModals();++beatToken;
   if(fresh){
     if(mapInstances.pharping){art.releaseRoot(mapInstances.pharping.group);mapInstances.pharping.dispose();delete mapInstances.pharping;delete ctx.zoneGroups.pharping;}
     disposeChapterWorld();chapterScene=stagedScene;stagedScene=null;scene.add(chapterScene.group);ctx.zoneGroups.chapter=chapterScene.group;}
-  activeChapter=chapterId;chapterCheckpoint=checkpointId;currentBeat='complete';
+  activeChapter=chapterId;chapterCheckpoint=checkpointId;currentBeat='complete';testingChapter=testing;
   const finale=chapterId==='finale';
   const present=!finale&&(checkpointId==='complete'||checkpointId==='diary'&&chapterId!=='chimphu');
   for(const [id,group]of Object.entries(ctx.zoneGroups))group.visible=(present||finale)&&id==='stupa';
@@ -408,12 +437,25 @@ ctx.bus.on('story:chapter-change',({chapterId,checkpointId,replaying})=>{
     art.setLighting(finale?'dusk':'dawn');
   }
   setTarget(point,'chapter.'+chapterId+'.'+checkpointId+'.action',chapterInteract);
-  hud.querySelector('.story-category').textContent=t(replaying?'chapter.replaying':'chapter.fiction');
+  if (replaying) hud.querySelector('.story-category').textContent=t('chapter.replaying');
   if(fresh&&checkpointId==='spring1')showCard('chapter.pharping.title','chapter.pharping.intro','chapter.close',()=>{});
 });
-ctx.bus.on('story:chapter-exit',()=>{
-  ++prepareToken;disposeChapterWorld();stagedScene?.dispose();stagedScene=null;
-  activeChapter=null;chapterCheckpoint=null;loading=false;enterBeat({beat:story.getState().beat});
+ctx.bus.on('story:chapter-exit', ({ testing }) => {
+  ++prepareToken;
+  disposeChapterWorld();
+  stagedScene?.dispose();
+  stagedScene = null;
+  activeChapter = null;
+  chapterCheckpoint = null;
+  loading = false;
+  testingChapter = false;
+  if (testing && story.getJourney().activeChapterId) {
+    clearModals();
+    // The director holds its synchronous transition guard while emitting exit.
+    queueMicrotask(resumeChapter);
+  } else {
+    enterBeat({ beat: story.getState().beat });
+  }
 });
 journalButton.onclick=()=>{if(!isAnyModalOpen())journal.open();};
 ctx.debug?.register('chapters',chapters);
@@ -435,7 +477,8 @@ function frame(now) {
   if (losang.visible && !reducedMotion.matches) losangCharacter.update(dt);
   document.body.classList.toggle('story-quality-low', art.getState().quality === 'low');
   hud.querySelector('.story-save').textContent = ctx.save.getStatus().ok ? t('saved') : t('chapter.saveError');
-  story.update(dt); phone.update(dt); documentary.update(dt); memory.update(dt); ctx.save.update(dt);
+  if (!testingChapter && !previewLoading && !debugPanel.isOpen()) story.update(dt);
+  phone.update(dt); documentary.update(dt); memory.update(dt); ctx.save.update(dt);
   const waypoint = hud.querySelector('.story-waypoint');
   if (currentTarget && !state.uiOpen) {
     camera.updateMatrixWorld();
