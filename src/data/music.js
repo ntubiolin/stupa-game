@@ -148,17 +148,25 @@ export const MUSIC_TRACKS = {
       const fv = night ? 0.55 : 0.72;
       tanpuraCycle(a, 62, night ? 0.32 : 0.42);
       if (B % 8 === 0) a.bowl(0, n('A3'), 0.5);
-      if (B >= 2 && B <= 4) {
-        if (a.loop % 2 === 0) a.line(MOTIFS.vow, 2, 'flute', fv, { tr, legato: true });
-        else a.line(MOTIFS.vow, 2, 'pluck', 0.45, { tr: 12 });
-      }
-      if (B >= 6 && B <= 8) {
-        a.line(MOTIFS.vajraGuru, 6, 'flute', fv * 0.65, { tr, legato: true, glideTime: 0.06 });
-        a.line(MOTIFS.vajraGuru, 6, 'mantraVoice', night ? 0.58 : 0.52, {
+      // Bar 0–2: Immediately intone the 12-syllable Vajra Guru Mantra upon entering the Stupa plaza
+      if (B <= 2) {
+        a.line(MOTIFS.vajraGuru, 0, 'mantraVoice', night ? 0.72 : 0.68, {
           tr: night ? -12 : 0,
           voice: night ? 'umdze' : 'choir',
           syllables: VAJRA_GURU_SYLLABLES,
         });
+      }
+      if (B >= 3 && B <= 5) {
+        if (a.loop % 2 === 0) a.line(MOTIFS.vow, 3, 'flute', fv, { tr, legato: true });
+        else a.line(MOTIFS.vow, 3, 'pluck', 0.45, { tr: 12 });
+      }
+      if (B >= 6 && B <= 8) {
+        a.line(MOTIFS.vajraGuru, 6, 'mantraVoice', night ? 0.72 : 0.68, {
+          tr: night ? -12 : 0,
+          voice: night ? 'umdze' : 'dakini',
+          syllables: VAJRA_GURU_SYLLABLES,
+        });
+        a.line(MOTIFS.vajraGuru, 6, 'flute', fv * 0.42, { tr, legato: true, glideTime: 0.06 });
       }
       if (B >= 10 && B <= 13) a.line(STUPA_ANSWER, 10, 'flute', fv * 0.9, { tr, legato: true, glideTime: 0.06 });
       if (!night && B >= 8) {
@@ -234,7 +242,10 @@ export const MUSIC_TRACKS = {
       dranyenLilt(a, B % 4 < 2 ? [n('D3'), n('A3'), n('D4'), n('F#4')] : [n('G3'), n('D4'), n('G4'), n('B4')], 0.28);
       for (let k = 0; k < 6; k++) a.rainDrop(a.rand(0, 4), 0.55);
       if (B % 8 === 0) a.bowl(0, n('A3'), 0.42);
-      if (B >= 2 && B <= 4) a.line(MOTIFS.vajraGuru, 2, 'flute', 0.7, { tr: 12, legato: true, glideTime: 0.06 });
+      if (B >= 2 && B <= 4) {
+        a.line(MOTIFS.vajraGuru, 2, 'mantraVoice', 0.68, { voice: 'choir', syllables: VAJRA_GURU_SYLLABLES });
+        a.line(MOTIFS.vajraGuru, 2, 'flute', 0.48, { tr: 12, legato: true, glideTime: 0.06 });
+      }
       if (B >= 6 && B <= 9) a.line(STUPA_ANSWER, 6, 'flute', 0.65, { tr: 12, legato: true, glideTime: 0.06 });
       if (B >= 10 && B <= 13) a.line(RAIN_C, 10, 'flute', 0.65, { legato: true, glideTime: 0.05 });
       if (B === 15) a.tingsha(2, n('A6'), 0.32);
@@ -285,7 +296,10 @@ export const MUSIC_TRACKS = {
       if (a.chance(0.6)) a.yakBell(1, n('A5'), 0.2);
       if (a.chance(0.6)) a.yakBell(3, n('E6'), 0.18);
       if (B === 8) a.dungchen(0, n('E2'), 6, 0.38);
-      if (B >= 2 && B <= 4) a.line(MOTIFS.vajraGuru, 2, 'flute', 0.7, { tr: 14, legato: true, glideTime: 0.06 });
+      if (B >= 2 && B <= 4) {
+        a.line(MOTIFS.vajraGuru, 2, 'mantraVoice', 0.68, { tr: 2, voice: 'choir', syllables: VAJRA_GURU_SYLLABLES });
+        a.line(MOTIFS.vajraGuru, 2, 'flute', 0.48, { tr: 14, legato: true, glideTime: 0.06 });
+      }
       if (B >= 6 && B <= 9) a.line(WINDHORSE, 6, 'flute', 0.66, { legato: true, glideTime: 0.05 });
       if (B >= 10 && B <= 12) a.line(MOTIFS.vow, 10, 'flute', 0.62, { tr: 14, legato: true });
       if (B === 13) a.line(MOTIFS.siddhiHum, 13, 'flute', 0.6, { tr: 14, legato: true });
@@ -343,7 +357,10 @@ export const MUSIC_TRACKS = {
       if (B === 14) a.tingsha(0, n('D7'), 0.28);
       if (B >= 2 && B <= 5) a.line(YL_A, 2, 'flute', 0.66, { legato: true, glideTime: 0.07 });
       if (B >= 6 && B <= 9) a.line(YL_B, 6, 'flute', 0.64, { legato: true, glideTime: 0.07 });
-      if (B >= 10 && B <= 13) a.line(MOTIFS.vajraGuru, 10, 'flute', 0.66, { tr: 17, scale: 2, legato: true, glideTime: 0.06 });
+      if (B >= 10 && B <= 13) {
+        a.line(MOTIFS.vajraGuru, 10, 'mantraVoice', 0.68, { tr: 5, scale: 2, voice: 'choir', syllables: VAJRA_GURU_SYLLABLES });
+        a.line(MOTIFS.vajraGuru, 10, 'flute', 0.46, { tr: 17, scale: 2, legato: true, glideTime: 0.06 });
+      }
     },
   },
 
@@ -367,7 +384,10 @@ export const MUSIC_TRACKS = {
       if (B === 6 || B === 7) a.line(SAMYE_CALL, 6, 'flute', 0.68, { legato: true, glideTime: 0.05 });
       if (B === 8 || B === 9) a.line(SAMYE_ANSWER, 8, 'chant', 0.38, { vowel: 'a' });
       if (B >= 10 && B <= 12) a.line(MOTIFS.vow, 10, 'flute', 0.66, { tr: 12, legato: true });
-      if (B >= 13) a.line(MOTIFS.vajraGuru, 13, 'flute', 0.66, { tr: 12, legato: true, glideTime: 0.06 });
+      if (B >= 13) {
+        a.line(MOTIFS.vajraGuru, 13, 'mantraVoice', 0.68, { voice: 'choir', syllables: VAJRA_GURU_SYLLABLES });
+        a.line(MOTIFS.vajraGuru, 13, 'flute', 0.45, { tr: 12, legato: true, glideTime: 0.06 });
+      }
     },
   },
 
@@ -515,11 +535,15 @@ export const MUSIC_TRACKS = {
       if (B === 0 || B === 8) a.chant(0, n('D2'), 6.5, 0.36, 'om');
       if (B >= 1 && B <= 3) a.line(MOTIFS.vow, 1, 'flute', 0.68, { tr: 12, legato: true });
       if (B >= 5 && B <= 7) {
-        a.line(MOTIFS.vajraGuru, 5, 'flute', 0.72, { tr: 12, legato: true, glideTime: 0.06 });
-        a.line(MOTIFS.vajraGuru, 5, 'pluck', 0.38, { tr: 12 });
+        a.line(MOTIFS.vajraGuru, 5, 'mantraVoice', 0.72, { voice: 'choir', syllables: VAJRA_GURU_SYLLABLES });
+        a.line(MOTIFS.vajraGuru, 5, 'mantraVoice', 0.64, { tr: 12, voice: 'dakini', syllables: VAJRA_GURU_SYLLABLES });
+        a.line(MOTIFS.vajraGuru, 5, 'pluck', 0.34, { tr: 12 });
       }
       if (B >= 9 && B <= 12) a.line(STUPA_ANSWER, 9, 'flute', 0.68, { tr: 12, legato: true, glideTime: 0.06 });
-      if (B >= 13 && B <= 15) a.line(MOTIFS.vajraGuru, 13, 'gyaling', 0.48, { legato: true });
+      if (B >= 13 && B <= 15) {
+        a.line(MOTIFS.vajraGuru, 13, 'mantraVoice', 0.72, { voice: 'umdze', syllables: VAJRA_GURU_SYLLABLES });
+        a.line(MOTIFS.vajraGuru, 13, 'gyaling', 0.42, { legato: true });
+      }
     },
   },
 
@@ -815,8 +839,13 @@ export const MUSIC_STINGERS = {
       const tr = v.tr ?? 0;
       a.bowl(0, n('A3') + tr, 0.65);
       a.tingsha(0.05, n('A6') + tr, 0.38);
-      a.chant(0.5, n('D2') + tr, 7, 0.42, 'om');
-      a.line(MOTIFS.omAhHum, 0, 'flute', 0.68, { tr: tr + 12, at: 2, legato: true });
+      a.chant(0.5, n('D2') + tr, 7, 0.35, 'om');
+      a.line(MOTIFS.omAhHum, 0, 'mantraVoice', 0.75, {
+        tr,
+        at: 1.5,
+        voice: 'choir',
+        syllables: ['om', 'ah', 'hum'],
+      });
       a.tingsha(8.5, n('A6') + tr, 0.3);
     },
   },
@@ -831,13 +860,24 @@ export const MUSIC_STINGERS = {
       a.dungchen(0, n('D2') + tr, 3.6, 0.65);
       a.cymbal(4, 0.5, 'rolmo');
       a.bowl(4, n('A3') + tr, 0.55);
-      a.line(MOTIFS.vajraGuru, 0, 'flute', 0.75, { tr: tr + 12, at: 4, legato: true, glideTime: 0.06 });
+      a.line(MOTIFS.vajraGuru, 0, 'mantraVoice', 0.76, {
+        tr,
+        at: 4,
+        voice: 'choir',
+        syllables: VAJRA_GURU_SYLLABLES,
+      });
+      a.line(MOTIFS.vajraGuru, 0, 'mantraVoice', 0.65, {
+        tr: tr + 12,
+        at: 4,
+        voice: 'dakini',
+        syllables: VAJRA_GURU_SYLLABLES,
+      });
       const arp = [n('D3'), n('A3'), n('D4'), n('F#4')];
       for (let b = 4; b < 16; b++) {
-        a.pluck(b, arp[b % 4] + tr, 0, 0.34);
-        if (b % 2 === 1) a.pluck(b + 0.5, arp[(b + 2) % 4] + tr, 0, 0.24);
+        a.pluck(b, arp[b % 4] + tr, 0, 0.3);
+        if (b % 2 === 1) a.pluck(b + 0.5, arp[(b + 2) % 4] + tr, 0, 0.22);
       }
-      for (const b of [4, 8, 12]) a.nga(b, 0.42);
+      for (const b of [4, 8, 12]) a.nga(b, 0.38);
       a.bowl(16, n('D3') + tr, 0.55);
       a.tingsha(16, n('A6') + tr, 0.35);
     },
@@ -850,8 +890,13 @@ export const MUSIC_STINGERS = {
     play(a, v) {
       const tr = v.tr ?? 0;
       a.tingsha(0, n('A6') + tr, 0.36);
-      a.chant(0.5, n('D2') + tr, 4.5, 0.38, 'om');
-      a.line(MOTIFS.siddhiHum, 0, 'flute', 0.66, { tr: tr + 12, at: 1, legato: true });
+      a.chant(0.5, n('D2') + tr, 4.5, 0.34, 'om');
+      a.line(MOTIFS.siddhiHum, 0, 'mantraVoice', 0.75, {
+        tr,
+        at: 1,
+        voice: 'choir',
+        syllables: ['sid', 'dhi', 'hum'],
+      });
     },
   },
   /** 蓮師淨相對話 Talking with Guru Rinpoche's vision. */
@@ -863,13 +908,17 @@ export const MUSIC_STINGERS = {
     play(a, v) {
       const tr = v.tr ?? 0;
       a.tingsha(0, n('A6') + tr, 0.3);
-      a.line(MOTIFS.vajraGuru, 0, 'flute', 0.55, { tr: tr + 12, at: 0.5, legato: true, glideTime: 0.06 });
-      a.line(MOTIFS.vajraGuru, 0, 'mantraVoice', 0.46, {
+      a.line(MOTIFS.vajraGuru, 0, 'mantraVoice', 0.72, {
         tr,
         at: 0.5,
         voice: 'choir',
         syllables: VAJRA_GURU_SYLLABLES,
-        legato: true,
+      });
+      a.line(MOTIFS.vajraGuru, 0, 'mantraVoice', 0.62, {
+        tr: tr + 12,
+        at: 0.5,
+        voice: 'dakini',
+        syllables: VAJRA_GURU_SYLLABLES,
       });
     },
   },

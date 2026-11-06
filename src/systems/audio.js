@@ -456,60 +456,44 @@ export function createAudio(ctx) {
     }
   }
 
+  const CHANT_STEP_NOTES = [
+    { syl: 'om',  m: 50, d: 0.85 },
+    { syl: 'ah',  m: 52, d: 0.85 },
+    { syl: 'hum', m: 54, d: 0.95 },
+    { syl: 'ben', m: 57, d: 0.62 },
+    { syl: 'za',  m: 57, d: 0.62 },
+    { syl: 'gu',  m: 59, d: 0.62 },
+    { syl: 'ru',  m: 57, d: 0.62 },
+    { syl: 'pe',  m: 54, d: 0.62 },
+    { syl: 'ma',  m: 52, d: 0.62 },
+    { syl: 'sid', m: 54, d: 0.62 },
+    { syl: 'dhi', m: 52, d: 0.62 },
+    { syl: 'hum', m: 50, d: 1.05 },
+  ];
+  let chantStepIdx = 0;
+
   function playMantraChant() {
     const context = ensureContext();
     if (!context || muted) return;
     const now = context.currentTime;
-    const dur = 0.62;
 
-    // Resonant Tibetan throat-singing "Om" chant (~0.6s)
-    // Low fundamental (~108 Hz sawtooth + 54 Hz sub-octave triangle + 162 Hz fifth)
-    const voiceGain = context.createGain();
-    voiceGain.gain.setValueAtTime(0.0001, now);
-    voiceGain.gain.linearRampToValueAtTime(0.36, now + 0.08);
-    voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
-
-    // Formant bandpass filters (~320 Hz and ~720 Hz for "O-M" resonance)
-    const formant1 = context.createBiquadFilter();
-    formant1.type = 'bandpass';
-    formant1.frequency.setValueAtTime(320, now);
-    formant1.frequency.linearRampToValueAtTime(260, now + dur);
-    formant1.Q.value = 4.5;
-
-    const formant2 = context.createBiquadFilter();
-    formant2.type = 'bandpass';
-    formant2.frequency.setValueAtTime(720, now);
-    formant2.frequency.linearRampToValueAtTime(540, now + dur);
-    formant2.Q.value = 5.0;
-
-    const sources = [
-      { type: 'sawtooth', freq: 108, gain: 0.28 },
-      { type: 'triangle', freq: 54, gain: 0.35 },
-      { type: 'sine', freq: 162, gain: 0.20 },
-    ];
-
-    for (const s of sources) {
-      const osc = context.createOscillator();
-      const g = context.createGain();
-      osc.type = s.type;
-      osc.frequency.setValueAtTime(s.freq, now);
-      osc.frequency.linearRampToValueAtTime(s.freq * 0.98, now + dur);
-      g.gain.value = s.gain;
-      osc.connect(g);
-      g.connect(formant1);
-      g.connect(formant2);
-      osc.start(now);
-      osc.stop(now + dur + 0.05);
+    // Sing the next syllable of the 12-syllable Vajra Guru Mantra with the real human vocal choir
+    if (music?.instruments?.mantraVoice) {
+      const step = CHANT_STEP_NOTES[chantStepIdx % CHANT_STEP_NOTES.length];
+      chantStepIdx = (chantStepIdx + 1) % CHANT_STEP_NOTES.length;
+      const tr = currentKeyOffset();
+      const bus = { dry: masterGain, wet: masterGain };
+      music.instruments.mantraVoice(bus, now + 0.01, step.m + tr, step.d, 0.82, {
+        syllable: step.syl,
+        voice: 'choir',
+        send: 0,
+      });
     }
-
-    formant1.connect(voiceGain);
-    formant2.connect(voiceGain);
-    voiceGain.connect(masterGain);
 
     // Soft singing-bowl harmonic shimmer
     const shimmerGain = context.createGain();
     shimmerGain.gain.setValueAtTime(0.0001, now);
-    shimmerGain.gain.linearRampToValueAtTime(0.08, now + 0.04);
+    shimmerGain.gain.linearRampToValueAtTime(0.06, now + 0.04);
     shimmerGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.72);
 
     const shimmerFreqs = [432, 648, 864];
