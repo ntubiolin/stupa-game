@@ -60,7 +60,8 @@ export function createCueVideo(node, src, { onReady, onProgress, onFailure }) {
     const attempt = ++request;
     playing = true;
     clearStartup();
-    pending = setTimeout(fail, 2500);
+    // Keep the still immediately visible while slow networks/decoders start.
+    pending = setTimeout(fail, 8000);
     try {
       Promise.resolve(node.play()).catch(() => {
         if (attempt === request) fail();

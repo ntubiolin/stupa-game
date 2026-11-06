@@ -278,6 +278,8 @@ test('media stalls, blocked playback and image errors preserve captions and cue 
   motion.dispatchEvent(new Event('stalled'));
   assert.equal(video(), motion);
   t.mock.timers.tick(2500);
+  assert.equal(video(), motion); // Startup allows the decoder longer than a mid-play buffer.
+  t.mock.timers.tick(5500);
   assert.equal(video(), undefined);
   assert.equal(still.dataset.playing, 'false');
   assert.equal(still.children[0].getAttribute('src'), '/story/restoration-memory.jpg');

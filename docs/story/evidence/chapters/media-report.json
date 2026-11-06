@@ -1,0 +1,242 @@
+{
+  "browser": "157.0.8103.39",
+  "scenarios": [
+    {
+      "name": "desktop",
+      "cues": [
+        "/story/restoration/A.webp",
+        "/story/video/V1.mp4",
+        "/story/restoration/B.webp",
+        "/story/video/V2.mp4",
+        "/story/restoration/C.webp",
+        "/story/video/V3.mp4",
+        "/story/restoration/D.webp"
+      ],
+      "events": [
+        {
+          "type": "waiting",
+          "src": "http://127.0.0.1:4178/story/video/V1.mp4",
+          "paused": false,
+          "time": 0,
+          "readyState": 0,
+          "networkState": 2
+        },
+        {
+          "type": "playing",
+          "src": "http://127.0.0.1:4178/story/video/V1.mp4",
+          "paused": false,
+          "time": 0.0006,
+          "readyState": 4,
+          "networkState": 1
+        },
+        {
+          "type": "pause",
+          "src": "http://127.0.0.1:4178/story/video/V1.mp4",
+          "paused": true,
+          "time": 1.5,
+          "readyState": 1,
+          "networkState": 1
+        },
+        {
+          "type": "seeked",
+          "src": "http://127.0.0.1:4178/story/video/V1.mp4",
+          "paused": true,
+          "time": 1.5,
+          "readyState": 4,
+          "networkState": 1
+        },
+        {
+          "type": "playing",
+          "src": "http://127.0.0.1:4178/story/video/V1.mp4",
+          "paused": false,
+          "time": 1.5147,
+          "readyState": 4,
+          "networkState": 1
+        },
+        {
+          "type": "waiting",
+          "src": "http://127.0.0.1:4178/story/video/V2.mp4",
+          "paused": false,
+          "time": 0,
+          "readyState": 0,
+          "networkState": 2
+        },
+        {
+          "type": "playing",
+          "src": "http://127.0.0.1:4178/story/video/V2.mp4",
+          "paused": false,
+          "time": 0.0258,
+          "readyState": 4,
+          "networkState": 1
+        },
+        {
+          "type": "waiting",
+          "src": "http://127.0.0.1:4178/story/video/V3.mp4",
+          "paused": false,
+          "time": 0,
+          "readyState": 0,
+          "networkState": 2
+        },
+        {
+          "type": "playing",
+          "src": "http://127.0.0.1:4178/story/video/V3.mp4",
+          "paused": false,
+          "time": 0.0004,
+          "readyState": 4,
+          "networkState": 1
+        },
+        {
+          "type": "waiting",
+          "src": "http://127.0.0.1:4178/story/video/V1.mp4",
+          "paused": false,
+          "time": 0,
+          "readyState": 0,
+          "networkState": 2
+        },
+        {
+          "type": "playing",
+          "src": "http://127.0.0.1:4178/story/video/V1.mp4",
+          "paused": false,
+          "time": 0.0005,
+          "readyState": 4,
+          "networkState": 1
+        }
+      ]
+    },
+    {
+      "name": "mobile",
+      "cues": [
+        "/story/restoration/A.webp",
+        "/story/video/V1.mp4",
+        "/story/restoration/B.webp",
+        "/story/video/V2.mp4",
+        "/story/restoration/C.webp",
+        "/story/video/V3.mp4",
+        "/story/restoration/D.webp"
+      ],
+      "events": [
+        {
+          "type": "waiting",
+          "src": "http://127.0.0.1:4178/story/video/V1.mp4",
+          "paused": false,
+          "time": 0,
+          "readyState": 0,
+          "networkState": 2
+        },
+        {
+          "type": "playing",
+          "src": "http://127.0.0.1:4178/story/video/V1.mp4",
+          "paused": false,
+          "time": 0.0004,
+          "readyState": 4,
+          "networkState": 1
+        },
+        {
+          "type": "pause",
+          "src": "http://127.0.0.1:4178/story/video/V1.mp4",
+          "paused": true,
+          "time": 1.5,
+          "readyState": 1,
+          "networkState": 1
+        },
+        {
+          "type": "seeked",
+          "src": "http://127.0.0.1:4178/story/video/V1.mp4",
+          "paused": true,
+          "time": 1.5,
+          "readyState": 4,
+          "networkState": 1
+        },
+        {
+          "type": "playing",
+          "src": "http://127.0.0.1:4178/story/video/V1.mp4",
+          "paused": false,
+          "time": 1.516,
+          "readyState": 4,
+          "networkState": 1
+        },
+        {
+          "type": "waiting",
+          "src": "http://127.0.0.1:4178/story/video/V2.mp4",
+          "paused": false,
+          "time": 0,
+          "readyState": 0,
+          "networkState": 2
+        },
+        {
+          "type": "playing",
+          "src": "http://127.0.0.1:4178/story/video/V2.mp4",
+          "paused": false,
+          "time": 0.0004,
+          "readyState": 4,
+          "networkState": 1
+        },
+        {
+          "type": "waiting",
+          "src": "http://127.0.0.1:4178/story/video/V3.mp4",
+          "paused": false,
+          "time": 0,
+          "readyState": 0,
+          "networkState": 2
+        },
+        {
+          "type": "playing",
+          "src": "http://127.0.0.1:4178/story/video/V3.mp4",
+          "paused": false,
+          "time": 0.0003,
+          "readyState": 4,
+          "networkState": 1
+        },
+        {
+          "type": "waiting",
+          "src": "http://127.0.0.1:4178/story/video/V1.mp4",
+          "paused": false,
+          "time": 0,
+          "readyState": 0,
+          "networkState": 2
+        },
+        {
+          "type": "playing",
+          "src": "http://127.0.0.1:4178/story/video/V1.mp4",
+          "paused": false,
+          "time": 0.0005,
+          "readyState": 4,
+          "networkState": 1
+        }
+      ]
+    },
+    {
+      "name": "missing-v3",
+      "cues": [
+        "/story/restoration/A.webp",
+        "/story/video/V1.mp4",
+        "/story/restoration/B.webp",
+        "/story/video/V2.mp4",
+        "/story/restoration/C.webp",
+        "/story/video/V3.mp4",
+        "/story/restoration/D.webp"
+      ]
+    },
+    {
+      "name": "missing-all",
+      "captions": 4
+    },
+    {
+      "name": "reduced-motion",
+      "cues": [
+        "/story/restoration/A.webp",
+        "/story/restoration/B.webp",
+        "/story/restoration/C.webp",
+        "/story/restoration/D.webp",
+        "/story/video/V1.mp4"
+      ]
+    },
+    {
+      "name": "vision",
+      "checkpoint": "spring2",
+      "savedBytesPreserved": true
+    }
+  ],
+  "errors": [],
+  "result": "PASS"
+}

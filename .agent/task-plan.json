@@ -349,16 +349,23 @@
     }
   ],
   "latest_local_validation": {
-    "node_tests": 40,
-    "browser_scenarios": 14,
-    "i18n_keys_per_locale": 2190,
+    "node_tests": 81,
+    "i18n_keys_per_locale": 2486,
     "result": "PASS",
-    "remote_status": "See exact-head checks on PR #80; prior cloud software rendering runs timed out"
+    "browser_scenarios": [
+      "fresh Demo through all six chapters / 75 checkpoints / finale reload",
+      "desktop and touch password previews; exact canonical save preservation",
+      "six native-DPR media cases; captions, failure, reduced motion, optional V4",
+      "five independent Adventure compatibility cases",
+      "desktop/touch real mode navigation",
+      "12 original Demo recovery scenarios"
+    ],
+    "remote_status": "Third CI verification queued after bounded startup/ANGLE fixes; local checks pass, not yet merge-ready"
   },
   "chapter_expansion": {
     "planning_issue": 89,
     "decision": "Independent ARPG retained; story chapters exploration-first (user confirmed 2026-11-06)",
-    "status": "IN_PROGRESS",
+    "status": "IN_REVIEW",
     "contract": "docs/story/chapter-roadmap.md",
     "tasks": [
       {
@@ -412,8 +419,8 @@
         ],
         "pr_number": 101,
         "pr_url": "https://github.com/ntubiolin/stupa-game/pull/101",
-        "local_verification": "build, bilingual checks, 74 Node tests; desktop/touch chapter checkpoints and replay; independent ARPG/mode regression",
-        "ci_status": "PENDING"
+        "local_verification": "build, bilingual 2486 keys, 81 Node tests; continuous Demo to finale and independent UI/ARPG checks",
+        "ci_status": "PENDING_FINAL_HEAD"
       },
       {
         "id": "compatibility",
@@ -464,8 +471,8 @@
         ],
         "pr_number": 102,
         "pr_url": "https://github.com/ntubiolin/stupa-game/pull/102",
-        "local_verification": "build, bilingual checks, 74 Node tests; desktop/touch chapter checkpoints and replay; independent ARPG/mode regression",
-        "ci_status": "PENDING"
+        "local_verification": "build, bilingual 2486 keys, 81 Node tests; continuous Demo to finale and independent UI/ARPG checks",
+        "ci_status": "PENDING_FINAL_HEAD"
       },
       {
         "id": "pharping",
@@ -518,8 +525,8 @@
         ],
         "pr_number": 103,
         "pr_url": "https://github.com/ntubiolin/stupa-game/pull/103",
-        "local_verification": "build, bilingual checks, 74 Node tests; desktop/touch chapter checkpoints and replay; independent ARPG/mode regression",
-        "ci_status": "PENDING"
+        "local_verification": "build, bilingual 2486 keys, 81 Node tests; continuous Demo to finale and independent UI/ARPG checks",
+        "ci_status": "PENDING_FINAL_HEAD"
       },
       {
         "id": "mangyul",
@@ -571,8 +578,8 @@
         ],
         "pr_number": 104,
         "pr_url": "https://github.com/ntubiolin/stupa-game/pull/104",
-        "local_verification": "build, bilingual checks, 74 Node tests; desktop/touch chapter checkpoints and replay; independent ARPG/mode regression",
-        "ci_status": "PENDING"
+        "local_verification": "build, bilingual 2486 keys, 81 Node tests; continuous Demo to finale and independent UI/ARPG checks",
+        "ci_status": "PENDING_FINAL_HEAD"
       },
       {
         "id": "yarlung",
@@ -624,8 +631,8 @@
         ],
         "pr_number": 105,
         "pr_url": "https://github.com/ntubiolin/stupa-game/pull/105",
-        "local_verification": "build, bilingual checks, 74 Node tests; desktop/touch chapter checkpoints and replay; independent ARPG/mode regression",
-        "ci_status": "PENDING"
+        "local_verification": "build, bilingual 2486 keys, 81 Node tests; continuous Demo to finale and independent UI/ARPG checks",
+        "ci_status": "PENDING_FINAL_HEAD"
       },
       {
         "id": "samye",
@@ -677,8 +684,8 @@
         ],
         "pr_number": 106,
         "pr_url": "https://github.com/ntubiolin/stupa-game/pull/106",
-        "local_verification": "build, bilingual checks, 74 Node tests; desktop/touch chapter checkpoints and replay; independent ARPG/mode regression",
-        "ci_status": "PENDING"
+        "local_verification": "build, bilingual 2486 keys, 81 Node tests; continuous Demo to finale and independent UI/ARPG checks",
+        "ci_status": "PENDING_FINAL_HEAD"
       },
       {
         "id": "chimphu",
@@ -730,8 +737,8 @@
         ],
         "pr_number": 107,
         "pr_url": "https://github.com/ntubiolin/stupa-game/pull/107",
-        "local_verification": "build, bilingual checks, 74 Node tests; desktop/touch chapter checkpoints and replay; independent ARPG/mode regression",
-        "ci_status": "PENDING"
+        "local_verification": "build, bilingual 2486 keys, 81 Node tests; continuous Demo to finale and independent UI/ARPG checks",
+        "ci_status": "PENDING_FINAL_HEAD"
       },
       {
         "id": "finale",
@@ -783,10 +790,49 @@
         ],
         "pr_number": 108,
         "pr_url": "https://github.com/ntubiolin/stupa-game/pull/108",
-        "local_verification": "build, bilingual checks, 74 Node tests; desktop/touch chapter checkpoints and replay; independent ARPG/mode regression",
-        "ci_status": "PENDING"
+        "local_verification": "build, bilingual 2486 keys, 81 Node tests; continuous Demo to finale and independent UI/ARPG checks",
+        "ci_status": "PENDING_FINAL_HEAD"
       }
     ],
-    "parallel_scope": "User authorized later chapters in parallel; keep independent ticket claims and validate before enabling."
-  }
+    "parallel_scope": "User authorized later chapters in parallel; keep independent ticket claims and validate before enabling.",
+    "integration_pr": "https://github.com/ntubiolin/stupa-game/pull/110"
+  },
+  "followup_deliveries": [
+    {
+      "issue": 84,
+      "pr": 112,
+      "status": "LOCALLY_VERIFIED",
+      "scope": "four approved full-frame still exports",
+      "claim": null
+    },
+    {
+      "issue": 85,
+      "pr": 111,
+      "status": "IN_REVIEW",
+      "scope": "four optional 360p motion exports; CI cold-start investigation",
+      "claim": {
+        "owner": "lead + Sol media validator"
+      }
+    },
+    {
+      "issue": 109,
+      "pr": 115,
+      "status": "LOCALLY_VERIFIED",
+      "scope": "amitabha chapter previews and explicit original-Demo jump",
+      "claim": null
+    }
+  ],
+  "new_art_requests": [
+    {
+      "issue": 113,
+      "status": "REQUESTED",
+      "scope": "Losang old-map dialogue shot using approved identity"
+    },
+    {
+      "issue": 114,
+      "status": "REQUESTED",
+      "scope": "later chapter stills, yak and Chimphu first"
+    }
+  ],
+  "source_progress_comment": "doco.4M7SUxCxT1bju8xnzyJltg"
 }

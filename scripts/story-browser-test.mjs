@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { CHAPTERS } from '../src/data/story/chapters.js';
-import { adventureCIOptions, startAdventureWithInput } from './adventure-browser-start.mjs';
+import { adventureCIOptions, adventureBrowserArgs, startAdventureWithInput } from './adventure-browser-start.mjs';
 
 const base = process.env.STORY_BASE_URL || 'http://127.0.0.1:4173';
 const output = process.env.STORY_ARTIFACTS || 'artifacts/story';
@@ -10,7 +10,7 @@ const ciDevice = process.env.CI ? { deviceScaleFactor: .5 } : {};
 const suite = process.env.STORY_SUITE || 'all';
 assert(['all', 'desktop', 'mobile', 'recovery', 'art', 'journey'].includes(suite), 'Unknown STORY_SUITE');
 await mkdir(output, { recursive: true });
-const browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : {}), args: ['--enable-unsafe-swiftshader'] });
+const browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : {}), args: suite === 'recovery' || suite === 'all' ? adventureBrowserArgs : ['--enable-unsafe-swiftshader'] });
 const report = { startedAt: new Date().toISOString(), browser: browser.version(), suite, renderProfile: process.env.CI ? 'Software CI: low journey quality, 0.5 render DPR; CSS viewport unchanged. Not art/performance acceptance.' : 'Native quality/DPR: art and layout acceptance', scenarios: [], errors: [], metrics: [] };
 const seedSections = { vitals: { level: 12, exp: 77, hp: 150, mp: 60 }, quests: { active: {}, done: ['prologue.kora'], flags: { 'sentinel': true } }, inventory: { bag: [], equipped: {}, turquoise: 321 }, appearance: { displayName: 'Save sentinel' }, coop: { sentinel: 'preserve' }, merit: { points: 987 }, settings: { lang: 'zh', muted: true }, unknownFutureSection: { keep: [1, 2, 3] } };
 const shot = (page, name) => {

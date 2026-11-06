@@ -490,6 +490,7 @@ caption/source keys. `createCueVideo` owns only the current muted inline media a
 releases it on cue change/close. The documentary owns progression; media ending
 does not itself complete a cue. Errors or a bounded 2.5-second unrecovered buffer
 wait fall back to the high-quality still, then poster, then readable captions.
+Initial decoder startup has an 8-second deadline while the still is already visible.
 Brief pauses/buffering do not discard a usable clip. Reduced-motion and Data Saver
 start with stills and expose an explicit Play motion button. Captions and provenance
 remain outside an uncropped frame. V1–V3 augment restoration, D stays static; V4 is
