@@ -299,8 +299,10 @@ function frame(now) {
   const raw = (now - last) / 1000; last = now; const dt = Math.min(raw, .05); state.elapsed += dt;
   if (raw > 0 && raw < .5) { samples.push(raw); if (samples.length > 240) samples.shift(); }
   state.uiOpen = isAnyModalOpen();
-  storyCamera.update(dt); sky.update(dt); stupa.update(dt); flags.update(dt); environment.update(dt);
+  // The camera bounds its own delta and substeps collisions; don't halve walking at 10 FPS.
+  storyCamera.update(raw); sky.update(dt); stupa.update(dt); flags.update(dt); environment.update(dt);
   mapInstances[state.zone]?.update(dt); art.update(dt);
+  document.body.classList.toggle('story-quality-low', art.getState().quality === 'low');
   story.update(dt); phone.update(dt); documentary.update(dt); memory.update(dt); ctx.save.update(dt);
   const waypoint = hud.querySelector('.story-waypoint');
   if (currentTarget && !state.uiOpen) {

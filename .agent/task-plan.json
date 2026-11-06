@@ -312,5 +312,47 @@
       "owner": "lead"
     }
   ],
-  "integration_pr": "https://github.com/ntubiolin/stupa-game/pull/80"
+  "integration_pr": "https://github.com/ntubiolin/stupa-game/pull/80",
+  "feedback_tasks": [
+    {
+      "issue": 81,
+      "pr": 86,
+      "branch": "codex/81-story-movement",
+      "status": "VERIFIED_LOCAL"
+    },
+    {
+      "issue": 82,
+      "pr": 88,
+      "branch": "codex/82-phone-progress",
+      "status": "VERIFIED_LOCAL"
+    },
+    {
+      "issue": 83,
+      "pr": 87,
+      "branch": "codex/83-documentary-next",
+      "status": "VERIFIED_LOCAL"
+    }
+  ],
+  "asset_requests": [
+    {
+      "issue": 84,
+      "status": "REQUESTED",
+      "kind": "character references and stills"
+    },
+    {
+      "issue": 85,
+      "status": "REQUESTED",
+      "kind": "Google Flow shots",
+      "depends_on": [
+        84
+      ]
+    }
+  ],
+  "latest_local_validation": {
+    "node_tests": 40,
+    "browser_scenarios": 14,
+    "i18n_keys_per_locale": 2190,
+    "result": "PASS",
+    "remote_status": "See exact-head checks on PR #80; prior cloud software rendering runs timed out"
+  }
 }

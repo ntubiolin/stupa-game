@@ -43,8 +43,8 @@ the full CI job has a ten-minute limit.
 
 ## Verified
 
-- Build and i18n pass: 2,186 symmetric keys, 919 data/UI references; no missing keys.
-- 32 Node tests pass. Director ordering/duplicates/reentry/clip cancellation,
+- Build and i18n pass: 2,190 symmetric keys, 919 data/UI references; no missing keys.
+- 40 Node tests pass. Director ordering/duplicates/reentry/clip cancellation,
   every checkpoint reload, malformed/future saves, actual v1 migration,
   preservation of unrelated sections including newer cross-tab adventure data,
   camera bounds/collisions/touch/keyboard focus, reversible art, phone evidence,
@@ -53,8 +53,8 @@ the full CI job has a ten-minute limit.
   mobile English complete prologue → arrival → photography → restoration → Losang
   → map → Pharping vision → return diary → completion through visible controls.
 - Touch and keyboard movement change the actual world pose. The flow then uses
-  the visible navigation assistance and camera assist, and skips the documentary
-  after exercising pause/replay. No debug beat transition completes either flow.
+  the visible navigation assistance and camera assist, and manually advances all four documentary cues
+  after exercising pause/replay (including while paused). No debug beat transition completes either flow.
 - Closing/reopening the prologue phone and the final vision card does not strand
   progress. All nine beat save fixtures resume to an actionable state.
 - Missing restoration image leaves captions usable and can advance via Skip.
@@ -73,6 +73,7 @@ the full CI job has a ten-minute limit.
 | Prologue | [image](evidence/desktop-01-prologue.jpg) | [image](evidence/mobile-01-prologue.jpg) |
 | Photograph alignment | [image](evidence/desktop-04-photography.jpg) | [image](evidence/mobile-04-photography.jpg) |
 | Restoration record | [image](evidence/desktop-05-documentary.jpg) | [image](evidence/mobile-05-documentary.jpg) |
+| Finish reading | [image](evidence/desktop-05b-documentary-last.jpg) | [image](evidence/mobile-05b-documentary-last.jpg) |
 | Old map | [image](evidence/desktop-06-map.jpg) | [image](evidence/mobile-06-map.jpg) |
 | Vision | [image](evidence/desktop-07-vision.jpg) | [image](evidence/mobile-07-vision.jpg) |
 | New diary | [image](evidence/desktop-08-diary.jpg) | [image](evidence/mobile-08-diary.jpg) |
@@ -90,14 +91,14 @@ counter, waits 1.2 seconds, and captures. Full raw measurements:
 
 | Lighting / quality | Legacy FPS / calls | Cinematic FPS / calls | Paired screenshots |
 |---|---|---|---|
-| Dawn / high | 57.0 / 85 | 60.0 / 85 | [Legacy](evidence/art-dawn-high-legacy.jpg) · [Cinematic](evidence/art-dawn-high-cinematic.jpg) |
-| Dawn / low | 57.8 / 50 | 57.7 / 50 | [Legacy](evidence/art-dawn-low-legacy.jpg) · [Cinematic](evidence/art-dawn-low-cinematic.jpg) |
+| Dawn / high | 57.7 / 85 | 60.0 / 85 | [Legacy](evidence/art-dawn-high-legacy.jpg) · [Cinematic](evidence/art-dawn-high-cinematic.jpg) |
+| Dawn / low | 57.7 / 50 | 57.7 / 50 | [Legacy](evidence/art-dawn-low-legacy.jpg) · [Cinematic](evidence/art-dawn-low-cinematic.jpg) |
 | Day / high | 57.8 / 85 | 58.5 / 85 | [Legacy](evidence/art-day-high-legacy.jpg) · [Cinematic](evidence/art-day-high-cinematic.jpg) |
-| Day / low | 57.7 / 50 | 58.5 / 50 | [Legacy](evidence/art-day-low-legacy.jpg) · [Cinematic](evidence/art-day-low-cinematic.jpg) |
+| Day / low | 57.7 / 50 | 57.7 / 50 | [Legacy](evidence/art-day-low-legacy.jpg) · [Cinematic](evidence/art-day-low-cinematic.jpg) |
 | Dusk / high | 58.5 / 50 | 60.0 / 85 | [Legacy](evidence/art-dusk-high-legacy.jpg) · [Cinematic](evidence/art-dusk-high-cinematic.jpg) |
 | Dusk / low | 60.0 / 50 | 60.0 / 50 | [Legacy](evidence/art-dusk-low-legacy.jpg) · [Cinematic](evidence/art-dusk-low-cinematic.jpg) |
 
-All samples have **zero PointLights**. Low disables shadow maps and caps DPR1;
+All samples have **zero PointLights**. Low disables shadow maps, phone/card backdrop blur, and caps DPR1;
 high uses the original capped DPR and directional shadows. These short headless
 measurements, with browser capture overhead, are not a guarantee on physical
 low-end phones or all laptops. Physical-device testing remains unmeasured.
@@ -122,3 +123,12 @@ exchanges, explore the plaza, and watch the 42-second restoration sequence.
   independent architecture review and lead/browser validation remain the evidence.
 - Existing production-deploy failures predate this work. This change adds a PR
   regression workflow and does not deploy or merge to production.
+
+## User playtest corrections
+
+- [#81](https://github.com/ntubiolin/stupa-game/issues/81) / [PR #86](https://github.com/ntubiolin/stupa-game/pull/86): ordinary keyboard/touch speed is 4 m/s; Shift fast-walk is 6 m/s. Camera substeps collisions and owns its bounded delta, so the world's 50 ms animation cap does not further slow walking on 10 FPS devices.
+- [#82](https://github.com/ntubiolin/stupa-game/issues/82) / [PR #88](https://github.com/ntubiolin/stupa-game/pull/88): partial replies and recording acknowledgment persist; the browser test reloads after three replies without a manual save/export, then verifies all seven replies after arrival and after final reload. Legacy history and isolated replay have additional regression coverage.
+- [#83](https://github.com/ntubiolin/stupa-game/issues/83) / [PR #87](https://github.com/ntubiolin/stupa-game/pull/87): Next image works while paused; Finish reading completes once, with no mandatory countdown. Full desktop/touch journeys exercise these controls.
+- The three review PRs target the fixed `codex/80-feedback-base`; #80 remains the complete integration candidate.
+- Asset production requests: [#84 character references and stills](https://github.com/ntubiolin/stupa-game/issues/84), [#85 Google Flow storyboard](https://github.com/ntubiolin/stupa-game/issues/85). These are requests, not delivered new media; the demo retains its existing fallback assets.
+- Earlier cloud software-WebGL runs exceeded the ten-minute budget. Run [42212536194](https://github.com/ntubiolin/stupa-game/actions/runs/42212536194) reached desktop completion but not the entire suite. They are not passes. Low quality now also disables phone/card backdrop blur; computed browser styles verify Low removes and High restores blur. Check #80 for the latest exact-head remote status.

@@ -333,7 +333,7 @@ Public narrative APIs and ordered beat/event schemas are specified in
 | `story/narrativeCamera.js` | `ctx.storyCamera` | Eye-pose camera, keyboard/mouse/touch movement with collisions |
 | `story/cinematicArt.js` | `ctx.storyArt` | Reversible material/light grade, three light presets, two quality settings |
 | `ui/story/phone.js` | `ctx.phone` | Novel-based fixed messages, diaries, evidence, train transcript |
-| `ui/story/documentary.js` | `ctx.documentary` | Lazy still cues, captions, pause/replay/skip/cancel and fallback |
+| `ui/story/documentary.js` | `ctx.documentary` | Lazy still cues, captions, next/finish, pause/replay/skip/cancel and fallback |
 | `story/memorySystem.js` | `ctx.memory` | Pose threshold evaluation, accessible camera assistance and explicit capture |
 | `story/runtime.js` | bootstrap owner only | World exploration, Losang, map, three spring interactions, return, focus/overlay integration |
 
@@ -376,3 +376,9 @@ sections at flush time, preserving progression made by a simultaneously open
 adventure tab. Default adventure behavior is unchanged. Scoped reset removes
 only permitted sections. This is a defensive write boundary, not a distributed
 transaction/locking protocol between multiple story sessions.
+
+Narrative playtest refinements: camera speed is 4 m/s (Shift 6 m/s), with collision
+substeps and its own 100 ms delta limit. Low quality disables the phone/card
+backdrop blur as well as shadows; runtime mirrors quality to a body class without
+changing adventure styles. Documentary manual Next/Finish uses the same guarded
+completion path as automatic playback and remains available while paused.

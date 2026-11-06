@@ -47,15 +47,30 @@ async function fullJourney(name, mobile, lang) {
   const guide = () => page.locator('[data-action="guide"]');
   await ready(page);
   await page.locator('.story-phone[open]').waitFor();
+  if (!mobile) {
+    await page.evaluate(() => __stupa.storyArt.setQuality('low'));
+    await page.waitForFunction(() => document.body.classList.contains('story-quality-low'));
+    assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.story-phone'), '::backdrop').backdropFilter), 'none');
+    await page.evaluate(() => __stupa.storyArt.setQuality('high'));
+    await page.waitForFunction(() => !document.body.classList.contains('story-quality-low'));
+    assert.match(await page.evaluate(() => getComputedStyle(document.querySelector('.story-phone'), '::backdrop').backdropFilter), /blur/);
+    if (process.env.CI) await page.evaluate(() => __stupa.storyArt.setQuality('low'));
+  }
   await shot(page, `${name}-01-prologue`);
   await click(page.locator('.story-phone__close'));
   await click(page.locator('[data-action="phone"]'));
-  for (let i = 0; i < 7; i++) await click(page.locator('.story-phone__actions button').first());
+  for (let i = 0; i < 3; i++) await click(page.locator('.story-phone__actions button').first());
+  await ready(page); // No export/flush shortcut: exercise normal unload persistence.
+  assert.equal(await page.locator('.story-phone__message--outgoing').count(), 3, `${name} retains partial conversation after reload`);
+  for (let i = 3; i < 7; i++) await click(page.locator('.story-phone__actions button').first());
   await click(page.locator('.story-phone__actions button').first()); // transcript
   await shot(page, `${name}-02-recording`);
   await click(page.locator('.story-phone__actions button').first()); // depart
   await waitBeat(page, 'arrival');
   await click(cardContinue());
+  await click(page.locator('[data-action="phone"]'));
+  assert.equal(await page.locator('.story-phone__message--outgoing').count(), 7, `${name} shows completed history after advancing`);
+  await click(page.locator('.story-phone__close'));
   // Verify real input changes the ground pose before using accessible journey controls.
   const before = await page.evaluate(() => __stupa.storyCamera.getPose());
   const waitForMovement = () => page.waitForFunction(previous => {
@@ -88,10 +103,17 @@ async function fullJourney(name, mobile, lang) {
   await shot(page, `${name}-04-photography`);
   await click(page.locator('.story-photography [data-action="capture"]'));
   await waitBeat(page, 'restoration'); await page.locator('.story-documentary[open]').waitFor();
-  await click(page.locator('.story-documentary-controls button').nth(0));
+  const documentaryAction = id => page.locator(`.story-documentary-controls [data-action="${id}"]`);
+  await click(documentaryAction('toggle'));
   await shot(page, `${name}-05-documentary`);
-  await click(page.locator('.story-documentary-controls button').nth(1)); // replay
-  await click(page.locator('.story-documentary-controls button').nth(2)); // skip
+  await click(documentaryAction('next'));
+  assert.match(await page.locator('.story-documentary-progress').innerText(), /2.*4/);
+  assert.equal(await page.locator('.story-documentary').getAttribute('data-paused'), 'true');
+  await click(documentaryAction('replay'));
+  await click(documentaryAction('toggle'));
+  for (let i = 0; i < 3; i++) await click(documentaryAction('next'));
+  await shot(page, `${name}-05b-documentary-last`);
+  await click(documentaryAction('next')); // Finish reading, without waiting for a timer.
   await waitBeat(page, 'losang'); await click(guide()); await click(action());
   for (let i = 0; i < 6; i++) await click(cardContinue());
   await waitBeat(page, 'map'); await shot(page, `${name}-06-map`);
@@ -110,6 +132,9 @@ async function fullJourney(name, mobile, lang) {
   for (const [key, value] of Object.entries(expected)) assert.deepEqual(final.sections[key], value, `${name} preserves ${key}`);
   assert.equal(final.sections.story.evidence.length, 5);
   await ready(page); await waitBeat(page, 'complete'); await click(cardContinue());
+  await click(page.locator('[data-action="phone"]'));
+  assert.equal(await page.locator('.story-phone__message--outgoing').count(), 7, `${name} retains archive after final reload`);
+  await click(page.locator('.story-phone__close'));
   if (!mobile) {
     // Same pose, all 3 lighting × 2 quality × 2 art combinations.
     await page.evaluate(() => __stupa.storyCamera.setPose({ x: 0, y: 1.68, z: 31, yaw: 0, pitch: .34, fov: 55 }));
@@ -140,7 +165,7 @@ try {
   const fp = await fallback.newPage(); monitor(fp, 'media-fallback'); await ready(fp);
   await fp.locator('.story-documentary-fallback').waitFor({ state: 'visible' });
   await shot(fp, 'missing-media-fallback');
-  await fp.locator('.story-documentary-controls button').nth(2).click(); await waitBeat(fp, 'losang');
+  await fp.locator('.story-documentary-controls [data-action="skip"]').click(); await waitBeat(fp, 'losang');
   report.scenarios.push({ name: 'missing-media-fallback', result: 'PASS' }); await fallback.close();
   const adventure = await browser.newContext(ciDevice); const ap = await adventure.newPage(); monitor(ap, 'adventure');
   await ap.goto(`${base}/?mode=adventure&debug=1`);

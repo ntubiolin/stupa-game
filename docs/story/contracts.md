@@ -61,3 +61,15 @@ after each reply; `flags["prologue.recordingRead"]` stores transcript acknowledg
 Invalid orphaned reply keys are removed on prologue resume. Later beats expose
 read-only history; old saves missing choices display an explicitly labeled script
 reconstruction. Replay is transient and never calls these persistence APIs.
+
+### Playtest refinements (#81, #83, #74)
+
+Narrative camera walks at 4 m/s and supports keyboard Shift at 6 m/s; full touch
+input uses normal speed. It caps its own input delta at 100 ms and substeps
+collisions at <=0.15 m, while runtime animation keeps its separate 50 ms cap.
+Documentary Next/Finish controls share the automatic advance logic, reset the
+current cue timer, work while paused and preserve single completion events.
+Low quality also disables phone/card backdrop blur via runtime's
+`body.story-quality-low`, retaining overlay tints and restoring blur in High.
+Follow-up agents own isolated #81/#82/#83 worktrees based on `f88b1a6`; reference
+PRs target `codex/80-feedback-base`, and reviewed commits are integrated in #80.
