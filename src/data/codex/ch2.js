@@ -63,8 +63,12 @@ export const CH2_CODEX_ENTRIES = [
     bodyKey: 'codex.mangyul.body',
     sources: [
       {
-        title: 'THL Place Dictionary — Mangyul / Kyirong Historical Geography',
-        url: 'https://places.thlib.org/',
+        title: 'Wikipedia — Gungthang & Mangyul Kingdom',
+        url: 'https://en.wikipedia.org/wiki/Gungthang',
+      },
+      {
+        title: 'The Tibetan & Himalayan Library (THL) — Historical Geography',
+        url: 'https://www.thlib.org/',
       },
       {
         title: 'Himalayan Art Resources — Kyirong & Mangyul Corridor',

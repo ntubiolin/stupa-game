@@ -310,18 +310,6 @@ export function createDungeon(ctx) {
       highestClearedTier,
     });
   }
-  loadSaved();
-  if (ctx.save?.register) {
-    ctx.save.register(
-      'dungeon',
-      () => ({ highestClearedTier }),
-      (data) => {
-        highestClearedTier = Math.max(0, Math.floor(Number(data?.highestClearedTier) || 0));
-        syncState();
-      },
-    );
-  }
-
   // Runtime state
   let active = false;
   let currentTier = 1;
@@ -337,6 +325,18 @@ export function createDungeon(ctx) {
   let gateUnlocked = false;
   let bossSubduedOnFloor = false;
   let chestOpened = false;
+
+  loadSaved();
+  if (ctx.save?.register) {
+    ctx.save.register(
+      'dungeon',
+      () => ({ highestClearedTier }),
+      (data) => {
+        highestClearedTier = Math.max(0, Math.floor(Number(data?.highestClearedTier) || 0));
+        syncState();
+      },
+    );
+  }
 
   // 3D Scene Group for procedural floor geometry (Zero PointLights, InstancedMeshes)
   const dungeonGroup = new THREE.Group();

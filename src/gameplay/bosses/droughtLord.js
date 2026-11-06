@@ -341,7 +341,7 @@ export const DROUGHT_LORD_DEF = {
   nameKey: 'boss.droughtLord.name',
   titleKey: 'boss.droughtLord.title',
   level: 10,
-  hp: 2200,
+  hp: 2800,
   def: 16,
   ccResist: 0.75,
   radius: 1.55,
@@ -454,10 +454,12 @@ export const DROUGHT_LORD_DEF = {
         const d = Math.hypot(pPos.x - w.x, pPos.z - w.z);
         if (d <= w.radius + 0.4) {
           rt.whirlwindHitCooldown = 0.65;
-          if (ctx.player?.damage) {
-            ctx.player.damage(10, { x: w.x, z: w.z });
+          if (ctx.vitals?.damage) {
+            ctx.vitals.damage(28, 'physical', { sourcePos: { x: w.x, z: w.z }, source: 'droughtLord.whirlwind' });
+          } else if (ctx.player?.damage) {
+            ctx.player.damage(28, { x: w.x, z: w.z });
           } else {
-            ctx.bus?.emit?.('player:damaged', { amount: 10, source: 'droughtLord.whirlwind' });
+            ctx.bus?.emit?.('vitals:damage', { amount: 28, type: 'physical', source: 'droughtLord.whirlwind' });
           }
         }
       }

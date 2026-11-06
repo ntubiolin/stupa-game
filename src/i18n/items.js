@@ -165,7 +165,10 @@ export const ITEMS_STRINGS = {
     'inv.equippedBadge': '已裝備',
     'inv.btnEquip': '裝備',
     'inv.btnUnequip': '卸下',
+    'inv.btnOffer': '供養',
+    'inv.btnSalvage': '拆解',
     'inv.btnDiscard': '丟棄',
+    'inv.btnCloseMenu': '關閉',
     'inv.close': '關閉 (Esc)',
 
     // Character panel stat labels
@@ -349,7 +352,10 @@ export const ITEMS_STRINGS = {
     'inv.equippedBadge': 'Equipped',
     'inv.btnEquip': 'Equip',
     'inv.btnUnequip': 'Unequip',
+    'inv.btnOffer': 'Offer',
+    'inv.btnSalvage': 'Salvage',
     'inv.btnDiscard': 'Discard',
+    'inv.btnCloseMenu': 'Close',
     'inv.close': 'Close (Esc)',
 
     // Character panel stat labels

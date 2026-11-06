@@ -15,7 +15,7 @@ export function createVitals(ctx) {
     baseMp: 60,
     mpPerLevel: 5,
     baseAtk: 10,
-    atkPerLevel: 4,
+    atkPerLevel: 3,
     baseDef: 0,
     expBase: 20,
     expExponent: 1.5,

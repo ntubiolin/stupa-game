@@ -189,14 +189,15 @@ export function createSkillbar(ctx) {
     });
   });
 
-  // Small Amrita Potion button (X)
+  // Small Amrita Potion button (X) with remaining charges badge
   const potionBtn = document.createElement('button');
-  potionBtn.id = 'btn-mobile-potion';
+  potionBtn.id = 'btn-mobile-pad-potion';
   potionBtn.type = 'button';
   potionBtn.className = 'arc-btn arc-btn--potion glass-panel';
   potionBtn.dataset.mobileAction = 'potion';
   potionBtn.innerHTML = `
-    <span class="arc-btn__icon" aria-hidden="true">🏺</span>
+    <span class="arc-btn__icon" aria-hidden="true">💊</span>
+    <span id="mobile-pad-potion-count" class="arc-btn__badge">4</span>
     <kbd class="arc-btn__key">X</kbd>
   `;
   potionBtn.addEventListener('pointerdown', (e) => {
@@ -206,6 +207,43 @@ export function createSkillbar(ctx) {
     ctx.bus?.emit('action:potion');
   });
   mobilePadEl.appendChild(potionBtn);
+  const potionCountBadgeEl = potionBtn.querySelector('#mobile-pad-potion-count');
+
+  // Recall to Stupa button (B)
+  const recallBtn = document.createElement('button');
+  recallBtn.id = 'btn-mobile-pad-recall';
+  recallBtn.type = 'button';
+  recallBtn.className = 'arc-btn arc-btn--recall glass-panel';
+  recallBtn.dataset.mobileAction = 'recall';
+  recallBtn.innerHTML = `
+    <span class="arc-btn__icon" aria-hidden="true">🪷</span>
+    <kbd class="arc-btn__key">B</kbd>
+  `;
+  recallBtn.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    ctx.waypoints?.startRecall?.();
+    ctx.input?.trigger('recall');
+  });
+  mobilePadEl.appendChild(recallBtn);
+
+  // Context Interact button (E) — highlights & scales up when an interactable is in range
+  const interactBtn = document.createElement('button');
+  interactBtn.id = 'btn-mobile-pad-interact';
+  interactBtn.type = 'button';
+  interactBtn.className = 'arc-btn arc-btn--interact glass-panel';
+  interactBtn.dataset.mobileAction = 'interact';
+  interactBtn.innerHTML = `
+    <span class="arc-btn__icon" aria-hidden="true">🪔</span>
+    <span class="arc-btn__badge">E</span>
+    <kbd class="arc-btn__key">E</kbd>
+  `;
+  interactBtn.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    ctx.input?.trigger('interact');
+  });
+  mobilePadEl.appendChild(interactBtn);
 
   playHud.appendChild(mobilePadEl);
 
@@ -563,6 +601,17 @@ export function createSkillbar(ctx) {
     } else {
       mobilePadEl.classList.add('is-hidden');
       if (mobileActions) mobileActions.classList.remove('is-combat-hidden');
+    }
+
+    // Update mobile pad potion charges badge & interact target highlight
+    if (potionCountBadgeEl) {
+      const pCharges = Math.max(0, Number(state.player?.potions?.charges ?? 4));
+      potionCountBadgeEl.textContent = String(pCharges);
+      potionBtn.classList.toggle('is-empty', pCharges <= 0);
+    }
+    if (interactBtn) {
+      const canInteract = Boolean(state.interactionTarget);
+      interactBtn.classList.toggle('is-ready', canInteract);
     }
 
     for (const def of SKILLS) {

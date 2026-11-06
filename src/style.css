@@ -1063,13 +1063,15 @@ kbd {
   transition: stroke-dashoffset 0.08s linear;
 }
 
-/* Touch virtual joystick created by input.js */
+/* Touch virtual joystick created by input.js (radius 60px -> 120x120px) */
 .joystick {
   position: fixed;
-  width: 112px;
-  height: 112px;
-  margin-left: -56px;
-  margin-top: -56px;
+  left: 76px;
+  top: calc(100vh - 86px);
+  width: 120px;
+  height: 120px;
+  margin-left: -60px;
+  margin-top: -60px;
   pointer-events: none;
   z-index: 25;
   opacity: 0;
@@ -1078,8 +1080,28 @@ kbd {
 }
 
 .joystick.is-active {
-  opacity: 1;
+  opacity: 1 !important;
+  transform: scale(1) !important;
+}
+
+body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joystick {
+  opacity: 0.62;
   transform: scale(1);
+}
+
+@media (max-width: 820px), (pointer: coarse) {
+  body:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joystick {
+    opacity: 0.62;
+    transform: scale(1);
+  }
+}
+
+@media (min-width: 821px) and (pointer: fine) {
+  body.is-mouse-active .joystick,
+  body.is-mouse-active .mobile-skill-pad,
+  body.is-mouse-active .mobile-actions {
+    display: none !important;
+  }
 }
 
 .joystick__ring {
@@ -4626,17 +4648,18 @@ kbd {
   }
 
   .dialogue-text {
-    font-size: 0.88rem;
+    font-size: 0.96rem;
     min-height: 2.6em;
   }
 
   .dialogue-choice-btn {
-    padding: 8px 10px;
-    font-size: 0.84rem;
+    padding: 9px 12px;
+    font-size: 0.88rem;
+    min-height: 40px;
   }
 
   .quest-tracker {
-    top: 248px;
+    top: 236px;
     right: 8px;
     width: 210px;
     padding: 7px 10px;
@@ -5176,10 +5199,10 @@ kbd {
 /* Mobile Arc Skill Pad (Combat Zones) */
 .mobile-skill-pad {
   position: absolute;
-  right: 16px;
-  bottom: 16px;
-  width: 210px;
-  height: 210px;
+  right: 12px;
+  bottom: 12px;
+  width: 204px;
+  height: 224px;
   pointer-events: none;
   z-index: 28;
   display: none;
@@ -5204,8 +5227,9 @@ kbd {
   user-select: none;
   -webkit-user-select: none;
   cursor: pointer;
-  overflow: hidden;
+  overflow: visible;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
 }
 
 .arc-btn:active {
@@ -5213,10 +5237,10 @@ kbd {
 }
 
 .arc-btn--primary {
-  right: 8px;
-  bottom: 8px;
-  width: 78px;
-  height: 78px;
+  right: 6px;
+  bottom: 6px;
+  width: 74px;
+  height: 74px;
   border-width: 2px;
   border-color: #fbbf24;
   background: radial-gradient(circle at 40% 35%, rgba(146, 64, 14, 0.92), rgba(34, 16, 24, 0.96));
@@ -5228,24 +5252,67 @@ kbd {
 }
 
 .arc-btn--sat {
-  width: 50px;
-  height: 50px;
+  width: 48px;
+  height: 48px;
 }
 
-/* Arc satellite positions around bottom-right center button */
-.arc-btn--pos-0 { right: 98px; bottom: 6px; }   /* R: mantra */
-.arc-btn--pos-1 { right: 92px; bottom: 64px; }  /* 1: phurba */
-.arc-btn--pos-2 { right: 62px; bottom: 112px; } /* 2: lotusWard */
-.arc-btn--pos-3 { right: 8px;  bottom: 126px; } /* 3: vajraBell */
-.arc-btn--pos-4 { right: 148px; bottom: 42px; } /* 4: protector */
-.arc-btn--pos-5 { right: 132px; bottom: 102px; border-color: #f59e0b; } /* T: guruMantra */
+/* Arc satellite positions around bottom-right center button (zero overlap) */
+.arc-btn--pos-0 { right: 90px; bottom: 4px; }   /* R: mantra */
+.arc-btn--pos-1 { right: 86px; bottom: 58px; }  /* 1: phurba */
+.arc-btn--pos-2 { right: 58px; bottom: 108px; } /* 2: lotusWard */
+.arc-btn--pos-3 { right: 6px;  bottom: 120px; } /* 3: vajraBell */
+.arc-btn--pos-4 { right: 140px; bottom: 32px; } /* 4: protector */
+.arc-btn--pos-5 { right: 124px; bottom: 90px; border-color: #f59e0b; } /* T: guruMantra */
 
 .arc-btn--potion {
-  right: 6px;
-  bottom: 184px;
-  width: 42px;
-  height: 42px;
-  border-color: rgba(110, 231, 183, 0.6);
+  right: 4px;
+  bottom: 176px;
+  width: 44px;
+  height: 44px;
+  border-color: rgba(110, 231, 183, 0.65);
+}
+
+.arc-btn--recall {
+  right: 54px;
+  bottom: 176px;
+  width: 44px;
+  height: 44px;
+  border-color: rgba(56, 189, 248, 0.65);
+}
+
+.arc-btn--interact {
+  right: 104px;
+  bottom: 176px;
+  width: 44px;
+  height: 44px;
+  border-color: rgba(251, 191, 36, 0.55);
+}
+
+.arc-btn--interact.is-ready {
+  border-color: #fde047;
+  box-shadow: 0 0 18px rgba(250, 204, 21, 0.9), 0 4px 14px rgba(0, 0, 0, 0.6);
+  transform: scale(1.14);
+}
+
+.arc-btn__badge {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f59e0b, #b45309);
+  border: 1px solid #fef08a;
+  color: #fffbeb;
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.65);
+  z-index: 5;
 }
 
 .arc-btn__glyph {
@@ -5261,13 +5328,14 @@ kbd {
 .arc-btn__cd {
   position: absolute;
   inset: 0;
+  border-radius: 50%;
   pointer-events: none;
   z-index: 3;
 }
 
 .arc-btn__lock {
   position: absolute;
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   bottom: 2px;
   opacity: 0;
   z-index: 4;
@@ -5290,7 +5358,7 @@ kbd {
   position: absolute;
   bottom: 2px;
   right: 4px;
-  font-size: 0.54rem;
+  font-size: 0.62rem;
   color: #93c5fd;
   z-index: 4;
 }
@@ -5299,7 +5367,11 @@ kbd {
   display: none;
 }
 
-@media (max-width: 720px), (pointer: coarse) {
+body.is-touch-device .mobile-skill-pad {
+  display: block;
+}
+
+@media (max-width: 820px), (pointer: coarse) {
   .mobile-skill-pad {
     display: block;
   }
@@ -5312,6 +5384,19 @@ kbd {
     gap: 5px;
     transform: translateX(-50%) scale(0.86);
     transform-origin: bottom center;
+  }
+
+  /* When combat mobile arc skill pad is active on narrow screens, dock only the K modal button */
+  .play-hud:has(#mobile-skill-pad:not(.is-hidden)) .skill-bar {
+    left: 158px;
+    bottom: 16px;
+    transform: none;
+    padding: 3px;
+    border-radius: 14px;
+  }
+
+  .play-hud:has(#mobile-skill-pad:not(.is-hidden)) .skill-bar .skill-slot {
+    display: none;
   }
 }
 
@@ -5473,10 +5558,68 @@ kbd {
 
 .protector-select-card__desc {
   margin: 0;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   line-height: 1.38;
   color: var(--col-text-muted);
 }
+
+/* ==========================================================================
+   #37 Mobile & Touch Accessibility Polish (Tap Targets >= 40x40, Font >= 12px)
+   ========================================================================== */
+.inv-action-bar {
+  flex-wrap: wrap;
+}
+
+.inv-act-btn,
+.inv-ctx-item,
+.inv-tab,
+.inv-close-btn,
+.dialogue-close-btn,
+.dialogue-next-btn,
+.dialogue-choice-btn,
+.worldmap-modal__close,
+.worldmap-tab,
+.codex-filter-btn,
+.quest-journal__tab,
+.quest-track-btn,
+.quest-tracker__btn,
+.quest-tracker__pill-btn,
+.minimap-pill,
+.icon-btn,
+.speed-btn,
+.shop-refresh-btn,
+.shop-batch-btn,
+.shop-action-btn,
+.crafting-affix-slot,
+.crafting-keep-btn,
+.btn-skill-upgrade,
+.skills-respec-btn {
+  min-width: 40px;
+  min-height: 40px;
+}
+
+.inv-slot__ilvl,
+.inv-slot__caption,
+.skill-row__meta-chip,
+.skill-enh-card__badge,
+.skill-enh-card__desc,
+.protector-select-card__role,
+.protector-select-card__badge,
+.protector-select-card__desc,
+.crafting-source-tag,
+.crafting-affix-slot__badge,
+.crafting-choice-card__badge,
+.codex-card__cat,
+.codex-card__title,
+.codex-reader__cat,
+.world-node-lvl {
+  font-size: max(12px, 0.75rem);
+}
+
+.dialogue-text {
+  font-size: max(15px, 0.95rem);
+}
+
 
 
 

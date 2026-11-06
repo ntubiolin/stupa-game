@@ -27,6 +27,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check i18n keys
+        run: npm run check:i18n
+
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 

@@ -226,7 +226,7 @@ export const MIGOI_KING_DEF = {
   nameKey: 'boss.migoiKing.name',
   titleKey: 'boss.migoiKing.title',
   level: 6,
-  hp: 1200,
+  hp: 1660,
   def: 12,
   ccResist: 0.75,
   radius: 1.35,

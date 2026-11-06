@@ -382,6 +382,7 @@ export function createWaypoints(ctx) {
   const unlockedSet = new Set(['stupa']);
   const waypointMeshes = new Map(); // mapId -> THREE.Group
   let returnPortalOrigin = null;    // { mapId, x, z, heading } | null
+  let returnPortalMesh = null;
 
   // Recall channeling state
   let recalling = false;
@@ -505,10 +506,11 @@ export function createWaypoints(ctx) {
   }
 
   // ---------------------------------------------------------------- Return Portal (歸途之門) in Stupa Hub
-  const returnPortalMesh = buildReturnPortalMesh();
+  returnPortalMesh = buildReturnPortalMesh();
   returnPortalMesh.position.set(RETURN_PORTAL_POS.x, 0, RETURN_PORTAL_POS.z);
   const stupaGrp = ctx.zoneGroups?.stupa || ctx.stupaGroup || scene;
   stupaGrp.add(returnPortalMesh);
+  syncReturnPortalMesh();
 
   const returnPortalVec = new THREE.Vector3(RETURN_PORTAL_POS.x, 0, RETURN_PORTAL_POS.z);
   if (Array.isArray(ctx.interactables)) {
@@ -532,7 +534,9 @@ export function createWaypoints(ctx) {
   }
 
   function syncReturnPortalMesh() {
-    returnPortalMesh.visible = Boolean(returnPortalOrigin);
+    if (returnPortalMesh) {
+      returnPortalMesh.visible = Boolean(returnPortalOrigin);
+    }
   }
 
   function useReturnPortal() {

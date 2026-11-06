@@ -17,9 +17,9 @@ import '../../i18n/ch4.js';
 
 export const SAMYE_ENEMIES = {
   wallBreaker: {
-    hp: 40,
+    hp: 76,
     speed: 2.0,
-    exp: 10,
+    exp: 24,
     def: 16,
     ccResist: 0.1,
     ring: 'near',
@@ -45,10 +45,10 @@ export const SAMYE_ENEMIES = {
   },
 
   du: {
-    hp: 60,
+    hp: 86,
     speed: 2.4,
-    exp: 16,
-    def: 20,
+    exp: 28,
+    def: 16,
     ccResist: 0.2,
     ring: 'mid',
     radius: 0.62,
@@ -84,9 +84,9 @@ export const SAMYE_ENEMIES = {
   },
 
   gyalpo: {
-    hp: 55,
+    hp: 95,
     speed: 1.8,
-    exp: 18,
+    exp: 30,
     def: 18,
     ccResist: 0.25,
     ring: 'deep',

@@ -26,7 +26,7 @@ export const CH2_QUESTS = [
       },
     ],
     rewards: {
-      exp: 220,
+      exp: 600,
       turquoise: 45,
       codex: ['trisongDetsen', 'shantarakshita', 'mangyul'],
       flags: ['ch2.envoy.done'],
@@ -58,7 +58,7 @@ export const CH2_QUESTS = [
       },
     ],
     rewards: {
-      exp: 380,
+      exp: 850,
       turquoise: 80,
       codex: ['twelveTenma'],
       flags: ['ch2.tenma.done'],
@@ -99,7 +99,7 @@ export const CH2_QUESTS = [
       },
     ],
     rewards: {
-      exp: 520,
+      exp: 1100,
       turquoise: 110,
       codex: ['twelveTenma'],
       flags: ['ch2.storm.done'],
@@ -138,7 +138,7 @@ export const CH2_QUESTS = [
       },
     ],
     rewards: {
-      exp: 600,
+      exp: 1450,
       turquoise: 150,
       skillUnlock: 'vajraBell',
       protector: 'tenma',

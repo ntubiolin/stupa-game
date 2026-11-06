@@ -49,7 +49,7 @@ export const CH4_QUESTS = [
       },
     ],
     rewards: {
-      exp: 420,
+      exp: 2000,
       turquoise: 120,
       codex: ['samye', 'shantarakshita', 'trisongDetsen'],
       flags: ['ch4.foundation.done'],
@@ -86,7 +86,7 @@ export const CH4_QUESTS = [
       },
     ],
     rewards: {
-      exp: 680,
+      exp: 2600,
       turquoise: 180,
       item: { rarity: 'rare', slot: 'armor', level: 26 },
       items: [{ rarity: 'rare', slot: 'armor', level: 26 }],
@@ -137,7 +137,7 @@ export const CH4_QUESTS = [
       },
     ],
     rewards: {
-      exp: 760,
+      exp: 2800,
       turquoise: 210,
       codex: ['hepori', 'eightClasses'],
       flags: ['ch4.hepori.done'],
@@ -173,7 +173,7 @@ export const CH4_QUESTS = [
       },
     ],
     rewards: {
-      exp: 950,
+      exp: 3400,
       turquoise: 260,
       item: { rarity: 'dharma', slot: 'mainhand', level: 30 },
       items: [{ rarity: 'dharma', slot: 'mainhand', level: 30 }],
@@ -234,7 +234,7 @@ export const CH4_QUESTS = [
       },
     ],
     rewards: {
-      exp: 1100,
+      exp: 4000,
       turquoise: 320,
       skillUnlock: 'vajraGuru',
       protector: 'pehar',

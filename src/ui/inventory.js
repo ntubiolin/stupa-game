@@ -390,7 +390,10 @@ export function createInventoryUi(ctx) {
             <div id="inv-action-bar" class="inv-action-bar is-hidden">
               <button id="inv-btn-equip" type="button" class="inv-act-btn inv-act-btn--primary" data-i18n="inv.btnEquip">裝備</button>
               <button id="inv-btn-unequip" type="button" class="inv-act-btn inv-act-btn--secondary" data-i18n="inv.btnUnequip">卸下</button>
+              <button id="inv-btn-offer" type="button" class="inv-act-btn inv-act-btn--secondary" data-i18n="inv.btnOffer">供養</button>
+              <button id="inv-btn-salvage" type="button" class="inv-act-btn inv-act-btn--secondary" data-i18n="inv.btnSalvage">拆解</button>
               <button id="inv-btn-discard" type="button" class="inv-act-btn inv-act-btn--danger" data-i18n="inv.btnDiscard">丟棄</button>
+              <button id="inv-btn-cancel" type="button" class="inv-act-btn inv-act-btn--secondary" data-i18n="inv.btnCloseMenu">關閉</button>
             </div>
           </section>
         </div>
@@ -408,7 +411,10 @@ export function createInventoryUi(ctx) {
       <div id="inv-context-menu" class="inv-context-menu is-hidden">
         <button id="inv-ctx-equip" type="button" class="inv-ctx-item" data-i18n="inv.btnEquip">裝備</button>
         <button id="inv-ctx-unequip" type="button" class="inv-ctx-item" data-i18n="inv.btnUnequip">卸下</button>
+        <button id="inv-ctx-offer" type="button" class="inv-ctx-item" data-i18n="inv.btnOffer">供養</button>
+        <button id="inv-ctx-salvage" type="button" class="inv-ctx-item" data-i18n="inv.btnSalvage">拆解</button>
         <button id="inv-ctx-discard" type="button" class="inv-ctx-item inv-ctx-item--danger" data-i18n="inv.btnDiscard">丟棄</button>
+        <button id="inv-ctx-cancel" type="button" class="inv-ctx-item" data-i18n="inv.btnCloseMenu">關閉</button>
       </div>
     </div>
   `;
@@ -428,12 +434,18 @@ export function createInventoryUi(ctx) {
   const actionBarEl = overlay.querySelector('#inv-action-bar');
   const btnEquip = overlay.querySelector('#inv-btn-equip');
   const btnUnequip = overlay.querySelector('#inv-btn-unequip');
+  const btnOffer = overlay.querySelector('#inv-btn-offer');
+  const btnSalvage = overlay.querySelector('#inv-btn-salvage');
   const btnDiscard = overlay.querySelector('#inv-btn-discard');
+  const btnCancel = overlay.querySelector('#inv-btn-cancel');
   const charStatsGridEl = overlay.querySelector('#inv-char-stats-grid');
   const ctxMenuEl = overlay.querySelector('#inv-context-menu');
   const ctxEquipBtn = overlay.querySelector('#inv-ctx-equip');
   const ctxUnequipBtn = overlay.querySelector('#inv-ctx-unequip');
+  const ctxOfferBtn = overlay.querySelector('#inv-ctx-offer');
+  const ctxSalvageBtn = overlay.querySelector('#inv-ctx-salvage');
   const ctxDiscardBtn = overlay.querySelector('#inv-ctx-discard');
+  const ctxCancelBtn = overlay.querySelector('#inv-ctx-cancel');
 
   // ---------------------------------------------------------------- Formatting Helpers
   function formatStatLine(stat, value) {
@@ -619,6 +631,8 @@ export function createInventoryUi(ctx) {
     const isBag = selectedSource?.type === 'bag';
     btnEquip.style.display = isBag ? '' : 'none';
     btnUnequip.style.display = !isBag ? '' : 'none';
+    if (btnOffer) btnOffer.style.display = isBag ? '' : 'none';
+    if (btnSalvage) btnSalvage.style.display = isBag ? '' : 'none';
   }
 
   function renderCharacterStats() {
@@ -706,10 +720,12 @@ export function createInventoryUi(ctx) {
   function openContextMenu(clientX, clientY, mode) {
     ctxEquipBtn.style.display = mode === 'bag' ? '' : 'none';
     ctxUnequipBtn.style.display = mode === 'equipped' ? '' : 'none';
+    if (ctxOfferBtn) ctxOfferBtn.style.display = mode === 'bag' ? '' : 'none';
+    if (ctxSalvageBtn) ctxSalvageBtn.style.display = mode === 'bag' ? '' : 'none';
     ctxMenuEl.classList.remove('is-hidden');
     const rect = overlay.querySelector('.inv-dialog').getBoundingClientRect();
-    const x = Math.min(rect.width - 130, Math.max(8, clientX - rect.left));
-    const y = Math.min(rect.height - 110, Math.max(8, clientY - rect.top));
+    const x = Math.min(rect.width - 140, Math.max(8, clientX - rect.left));
+    const y = Math.min(rect.height - 180, Math.max(8, clientY - rect.top));
     ctxMenuEl.style.left = `${x}px`;
     ctxMenuEl.style.top = `${y}px`;
   }
@@ -736,6 +752,36 @@ export function createInventoryUi(ctx) {
     }
   }
 
+  function handleOfferSelected() {
+    hideContextMenu();
+    if (selectedSource?.type !== 'bag' || !selectedSource.uid) return;
+    const item = resolveSelectedItem();
+    if (!item) return;
+    if (ctx.shop?.sell) {
+      if (ctx.shop.sell(item.uid)) {
+        selectedSource = null;
+        renderAll();
+      }
+    } else if (ctx.inventory?.discard(item.uid)) {
+      ctx.inventory?.addTurquoise?.(Math.max(1, Number(item.sellValue) || 1));
+      selectedSource = null;
+      renderAll();
+    }
+  }
+
+  function handleSalvageSelected() {
+    hideContextMenu();
+    if (selectedSource?.type !== 'bag' || !selectedSource.uid) return;
+    const item = resolveSelectedItem();
+    if (!item) return;
+    if (ctx.crafting?.salvage) {
+      if (ctx.crafting.salvage(item.uid)) {
+        selectedSource = null;
+        renderAll();
+      }
+    }
+  }
+
   function handleDiscardSelected() {
     hideContextMenu();
     const item = resolveSelectedItem();
@@ -746,12 +792,24 @@ export function createInventoryUi(ctx) {
     }
   }
 
+  function handleCancelSelected() {
+    hideContextMenu();
+    selectedSource = null;
+    renderAll();
+  }
+
   btnEquip.addEventListener('click', handleEquipSelected);
   btnUnequip.addEventListener('click', handleUnequipSelected);
+  if (btnOffer) btnOffer.addEventListener('click', handleOfferSelected);
+  if (btnSalvage) btnSalvage.addEventListener('click', handleSalvageSelected);
   btnDiscard.addEventListener('click', handleDiscardSelected);
+  if (btnCancel) btnCancel.addEventListener('click', handleCancelSelected);
   ctxEquipBtn.addEventListener('click', handleEquipSelected);
   ctxUnequipBtn.addEventListener('click', handleUnequipSelected);
+  if (ctxOfferBtn) ctxOfferBtn.addEventListener('click', handleOfferSelected);
+  if (ctxSalvageBtn) ctxSalvageBtn.addEventListener('click', handleSalvageSelected);
   ctxDiscardBtn.addEventListener('click', handleDiscardSelected);
+  if (ctxCancelBtn) ctxCancelBtn.addEventListener('click', handleCancelSelected);
 
   tabBagBtn.addEventListener('click', () => {
     activeTab = 'bag';

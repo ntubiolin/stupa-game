@@ -145,10 +145,14 @@ export function createPatternRunner(ctx, parentGroup) {
   function dealPlayerDamage(amount, sourcePos, knockback = 0, slowSec = 0) {
     const pPos = state.player?.position;
     if (!pPos || state.bossSubdued) return;
-    if (ctx.player?.damage) {
-      ctx.player.damage(amount, sourcePos);
+    const bossLevel = Math.max(1, Number(ctx.bosses?.getState?.()?.level || state.boss?.level) || 6);
+    const scaledAmount = Math.max(1, Math.round(Number(amount || 10) * (1 + 0.12 * (bossLevel - 1)) * 1.8));
+    if (ctx.vitals?.damage) {
+      ctx.vitals.damage(scaledAmount, 'physical', { sourcePos, source: 'boss', slow: slowSec });
+    } else if (ctx.player?.damage) {
+      ctx.player.damage(scaledAmount, sourcePos);
     } else {
-      bus.emit('player:damaged', { amount, source: 'boss' });
+      bus.emit('vitals:damage', { amount: scaledAmount, type: 'physical', sourcePos, source: 'boss', slow: slowSec });
     }
     if (knockback > 0 && sourcePos && state.player?.velocity) {
       const dx = pPos.x - sourcePos.x;
