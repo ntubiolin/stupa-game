@@ -1,3 +1,4 @@
+import { MIGOI_ARENA_RADIUS } from '../data/combatSettings.js';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
@@ -47,8 +48,8 @@ export function computeWildernessHeight(x, z, wildConfig) {
 
   // 4. Northern Boss Arena around (1000, -48)
   const dBossArena = Math.hypot(x - origin.x, z - (origin.z - 48));
-  if (dBossArena < 18) {
-    flatWeight = Math.min(flatWeight, Math.max(0, (dBossArena - 14.5) / 3.5));
+  if (dBossArena < MIGOI_ARENA_RADIUS + 4) {
+    flatWeight = Math.min(flatWeight, Math.max(0, (dBossArena - (MIGOI_ARENA_RADIUS + 0.5)) / 3.5));
   }
 
   // Outer rim rises into surrounding foothills
@@ -591,7 +592,7 @@ export function createWilderness(ctx) {
     // Reject if too close to chorten
     if (Math.hypot(bx - chortenX, bz - chortenZ) < 8) continue;
     // Reject if inside northern Boss arena around (1000, -48)
-    if (Math.hypot(bx - origin.x, bz - (origin.z - 48)) < 16) continue;
+    if (Math.hypot(bx - origin.x, bz - (origin.z - 48)) < MIGOI_ARENA_RADIUS + bCfg.maxRadius + 1) continue;
     // Reject if too close to tilted Mani stone cairn / Ancient Pilgrim's Map at (origin.x + 8, origin.z - 12)
     if (Math.hypot(bx - (origin.x + 8.5), bz - (origin.z - 12)) < 5.5) continue;
 

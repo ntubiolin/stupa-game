@@ -313,3 +313,11 @@ Because maps, enemies, bosses, quests, dialogues, codex entries, and i18n dictio
 6. **Register Bilingual Strings (`src/i18n/chX.js`) & Verify**:
    - Call `i18n.register({ 'zh-Hant': { ... }, en: { ... } })`.
    - Run `npm run check:i18n`, `npm run check:links`, `node scripts/balance-report.mjs`, and `npm run build`.
+
+## Adventure difficulty and settings (#120)
+
+- `src/data/combatSettings.js`: shared `MIGOI_ARENA_RADIUS` (20 m) for the snow king barrier/player clamp, wilderness flattening and boulder exclusion. Difficulty presets resolve unknown/missing values to `normal`.
+- `src/ui/settings.js`: `ctx.settingsUi.open()`, `close()`, `isOpen()`; native modal dialog with title/HUD entries, keyboard focus containment and bilingual radio options. Restores prior `state.uiOpen` on close. No new bus events or update loop.
+- Persistence: existing `settings` section gains `difficulty: 'easy' | 'normal' | 'hard'`; writes merge with existing settings via `ctx.save`, flush immediately, and preserve audio/language preferences. Old saves default to normal without migration.
+- `vitals.applyDamage`: multiply mitigated incoming damage by 0.6 / 1 / 1.4 (minimum 1), once before shield absorption; invulnerability/god mode still short-circuit. Changes apply to the next hit, including active boss fights, without resetting HP or changing enemy HP, loot, experience or quest progress.
+- Regression: `npm run test:combat-settings` checks actual vitals damage, defense, shields, invulnerability, live difficulty changes, invalid settings and flat terrain across the expanded arena.
