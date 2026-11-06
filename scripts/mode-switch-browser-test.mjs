@@ -77,7 +77,7 @@ async function runModeSwitch(mobile) {
 
   async function navigateWithMenu(mode) {
     const previous = await documentId();
-    const destination = new URL(mode === 'home' ? '/' : `/?mode=${mode}`, base);
+    const destination = new URL(`/?mode=${mode}`, base);
     await Promise.all([
       page.waitForURL(url => url.pathname === destination.pathname && url.search === destination.search),
       activate(target(mode)),
@@ -88,7 +88,16 @@ async function runModeSwitch(mobile) {
     }, previous, `New ${mode} document`);
   }
 
-  await page.goto(`${base}/?mode=story`);
+  // Root defaults to the preserved Adventure runtime. Follow the visible switch.
+  await page.goto(`${base}/`);
+  await startAdventureWithInput(page, { mobile });
+  assert.equal(await page.evaluate(() => Boolean(window.__stupa.story)), false);
+  assert.match(await menu().innerText(), /switch to story mode/i);
+  const entryBox = await menu().boundingBox();
+  assert(entryBox.height >= 44 && entryBox.x >= 0 && entryBox.x + entryBox.width <= (mobile ? 390 : 1000));
+  await screenshot('default-adventure');
+  await openMenu('adventure');
+  await navigateWithMenu('story');
   await waitForCheckpoint(page, 'spring2');
   // The fixture resumes mid-chapter. Advance a real, in-range world action.
   await activate(page.locator('[data-action="interact"]'));

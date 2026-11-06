@@ -174,7 +174,8 @@ npm run preview
 
 ## 《鏡中之人》敘事 Demo / The Person in the Mirror
 
-The main menu offers the original **Footsteps adventure** and an independent
+The root URL opens the original **Footsteps adventure** by default. The explicit
+`/?mode=home` menu also offers an independent
 **Mirror narrative journey**. Existing ARPG saves remain in their original
 sections; narrative progress is autosaved in its own `story` section.
 
@@ -221,3 +222,15 @@ installed Chrome. See [contracts](docs/story/contracts.md),
 `STORY_SUITE=journey npm run test:browser` 可從新 Demo 連續操作至六章終局，
 不使用 debug 推進。媒體與跳關分別由 `scripts/story-media-browser-test.mjs`、
 `scripts/story-debug-browser-test.mjs` 驗證。
+
+### Vercel acceptance preview
+
+Open the deployment root for Adventure. The visible chapter-mode button opens
+the guarded mode selector; `/?mode=story` opens chapters directly and
+`/?mode=home` retains the dual-mode launcher. Mode switching preserves saved
+sections and refuses navigation when a save fails.
+
+Manual dispatch of the Vercel workflow defaults to Preview and supports the
+current feature branch. Production deployment remains restricted to master;
+this acceptance branch must not be merged automatically. Known Linux headless
+CI exceptions remain tracked in #116 and are not waived by a Preview deployment.

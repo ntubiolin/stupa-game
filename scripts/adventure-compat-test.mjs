@@ -211,8 +211,8 @@ async function roundTrip() {
   assert.equal(locked.origin, locked.zone);
   assert.deepEqual(locked.attempts, chapterMaps.slice(1).map(id => ({ id, unlocked: false, arrived: false })));
 
-  // Adventure has no launcher link, so return to the launcher by document navigation.
-  await story.goto(base);
+  // Exercise the explicit launcher route in addition to the in-game mode menu.
+  await story.goto(`${base}/?mode=home`);
   await story.locator('a[href="?mode=story"]').click();
   await openStory(story);
   assert.equal(await story.locator('.story-phone__message--outgoing').count(), 1);

@@ -2,7 +2,7 @@
 import { i18n } from './i18n.js';
 import './i18n/storyRuntime.js';
 const mode = new URLSearchParams(location.search).get('mode');
-if (mode === 'adventure') {
+if (mode !== 'story' && mode !== 'home') {
   await import('./adventure.js');
 } else if (mode === 'story') {
   await import('./story/runtime.js');
