@@ -529,12 +529,20 @@ export function createQuests(ctx) {
               };
         const addFn = ctx.inventory?.addItem || ctx.inventory?.add;
         if (addFn) {
-          addFn.call(ctx.inventory, item);
+          const added = addFn.call(ctx.inventory, item);
+          if (added === false) {
+            bus.emit('loot:drop', {
+              item,
+              position: state.player?.position,
+            });
+          } else {
+            bus.emit('loot:pickup', { item });
+          }
         } else {
           if (!Array.isArray(state.stubBag)) state.stubBag = [];
           state.stubBag.push(item);
+          bus.emit('loot:pickup', { item });
         }
-        bus.emit('loot:pickup', { item });
       }
     }
 
@@ -809,17 +817,29 @@ export function createQuests(ctx) {
 
   // ---------------------------------------------------------------- Skip-To Chapter Helper (`__stupa.quests.skipTo`)
   function grantSkipGear(targetLevel) {
-    const slots = ['mainhand', 'offhand', 'head', 'body', 'waist', 'accessory'];
+    // Ensure the bag has plenty of free slots (cleans up any prior skipTo clutter)
+    ctx.inventory?.ensureFreeSlots?.(15, targetLevel);
+
+    const slots = ['mainhand', 'offhand', 'head', 'body', 'hands', 'feet', 'neck', 'ring'];
+    const currentEquipped = ctx.inventory?.getEquipped?.() || {};
     const addFn = ctx.inventory?.addItem || ctx.inventory?.add;
+
     for (let i = 0; i < slots.length; i++) {
       const slot = slots[i];
+      const existing = currentEquipped[slot];
+      if (existing && (existing.rarity === 'terma' || (existing.ilvl || 1) >= targetLevel)) {
+        continue;
+      }
       const rarity = i % 2 === 0 ? 'rare' : 'blessed';
       const item = ctx.loot?.generate?.({
         ilvl: targetLevel,
         slot,
         rarity,
       });
-      if (item && addFn) {
+      if (!item) continue;
+      if (ctx.inventory?.equipDirect) {
+        ctx.inventory.equipDirect(item);
+      } else if (addFn) {
         addFn.call(ctx.inventory, item);
       }
     }
@@ -841,7 +861,7 @@ export function createQuests(ctx) {
 
     if (state.mode !== 'play') {
       if (typeof document !== 'undefined') {
-        document.getElementById('btn-start')?.click();
+        document.getElementById('btn-begin')?.click();
       }
       state.mode = 'play';
       bus.emit('game:start');
@@ -872,11 +892,11 @@ export function createQuests(ctx) {
       'liberation',
     ];
     for (const cId of prologueCodex) {
-      ctx.codex?.unlock?.(cId);
+      ctx.codex?.unlock?.(cId, { silent: true });
     }
-    ctx.waypoints?.unlock?.('stupa');
-    ctx.waypoints?.unlock?.('wild');
-    ctx.waypoints?.unlock?.('pharping');
+    ctx.waypoints?.unlock?.('stupa', { silent: true });
+    ctx.waypoints?.unlock?.('wild', { silent: true });
+    ctx.waypoints?.unlock?.('pharping', { silent: true });
 
     // 2. If skipping to ch2+, complete Chapter 1
     if (targetIdx >= 1) {
@@ -894,10 +914,10 @@ export function createQuests(ctx) {
         questData.flags[f] = true;
       });
       ['pharping', 'yangleshoCave', 'asuraCave', 'vajrakilaya', 'phurba', 'droughtLegend'].forEach(
-        (cId) => ctx.codex?.unlock?.(cId)
+        (cId) => ctx.codex?.unlock?.(cId, { silent: true })
       );
       ctx.skills?.unlock?.('phurba');
-      ctx.waypoints?.unlock?.('mangyul');
+      ctx.waypoints?.unlock?.('mangyul', { silent: true });
     }
 
     // 3. If skipping to ch3+, complete Chapter 2
@@ -916,12 +936,12 @@ export function createQuests(ctx) {
         questData.flags[f] = true;
       });
       ['trisongDetsen', 'shantarakshita', 'mangyul', 'twelveTenma', 'windhorse', 'latse'].forEach(
-        (cId) => ctx.codex?.unlock?.(cId)
+        (cId) => ctx.codex?.unlock?.(cId, { silent: true })
       );
       ctx.skills?.unlock?.('vajraBell');
       ctx.protectors?.unlock?.('tenma');
       ctx.allies?.unlock?.('tenma');
-      ctx.waypoints?.unlock?.('yarlung');
+      ctx.waypoints?.unlock?.('yarlung', { silent: true });
     }
 
     // 4. If skipping to ch4+, complete Chapter 3
@@ -946,11 +966,11 @@ export function createQuests(ctx) {
         'yarlhaShampo',
         'nyen',
         'eightClasses',
-      ].forEach((cId) => ctx.codex?.unlock?.(cId));
+      ].forEach((cId) => ctx.codex?.unlock?.(cId, { silent: true }));
       ctx.skills?.unlock?.('lotusShield');
       ctx.protectors?.unlock?.('whiteYak');
       ctx.allies?.unlock?.('whiteYak');
-      ctx.waypoints?.unlock?.('samye');
+      ctx.waypoints?.unlock?.('samye', { silent: true });
     }
 
     // 5. If skipping to ch5, complete Chapter 4
@@ -979,12 +999,12 @@ export function createQuests(ctx) {
         'sevenTestedMen',
         'shantarakshita',
         'trisongDetsen',
-      ].forEach((cId) => ctx.codex?.unlock?.(cId));
+      ].forEach((cId) => ctx.codex?.unlock?.(cId, { silent: true }));
       ctx.skills?.unlock?.('vajraGuru');
       ctx.protectors?.unlock?.('pehar');
       ctx.allies?.unlock?.('pehar');
-      ctx.waypoints?.unlock?.('chimphu');
-      ctx.waypoints?.unlock?.('chimpu');
+      ctx.waypoints?.unlock?.('chimphu', { silent: true });
+      ctx.waypoints?.unlock?.('chimpu', { silent: true });
     }
 
     persist();

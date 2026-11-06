@@ -453,6 +453,63 @@ export function createInventory(ctx) {
     return getEquipped();
   }
 
+  function equipDirect(item) {
+    const hydrated = hydrateItem(item);
+    if (!hydrated || !EQUIPMENT_SLOTS.includes(hydrated.slot)) return false;
+    const slot = hydrated.slot;
+    const previous = equipped[slot] || null;
+    equipped[slot] = hydrated;
+    save();
+    bus.emit('equipment:changed', { slot, item: hydrated, previous });
+    bus.emit('inventory:changed', { reason: 'equip', slot, item: hydrated, previous });
+    return true;
+  }
+
+  function ensureFreeSlots(minFree = 12, maxIlvlToPrune = Infinity) {
+    const targetFree = Math.max(1, Math.min(BAG_CAPACITY, Math.floor(Number(minFree) || 12)));
+    let freeCount = bag.filter((it) => it === null).length;
+    if (freeCount >= targetFree) return freeCount;
+
+    // Collect removable non-terma items sorted by ilvl & score ascending
+    const candidates = [];
+    for (let i = 0; i < bag.length; i++) {
+      const it = bag[i];
+      if (!it || it.rarity === 'terma') continue;
+      candidates.push({
+        idx: i,
+        ilvl: it.ilvl || 1,
+        score: scoreItemForEquipBest(it),
+      });
+    }
+    candidates.sort((a, b) => a.ilvl - b.ilvl || a.score - b.score);
+
+    let changed = false;
+    // Pass 1: prune items strictly below maxIlvlToPrune
+    for (const c of candidates) {
+      if (freeCount >= targetFree) break;
+      if (c.ilvl <= maxIlvlToPrune && bag[c.idx]) {
+        bag[c.idx] = null;
+        freeCount += 1;
+        changed = true;
+      }
+    }
+    // Pass 2: if still below targetFree, prune remaining lowest-scored non-terma items
+    for (const c of candidates) {
+      if (freeCount >= targetFree) break;
+      if (bag[c.idx]) {
+        bag[c.idx] = null;
+        freeCount += 1;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      save();
+      bus.emit('inventory:changed', { reason: 'prune' });
+    }
+    return freeCount;
+  }
+
   function clear() {
     bag = new Array(BAG_CAPACITY).fill(null);
     equipped = defaultEquipped();
@@ -500,6 +557,8 @@ export function createInventory(ctx) {
     save,
     give,
     equipBest,
+    equipDirect,
+    ensureFreeSlots,
     clear,
   };
 
@@ -510,6 +569,8 @@ export function createInventory(ctx) {
     add: (item) => api.add(item),
     pickup: (item) => api.add(item),
     equip: (uid) => api.equip(uid),
+    equipDirect: (item) => api.equipDirect(item),
+    ensureFreeSlots: (minFree, maxIlvl) => api.ensureFreeSlots(minFree, maxIlvl),
     unequip: (slot) => api.unequip(slot),
     equipBest: () => api.equipBest(),
     clear: () => api.clear(),
