@@ -464,4 +464,7 @@ export const i18n = {
       Object.assign(STRINGS.en, dict.en);
     }
   },
+  extend(dict) {
+    this.register(dict);
+  },
 };

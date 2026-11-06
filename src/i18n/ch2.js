@@ -3,6 +3,8 @@
 // Auto-discovered by src/systems/quests.js via import.meta.glob('../i18n/*.js')
 // ============================================================================
 
+import { i18n } from '../i18n.js';
+
 export const CH2_STRINGS = {
   zh: {
     // Map & Zone
@@ -62,6 +64,8 @@ export const CH2_STRINGS = {
     'npc.envoyRetinue2': '迎請隨從・多吉',
     'npc.envoyPorter': '馱隊腳夫・扎西',
     'npc.guruVision.mangyul': '蓮師淨相・入藏法影',
+    'npc.boss.tenmaStorm.name': '十二丹瑪女神',
+    'npc.boss.tenmaStorm': '十二丹瑪女神',
 
     // Quests
     'quest.ch2.envoy.title': '藏王的使者',
@@ -199,6 +203,8 @@ export const CH2_STRINGS = {
     'npc.envoyRetinue2': 'Envoy Retinue · Dorje',
     'npc.envoyPorter': 'Caravan Porter · Tashi',
     'npc.guruVision.mangyul': 'Guru Vision · Gateway to Tibet',
+    'npc.boss.tenmaStorm.name': 'The Twelve Tenma Goddesses',
+    'npc.boss.tenmaStorm': 'The Twelve Tenma Goddesses',
 
     // Quests
     'quest.ch2.envoy.title': 'Envoys of the Tibetan King',
@@ -278,5 +284,7 @@ export const CH2_STRINGS = {
     'codex.latse.body': '[History] A latse (Tibetan: La-btsas, "sanctuary of the pass") is a ritual stone cairn erected atop high mountain passes and sacred peaks throughout Tibet and the Himalayas. Built from stacked white quartz and slate stones and crowned with Symbolic wooden arrows, spears, juniper boughs, and dense arrays of five-colored prayer flags, the latse originated in pre-Buddhist veneration of territorial mountain deities (yullha / zhidak). Following the Buddhist conversion of Tibet’s landscape guardians, crossing a pass became a sacred pilgrimage act: travelers circumambulate the latse, add a stone to the cairn, toss paper windhorses, and cry "Lha gyal lo!" ("Victory to the Gods!").',
   },
 };
+
+i18n.register(CH2_STRINGS);
 
 export default CH2_STRINGS;

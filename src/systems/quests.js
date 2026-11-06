@@ -783,7 +783,8 @@ export function createQuests(ctx) {
   function handleCustomEventStep(eventName, payload) {
     forEachActiveStepOfType('event', (qId, _entry, step) => {
       if ((step.name || step.event) === eventName && matchEventPayload(payload, step.match)) {
-        advanceStepProgress(qId, 1);
+        const inc = Math.max(1, Number(payload?.increment || payload?.count || 1));
+        advanceStepProgress(qId, inc);
       }
     });
   }
@@ -901,9 +902,22 @@ export function createQuests(ctx) {
 
     // 3. If skipping to ch3+, complete Chapter 2
     if (targetIdx >= 2) {
-      ['ch2.done', 'ch3.unlocked', 'skill.vajraBell', 'protector.tenma'].forEach((f) => {
+      ['ch2.envoy', 'ch2.tenma', 'ch2.storm', 'ch2.tibet'].forEach(markQuestDoneSilent);
+      [
+        'ch2.introSeen',
+        'ch2.envoy.done',
+        'ch2.tenma.done',
+        'ch2.storm.done',
+        'ch2.done',
+        'ch3.unlocked',
+        'skill.vajraBell',
+        'protector.tenma',
+      ].forEach((f) => {
         questData.flags[f] = true;
       });
+      ['trisongDetsen', 'shantarakshita', 'mangyul', 'twelveTenma', 'windhorse', 'latse'].forEach(
+        (cId) => ctx.codex?.unlock?.(cId)
+      );
       ctx.skills?.unlock?.('vajraBell');
       ctx.protectors?.unlock?.('tenma');
       ctx.allies?.unlock?.('tenma');
@@ -912,9 +926,27 @@ export function createQuests(ctx) {
 
     // 4. If skipping to ch4+, complete Chapter 3
     if (targetIdx >= 3) {
-      ['ch3.done', 'ch4.unlocked', 'skill.lotusShield', 'protector.whiteYak'].forEach((f) => {
+      ['ch3.valley', 'ch3.sheldrak', 'ch3.yaks', 'ch3.shampo'].forEach(markQuestDoneSilent);
+      [
+        'ch3.introSeen',
+        'ch3.valley.done',
+        'ch3.sheldrak.done',
+        'ch3.yaks.done',
+        'ch3.done',
+        'ch4.unlocked',
+        'skill.lotusShield',
+        'protector.whiteYak',
+      ].forEach((f) => {
         questData.flags[f] = true;
       });
+      [
+        'yarlungValley',
+        'yumbulagang',
+        'sheldrak',
+        'yarlhaShampo',
+        'nyen',
+        'eightClasses',
+      ].forEach((cId) => ctx.codex?.unlock?.(cId));
       ctx.skills?.unlock?.('lotusShield');
       ctx.protectors?.unlock?.('whiteYak');
       ctx.allies?.unlock?.('whiteYak');
@@ -955,7 +987,7 @@ export function createQuests(ctx) {
     // Start first quest of target chapter if registered
     const firstQuestMap = {
       ch1: 'ch1.drought',
-      ch2: 'ch2.pass',
+      ch2: 'ch2.envoy',
       ch3: 'ch3.valley',
       ch4: 'ch4.foundation',
       ch5: 'ch5.retreat',
@@ -1214,6 +1246,8 @@ export function createQuests(ctx) {
     getFlag: hasFlag,
     isActive,
     isDone,
+    isCompleted: isDone,
+    isComplete: isDone,
     isAtStep,
     toggleTrack,
     getNpcMarker,

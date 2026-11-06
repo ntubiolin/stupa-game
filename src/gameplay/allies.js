@@ -729,12 +729,21 @@ export function createAllies(ctx) {
     unlockAll,
     summon,
     setActive,
+    equip: setActive,
     getActive,
     hasAny,
     isUnlocked,
     list,
     getActiveSummons,
     clearSummons,
+    getState() {
+      return {
+        active: activeProtectorId,
+        unlocked: [...unlockedSet],
+        activeSummons: getActiveSummons(),
+        speedMult: state.player?.speedMult || 1,
+      };
+    },
   };
 
   ctx.protectors = api;

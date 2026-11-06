@@ -136,7 +136,7 @@ export function createMangyulMap(ctx) {
     y: mangyulHeightFn(ORIGIN_X, 92),
     facing: 0,
   });
-  addRimMountains(zoneGroup, {
+  addRimMountains(ctx, zoneGroup, {
     origin: { x: ORIGIN_X, z: ORIGIN_Z },
     radius: 118,
     count: 28,

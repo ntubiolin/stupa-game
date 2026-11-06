@@ -375,6 +375,7 @@ export function createBosses(ctx) {
   const api = {
     register,
     start,
+    spawn: start,
     setHp,
     subdue,
     reset,
@@ -382,12 +383,14 @@ export function createBosses(ctx) {
     dispelIllusions,
     getBoss,
     getActiveBoss,
+    getActive: getActiveBoss,
     update,
   };
 
   ctx.bosses = api;
   const debugBossesApi = {
     start,
+    spawn: start,
     setHp,
     subdue,
     reset,

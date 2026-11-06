@@ -405,6 +405,10 @@ export const TENMA_STORM_BOSS = {
     return buildTenmaStormModel();
   },
 
+  onStart(boss, ctx, patternRunner, built) {
+    return this.onSpawn(boss, ctx, patternRunner, built);
+  },
+
   onSpawn(boss, _ctx, _patternRunner, built) {
     boss.phase2ToastShown = false;
     boss.subdueElapsed = 0;
@@ -517,6 +521,10 @@ export const TENMA_STORM_BOSS = {
     }
   },
 
+  onSubdue(boss, ctx, patternRunner, built) {
+    return this.onSubdued(boss, ctx, patternRunner, built);
+  },
+
   onSubdued(boss, _ctx, _patternRunner, built) {
     boss.subdueElapsed = 0;
     if (!built) return;
@@ -528,10 +536,25 @@ export const TENMA_STORM_BOSS = {
     }
     built.silhouettesGroup.visible = true;
     // Place the boss group at arena center so the 12 silhouettes form a perfect circle around the pass latse
-    boss.pos.x = ARENA_X;
-    boss.pos.z = ARENA_Z;
-    boss.group.position.set(boss.pos.x, boss.pos.y, boss.pos.z);
-    boss.group.rotation.y = 0;
+    if (typeof boss.setPosition === 'function') {
+      boss.setPosition(ARENA_X, ARENA_Z);
+    } else if (boss.pos) {
+      boss.pos.x = ARENA_X;
+      boss.pos.z = ARENA_Z;
+    }
+    if (boss.group) {
+      boss.group.position.set(boss.pos.x, boss.pos.y, boss.pos.z);
+      boss.group.rotation.y = 0;
+    }
+  },
+
+  getExtraState(_boss, _patternRunner, _ctx, built) {
+    return {
+      detachedOrbs: built ? built.orbs.filter((o) => o.detached).length : 0,
+      silhouettesVisible: Boolean(built?.silhouettesGroup?.visible),
+      vortexVisible: Boolean(built?.vortexGroup?.visible),
+      silhouetteCount: built?.silhouettes?.length || 0,
+    };
   },
 
   onUpdate(dt, boss, ctx, patternRunner, built) {
@@ -540,7 +563,7 @@ export const TENMA_STORM_BOSS = {
     const pPos = ctx.state?.player?.position;
 
     // ── Subdued State: 12 Translucent Female Silhouettes Bowing in Sequence ──
-    if (boss.state === 'subdued') {
+    if (boss.state === 'subdued' || (boss.subdued && !boss.active)) {
       boss.subdueElapsed = (boss.subdueElapsed || 0) + dt;
       built.vortexGroup.visible = false;
       built.silhouettesGroup.visible = true;
@@ -690,19 +713,22 @@ export function registerTenmaStormDialogue(ctx) {
     id: 'boss.tenmaStorm.oath',
     nodes: {
       start: {
-        speaker: 'boss.tenmaStorm.name',
+        speaker: 'boss.tenmaStorm',
+        speakerKey: 'boss.tenmaStorm.name',
         look: 'yogini',
         textKey: 'boss.tenmaStorm.oath.n1',
         next: 'n2',
       },
       n2: {
-        speaker: 'boss.tenmaStorm.name',
+        speaker: 'boss.tenmaStorm',
+        speakerKey: 'boss.tenmaStorm.name',
         look: 'yogini',
         textKey: 'boss.tenmaStorm.oath.n2',
         next: 'n3',
       },
       n3: {
-        speaker: 'boss.tenmaStorm.name',
+        speaker: 'boss.tenmaStorm',
+        speakerKey: 'boss.tenmaStorm.name',
         look: 'yogini',
         textKey: 'boss.tenmaStorm.oath.n3',
         choices: [

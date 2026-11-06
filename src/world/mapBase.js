@@ -187,14 +187,21 @@ export const scatterProps = scatterRocks;
 /**
  * Add a distant ring of mountain peaks around `origin`.
  */
-export function addRimMountains(ctx, group, {
-  origin = { x: 0, z: 0 },
-  innerR = 125,
-  outerR = 180,
-  count = 24,
-  heightRange = [38, 75],
-  snowLine = 0.44,
-} = {}) {
+export function addRimMountains(ctxOrGroup, groupOrOpts, maybeOpts = {}) {
+  let group = groupOrOpts;
+  let opts = maybeOpts;
+  if (ctxOrGroup && typeof ctxOrGroup.add === 'function') {
+    group = ctxOrGroup;
+    opts = groupOrOpts || {};
+  }
+  const {
+    origin = { x: 0, z: 0 },
+    innerR = 125,
+    outerR = 180,
+    count = 24,
+    heightRange = [38, 75],
+    snowLine = 0.44,
+  } = opts || {};
   const mountainGeos = [];
   const minH = heightRange[0] ?? 38;
   const maxH = heightRange[1] ?? 75;
