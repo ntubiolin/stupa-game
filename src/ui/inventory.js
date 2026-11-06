@@ -480,6 +480,21 @@ export function createInventoryUi(ctx) {
     return ctx.inventory.get(selectedSource.uid);
   }
 
+  // Keep slot nodes stable on selection so native double-clicks reach the same button.
+  function renderSelection() {
+    for (const cell of equipSlotsEl.children) {
+      cell.classList.toggle('is-selected',
+        selectedSource?.type === 'equipped' && selectedSource.slot === cell.dataset.slot);
+    }
+    const slots = ctx.inventory?.getBagSlots() || [];
+    for (const cell of bagGridEl.children) {
+      const item = slots[Number(cell.dataset.bagIndex)];
+      cell.classList.toggle('is-selected', Boolean(item &&
+        selectedSource?.type === 'bag' && selectedSource.uid === item.uid));
+    }
+    renderTooltip();
+  }
+
   function renderEquipmentSlots() {
     if (!ctx.inventory) return;
     const equipped = ctx.inventory.getEquipped();
@@ -519,7 +534,7 @@ export function createInventoryUi(ctx) {
         } else {
           selectedSource = null;
         }
-        renderAll();
+        renderSelection();
       });
 
       cell.addEventListener('dblclick', (e) => {
@@ -580,7 +595,7 @@ export function createInventoryUi(ctx) {
           e.stopPropagation();
           hideContextMenu();
           selectedSource = { type: 'bag', uid: item.uid, slot: item.slot };
-          renderAll();
+          renderSelection();
         });
 
         cell.addEventListener('dblclick', (e) => {
