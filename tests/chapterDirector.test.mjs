@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createBus } from '../src/core/events.js';
+import { createDebug } from '../src/core/debug.js';
 import { createChapterDirector } from '../src/story/chapterDirector.js';
 import { createStoryDirector } from '../src/story/storyDirector.js';
 import { createSave, SAVE_STORAGE_KEY } from '../src/systems/save.js';
@@ -39,6 +40,7 @@ function harness(t, story = legacy) {
   function load(prepareChapter = async () => true) {
     const ctx = { bus: createBus(), prepareChapter };
     createSave(ctx, { writableSections: ['story'] });
+    createDebug(ctx);
     createStoryDirector(ctx);
     createChapterDirector(ctx);
     const events = [];
@@ -249,4 +251,106 @@ test('a finale checkpoint cannot imply an unmade agent decision', async t => {
   records.finale={checkpointId:'response',completed:false,choices:{}};
   const {load}=harness(t,{...legacy,version:2,journey:{activeChapterId:'finale',chapters:records}});
   const ctx=load();assert.equal(ctx.chapters.getState().activeChapterId,null);assert.equal(ctx.chapters.getState().chapters.finale,undefined);
+});
+
+test('password-gated preview jumps from prologue without committing progress', async t => {
+  const { load, raw } = harness(t, { ...legacy, beat: 'prologue' });
+  const prepared = [];
+  const ctx = load(async (...args) => { prepared.push(args); return true; });
+  const before = raw();
+  ctx.debug.enabled = true;
+  assert.equal(await ctx.chapters.preview('chimphu', 'light'), false);
+  assert.equal(ctx.debug.unlock('wrong password'), false);
+  assert.equal(await ctx.chapters.preview('chimphu', 'light'), false);
+  assert.deepEqual(prepared, []);
+  assert.equal(ctx.debug.unlock('amitabha'), true);
+  assert.equal(await ctx.chapters.preview('missing', 'light'), false);
+  assert.equal(await ctx.chapters.preview('chimphu', 'missing'), false);
+  assert.equal(await ctx.chapters.preview('chimphu', 'light'), true);
+  assert.deepEqual(prepared, [['chimphu', 'light']]);
+  assert.equal(ctx.story.getState().beat, 'prologue');
+  assert.equal(ctx.chapters.getState().testing, true);
+  assert.equal(ctx.chapters.canStart('pharping'), false);
+  assert.deepEqual(ctx.events.at(-1), ['change', {
+    chapterId: 'chimphu', checkpointId: 'light', replaying: false, testing: true,
+  }]);
+  assert.equal(ctx.chapters.signal('light:touch', { checkpointId: 'light' }), true);
+  assert.equal(ctx.chapters.signal('diary:read', { checkpointId: 'diary' }), true);
+  assert.equal(ctx.chapters.getState().chapters.chimphu.completed, true);
+  assert.equal(raw(), before);
+  assert.equal(ctx.chapters.exit(), true);
+  assert.deepEqual(ctx.events.at(-1), ['exit', { chapterId: 'chimphu', testing: true }]);
+  assert.equal(ctx.chapters.getState().testing, undefined);
+  assert.deepEqual(ctx.story.getJourney(), { activeChapterId: null, chapters: {} });
+  assert.equal(raw(), before);
+});
+
+test('finale preview requires explicit prior choices and restores the canonical active chapter', async t => {
+  const record = { checkpointId: 'spring2', completed: false, choices: {}, flags: {} };
+  const { load, raw } = harness(t, { ...legacy, version: 2, journey: {
+    activeChapterId: 'pharping', chapters: { pharping: record },
+  } });
+  const ctx = load();
+  const before = raw();
+  ctx.debug.unlock('amitabha');
+  assert.equal(await ctx.chapters.resume(), true);
+  assert.equal(await ctx.chapters.preview('finale', 'response'), false);
+  assert.equal(await ctx.chapters.preview('finale', 'custody', { choice: 'bad' }), false);
+  assert.equal(await ctx.chapters.preview('finale', 'decision', { choice: 'end' }), false);
+  assert.equal(await ctx.chapters.preview('finale', 'response', { choice: 'retain' }), true);
+  assert.deepEqual(ctx.chapters.getChoices('finale'), { decision: 'retain' });
+  assert.equal(await ctx.chapters.preview('finale', 'lamp', { choice: 'end' }), true);
+  assert.deepEqual(ctx.chapters.getChoices('finale'), { decision: 'end' });
+  assert.equal(await ctx.chapters.preview('finale', 'decision'), true);
+  assert.deepEqual(ctx.chapters.getChoices('finale'), {});
+  assert.equal(ctx.chapters.signal('proxy:decide', { checkpointId: 'decision', choice: 'retain' }), true);
+  assert.deepEqual(ctx.chapters.getChoices('finale'), { decision: 'retain' });
+  assert.equal(ctx.chapters.exit(), true);
+  assert.deepEqual(ctx.story.getJourney(), { activeChapterId: 'pharping', chapters: { pharping: record } });
+  assert.deepEqual(ctx.chapters.getChoices('finale'), {});
+  assert.equal(await ctx.chapters.resume(), true);
+  assert.deepEqual(ctx.events.at(-1), ['change', {
+    chapterId: 'pharping', checkpointId: 'spring2', replaying: false,
+  }]);
+  assert.equal(raw(), before);
+});
+
+test('preview supersedes pending work and rejected or cancelled loads keep canonical state', async t => {
+  const { load, raw } = harness(t);
+  const pending = [];
+  const ctx = load((...args) => new Promise((resolve, reject) => pending.push({ args, resolve, reject })));
+  ctx.debug.unlock('amitabha');
+  const before = raw();
+
+  const canonical = ctx.chapters.start('pharping');
+  const preview = ctx.chapters.preview('mangyul', 'clearing');
+  pending[0].resolve(true);
+  assert.equal(await canonical, false);
+  pending[1].resolve(true);
+  assert.equal(await preview, true);
+
+  const rejected = ctx.chapters.preview('yarlung', 'release');
+  pending[2].reject(new Error('scene failed'));
+  assert.equal(await rejected, false);
+  assert.equal(ctx.chapters.getState().activeChapterId, 'mangyul');
+
+  const superseded = ctx.chapters.preview('samye', 'night');
+  const latest = ctx.chapters.preview('yarlung', 'calm');
+  pending[4].resolve(true);
+  assert.equal(await latest, true);
+  pending[3].resolve(true);
+  assert.equal(await superseded, false);
+  assert.equal(ctx.chapters.getState().activeChapterId, 'yarlung');
+
+  const cancelled = ctx.chapters.preview('chimphu', 'light');
+  assert.equal(ctx.chapters.exit(), true);
+  pending[5].resolve(true);
+  assert.equal(await cancelled, false);
+  assert.equal(ctx.chapters.getState().activeChapterId, null);
+
+  const disposed = ctx.chapters.preview('chimphu', 'light');
+  ctx.chapters.dispose();
+  pending[6].resolve(true);
+  assert.equal(await disposed, false);
+  assert.equal(raw(), before);
 });
