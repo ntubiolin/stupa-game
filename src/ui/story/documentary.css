@@ -1,0 +1,110 @@
+.story-documentary {
+  box-sizing: border-box;
+  width: min(42rem, calc(100% - 1.5rem));
+  max-height: calc(100dvh - 1.5rem);
+  padding: clamp(1rem, 3vw, 1.6rem);
+  overflow: auto;
+  border: 1px solid #655e50;
+  border-radius: .75rem;
+  background: #181817;
+  color: #f3eee4;
+  font: inherit;
+  color-scheme: dark;
+}
+
+.story-documentary::backdrop {
+  background: rgb(13 12 11 / 82%);
+}
+
+.story-documentary h2 {
+  margin: 0 0 .75rem;
+  font-size: clamp(1.3rem, 3vw, 1.85rem);
+}
+
+.story-documentary-still {
+  position: relative;
+  display: grid;
+  min-height: 6rem;
+  height: clamp(8rem, 33dvh, 20rem);
+  place-items: center;
+  overflow: hidden;
+  border-radius: .35rem;
+  background: radial-gradient(ellipse at center, #454038, #272421);
+}
+
+.story-documentary-still img {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 54%;
+}
+
+.story-documentary-still[data-frame="work"] img { object-position: center 85%; }
+.story-documentary-still[data-frame="spire"] img { object-position: center 12%; }
+
+.story-documentary-still[data-frame="slate"]::before {
+  content: "";
+  width: 29%;
+  height: 75%;
+  rotate: -8deg;
+  clip-path: polygon(13% 5%, 81% 0, 97% 12%, 96% 88%, 76% 99%, 9% 92%, 0 78%, 3% 18%);
+  background:
+    linear-gradient(130deg, transparent 65%, rgb(26 24 24 / 32%) 66% 68%, transparent 69%),
+    linear-gradient(38deg, transparent 38%, rgb(28 26 25 / 34%) 39% 40%, transparent 41%),
+    radial-gradient(ellipse at 24% 20%, #77756d, #414141 74%, #302d2b);
+}
+
+.story-documentary-fallback {
+  margin: .75rem;
+  text-align: center;
+}
+
+.story-documentary-provenance,
+.story-documentary-progress {
+  margin: .4rem 0;
+  color: #d5cabb;
+  font-size: .875rem;
+}
+
+.story-documentary-captions {
+  margin: .8rem 0;
+  padding: .7rem .9rem;
+  border-inline-start: 2px solid #c29758;
+  background: #22211f;
+}
+
+.story-documentary-source {
+  margin: 0 0 .2rem;
+  color: #e3bd83;
+  font-size: .9rem;
+}
+
+.story-documentary-caption {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.story-documentary-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin-top: .75rem;
+}
+
+.story-documentary-controls button {
+  min-height: 44px;
+  padding: .5rem .85rem;
+  border: 1px solid #817563;
+  border-radius: .4rem;
+  background: #332f28;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.story-documentary-controls button:focus-visible {
+  outline: 2px solid #ffd383;
+  outline-offset: 2px;
+}
