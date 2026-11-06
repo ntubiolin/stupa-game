@@ -39,7 +39,11 @@ acceptance; the committed art evidence comes from full-resolution local runs.
 Movement checks hold real input until the pose changes, with a 30-second timeout, rather
 than assuming a GPU-less runner can render enough frames in 350 milliseconds.
 Browser actions are bounded and failures include page text and screenshots;
-the full CI job has a ten-minute limit.
+CI runs desktop, mobile, recovery/adventure, and art suites in parallel, each with
+a twenty-minute limit. The final `validate` job requires the build and every
+browser matrix job to succeed; no scenario or assertion is omitted. Locally,
+`npm run test:browser` still runs the whole suite, or set `STORY_SUITE` to one of
+`desktop`, `mobile`, `recovery`, `art` to reproduce a CI shard.
 
 ## Verified
 
@@ -132,3 +136,8 @@ exchanges, explore the plaza, and watch the 42-second restoration sequence.
 - The three review PRs target the fixed `codex/80-feedback-base`; #80 remains the complete integration candidate.
 - Asset production requests: [#84 character references and stills](https://github.com/ntubiolin/stupa-game/issues/84), [#85 Google Flow storyboard](https://github.com/ntubiolin/stupa-game/issues/85). These are requests, not delivered new media; the demo retains its existing fallback assets.
 - Earlier cloud software-WebGL runs exceeded the ten-minute budget. Run [42212536194](https://github.com/ntubiolin/stupa-game/actions/runs/42212536194) reached desktop completion but not the entire suite. They are not passes. Low quality now also disables phone/card backdrop blur; computed browser styles verify Low removes and High restores blur. Check #80 for the latest exact-head remote status.
+
+The four CI shards are independently runnable: desktop = one full journey,
+mobile = one full journey, recovery = twelve saved-state/fallback/adventure
+scenarios, and art = all twelve lighting/quality/preset combinations. Together
+they retain the fourteen gameplay scenarios and the full A/B matrix.

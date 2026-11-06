@@ -5,9 +5,11 @@ import { chromium } from 'playwright';
 const base = process.env.STORY_BASE_URL || 'http://127.0.0.1:4173';
 const output = process.env.STORY_ARTIFACTS || 'artifacts/story';
 const ciDevice = process.env.CI ? { deviceScaleFactor: .5 } : {};
+const suite = process.env.STORY_SUITE || 'all';
+assert(['all', 'desktop', 'mobile', 'recovery', 'art'].includes(suite), 'Unknown STORY_SUITE');
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : {}), args: ['--enable-unsafe-swiftshader'] });
-const report = { startedAt: new Date().toISOString(), browser: browser.version(), renderProfile: process.env.CI ? 'Software CI: low journey quality, 0.5 render DPR; CSS viewport unchanged. Not art/performance acceptance.' : 'Native quality/DPR: art and layout acceptance', scenarios: [], errors: [], metrics: [] };
+const report = { startedAt: new Date().toISOString(), browser: browser.version(), suite, renderProfile: process.env.CI ? 'Software CI: low journey quality, 0.5 render DPR; CSS viewport unchanged. Not art/performance acceptance.' : 'Native quality/DPR: art and layout acceptance', scenarios: [], errors: [], metrics: [] };
 const seedSections = { vitals: { level: 12, exp: 77, hp: 150, mp: 60 }, quests: { active: {}, done: ['prologue.kora'], flags: { 'sentinel': true } }, inventory: { bag: [], equipped: {}, turquoise: 321 }, appearance: { displayName: 'Save sentinel' }, coop: { sentinel: 'preserve' }, merit: { points: 987 }, settings: { lang: 'zh', muted: true }, unknownFutureSection: { keep: [1, 2, 3] } };
 const shot = (page, name) => {
   console.log(`Capturing ${name}`);
@@ -36,6 +38,18 @@ async function ready(page) {
     __stupa.storyArt.setQuality('low');
   });
 }
+async function artMatrix(page) {
+  // Same pose, all 3 lighting × 2 quality × 2 art combinations.
+  await page.evaluate(() => __stupa.storyCamera.setPose({ x: 0, y: 1.68, z: 31, yaw: 0, pitch: .34, fov: 55 }));
+  for (const lighting of ['dawn', 'day', 'dusk']) for (const quality of ['high', 'low']) for (const preset of ['legacy', 'cinematic']) {
+    await page.evaluate(({ lighting, quality, preset }) => { __stupa.storyArt.setLighting(lighting); __stupa.storyArt.setQuality(quality); __stupa.storyArt.setPreset(preset); __stupa.storyRuntime.resetMetrics(); }, { lighting, quality, preset });
+    await page.waitForTimeout(1200);
+    await shot(page, `art-${lighting}-${quality}-${preset}`);
+    const metric = await page.evaluate(() => __stupa.storyRuntime.getMetrics());
+    assert.equal(metric.pointLights, 0); report.metrics.push(metric);
+  }
+}
+
 async function fullJourney(name, mobile, lang) {
   const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 }, deviceScaleFactor: mobile ? 2 : 1, ...ciDevice, isMobile: mobile, hasTouch: mobile, reducedMotion: 'reduce', ...(!process.env.CI && { recordVideo: { dir: `${output}/video`, size: mobile ? { width: 390, height: 844 } : { width: 1280, height: 800 } } }) });
   await fixture(context, null, lang);
@@ -135,60 +149,62 @@ async function fullJourney(name, mobile, lang) {
   await click(page.locator('[data-action="phone"]'));
   assert.equal(await page.locator('.story-phone__message--outgoing').count(), 7, `${name} retains archive after final reload`);
   await click(page.locator('.story-phone__close'));
-  if (!mobile) {
-    // Same pose, all 3 lighting × 2 quality × 2 art combinations.
-    await page.evaluate(() => __stupa.storyCamera.setPose({ x: 0, y: 1.68, z: 31, yaw: 0, pitch: .34, fov: 55 }));
-    for (const lighting of ['dawn', 'day', 'dusk']) for (const quality of ['high', 'low']) for (const preset of ['legacy', 'cinematic']) {
-      await page.evaluate(({ lighting, quality, preset }) => { __stupa.storyArt.setLighting(lighting); __stupa.storyArt.setQuality(quality); __stupa.storyArt.setPreset(preset); __stupa.storyRuntime.resetMetrics(); }, { lighting, quality, preset });
-      await page.waitForTimeout(1200);
-      await shot(page, `art-${lighting}-${quality}-${preset}`);
-      const metric = await page.evaluate(() => __stupa.storyRuntime.getMetrics());
-      assert.equal(metric.pointLights, 0); report.metrics.push(metric);
-    }
-  }
-  report.scenarios.push({ name, result: 'PASS', mode: 'complete user-facing flow, assisted navigation, no debug beat progression', language: lang, gameElapsedSeconds: final.sections.story.elapsedSeconds, automatedWallSeconds: (Date.now() - wallStart) / 1000, pacingNote: 'Fast automated path with assist and skip; not a 15-minute human reading test' });
+  if (!mobile && suite === 'all') await artMatrix(page);
+  report.scenarios.push({ name, result: 'PASS', mode: 'complete user-facing flow, assisted navigation, no debug beat progression', language: lang, gameElapsedSeconds: final.sections.story.elapsedSeconds, automatedWallSeconds: (Date.now() - wallStart) / 1000, pacingNote: 'Fast automated path with navigation/photo assistance and manual cue advance; not a 15-minute human reading test' });
   await context.close();
 }
 
 try {
-  await fullJourney('desktop', false, 'zh');
-  await fullJourney('mobile', true, 'en');
-  // Resume every checkpoint with genuine saved data, never a debug transition.
-  for (const beat of ['prologue', 'arrival', 'photography', 'restoration', 'losang', 'map', 'vision', 'return', 'complete']) {
-    const context = await browser.newContext(ciDevice); await fixture(context, beat);
-    const page = await context.newPage(); monitor(page, `resume-${beat}`); await ready(page); await waitBeat(page, beat);
-    await page.waitForFunction(() => document.querySelector('dialog[open]') || !document.querySelector('.story-modal').hidden || !document.querySelector('[data-action="interact"]').hidden);
-    report.scenarios.push({ name: `resume-${beat}`, result: 'PASS' }); await context.close();
+  if (suite === 'all' || suite === 'desktop') await fullJourney('desktop', false, 'zh');
+  if (suite === 'all' || suite === 'mobile') await fullJourney('mobile', true, 'en');
+  if (suite === 'art') {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...ciDevice, reducedMotion: 'reduce' });
+    await fixture(context, 'complete');
+    const page = await context.newPage(); monitor(page, 'art-matrix');
+    await ready(page); await waitBeat(page, 'complete');
+    await page.locator('[data-card="continue"]').click();
+    await artMatrix(page);
+    report.scenarios.push({ name: 'art-matrix', result: 'PASS', combinations: 12 });
+    await context.close();
   }
-  const fallback = await browser.newContext(ciDevice); await fixture(fallback, 'restoration');
-  await fallback.route('**/story/restoration-memory.jpg', route => route.abort());
-  const fp = await fallback.newPage(); monitor(fp, 'media-fallback'); await ready(fp);
-  await fp.locator('.story-documentary-fallback').waitFor({ state: 'visible' });
-  await shot(fp, 'missing-media-fallback');
-  await fp.locator('.story-documentary-controls [data-action="skip"]').click(); await waitBeat(fp, 'losang');
-  report.scenarios.push({ name: 'missing-media-fallback', result: 'PASS' }); await fallback.close();
-  const adventure = await browser.newContext(ciDevice); const ap = await adventure.newPage(); monitor(ap, 'adventure');
-  await ap.goto(`${base}/?mode=adventure&debug=1`);
-  await ap.waitForFunction(() => window.__stupa?.quests && window.__stupa?.save);
-  assert.equal(await ap.evaluate(() => Boolean(__stupa.story)), false);
-  await ap.locator('#btn-begin').click();
-  await ap.waitForFunction(() => __stupa.state.mode === 'play');
-  const adventureChecks = await ap.evaluate(async () => {
-    __stupa.inventory.give('magic');
-    const bag = __stupa.inventory.getBag();
-    const item = bag[0];
-    if (item) __stupa.inventory.equip(item.uid);
-    const equipped = Object.values(__stupa.inventory.getEquipped()).filter(Boolean).length;
-    const cast = __stupa.skills.cast('humBolt');
-    await __stupa.zones.teleport('pharping');
-    const mapLoaded = __stupa.state.zone === 'pharping';
-    await __stupa.zones.teleport('stupa');
-    return { item: Boolean(item), equipped, cast, mapLoaded, mapCount: __stupa.zones.list().length, coopAvailable: Boolean(__stupa.coop) };
-  });
-  assert.equal(adventureChecks.item, true); assert(adventureChecks.equipped > 0); assert.equal(adventureChecks.mapLoaded, true); assert(adventureChecks.mapCount >= 9); assert.equal(adventureChecks.coopAvailable, true);
-  report.scenarios.push({ name: 'adventure-equipment-skills-historical-maps', result: 'PASS', checks: adventureChecks });
-  await shot(ap, 'adventure-preserved');
-  report.scenarios.push({ name: 'adventure-bootstrap', result: 'PASS' }); await adventure.close();
+  if (suite === 'all' || suite === 'recovery') {
+    // Resume every checkpoint with genuine saved data, never a debug transition.
+    for (const beat of ['prologue', 'arrival', 'photography', 'restoration', 'losang', 'map', 'vision', 'return', 'complete']) {
+      const context = await browser.newContext(ciDevice); await fixture(context, beat);
+      const page = await context.newPage(); monitor(page, `resume-${beat}`); await ready(page); await waitBeat(page, beat);
+      await page.waitForFunction(() => document.querySelector('dialog[open]') || !document.querySelector('.story-modal').hidden || !document.querySelector('[data-action="interact"]').hidden);
+      report.scenarios.push({ name: `resume-${beat}`, result: 'PASS' }); await context.close();
+    }
+    const fallback = await browser.newContext(ciDevice); await fixture(fallback, 'restoration');
+    await fallback.route('**/story/restoration-memory.jpg', route => route.abort());
+    const fp = await fallback.newPage(); monitor(fp, 'media-fallback'); await ready(fp);
+    await fp.locator('.story-documentary-fallback').waitFor({ state: 'visible' });
+    await shot(fp, 'missing-media-fallback');
+    await fp.locator('.story-documentary-controls [data-action="skip"]').click(); await waitBeat(fp, 'losang');
+    report.scenarios.push({ name: 'missing-media-fallback', result: 'PASS' }); await fallback.close();
+    const adventure = await browser.newContext(ciDevice); const ap = await adventure.newPage(); monitor(ap, 'adventure');
+    await ap.goto(`${base}/?mode=adventure&debug=1`);
+    await ap.waitForFunction(() => window.__stupa?.quests && window.__stupa?.save);
+    assert.equal(await ap.evaluate(() => Boolean(__stupa.story)), false);
+    await ap.locator('#btn-begin').click();
+    await ap.waitForFunction(() => __stupa.state.mode === 'play');
+    const adventureChecks = await ap.evaluate(async () => {
+      __stupa.inventory.give('magic');
+      const bag = __stupa.inventory.getBag();
+      const item = bag[0];
+      if (item) __stupa.inventory.equip(item.uid);
+      const equipped = Object.values(__stupa.inventory.getEquipped()).filter(Boolean).length;
+      const cast = __stupa.skills.cast('humBolt');
+      await __stupa.zones.teleport('pharping');
+      const mapLoaded = __stupa.state.zone === 'pharping';
+      await __stupa.zones.teleport('stupa');
+      return { item: Boolean(item), equipped, cast, mapLoaded, mapCount: __stupa.zones.list().length, coopAvailable: Boolean(__stupa.coop) };
+    });
+    assert.equal(adventureChecks.item, true); assert(adventureChecks.equipped > 0); assert.equal(adventureChecks.mapLoaded, true); assert(adventureChecks.mapCount >= 9); assert.equal(adventureChecks.coopAvailable, true);
+    report.scenarios.push({ name: 'adventure-equipment-skills-historical-maps', result: 'PASS', checks: adventureChecks });
+    await shot(ap, 'adventure-preserved');
+    report.scenarios.push({ name: 'adventure-bootstrap', result: 'PASS' }); await adventure.close();
+  }
   assert.deepEqual(report.errors, [], 'No uncaught browser errors');
   report.result = 'PASS';
 } catch (error) {

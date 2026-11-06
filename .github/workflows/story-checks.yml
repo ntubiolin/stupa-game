@@ -3,7 +3,7 @@ on:
   pull_request:
   workflow_dispatch:
 jobs:
-  validate:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -16,13 +16,47 @@ jobs:
       - run: npm run build
       - run: npm run check:i18n
       - run: npm test
+      - uses: actions/upload-artifact@v4
+        with:
+          name: story-build
+          path: dist
+  browser:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [desktop, mobile, recovery, art]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: story-build
+          path: dist
       - run: google-chrome --version
       - run: npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/vite.log 2>&1 &
       - run: npm run test:browser
         env:
           BROWSER_CHANNEL: chrome
+          STORY_SUITE: ${{ matrix.suite }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: story-browser-evidence
+          name: story-browser-evidence-${{ matrix.suite }}
           path: artifacts/story
+  validate:
+    if: ${{ always() }}
+    needs: [build, browser]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require build and every browser suite
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+          BROWSER_RESULT: ${{ needs.browser.result }}
+        run: test "$BUILD_RESULT" = success && test "$BROWSER_RESULT" = success
