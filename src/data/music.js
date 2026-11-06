@@ -152,7 +152,14 @@ export const MUSIC_TRACKS = {
         if (a.loop % 2 === 0) a.line(MOTIFS.vow, 2, 'flute', fv, { tr, legato: true });
         else a.line(MOTIFS.vow, 2, 'pluck', 0.45, { tr: 12 });
       }
-      if (B >= 6 && B <= 8) a.line(MOTIFS.vajraGuru, 6, 'flute', fv, { tr, legato: true, glideTime: 0.06 });
+      if (B >= 6 && B <= 8) {
+        a.line(MOTIFS.vajraGuru, 6, 'flute', fv * 0.65, { tr, legato: true, glideTime: 0.06 });
+        a.line(MOTIFS.vajraGuru, 6, 'mantraVoice', night ? 0.58 : 0.52, {
+          tr: night ? -12 : 0,
+          voice: night ? 'umdze' : 'choir',
+          syllables: VAJRA_GURU_SYLLABLES,
+        });
+      }
       if (B >= 10 && B <= 13) a.line(STUPA_ANSWER, 10, 'flute', fv * 0.9, { tr, legato: true, glideTime: 0.06 });
       if (!night && B >= 8) {
         dranyenLilt(a, B % 2 === 0 ? [n('D3'), n('A3'), n('D4'), n('F#4')] : [n('E3'), n('B3'), n('E4'), n('A3')], 0.32);
@@ -402,8 +409,11 @@ export const MUSIC_TRACKS = {
       if (B === 2 || B === 10) a.chant(0, n('D2'), 6, 0.36, 'om');
       if (B >= 2 && B <= 4) a.line(MOTIFS.vow, 2, 'flute', 0.66, { tr: 12, legato: true });
       if (B >= 6 && B <= 8) {
-        a.line(MOTIFS.vajraGuru, 6, 'gyaling', 0.55, { legato: true });
-        a.line(MOTIFS.vajraGuru, 6, 'flute', 0.6, { tr: 12, legato: true, glideTime: 0.06 });
+        a.line(MOTIFS.vajraGuru, 6, 'gyaling', 0.42, { legato: true });
+        a.line(MOTIFS.vajraGuru, 6, 'mantraVoice', 0.64, {
+          voice: 'choir',
+          syllables: VAJRA_GURU_SYLLABLES,
+        });
       }
       if (B >= 10 && B <= 13) {
         a.line(STUPA_ANSWER, 10, 'flute', 0.6, { tr: 12, legato: true, glideTime: 0.06 });
@@ -440,7 +450,13 @@ export const MUSIC_TRACKS = {
       }
       if (B >= 2 && B <= 5) a.line(TSOGYAL_A, 2, 'flute', 0.66, { legato: true, glideTime: 0.07, breath: 1.2 });
       if (B >= 6 && B <= 9) a.line(TSOGYAL_B, 6, 'flute', 0.64, { legato: true, glideTime: 0.07, breath: 1.2 });
-      if (B >= 10 && B <= 12) a.line(MOTIFS.vajraGuru, 10, 'flute', 0.66, { tr: 7, legato: true, glideTime: 0.06 });
+      if (B >= 10 && B <= 12) {
+        a.line(MOTIFS.vajraGuru, 10, 'mantraVoice', 0.62, {
+          tr: 7,
+          voice: 'dakini',
+          syllables: VAJRA_GURU_SYLLABLES,
+        });
+      }
       if (B === 14 || B === 15) a.chant(0, n('A2'), 6, 0.34, 'om');
     },
   },
@@ -532,31 +548,28 @@ export const MUSIC_TRACKS = {
           0.28
         );
       }
-      // Bars 0–3: Umdze chant + unison choir + gentle bamboo flute
+      // Bars 0–3: Umdze chant + unison choir (pure vocals, no flute masking)
       if (B <= 3) {
-        a.line(VG_SAMYE_A, 0, 'mantraVoice', 0.56, { tr: -12, voice: 'umdze', syllables: syl, legato: true });
-        a.line(VG_SAMYE_A, 0, 'mantraVoice', 0.52, { voice: 'choir', syllables: syl, legato: true });
-        a.line(VG_SAMYE_A, 0, 'flute', 0.48, { tr: 12, legato: true, glideTime: 0.06 });
+        a.line(VG_SAMYE_A, 0, 'mantraVoice', 0.72, { tr: -12, voice: 'umdze', syllables: syl });
+        a.line(VG_SAMYE_A, 0, 'mantraVoice', 0.68, { voice: 'choir', syllables: syl });
       }
-      // Bars 4–7: Full monastic assembly + flute soaring to D5
+      // Bars 4–7: Full monastic assembly + Dakini soaring to D5
       if (B >= 4 && B <= 7) {
-        a.line(VG_SAMYE_B, 4, 'mantraVoice', 0.62, { tr: -12, voice: 'choir', syllables: syl, legato: true });
-        a.line(VG_SAMYE_B, 4, 'mantraVoice', 0.5, { voice: 'dakini', syllables: syl, legato: true });
-        a.line(VG_SAMYE_B, 4, 'flute', 0.56, { legato: true, glideTime: 0.06 });
+        a.line(VG_SAMYE_B, 4, 'mantraVoice', 0.72, { tr: -12, voice: 'choir', syllables: syl });
+        a.line(VG_SAMYE_B, 4, 'mantraVoice', 0.66, { voice: 'dakini', syllables: syl });
       }
-      // Bars 8–11: High devotional ascent (Dakini + Choir in octaves)
+      // Bars 8–11: High devotional ascent (Dakini + Choir in octaves, soft low flute fifth)
       if (B >= 8 && B <= 11) {
         if (B === 8) a.dungchen(0, n('D2'), 7, 0.45);
-        a.line(VG_SAMYE_C, 8, 'mantraVoice', 0.6, { voice: 'dakini', syllables: syl, legato: true });
-        a.line(VG_SAMYE_C, 8, 'mantraVoice', 0.54, { tr: -12, voice: 'choir', syllables: syl, legato: true });
-        a.line(VG_SAMYE_C, 8, 'flute', 0.54, { legato: true, glideTime: 0.06 });
+        a.line(VG_SAMYE_C, 8, 'mantraVoice', 0.74, { voice: 'dakini', syllables: syl });
+        a.line(VG_SAMYE_C, 8, 'mantraVoice', 0.66, { tr: -12, voice: 'choir', syllables: syl });
       }
-      // Bars 12–15: Benediction return to Phrase A with Umdze + Choir + Gyaling
+      // Bars 12–15: Benediction return to Phrase A with Umdze + Choir + soft flute echo
       if (B >= 12) {
         if (B === 12) a.cymbal(0, 0.32, 'silnyen');
-        a.line(VG_SAMYE_A, 12, 'mantraVoice', 0.58, { tr: -12, voice: 'umdze', syllables: syl, legato: true });
-        a.line(VG_SAMYE_A, 12, 'mantraVoice', 0.55, { voice: 'choir', syllables: syl, legato: true });
-        a.line(VG_SAMYE_A, 12, 'gyaling', 0.36, { legato: true });
+        a.line(VG_SAMYE_A, 12, 'mantraVoice', 0.72, { tr: -12, voice: 'umdze', syllables: syl });
+        a.line(VG_SAMYE_A, 12, 'mantraVoice', 0.68, { voice: 'choir', syllables: syl });
+        a.line(VG_SAMYE_A, 12, 'flute', 0.32, { tr: 12, legato: true, glideTime: 0.06 });
       }
     },
   },
@@ -570,41 +583,39 @@ export const MUSIC_TRACKS = {
     beatsPerBar: 4,
     loopBars: 16,
     bpm: 66,
-    pads: [{ notes: [n('A2'), n('E3'), n('A3')], cutoff: 720, gain: 0.03, lfoRate: 0.06, sub: 0.25 }],
+    pads: [{ notes: [n('A2'), n('E3'), n('A3')], cutoff: 720, gain: 0.026, lfoRate: 0.06, sub: 0.22 }],
     bar(a) {
       const B = a.bar;
       const syl = VAJRA_GURU_SYLLABLES;
-      tanpuraCycle(a, 57, 0.3);
+      tanpuraCycle(a, 57, 0.24);
       dranyenLilt(
         a,
         B % 2 === 0 ? [n('A2'), n('E3'), n('A3'), n('C#4')] : [n('F#2'), n('C#3'), n('F#3'), n('A3')],
-        0.3
+        0.24
       );
-      if (a.chance(0.7)) a.rainDrop(a.rand(0, 4), 0.32);
-      if (B % 4 === 0) a.bowl(0, n('A3'), 0.44);
-      if (B % 8 === 7) a.tingsha(2, n('E7'), 0.28);
-      if (B >= 4) a.tabla(0, 'dha', 0.34);
-      if (B >= 4) a.tabla(2, 'na', 0.24);
-      // Bars 0–3: Dakini voice solo prayer
+      if (a.chance(0.7)) a.rainDrop(a.rand(0, 4), 0.28);
+      if (B % 4 === 0) a.bowl(0, n('A3'), 0.38);
+      if (B % 8 === 7) a.tingsha(2, n('E7'), 0.24);
+      if (B >= 4) a.tabla(0, 'dha', 0.28);
+      if (B >= 4) a.tabla(2, 'na', 0.2);
+      // Bars 0–3: Dakini voice solo prayer (unmasked)
       if (B <= 3) {
-        a.line(VG_DAKINI_A, 0, 'mantraVoice', 0.64, { voice: 'dakini', syllables: syl, legato: true });
-        a.line(VG_DAKINI_A, 0, 'pluck', 0.3, { tr: -12 });
+        a.line(VG_DAKINI_A, 0, 'mantraVoice', 0.78, { voice: 'dakini', syllables: syl });
       }
-      // Bars 4–7: Dakini + Bamboo flute answer
+      // Bars 4–7: Dakini voice leads Phrase B with soft lower choir harmony
       if (B >= 4 && B <= 7) {
-        a.line(VG_DAKINI_B, 4, 'mantraVoice', 0.64, { voice: 'dakini', syllables: syl, legato: true });
-        a.line(VG_DAKINI_B, 4, 'flute', 0.54, { legato: true, glideTime: 0.07 });
+        a.line(VG_DAKINI_B, 4, 'mantraVoice', 0.78, { voice: 'dakini', syllables: syl });
+        a.line(VG_DAKINI_B, 4, 'mantraVoice', 0.48, { tr: -12, voice: 'choir', syllables: syl });
       }
-      // Bars 8–11: Monastic choir joins a 5th/octave below while flute sings
+      // Bars 8–11: Monastic choir chants Phrase A while flute plays high harmony
       if (B >= 8 && B <= 11) {
-        a.line(VG_DAKINI_A, 8, 'mantraVoice', 0.56, { tr: -12, voice: 'choir', syllables: syl, legato: true });
-        a.line(VG_DAKINI_A, 8, 'flute', 0.62, { legato: true, glideTime: 0.06 });
+        a.line(VG_DAKINI_A, 8, 'mantraVoice', 0.72, { tr: -12, voice: 'choir', syllables: syl });
+        a.line(VG_DAKINI_A, 8, 'flute', 0.38, { legato: true, glideTime: 0.06 });
       }
-      // Bars 12–15: Full duet (Dakini + Choir + Flute)
+      // Bars 12–15: Full vocal duet (Dakini + Choir in octaves)
       if (B >= 12) {
-        a.line(VG_DAKINI_B, 12, 'mantraVoice', 0.62, { voice: 'dakini', syllables: syl, legato: true });
-        a.line(VG_DAKINI_B, 12, 'mantraVoice', 0.52, { tr: -12, voice: 'choir', syllables: syl, legato: true });
-        a.line(VG_DAKINI_B, 12, 'flute', 0.5, { legato: true, glideTime: 0.07 });
+        a.line(VG_DAKINI_B, 12, 'mantraVoice', 0.76, { voice: 'dakini', syllables: syl });
+        a.line(VG_DAKINI_B, 12, 'mantraVoice', 0.64, { tr: -12, voice: 'choir', syllables: syl });
       }
     },
   },
@@ -618,38 +629,39 @@ export const MUSIC_TRACKS = {
     beatsPerBar: 4,
     loopBars: 16,
     bpm: 88,
-    pads: [{ notes: [n('D2'), n('A2')], cutoff: 360, gain: 0.038, lfoRate: 0.12, lfoDepth: 0.42, sub: 0.35 }],
+    pads: [{ notes: [n('D2'), n('A2')], cutoff: 360, gain: 0.032, lfoRate: 0.12, lfoDepth: 0.42, sub: 0.3 }],
     bar(a) {
       const B = a.bar;
       const syl = VAJRA_GURU_SYLLABLES;
       // Ritual drum & damaru pulse
-      for (const [beat, vel] of [[0, 0.72], [1.5, 0.4], [2, 0.55], [3, 0.45]]) a.nga(beat, vel, { pitch: 58 });
-      for (let k = 0; k < 4; k++) a.damaru(k + 0.5, 0.24);
+      for (const [beat, vel] of [[0, 0.58], [1.5, 0.34], [2, 0.46], [3, 0.38]]) a.nga(beat, vel, { pitch: 58 });
+      for (let k = 0; k < 4; k++) a.damaru(k + 0.5, 0.2);
       if (B % 4 === 0) {
-        a.dungchen(0, n('D2'), 7, 0.55);
-        a.cymbal(0, 0.4, 'rolmo');
+        a.dungchen(0, n('D2'), 7, 0.45);
+        a.cymbal(0, 0.34, 'rolmo');
       }
-      if (B % 4 === 2) a.cymbal(0, 0.28, 'silnyen');
+      if (B % 4 === 2) a.cymbal(0, 0.24, 'silnyen');
       // Bars 0–3: Deep Umdze throat chant on Wrathful Phrase A
       if (B <= 3) {
-        a.line(VG_WRATH_A, 0, 'mantraVoice', 0.68, { voice: 'umdze', syllables: syl, legato: true });
+        a.line(VG_WRATH_A, 0, 'mantraVoice', 0.82, { voice: 'umdze', syllables: syl });
       }
       // Bars 4–7: Umdze + Choir on Wrathful Phrase B
       if (B >= 4 && B <= 7) {
-        a.line(VG_WRATH_B, 4, 'mantraVoice', 0.64, { voice: 'umdze', syllables: syl, legato: true });
-        a.line(VG_WRATH_B, 4, 'mantraVoice', 0.56, { voice: 'choir', syllables: syl, legato: true });
+        a.line(VG_WRATH_B, 4, 'mantraVoice', 0.68, { voice: 'umdze', syllables: syl });
+        a.line(VG_WRATH_B, 4, 'mantraVoice', 0.58, { voice: 'choir', syllables: syl });
       }
-      // Bars 8–11: Gyaling shawm + Umdze chant in octaves
+      // Bars 8–11: Umdze + Choir octave chant with Gyaling response
       if (B >= 8 && B <= 11) {
-        a.line(VG_WRATH_A, 8, 'mantraVoice', 0.66, { voice: 'umdze', syllables: syl, legato: true });
-        a.line(VG_WRATH_A, 8, 'gyaling', 0.54, { tr: 12, legato: true });
+        a.line(VG_WRATH_A, 8, 'mantraVoice', 0.68, { voice: 'umdze', syllables: syl });
+        a.line(VG_WRATH_A, 8, 'mantraVoice', 0.58, { tr: 12, voice: 'choir', syllables: syl });
+        a.line(VG_WRATH_A, 8, 'gyaling', 0.3, { tr: 12, legato: true });
       }
-      // Bars 12–15: Full ritual climax (Umdze + Choir + Gyaling + fast Damaru)
+      // Bars 12–15: Full ritual climax (Umdze + Choir + fast Damaru)
       if (B >= 12) {
-        for (let k = 0; k < 4; k++) a.damaru(k, 0.22);
-        a.line(VG_WRATH_B, 12, 'mantraVoice', 0.66, { voice: 'umdze', syllables: syl, legato: true });
-        a.line(VG_WRATH_B, 12, 'mantraVoice', 0.58, { voice: 'choir', syllables: syl, legato: true });
-        a.line(VG_WRATH_B, 12, 'gyaling', 0.52, { tr: 12, legato: true });
+        for (let k = 0; k < 4; k++) a.damaru(k, 0.18);
+        a.line(VG_WRATH_B, 12, 'mantraVoice', 0.68, { voice: 'umdze', syllables: syl });
+        a.line(VG_WRATH_B, 12, 'mantraVoice', 0.6, { voice: 'choir', syllables: syl });
+        a.line(VG_WRATH_B, 12, 'gyaling', 0.3, { tr: 12, legato: true });
       }
     },
   },
@@ -664,35 +676,36 @@ export const MUSIC_TRACKS = {
     loopBars: 16,
     bpm: 48,
     pads: [
-      { notes: [n('G2'), n('D3'), n('B3')], cutoff: 580, gain: 0.032, lfoRate: 0.04, lfoDepth: 0.35, sub: 0.28 },
-      { notes: [n('D6')], type: 'sine', detune: 4, cutoff: 3800, gain: 0.007, lfoDepth: 0.15 },
+      { notes: [n('G2'), n('D3'), n('B3')], cutoff: 580, gain: 0.028, lfoRate: 0.04, lfoDepth: 0.35, sub: 0.24 },
+      { notes: [n('D6')], type: 'sine', detune: 4, cutoff: 3800, gain: 0.006, lfoDepth: 0.15 },
     ],
     bar(a) {
       const B = a.bar;
       const syl = VAJRA_GURU_SYLLABLES;
       const bowls = [n('G3'), n('B3'), n('D4'), n('G4'), n('A4')];
-      a.bowl(0, bowls[B % bowls.length], 0.45);
-      if (B % 2 === 1) a.bowl(2, bowls[(B + 2) % bowls.length], 0.32);
-      scatterChimes(a, [n('G6'), n('A6'), n('B6'), n('D7'), n('E7')], 1, 0.32);
-      if (B % 8 === 0) a.tingsha(0, n('D7'), 0.26);
+      a.bowl(0, bowls[B % bowls.length], 0.38);
+      if (B % 2 === 1) a.bowl(2, bowls[(B + 2) % bowls.length], 0.28);
+      scatterChimes(a, [n('G6'), n('A6'), n('B6'), n('D7'), n('E7')], 1, 0.28);
+      if (B % 8 === 0) a.tingsha(0, n('D7'), 0.24);
       // Bars 0–3: Dakini + soft Umdze sub-octave chanting the contemplative 12 syllables
       if (B <= 3) {
-        a.line(VG_DZOGCHEN, 0, 'mantraVoice', 0.58, { voice: 'dakini', syllables: syl, legato: true });
-        a.line(VG_DZOGCHEN, 0, 'mantraVoice', 0.38, { tr: -24, voice: 'umdze', syllables: syl, legato: true });
+        a.line(VG_DZOGCHEN, 0, 'mantraVoice', 0.74, { voice: 'dakini', syllables: syl });
+        a.line(VG_DZOGCHEN, 0, 'mantraVoice', 0.52, { tr: -12, voice: 'umdze', syllables: syl });
       }
-      // Bars 4–7: Breathy bamboo flute echoes the mantra in the mountain mist
+      // Bars 4–7: Monastic choir chants in warm register with soft flute halo
       if (B >= 4 && B <= 7) {
-        a.line(VG_DZOGCHEN, 4, 'flute', 0.56, { legato: true, glideTime: 0.09, breath: 1.5 });
+        a.line(VG_DZOGCHEN, 4, 'mantraVoice', 0.68, { tr: -12, voice: 'choir', syllables: syl });
+        a.line(VG_DZOGCHEN, 4, 'flute', 0.32, { legato: true, glideTime: 0.09, breath: 1.4 });
       }
-      // Bars 8–11: Monastic choir + Dakini harmony
+      // Bars 8–11: Dakini + Choir harmony
       if (B >= 8 && B <= 11) {
-        a.line(VG_DZOGCHEN, 8, 'mantraVoice', 0.54, { voice: 'dakini', syllables: syl, legato: true });
-        a.line(VG_DZOGCHEN, 8, 'mantraVoice', 0.48, { tr: -12, voice: 'choir', syllables: syl, legato: true });
+        a.line(VG_DZOGCHEN, 8, 'mantraVoice', 0.72, { voice: 'dakini', syllables: syl });
+        a.line(VG_DZOGCHEN, 8, 'mantraVoice', 0.62, { tr: -12, voice: 'choir', syllables: syl });
       }
-      // Bars 12–15: Singing bowls + canonical Vajra Guru motif on flute & choir
+      // Bars 12–15: Canonical Vajra Guru motif sung by Choir & Dakini
       if (B >= 12 && B <= 14) {
-        a.line(MOTIFS.vajraGuru, 12, 'flute', 0.58, { tr: 17, legato: true, glideTime: 0.07 });
-        a.line(MOTIFS.vajraGuru, 12, 'mantraVoice', 0.48, { tr: 5, voice: 'choir', syllables: syl, legato: true });
+        a.line(MOTIFS.vajraGuru, 12, 'mantraVoice', 0.7, { tr: 17, voice: 'dakini', syllables: syl });
+        a.line(MOTIFS.vajraGuru, 12, 'mantraVoice', 0.62, { tr: 5, voice: 'choir', syllables: syl });
       }
     },
   },

@@ -25,8 +25,9 @@ const DEFAULTS = {
   duckLevel: 0.28,
 };
 
-export function createMusicEngine({ ac, destination, noiseBuffer = null, tracks = {}, stingers = {}, config = {} }) {
+export function createMusicEngine({ ac, destination, noiseBuffer = null, tracks = {}, stingers = {}, config = {}, onSyllable = null }) {
   const cfg = { ...DEFAULTS, ...config };
+  let vocalBoost = cfg.vocalBoost ?? 1.0;
   const mtof = (m) => cfg.tuningA4 * 2 ** ((m - 69) / 12);
   const rand = (a, b) => a + Math.random() * (b - a);
 
@@ -503,98 +504,173 @@ export function createMusicEngine({ ac, destination, noiseBuffer = null, tracks 
   }
 
   /**
-   * 12-syllable Vajra Guru Mantra formant table:
+   * 12-syllable Vajra Guru Mantra formant & articulation table:
    * ཨོཾ (om) · ཨཱཿ (ah) · ཧཱུྃ (hum) · བཛྲ (ben-za) · གུ་རུ (gu-ru) · པདྨ (pe-ma) · སིདྡྷི (sid-dhi) · ཧཱུྃ (hum)
+   *
+   * f0 = initial [F1, F2, F3] Hz, f1 = target [F1, F2, F3] Hz
+   * lp0 / lp1 = mouth-aperture lowpass cutoff (closed lips ~650 Hz vs open jaw ~4200 Hz)
    */
   const MANTRA_SYLLABLES = {
-    om:  { f0: [420, 780, 2400], f1: [260, 520, 2150], split: 0.55, attack: 0.14 },
-    ah:  { f0: [730, 1180, 2600], f1: [690, 1140, 2550], split: 0.7, attack: 0.1, breath: 0.04 },
-    hum: { f0: [330, 690, 2300], f1: [255, 530, 2150], split: 0.58, attack: 0.11, onset: 'h' },
-    ben: { f0: [490, 1680, 2500], f1: [290, 1420, 2380], split: 0.65, attack: 0.045, scoop: 1.5 },
-    za:  { f0: [690, 1160, 2560], f1: [680, 1140, 2540], split: 0.7, attack: 0.04, onset: 'z' },
-    gu:  { f0: [330, 720, 2320], f1: [320, 700, 2300], split: 0.7, attack: 0.05, scoop: 1.2 },
-    ru:  { f0: [380, 1120, 1950], f1: [340, 750, 2320], split: 0.22, attack: 0.045 },
-    pe:  { f0: [510, 1740, 2520], f1: [490, 1680, 2500], split: 0.7, attack: 0.035, onset: 'p' },
-    ma:  { f0: [270, 560, 2180], f1: [720, 1180, 2600], split: 0.22, attack: 0.05 },
-    sid: { f0: [310, 2080, 2860], f1: [295, 1960, 2780], split: 0.7, attack: 0.04, onset: 's' },
-    dhi: { f0: [315, 2140, 2900], f1: [310, 2100, 2860], split: 0.7, attack: 0.045, onset: 'h' },
+    om:  { f0: [460, 820, 2420], f1: [260, 520, 2050], lp0: 3200, lp1: 640,  split: 0.52, attack: 0.06 },
+    ah:  { f0: [780, 1240, 2580], f1: [740, 1180, 2540], lp0: 4400, lp1: 3800, split: 0.72, attack: 0.05, breath: 0.06 },
+    hum: { f0: [350, 700, 2320], f1: [250, 520, 2020], lp0: 2800, lp1: 600,  split: 0.52, attack: 0.06, onset: 'h', vot: 0.045 },
+    ben: { f0: [300, 960, 2250], f1: [530, 1740, 2500], f2: [280, 1420, 2300], lp0: 950, lp1: 3600, lp2: 800, split: 0.18, split2: 0.72, attack: 0.035, scoop: 1.5 },
+    za:  { f0: [760, 1260, 2580], f1: [740, 1200, 2540], lp0: 4300, lp1: 3900, split: 0.7,  attack: 0.035, onset: 'z', vot: 0.045 },
+    gu:  { f0: [310, 1080, 2150], f1: [340, 710, 2320], lp0: 1400, lp1: 2800, split: 0.2,  attack: 0.035, onset: 'g', scoop: 1.2 },
+    ru:  { f0: [410, 1180, 1750], f1: [350, 740, 2320], lp0: 1800, lp1: 2900, split: 0.22, attack: 0.035 },
+    pe:  { f0: [540, 1840, 2560], f1: [510, 1760, 2500], lp0: 4100, lp1: 3600, split: 0.7,  attack: 0.025, onset: 'p', vot: 0.035 },
+    ma:  { f0: [260, 540, 2050], f1: [780, 1240, 2600], lp0: 640,  lp1: 4400, split: 0.22, attack: 0.035 },
+    sid: { f0: [290, 2260, 2960], f1: [300, 2080, 2820], lp0: 4400, lp1: 2200, split: 0.72, attack: 0.03,  onset: 's', vot: 0.055 },
+    dhi: { f0: [310, 2240, 2940], f1: [300, 2180, 2880], lp0: 3800, lp1: 3600, split: 0.7,  attack: 0.035, onset: 'h', vot: 0.028 },
   };
 
+  // Cached Rosenberg-style glottal pulse PeriodicWaves for natural human vocal cord timbre
+  const glottalWaves = {};
+  function getGlottalWave(voice) {
+    if (glottalWaves[voice]) return glottalWaves[voice];
+    const N = 48;
+    const real = new Float32Array(N + 1);
+    const imag = new Float32Array(N + 1);
+    // Open quotient shapes brightness: umdze = rich overtones, choir = warm baritone, dakini = clear lyric
+    const rolloff = voice === 'umdze' ? 1.12 : voice === 'dakini' ? 1.32 : 1.22;
+    for (let k = 1; k <= N; k++) {
+      const amp = (1 / k ** rolloff) * (1 + 0.35 * Math.cos(k * 0.45));
+      real[k] = amp * Math.sin(k * 0.7);
+      imag[k] = amp * Math.cos(k * 0.7);
+    }
+    try {
+      glottalWaves[voice] = ac.createPeriodicWave(real, imag, { disableNormalization: false });
+    } catch {
+      glottalWaves[voice] = null;
+    }
+    return glottalWaves[voice];
+  }
+
   /**
-   * 蓮師心咒十二音節梵音合成 — Articulates a mantra syllable ('om'|'ah'|'hum'|'ben'|'za'|'gu'|'ru'|'pe'|'ma'|'sid'|'dhi')
-   * in one of three vocal styles (`o.voice`: 'umdze' | 'choir' | 'dakini').
+   * 蓮師心咒十二音節梵音合成 — Klatt-inspired cascade vocal tract (F1→F2→F3→Singer's Formant→Mouth Aperture)
+   * driven by a Rosenberg glottal pulse wave with consonant pre-onset & nasal closure.
    */
-  function mantraVoice(bus, t, m, dur, vel = 0.65, o = {}) {
+  function mantraVoice(bus, t, m, dur, vel = 0.75, o = {}) {
     const syl = MANTRA_SYLLABLES[o.syllable || 'om'] || MANTRA_SYLLABLES.om;
-    const voice = o.voice || 'choir'; // 'umdze' (deep overtone) | 'choir' (monastic unison) | 'dakini' (female devotional)
+    const voice = o.voice || 'choir'; // 'umdze' | 'choir' | 'dakini'
     const f = mtof(m);
-    const rel = o.release ?? (voice === 'dakini' ? 0.32 : 0.45);
-    const end = t + dur + rel + 0.2;
+    const vot = syl.vot ?? 0;
+    const tVoice = t + Math.min(vot, dur * 0.25);
+    // Leave a slight articulatory separation between syllables so each word is clearly heard
+    const vDur = Math.max(0.08, (dur - (tVoice - t)) * 0.9);
+    const rel = o.release ?? (voice === 'dakini' ? 0.16 : 0.22);
+    const end = tVoice + vDur + rel + 0.15;
+
     const env = gainNode();
-    const peakScale = voice === 'dakini' ? 0.34 : voice === 'umdze' ? 0.48 : 0.42;
-    susEnv(env, t, dur, vel * peakScale, o.attack ?? syl.attack ?? 0.08, rel, 0.86);
+    const peakScale = (voice === 'dakini' ? 0.38 : voice === 'umdze' ? 0.46 : 0.42) * vocalBoost;
+    susEnv(env, tVoice, vDur, vel * peakScale, o.attack ?? syl.attack ?? 0.045, rel, 0.88);
 
-    // Glottal oscillator bank tailored to vocal timbre
-    const src = gainNode(1);
-    const oscSpecs =
+    // Multi-singer glottal source with natural human vibrato (5.2–5.8 Hz)
+    const src = gainNode(0.45);
+    const gWave = getGlottalWave(voice);
+    const detunes =
       voice === 'dakini'
-        ? [[1, 'sawtooth', 0.36], [1.0025, 'triangle', 0.48], [2, 'sine', 0.22]]
+        ? [[1, 0, 0.65], [1, 7, 0.45], [2, -4, 0.18]]
         : voice === 'umdze'
-          ? [[1, 'sawtooth', 0.52], [1.003, 'sawtooth', 0.38], [0.5, 'sawtooth', 0.42], [0.5, 'sine', 0.35]]
-          : [[1, 'sawtooth', 0.42], [0.9965, 'sawtooth', 0.34], [1.0035, 'sawtooth', 0.34], [0.5, 'triangle', 0.3]];
+          ? [[1, 0, 0.62], [1, 6, 0.44], [0.5, -3, 0.55]]
+          : [[1, -8, 0.45], [1, 0, 0.55], [1, 8, 0.45], [0.5, 0, 0.28]];
 
-    // Subtle vocal vibrato
-    const lfo = osc('sine', (voice === 'dakini' ? 5.4 : 4.6) + rand(-0.2, 0.2), t);
+    const lfo = osc('sine', (voice === 'dakini' ? 5.6 : 4.9) + rand(-0.25, 0.25), tVoice);
     const vib = gainNode(0);
-    const vibDelay = Math.min(0.28, dur * 0.5);
-    vib.gain.setValueAtTime(0, t);
-    vib.gain.linearRampToValueAtTime(f * (voice === 'dakini' ? 0.011 : 0.006), t + vibDelay + 0.02);
+    const vibDelay = Math.min(0.18, vDur * 0.4);
+    vib.gain.setValueAtTime(0, tVoice);
+    vib.gain.linearRampToValueAtTime(f * (voice === 'dakini' ? 0.013 : 0.008), tVoice + vibDelay + 0.02);
     lfo.connect(vib);
-    lfo.start(t); lfo.stop(end);
+    lfo.start(tVoice); lfo.stop(end);
 
-    for (const [ratio, type, amp] of oscSpecs) {
-      const o1 = osc(type, f * ratio, t);
-      applyPitch(o1.frequency, t, f * ratio, { ...o, scoop: o.scoop ?? syl.scoop, m });
-      if (ratio === 1 || ratio === 1.0025) vib.connect(o1.frequency);
+    for (const [ratio, detCents, amp] of detunes) {
+      const o1 = osc('sawtooth', f * ratio, tVoice);
+      if (gWave) o1.setPeriodicWave(gWave);
+      o1.detune.value = detCents;
+      // Syllables re-articulate cleanly with a subtle human vocal scoop instead of a wide flute portamento
+      applyPitch(o1.frequency, tVoice, f * ratio, {
+        grace: o.grace,
+        scoop: o.scoop ?? syl.scoop ?? 0.6,
+        scoopTime: 0.055,
+        m,
+      });
+      if (ratio === 1) vib.connect(o1.frequency);
       const g = gainNode(amp);
       o1.connect(g); g.connect(src);
-      o1.start(t); o1.stop(end);
+      o1.start(tVoice); o1.stop(end);
     }
 
-    // Formant filter bank (scaled slightly higher for the female 'dakini' vocal tract)
-    const tractScale = voice === 'dakini' ? 1.13 : 1.0;
-    const qs = voice === 'dakini' ? [5.5, 7.5, 8.5] : [6.5, 8.5, 9.5];
-    const amps = voice === 'dakini' ? [1.0, 0.68, 0.26] : [1.0, 0.58, 0.2];
-    const tSplit = t + dur * (syl.split ?? 0.6);
-    const tGlideEnd = t + dur * Math.min(0.92, (syl.split ?? 0.6) + 0.24);
+    // Cascade vocal tract resonators: F1 → F2 → F3 → Singer's Formant (2950 Hz) → Mouth Lowpass
+    const tractScale = voice === 'dakini' ? 1.15 : voice === 'umdze' ? 0.94 : 1.0;
+    const qs = [4.5, 6.0, 7.0];
+    const dbs = [13, 11, 8];
+    const tSplit = tVoice + vDur * (syl.split ?? 0.6);
+    const tGlideEnd = tVoice + vDur * Math.min(0.92, (syl.split ?? 0.6) + 0.24);
 
+    let chain = src;
     for (let i = 0; i < 3; i++) {
       const fStart = syl.f0[i] * tractScale;
-      const fEnd = syl.f1[i] * tractScale;
-      const bp = biquad('bandpass', fStart, qs[i]);
-      bp.frequency.setValueAtTime(fStart, t);
-      if (Math.abs(fEnd - fStart) > 1) {
-        bp.frequency.setValueAtTime(fStart, tSplit);
-        bp.frequency.linearRampToValueAtTime(fEnd, Math.max(tSplit + 0.02, tGlideEnd));
+      const fMid = syl.f1[i] * tractScale;
+      const pk = biquad('peaking', fStart, qs[i]);
+      pk.gain.value = dbs[i];
+      pk.frequency.setValueAtTime(fStart, tVoice);
+      if (Math.abs(fMid - fStart) > 1) {
+        pk.frequency.setValueAtTime(fStart, tSplit);
+        pk.frequency.linearRampToValueAtTime(fMid, Math.max(tSplit + 0.02, tGlideEnd));
       }
-      const g = gainNode(amps[i]);
-      src.connect(bp); bp.connect(g); g.connect(env);
+      if (syl.f2) {
+        const fEnd = syl.f2[i] * tractScale;
+        const tSplit2 = tVoice + vDur * (syl.split2 ?? 0.75);
+        pk.frequency.setValueAtTime(fMid, Math.max(tGlideEnd + 0.01, tSplit2));
+        pk.frequency.linearRampToValueAtTime(fEnd, Math.max(tSplit2 + 0.02, tVoice + vDur * 0.95));
+      }
+      chain.connect(pk);
+      chain = pk;
     }
 
-    // Consonant / aspirate onset transient ('s', 'z', 'h', 'p')
+    // Singer's formant cluster (~2950 Hz for vocal projection & clarity over instruments)
+    const singerFormant = biquad('peaking', 2950 * tractScale, 3.5);
+    singerFormant.gain.value = voice === 'dakini' ? 8 : 6;
+    chain.connect(singerFormant);
+
+    // Dynamic mouth-aperture lowpass filter (opens on 'a'/'e'/'i', closes into nasal 'm'/'n')
+    const lp0 = syl.lp0 ?? 3600;
+    const lp1 = syl.lp1 ?? 3200;
+    const mouthLp = biquad('lowpass', lp0, 0.9);
+    mouthLp.frequency.setValueAtTime(lp0, tVoice);
+    if (Math.abs(lp1 - lp0) > 10) {
+      mouthLp.frequency.setValueAtTime(lp0, tSplit);
+      mouthLp.frequency.linearRampToValueAtTime(lp1, Math.max(tSplit + 0.02, tGlideEnd));
+    }
+    if (syl.lp2) {
+      const tSplit2 = tVoice + vDur * (syl.split2 ?? 0.75);
+      mouthLp.frequency.setValueAtTime(lp1, Math.max(tGlideEnd + 0.01, tSplit2));
+      mouthLp.frequency.linearRampToValueAtTime(syl.lp2, Math.max(tSplit2 + 0.02, tVoice + vDur * 0.95));
+    }
+    singerFormant.connect(mouthLp);
+    mouthLp.connect(env);
+
+    // Parallel nasal & chest warmth (260 Hz resonance so 'om', 'hum', 'ma', 'ben' ring warmly)
+    const nasalBp = biquad('bandpass', 265 * tractScale, 3.2);
+    const nasalGain = gainNode(0.32);
+    src.connect(nasalBp); nasalBp.connect(nasalGain); nasalGain.connect(env);
+
+    // Consonant / aspirate pre-onset transient ('s', 'z', 'h', 'p', 'g')
     const onset = syl.onset;
     if (onset) {
-      const ns = noiseSrc(t, 0.09);
-      const freq = onset === 's' ? 5200 : onset === 'z' ? 3600 : onset === 'p' ? 900 : 1800;
-      const durOn = onset === 's' ? 0.042 : onset === 'z' ? 0.032 : onset === 'p' ? 0.018 : 0.05;
-      const ampOn = onset === 'p' ? 0.05 : 0.065;
-      const bp = biquad('bandpass', freq, 2.0);
+      const durOn = onset === 's' ? 0.065 : onset === 'z' ? 0.05 : onset === 'p' ? 0.025 : onset === 'g' ? 0.022 : 0.06;
+      const freq = onset === 's' ? 5800 : onset === 'z' ? 4100 : onset === 'p' ? 1100 : onset === 'g' ? 1450 : 1950;
+      const ampOn = onset === 's' ? 0.14 : onset === 'z' ? 0.12 : onset === 'p' ? 0.11 : 0.1;
+      const ns = noiseSrc(t, durOn + 0.03);
+      const bp = biquad('bandpass', freq, onset === 's' || onset === 'z' ? 2.6 : 1.6);
       const ng = gainNode();
       percEnv(ng, t, vel * ampOn, 0.004, durOn);
-      ns.connect(bp); bp.connect(ng); ng.connect(env);
+      ns.connect(bp); bp.connect(ng);
+      route(bus, ng, o.send ?? 0.45);
     }
 
-    route(bus, env, o.send ?? 0.62);
+    route(bus, env, o.send ?? 0.55);
+    onSyllable?.({ syllable: o.syllable || 'om', voice, t: tVoice, dur: vDur, m });
   }
 
   /** 雨滴 Rain drop blip. */
@@ -904,6 +980,7 @@ export function createMusicEngine({ ac, destination, noiseBuffer = null, tracks 
     stinger,
     duck,
     setVolume,
+    setVocalBoost: (v) => { vocalBoost = Math.max(0.2, Math.min(2.5, Number(v) || 1)); },
     dispose,
     tick,
     getCurrent: () => (current ? { id: current.id, vars: { ...current.vars }, root: current.def.root } : null),
