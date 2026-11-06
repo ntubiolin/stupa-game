@@ -14,6 +14,7 @@ const browser = await chromium.launch({
 });
 await mkdir(output, { recursive: true });
 const report = { browser: browser.version(), scenarios: [], errors: [] };
+const mediaTraffic = new Map();
 
 async function openScenario(name, { mobile = false, reduced = false, activeChapter = false, abort } = {}) {
   const context = await browser.newContext({
@@ -59,9 +60,20 @@ async function openScenario(name, { mobile = false, reduced = false, activeChapt
   const page = await context.newPage();
   page.setDefaultTimeout(30000);
   const requested = new Set();
+  const traffic = [];
+  mediaTraffic.set(name, traffic);
+  const started = performance.now();
+  const record = (url, detail) => {
+    const path = new URL(url).pathname;
+    if (path.endsWith('.mp4')) traffic.push({ path, ms: Math.round(performance.now() - started), ...detail });
+  };
+  page.on('response', response => record(response.url(), { status: response.status(),
+    contentType: response.headers()['content-type'] }));
+  page.on('requestfailed', request => record(request.url(), { failure: request.failure()?.errorText }));
   page.on('request', request => {
     const pathname = new URL(request.url()).pathname;
     if (pathname.startsWith(assets)) requested.add(pathname);
+    record(request.url(), { request: true });
   });
   page.on('pageerror', error => report.errors.push({ name, error: error.message }));
   await page.goto(`${base}/?mode=story&debug=1`);
@@ -126,6 +138,9 @@ async function waitBeat(ui, beat) {
 async function playback(mobile) {
   const ui = await openScenario(mobile ? 'mobile' : 'desktop', { mobile });
   const { page, frame, action } = ui;
+  const h264 = await page.evaluate(() => document.createElement('video')
+    .canPlayType('video/mp4; codecs="avc1.64001e"'));
+  assert.ok(h264, 'This browser must support the delivered H.264 stream');
   await waitForFrame(ui, 'video', '/story/video/V1.mp4');
   await ui.click(action('toggle'));
   assert.equal(await ui.dialog.getAttribute('data-paused'), 'true');
@@ -259,6 +274,7 @@ try {
 } catch (error) {
   report.result = 'FAIL';
   report.failure = error.stack;
+  report.mediaTraffic = Object.fromEntries(mediaTraffic);
   const pages = browser.contexts().flatMap(context => context.pages());
   report.failureMediaEvents = await Promise.allSettled(pages.map(page =>
     page.evaluate(() => window.mediaRegressionEvents)));
