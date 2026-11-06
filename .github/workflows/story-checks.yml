@@ -16,9 +16,11 @@ jobs:
       - run: npm run build
       - run: npm run check:i18n
       - run: npm test
-      - run: npx playwright install --with-deps chromium
+      - run: google-chrome --version
       - run: npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/vite.log 2>&1 &
       - run: npm run test:browser
+        env:
+          BROWSER_CHANNEL: chrome
       - uses: actions/upload-artifact@v4
         if: always()
         with:
