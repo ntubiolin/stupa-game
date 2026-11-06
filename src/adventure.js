@@ -71,6 +71,7 @@ import { createCoop } from './systems/coop.js';
 import { createRemotePilgrims } from './gameplay/remotePilgrims.js';
 import { createCoopLobbyUi } from './ui/coopLobby.js';
 import { createAppearanceUi } from './ui/appearance.js';
+import { createModeSwitch } from './ui/modeSwitch.js';
 
 // ---------------------------------------------------------------- renderer
 const container = document.getElementById('app');
@@ -148,6 +149,7 @@ const ctx = {
 ctx.input = createInput(ctx);
 createDebug(ctx);
 ctx.save = createSave(ctx);
+createModeSwitch(ctx, 'adventure');
 i18n.bindSave?.(ctx.save);
 
 // ---------------------------------------------------------------- modules (order = update order)

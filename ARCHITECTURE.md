@@ -405,3 +405,55 @@ chapter/store/map adapter contracts and dependency gates. Existing Demo APIs and
 save schema remain unchanged by this documentation PR; next chapters require
 their own tested implementation PRs. Never import adventure gameplay serializers
 into narrative or treat shared world factories as side-effect-free.
+
+## Narrative chapters and mode switching (#91–#98)
+
+The chapter preview retains the independent Adventure runtime. `createChapterDirector(ctx)`
+assigns `ctx.chapters` after `ctx.story`; `getState`, `canStart`, asynchronous `start`/`resume`,
+checkpoint-checked `signal`, `exit`, and `dispose` control only narrative state. The original
+nine Demo beats remain intact. At the terminal Demo beat the player explicitly opens the
+journey journal; no automatic chapter jump or Adventure progression requirement is added.
+
+The root save format remains `stupa.save.v2`, version 2. The story section migrates version 1
+to version 2 with `journey: {activeChapterId, chapters}`. Records hold a canonical checkpoint,
+completion, bounded choices and flags. The ordered registry in `data/story/chapters.js`
+rejects invalid completion and missing prerequisite records. `story.getJourney()` returns a
+snapshot and `story.commitJourney()` uses `save.commitSection()`; there is no second story
+serializer. `save.flush()` returns success, `getStatus()` exposes errors, and failed writes
+keep dirty updates while atomic chapter commits keep the prior checkpoint. Both modes merge
+latest untouched sections, and unchanged Adventure serializers do not overwrite newer data.
+Stale story snapshots are rejected. This protects sequential interleaved writes; it is not
+an atomic cross-tab compare-and-swap or a distributed save synchronization service. Unknown
+newer root/story versions remain read-only.
+
+Runtime owns `ctx.prepareChapter(id, checkpoint)` and stages an explicitly allowlisted lazy
+scene before any durable chapter start. `story:chapter-change` carries
+`{chapterId, checkpointId, replaying}` after successful commit; `story:chapter-exit` carries
+`{chapterId}`. A session token rejects stale preparation. Revisit state is transient, only
+available after exiting a completed chapter, and never overwrites original progress.
+
+Each `story/world/*Scene.js` exports an async `create<Name>Scene(ctx)` with a detached `group`,
+`getHeight`, `getTarget(checkpointId)`, `restore(checkpointId, {animate, reducedMotion})`,
+`update(dt)`, `getSnapshot`, and `dispose`. Targets include a safe approach and `lookAt`.
+The scene never writes saves or advances the story. Owned colliders/listeners/GPU resources
+are removed on disposal. Existing native maps are used with private buses/state and minimal
+opt-in presentation guards; their default Adventure behavior is unchanged. Cinematic grading
+covers the active chapter; `storyArt.releaseRoot(group)` drops owned material references
+before disposal. The short Demo vision also uses the interactive Pharping scene.
+
+`createChapterJournal(ctx)` derives sacred-site unlocks from begun chapter records and looks
+up existing `CODEX_BY_ID` records, bilingual bodies and source links. It does not write the
+Adventure codex or copy/replace historical text. Fictional chapter prose is labeled separately.
+The journal supports explicit start/resume/exit/revisit and durable chapter diaries.
+
+`createModeSwitch(ctx, mode, mount?)` adds a native modal dialog in both runtimes. It flushes
+before a normal page navigation, preserving runtime isolation, and blocks switching on
+storage failure. Story navigation owns all its modal state; keyboard/touch controls remain
+available and the active mode is visibly disabled in the menu.
+
+A completed active chapter permits atomic handoff to the next chapter from the journal,
+without an intermediate exit/save. Replay still requires an explicit exit. Finale decision
+checkpoints validate allowlisted `payload.choice`, stored only after successful commit;
+`chapters.getChoices(id)` exposes a copy. Replay choices are transient. Reader pages are
+canonical checkpoints and remain available in the journal after completion. Missing required
+choices invalidate a corrupt advanced record instead of inventing an ending.

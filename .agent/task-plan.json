@@ -358,7 +358,7 @@
   "chapter_expansion": {
     "planning_issue": 89,
     "decision": "Independent ARPG retained; story chapters exploration-first (user confirmed 2026-11-06)",
-    "status": "PLANNED",
+    "status": "IN_PROGRESS",
     "contract": "docs/story/chapter-roadmap.md",
     "tasks": [
       {
@@ -373,9 +373,9 @@
         "scope": [
           "foundation"
         ],
-        "owner": "unclaimed",
+        "owner": "lead-integration",
         "claim": null,
-        "status": "PLANNED",
+        "status": "IN_REVIEW",
         "blocked_by": [
           89
         ],
@@ -409,7 +409,11 @@
           "Map factories may mutate adventure state",
           "Future save/downgrade protection",
           "Human character/cultural acceptance"
-        ]
+        ],
+        "pr_number": 101,
+        "pr_url": "https://github.com/ntubiolin/stupa-game/pull/101",
+        "local_verification": "build, bilingual checks, 74 Node tests; desktop/touch chapter checkpoints and replay; independent ARPG/mode regression",
+        "ci_status": "PENDING"
       },
       {
         "id": "compatibility",
@@ -423,9 +427,9 @@
         "scope": [
           "compatibility"
         ],
-        "owner": "unclaimed",
+        "owner": "lead-integration",
         "claim": null,
-        "status": "PLANNED",
+        "status": "IN_REVIEW",
         "blocked_by": [
           89
         ],
@@ -457,7 +461,11 @@
           "Map factories may mutate adventure state",
           "Future save/downgrade protection",
           "Human character/cultural acceptance"
-        ]
+        ],
+        "pr_number": 102,
+        "pr_url": "https://github.com/ntubiolin/stupa-game/pull/102",
+        "local_verification": "build, bilingual checks, 74 Node tests; desktop/touch chapter checkpoints and replay; independent ARPG/mode regression",
+        "ci_status": "PENDING"
       },
       {
         "id": "pharping",
@@ -471,9 +479,9 @@
         "scope": [
           "pharping"
         ],
-        "owner": "unclaimed",
+        "owner": "lead-integration",
         "claim": null,
-        "status": "PLANNED",
+        "status": "IN_REVIEW",
         "blocked_by": [
           91,
           92
@@ -507,7 +515,11 @@
           "Map factories may mutate adventure state",
           "Future save/downgrade protection",
           "Human character/cultural acceptance"
-        ]
+        ],
+        "pr_number": 103,
+        "pr_url": "https://github.com/ntubiolin/stupa-game/pull/103",
+        "local_verification": "build, bilingual checks, 74 Node tests; desktop/touch chapter checkpoints and replay; independent ARPG/mode regression",
+        "ci_status": "PENDING"
       },
       {
         "id": "mangyul",
@@ -521,9 +533,9 @@
         "scope": [
           "mangyul"
         ],
-        "owner": "unclaimed",
+        "owner": "lead-integration",
         "claim": null,
-        "status": "PLANNED",
+        "status": "IN_REVIEW",
         "blocked_by": [
           93
         ],
@@ -556,7 +568,11 @@
           "Map factories may mutate adventure state",
           "Future save/downgrade protection",
           "Human character/cultural acceptance"
-        ]
+        ],
+        "pr_number": 104,
+        "pr_url": "https://github.com/ntubiolin/stupa-game/pull/104",
+        "local_verification": "build, bilingual checks, 74 Node tests; desktop/touch chapter checkpoints and replay; independent ARPG/mode regression",
+        "ci_status": "PENDING"
       },
       {
         "id": "yarlung",
@@ -570,9 +586,9 @@
         "scope": [
           "yarlung"
         ],
-        "owner": "unclaimed",
+        "owner": "lead-integration",
         "claim": null,
-        "status": "PLANNED",
+        "status": "IN_REVIEW",
         "blocked_by": [
           94
         ],
@@ -605,7 +621,11 @@
           "Map factories may mutate adventure state",
           "Future save/downgrade protection",
           "Human character/cultural acceptance"
-        ]
+        ],
+        "pr_number": 105,
+        "pr_url": "https://github.com/ntubiolin/stupa-game/pull/105",
+        "local_verification": "build, bilingual checks, 74 Node tests; desktop/touch chapter checkpoints and replay; independent ARPG/mode regression",
+        "ci_status": "PENDING"
       },
       {
         "id": "samye",
@@ -619,9 +639,9 @@
         "scope": [
           "samye"
         ],
-        "owner": "unclaimed",
+        "owner": "lead-integration",
         "claim": null,
-        "status": "PLANNED",
+        "status": "IN_REVIEW",
         "blocked_by": [
           95
         ],
@@ -654,7 +674,11 @@
           "Map factories may mutate adventure state",
           "Future save/downgrade protection",
           "Human character/cultural acceptance"
-        ]
+        ],
+        "pr_number": 106,
+        "pr_url": "https://github.com/ntubiolin/stupa-game/pull/106",
+        "local_verification": "build, bilingual checks, 74 Node tests; desktop/touch chapter checkpoints and replay; independent ARPG/mode regression",
+        "ci_status": "PENDING"
       },
       {
         "id": "chimphu",
@@ -668,9 +692,9 @@
         "scope": [
           "chimphu"
         ],
-        "owner": "unclaimed",
+        "owner": "lead-integration",
         "claim": null,
-        "status": "PLANNED",
+        "status": "IN_REVIEW",
         "blocked_by": [
           96
         ],
@@ -703,7 +727,11 @@
           "Map factories may mutate adventure state",
           "Future save/downgrade protection",
           "Human character/cultural acceptance"
-        ]
+        ],
+        "pr_number": 107,
+        "pr_url": "https://github.com/ntubiolin/stupa-game/pull/107",
+        "local_verification": "build, bilingual checks, 74 Node tests; desktop/touch chapter checkpoints and replay; independent ARPG/mode regression",
+        "ci_status": "PENDING"
       },
       {
         "id": "finale",
@@ -717,9 +745,9 @@
         "scope": [
           "finale"
         ],
-        "owner": "unclaimed",
+        "owner": "lead-integration",
         "claim": null,
-        "status": "PLANNED",
+        "status": "IN_REVIEW",
         "blocked_by": [
           97
         ],
@@ -752,8 +780,13 @@
           "Map factories may mutate adventure state",
           "Future save/downgrade protection",
           "Human character/cultural acceptance"
-        ]
+        ],
+        "pr_number": 108,
+        "pr_url": "https://github.com/ntubiolin/stupa-game/pull/108",
+        "local_verification": "build, bilingual checks, 74 Node tests; desktop/touch chapter checkpoints and replay; independent ARPG/mode regression",
+        "ci_status": "PENDING"
       }
-    ]
+    ],
+    "parallel_scope": "User authorized later chapters in parallel; keep independent ticket claims and validate before enabling."
   }
 }

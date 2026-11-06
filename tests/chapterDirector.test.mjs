@@ -223,3 +223,30 @@ test('a stale story instance cannot overwrite another instance’s completed wri
   assert.equal(stale.save.flush(), false);
   assert.equal(raw(), saved);
 });
+
+test('finale choice survives reload and opposite replay cannot rewrite it', async t => {
+  const { CHAPTERS } = await import('../src/data/story/chapters.js');
+  const prerequisiteRecords = Object.fromEntries(CHAPTERS.filter(c=>c.id!=='finale').map(c=>[c.id,{checkpointId:'complete',completed:true,choices:{},flags:{}}]));
+  const {load,raw,saved,fail}=harness(t,{...legacy,version:2,journey:{activeChapterId:'finale',chapters:{...prerequisiteRecords,finale:{checkpointId:'decision',completed:false,choices:{},flags:{}}}}});
+  let ctx=load();assert(await ctx.chapters.resume());
+  assert.equal(ctx.chapters.signal('proxy:decide',{checkpointId:'decision',choice:'invented'}),false);
+  const before=raw();fail('QuotaExceededError');
+  assert.equal(ctx.chapters.signal('proxy:decide',{checkpointId:'decision',choice:'end'}),false);assert.equal(raw(),before);assert.deepEqual(ctx.chapters.getChoices('finale'),{});
+  fail(null);assert(ctx.chapters.signal('proxy:decide',{checkpointId:'decision',choice:'end'}));
+  ctx=load();assert(await ctx.chapters.resume());assert.equal(ctx.chapters.getChoices('finale').decision,'end');
+  const def=CHAPTERS.find(c=>c.id==='finale');
+  for(const checkpoint of def.checkpoints.slice(def.checkpoints.findIndex(c=>c.id==='response')).filter(c=>c.signal))assert(ctx.chapters.signal(checkpoint.signal,{checkpointId:checkpoint.id}));
+  assert(ctx.chapters.exit());const complete=raw();assert(saved().journey.chapters.finale.completed);
+  assert(await ctx.chapters.start('finale',{replay:true}));
+  for(const checkpoint of def.checkpoints.filter(c=>c.signal))assert(ctx.chapters.signal(checkpoint.signal,{checkpointId:checkpoint.id,...(checkpoint.choices?{choice:'retain'}:{})}));
+  assert.equal(ctx.chapters.getChoices('finale').decision,'retain');assert.equal(raw(),complete);
+  assert(ctx.chapters.exit());assert.equal(ctx.chapters.getChoices('finale').decision,'end');assert.equal(raw(),complete);
+});
+
+test('a finale checkpoint cannot imply an unmade agent decision', async t => {
+  const {CHAPTERS}=await import('../src/data/story/chapters.js');
+  const records=Object.fromEntries(CHAPTERS.filter(c=>c.id!=='finale').map(c=>[c.id,{checkpointId:'complete',completed:true,choices:{},flags:{}}]));
+  records.finale={checkpointId:'response',completed:false,choices:{}};
+  const {load}=harness(t,{...legacy,version:2,journey:{activeChapterId:'finale',chapters:records}});
+  const ctx=load();assert.equal(ctx.chapters.getState().activeChapterId,null);assert.equal(ctx.chapters.getState().chapters.finale,undefined);
+});

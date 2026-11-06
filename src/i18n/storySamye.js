@@ -2,6 +2,8 @@ import { i18n } from '../i18n.js';
 
 i18n.register({
   zh: {
+    'mirror.chapter.samye.summary': '在晝建夜毀的桑耶寺搬石築牆，重新看見修建的意義。',
+    'mirror.chapter.samye.diary.finish': '讀完日記',
     'mirror.chapter.samye.title': '晝建夜毀',
     'mirror.chapter.samye.intro': '映真以前傳過一張桑耶寺的照片給我。她說，相傳這裡白天建好的牆，到了晚上又會被鬼神拆掉。淨相裡，工匠正把石木抬進尚未完工的院子。我走過去幫忙。',
     'mirror.chapter.samye.stone.title': '牆腳的石料',
@@ -30,6 +32,8 @@ i18n.register({
     'mirror.chapter.samye.complete.body': '海波日山下，晨光照在重新砌起的牆上。',
   },
   en: {
+    'mirror.chapter.samye.summary': 'Build, witness the night’s damage and rebuild at Samye.',
+    'mirror.chapter.samye.diary.finish': 'Finish reading',
     'mirror.chapter.samye.title': 'Built by Day, Torn Down by Night',
     'mirror.chapter.samye.intro': 'Yingzhen once sent me a photo of Samye Monastery. She said that, according to legend, spirits would pull down at night the walls raised by day. In the vision, builders are carrying stone and timber into an unfinished courtyard. I go over to help.',
     'mirror.chapter.samye.stone.title': 'Stones at the Footing',

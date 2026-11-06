@@ -50,9 +50,12 @@ function readChapterValues(value, type) {
 function readJourney(value) {
   const chapters = {};
   for (const chapter of CHAPTERS) {
+    if (chapter.previousId && !chapters[chapter.previousId]?.completed) continue;
     const record = value?.chapters?.[chapter.id];
     const checkpoint = chapter.checkpoints.find(entry => entry.id === record?.checkpointId);
     if (!checkpoint || record.completed !== (checkpoint.signal === null)) continue;
+    const checkpointIndex = chapter.checkpoints.indexOf(checkpoint);
+    if (chapter.checkpoints.slice(0, checkpointIndex).some(step => step.choices && !step.choices.includes(record.choices?.[step.id]))) continue;
     chapters[chapter.id] = {
       checkpointId: checkpoint.id,
       completed: record.completed,

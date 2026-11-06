@@ -11,7 +11,7 @@ import { createSky } from '../world/sky.js';
 import { createStupa } from '../world/stupa.js';
 import { createPrayerFlags } from '../world/prayerFlags.js';
 import { createEnvironment } from '../world/environment.js';
-import { PHARPING_MAP } from '../data/maps/pharping.js';
+import { getMapDef } from '../data/maps.js';
 import { createStoryDirector } from './storyDirector.js';
 import { createNarrativeCamera } from './narrativeCamera.js';
 import { createCinematicArt } from './cinematicArt.js';
@@ -21,6 +21,11 @@ import { createPhone } from '../ui/story/phone.js';
 import { createDocumentary } from '../ui/story/documentary.js';
 import { createMemorySystem } from './memorySystem.js';
 import { createLosang } from './characters/losang.js';
+import { createChapterDirector } from './chapterDirector.js';
+import { getChapter } from '../data/story/chapters.js';
+import { createChapterJournal } from '../ui/story/chapterJournal.js';
+import { createModeSwitch } from '../ui/modeSwitch.js';
+import '../i18n/storyChapters.js';
 import './runtime.css';
 
 const t = (key, args) => i18n.t(`mirror.${key}`, args);
@@ -46,9 +51,10 @@ const ctx = { THREE, scene, camera, renderer, config: CONFIG, state, bus: create
   zoneGroups: { stupa: stupaGroup }, colliders: [], interactables: [] };
 createDebug(ctx); createSave(ctx, { writableSections: ['story'] }); // Deliberately no i18n.bindSave: narrative writes only story.
 const mapInstances = {};
+let chapterScene = null, stagedScene = null, activeChapter = null, chapterCheckpoint = null, prepareToken = 0;
 ctx.world = {
-  getMap: (id = state.zone) => id === 'pharping' ? PHARPING_MAP : { id: 'stupa', origin: { x: 0, z: 0 }, walkRadius: CONFIG.WORLD.walkRadius, innerRadius: CONFIG.WORLD.stupaColliderRadius },
-  getHeight: (x, z, id = state.zone) => mapInstances[id]?.getHeight(x, z) || 0,
+  getMap: (id = state.zone) => getMapDef(id),
+  getHeight: (x, z, id = state.zone) => (activeChapter && id === getChapter(activeChapter)?.mapId ? chapterScene?.getHeight(x,z) : mapInstances[id]?.getHeight(x, z)) || 0,
   isCombatZone: () => false, isHub: () => true,
 };
 const sky = createSky(ctx);
@@ -56,6 +62,8 @@ const stupa = createStupa(ctx);
 const flags = createPrayerFlags(ctx, stupa.flagAnchors);
 const environment = createEnvironment(ctx);
 const story = createStoryDirector(ctx); ctx.story = story;
+const chapters = createChapterDirector(ctx);
+const journal = createChapterJournal(ctx);
 const storyCamera = createNarrativeCamera(ctx); ctx.storyCamera = storyCamera;
 const art = createCinematicArt(ctx); ctx.storyArt = art;
 const phone = createPhone(ctx); ctx.phone = phone;
@@ -65,6 +73,8 @@ const memory = createMemorySystem(ctx); ctx.memory = memory;
 const hud = document.createElement('section'); hud.className = 'story-hud';
 hud.innerHTML = `<header class="story-header"><a href="?" class="story-wordmark">${t('title')}<small>THE PERSON IN THE MIRROR</small></a><nav><button data-action="phone">${t('phone')}</button><button data-action="settings" aria-label="${t('settings')}">☷</button></nav></header><div class="story-waypoint" aria-hidden="true"><span>◇</span><small></small></div><section class="story-objective"><p class="story-category"></p><h2></h2><p class="story-hint"></p><div class="story-objective-actions"><button data-action="interact" class="story-action"></button><button data-action="guide" class="story-guide">${t('guide')}</button></div></section><footer class="story-footer"><span class="story-controls"></span><span class="story-save">${t('saved')}</span></footer>`;
 root.append(hud);
+const journalButton = document.createElement('button'); journalButton.dataset.action='journal'; hud.querySelector('nav').prepend(journalButton);
+const modeSwitch = createModeSwitch(ctx, 'story', hud.querySelector('nav'));
 const modal = document.createElement('section'); modal.className = 'story-modal'; modal.hidden = true; modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true'); root.append(modal);
 let modalCallback = null, modalKeys = null, previousFocus = null;
 let arrivalCount = 0, visionCount = 0, losangLine = 0;
@@ -78,22 +88,25 @@ function closeModal() {
   state.uiOpen = isAnyModalOpen();
   renderer.domElement.focus({ preventScroll: true });
 }
-function isAnyModalOpen() { return !modal.hidden || phone.isOpen() || documentary.isOpen() || memory.isOpen() || loading; }
-function clearModals() { closeModal(); phone.close(); documentary.close(); memory.close(); state.uiOpen = loading; }
-function showCard(titleKey, bodyKey, actionKey, callback, category = 'fiction', extra = '') {
-  if (phone.isOpen() || documentary.isOpen() || memory.isOpen()) return;
+function isAnyModalOpen() { return !modal.hidden || phone.isOpen() || documentary.isOpen() || memory.isOpen() || journal.isOpen() || modeSwitch.isOpen() || loading; }
+function clearModals() { closeModal(); phone.close(); documentary.close(); memory.close(); journal.close(); modeSwitch.close(); state.uiOpen = loading; }
+function showCard(titleKey, bodyKey, actionKey, callback, category = 'fiction', extra = '', choices = null) {
+  if (phone.isOpen() || documentary.isOpen() || memory.isOpen() || journal.isOpen() || modeSwitch.isOpen()) return;
   previousFocus = document.activeElement;
   modal.hidden = false; state.uiOpen = true; modalCallback = callback;
-  modalKeys = { titleKey, bodyKey, actionKey, category, extra };
+  modalKeys = { titleKey, bodyKey, actionKey, category, extra, choices };
   renderCard();
 }
 function renderCard() {
-  const { titleKey, bodyKey, actionKey, category, extra } = modalKeys;
-  modal.innerHTML = `<div class="story-card"><p class="story-category">${t(category)}</p><h2 id="story-card-title">${t(titleKey)}</h2>${extra}<p class="story-prose">${t(bodyKey)}</p><div class="story-card-actions"><button class="story-primary" data-card="continue">${t(actionKey)}</button><button data-card="close">${t('close')}</button></div></div>`;
+  const { titleKey, bodyKey, actionKey, category, extra, choices } = modalKeys;
+  modal.innerHTML = `<div class="story-card"><p class="story-category">${t(category)}</p><h2 id="story-card-title">${t(titleKey)}</h2>${extra}<p class="story-prose">${t(bodyKey)}</p><div class="story-card-actions">${choices ? choices.map((id,index)=>`<button class="${index ? '' : 'story-primary'}" data-card-choice="${id}">${t(`chapter.${activeChapter}.${chapterCheckpoint}.${id}`)}</button>`).join('') : `<button class="story-primary" data-card="continue">${t(actionKey)}</button>`}<button data-card="close">${t('close')}</button></div></div>`;
   modal.setAttribute('aria-labelledby', 'story-card-title');
-  modal.querySelector('[data-card="continue"]').onclick = () => { const cb = modalCallback; closeModal(); cb?.(); };
+  const nextButton=modal.querySelector('[data-card="continue"]');
+  if(nextButton)nextButton.onclick = () => { const cb = modalCallback; closeModal(); cb?.(); };
+  for(const button of modal.querySelectorAll('[data-card-choice]'))button.onclick=()=>{const cb=modalCallback;closeModal();cb?.(button.dataset.cardChoice);};
   modal.querySelector('[data-card="close"]').onclick = closeModal;
-  modal.querySelector('button').focus();
+  const heading=modal.querySelector('h2');heading.tabIndex=-1;heading.focus({preventScroll:true});
+  modal.scrollTop=0;modal.querySelector('.story-card').scrollTop=0;
 }
 function showLoading(error = false) {
   modal.hidden = false; state.uiOpen = true; modalKeys = null;
@@ -143,10 +156,12 @@ async function setWorld(zone, token) {
   if (zone === 'pharping' && !mapInstances.pharping) {
     loading = true; showLoading();
     try {
-      const { createMap } = await import('../world/maps/pharping.js');
+      const { createPharpingScene } = await import('./world/pharpingScene.js');
       if (token !== beatToken) return false;
-      const group = new THREE.Group(); scene.add(group); ctx.zoneGroups.pharping = group;
-      mapInstances.pharping = createMap(ctx);
+      const world = await createPharpingScene(ctx);
+      if (token !== beatToken) { world.dispose(); return false; }
+      scene.add(world.group); ctx.zoneGroups.pharping = world.group;
+      mapInstances.pharping = world;
     } catch (e) {
       console.error('[story] map load failed', e); loading = true; showLoading(true); return false;
     }
@@ -162,7 +177,7 @@ async function setWorld(zone, token) {
   return true;
 }
 const arrivalStops = [{ x: 12, z: 29 }, { x: -9, z: 29 }, { x: -26, z: 16 }];
-const visionStops = [{ x: 2040, z: 36 }, { x: 2045, z: 30 }, { x: 2040, z: 25 }];
+const visionStop = n => mapInstances.pharping.getTarget(['spring1', 'spring2', 'channel2'][n]);
 function setTarget(point, label, action) {
   currentTarget = point; currentLabel = label; currentAction = action;
   mark.visible = Boolean(point);
@@ -171,16 +186,17 @@ function setTarget(point, label, action) {
 }
 function refreshHud() {
   const key = currentBeat === 'photography' ? 'photo' : currentBeat;
-  hud.querySelector('h2').textContent = currentBeat === 'prologue' ? i18n.t('story.beat.prologue.title') : t(`${key}.title`);
+  hud.querySelector('h2').textContent = activeChapter ? chapterText('title') : currentBeat === 'prologue' ? i18n.t('story.beat.prologue.title') : t(`${key}.title`);
   hud.querySelector('.story-category').textContent = currentBeat === 'restoration' ? t('history') : t('fiction');
-  const act = hud.querySelector('[data-action="interact"]'); act.textContent = currentLabel ? t(currentLabel) : t('phone'); act.hidden = !currentAction;
+  const act = hud.querySelector('[data-action="interact"]'); act.textContent = activeChapter ? chapterText('action') : currentLabel ? t(currentLabel) : t('phone'); act.hidden = !currentAction;
   hud.querySelector('[data-action="guide"]').hidden = !currentTarget;
   hud.querySelector('[data-action="phone"]').textContent = t('phone');
   hud.querySelector('[data-action="settings"]').setAttribute('aria-label', t('settings'));
   hud.querySelector('.story-wordmark').firstChild.textContent = t('title');
   hud.querySelector('.story-controls').textContent = t(matchMedia('(pointer:coarse)').matches ? 'controlsTouch' : 'controls');
   hud.querySelector('[data-action="guide"]').textContent = t('guide');
-  hud.querySelector('.story-save').textContent = t('saved');
+  hud.querySelector('.story-save').textContent = ctx.save.getStatus().ok ? t('saved') : t('chapter.saveError');
+  journalButton.textContent=t('chapter.menu');
 }
 function showArrivalStop() {
   const n = arrivalCount;
@@ -211,12 +227,16 @@ function showVisionStop() {
   showCard(`vision.${n}.title`, `vision.${n}.body`, n === 2 ? 'vision.return' : 'next', () => {
     visionCount++;
     if (visionCount >= 3) {
-      ctx.bus.emit('pharping:rain'); bowl();
+      mapInstances.pharping.restore('release', { reducedMotion: reducedMotion.matches });
+      mapInstances.pharping.restore('rain', { animate: true, reducedMotion: reducedMotion.matches }); bowl();
       // Closing this card must leave an actionable route back to the present.
       const returnCard = () => showCard('vision.2.title', 'vision.2.body', 'vision.return', () => story.signal('vision:restored'));
       setTarget(null, 'vision.return', returnCard);
       returnCard();
-    } else setTarget(visionStops[visionCount], `vision.${visionCount}.title`, showVisionStop);
+    } else {
+      mapInstances.pharping.restore(visionCount === 1 ? 'spring2' : 'channel1', { animate: true, reducedMotion: reducedMotion.matches });
+      setTarget(visionStop(visionCount), `vision.${visionCount}.title`, showVisionStop);
+    }
   });
 }
 async function enterBeat({ beat }) {
@@ -237,9 +257,9 @@ async function enterBeat({ beat }) {
       losangLine = 0; setTarget({ x: -26.5, z: 13 }, 'losang.action', showLosang); break;
     case 'map': setTarget(null, 'map.hotel', showMap); showMap(); break;
     case 'vision': {
-      visionCount = 0; art.setLighting('dawn');
+      visionCount = 0; art.releaseRoot(mapInstances.pharping.group); mapInstances.pharping.restore('spring1', { reducedMotion: reducedMotion.matches }); art.setLighting('dawn');
       const x = 2035, z = 43; storyCamera.setPose({ x, y: ctx.world.getHeight(x, z) + 1.68, z, yaw: -.35, pitch: .05, fov: 55 });
-      setTarget(visionStops[0], 'vision.0.title', showVisionStop);
+      setTarget(visionStop(0), 'vision.0.title', showVisionStop);
       showCard('vision.title', 'vision.body', 'vision.enter', () => {}); break;
     }
     case 'return':
@@ -247,7 +267,7 @@ async function enterBeat({ beat }) {
       setTarget(null, 'return.action', () => phone.open('diary'));
       showCard('return.title', 'return.body', 'return.action', () => phone.open('diary')); break;
     case 'complete':
-      setTarget(null, 'phone', () => phone.open('evidence'));
+      setTarget(null, 'chapter.continue', () => journal.open());
       showCard('complete.title', 'complete.body', 'complete.action', () => {}); break;
   }
   refreshHud(); bowl();
@@ -261,6 +281,7 @@ function guide() {
   storyCamera.setPose({ x, y: ctx.world.getHeight(x, z) + 1.68, z,
     yaw: facingLosang ? Math.atan2(x - losang.position.x, z - losang.position.z) : state.zone === 'stupa' ? Math.atan2(x, z) : 0,
     pitch: facingLosang ? -.14 : .18 });
+  if (currentTarget.lookAt) faceTarget(currentTarget.lookAt);
   renderer.domElement.focus({ preventScroll: true });
 }
 function showSettings() {
@@ -284,7 +305,11 @@ hud.querySelector('[data-action="phone"]').onclick = () => { if (!isAnyModalOpen
 hud.querySelector('[data-action="settings"]').onclick = showSettings;
 hud.querySelector('[data-action="interact"]').onclick = interact;
 hud.querySelector('[data-action="guide"]').onclick = guide;
-root.addEventListener('click', e => { if (e.target.closest('a[href="?"]')) ctx.save.flush(); });
+root.addEventListener('click', e => {
+  if (e.target.closest('a[href="?"]') && ctx.save.flush() === false) {
+    e.preventDefault();showCard('chapter.mode.title','chapter.saveError','close',()=>{});
+  }
+});
 window.addEventListener('keydown', e => {
   if (!modal.hidden) {
     if (e.key === 'Escape') { e.preventDefault(); if (!loading) closeModal(); }
@@ -301,7 +326,99 @@ window.addEventListener('keydown', e => {
   if (e.code === 'Escape' && !isAnyModalOpen()) showSettings();
 });
 i18n.onChange(() => { refreshHud(); if (modalKeys) renderCard(); });
-ctx.bus.on('story:beat-start', enterBeat);
+function faceTarget(point) {
+  const pose=storyCamera.getPose();
+  const distance=Math.hypot(point.x-pose.x,point.z-pose.z);
+  storyCamera.setPose({yaw:Math.atan2(pose.x-point.x,pose.z-point.z),pitch:Math.atan2(point.y-pose.y,distance)});
+}
+function chapterError(retry) {
+  loading=false; closeModal();
+  const failedSave=!ctx.save.getStatus().ok;
+  showCard('chapter.pharping.title',failedSave?'chapter.saveError':'chapter.loadError','chapter.retry',retry);
+  setTarget(null,'chapter.continue',()=>journal.open());
+}
+ctx.prepareChapter=async (id,checkpointId)=>{
+  if(!sceneFactories[id]||!getChapter(id)?.checkpoints.some(c=>c.id===checkpointId))return false;
+  const token=++prepareToken;loading=true;showLoading();
+  let staged;
+  try{
+    const factory=await sceneFactories[id]();
+    staged=await factory({...ctx,scene:new THREE.Scene(),zoneGroups:{}});
+    if(token!==prepareToken){staged.dispose();return false;}
+    staged.restore(checkpointId,{animate:false,reducedMotion:reducedMotion.matches});
+    staged.group.visible=false;stagedScene?.dispose();stagedScene=staged;return true;
+  }catch(error){staged?.dispose();console.warn('[chapter] prepare failed',error);return false;}
+  finally{if(token===prepareToken)loading=false;}
+};
+ctx.requestChapter=async (id,replay=false)=>{
+  if(isAnyModalOpen())return;
+  const ok=await chapters.start(id,{replay});
+  if(!ok){stagedScene?.dispose();stagedScene=null;chapterError(()=>ctx.requestChapter(id,replay));}
+};
+async function resumeChapter(){
+  const ok=await chapters.resume();
+  if(!ok){stagedScene?.dispose();stagedScene=null;chapterError(resumeChapter);}
+}
+const sceneFactories = {
+  pharping: () => import('./world/pharpingScene.js').then(m => m.createPharpingScene),
+  mangyul: () => import('./world/mangyulScene.js').then(m => m.createMangyulScene),
+  finale: () => import('./world/finaleScene.js').then(m => m.createFinaleScene),
+  samye: () => import('./world/samyeScene.js').then(m => m.createSamyeScene),
+  chimphu: () => import('./world/chimphuScene.js').then(m => m.createChimphuScene),
+  yarlung: () => import('./world/yarlungScene.js').then(m => m.createYarlungScene),
+};
+function chapterText(part) {
+  if (chapterCheckpoint === 'complete') return t(part === 'title' ? 'chapter.complete' : 'chapter.continue');
+  return t(`chapter.${activeChapter}.${chapterCheckpoint}.${part}`);
+}
+function disposeChapterWorld() {
+  if (chapterScene) { art.releaseRoot(chapterScene.group); chapterScene.dispose(); }
+  chapterScene=null; delete ctx.zoneGroups.chapter;
+}
+function chapterInteract(){
+  const checkpoint=getChapter(activeChapter)?.checkpoints.find(c=>c.id===chapterCheckpoint);
+  if(!checkpoint)return;
+  const current=chapterCheckpoint;
+  const advance=choice=>{if(!chapters.signal(checkpoint.signal,{checkpointId:current,choice}))showCard('chapter.'+activeChapter+'.title','chapter.saveError','retry',()=>{});};
+  if(current==='diary'){journal.open('diary');return;}
+  if(current==='complete'){journal.open();return;}
+  if(checkpoint.presentation==='card'||(activeChapter==='pharping'&&['shadow','release'].includes(current))||current.startsWith('altar')){
+    const prefix='chapter.'+activeChapter+'.'+current;
+    const response=activeChapter==='finale'&&current==='response';
+    showCard(prefix+'.title',prefix+'.body'+(response?'.'+chapters.getChoices('finale').decision:''),prefix+'.action',advance,activeChapter==='finale'&&current.startsWith('letter')?'chapter.finale.letterSource':'fiction','',checkpoint.choices);
+  }
+  else advance();
+}
+ctx.bus.on('story:chapter-change',({chapterId,checkpointId,replaying})=>{
+  const fresh=Boolean(stagedScene);loading=false;clearModals();++beatToken;
+  if(fresh){
+    if(mapInstances.pharping){art.releaseRoot(mapInstances.pharping.group);mapInstances.pharping.dispose();delete mapInstances.pharping;delete ctx.zoneGroups.pharping;}
+    disposeChapterWorld();chapterScene=stagedScene;stagedScene=null;scene.add(chapterScene.group);ctx.zoneGroups.chapter=chapterScene.group;}
+  activeChapter=chapterId;chapterCheckpoint=checkpointId;currentBeat='complete';
+  const finale=chapterId==='finale';
+  const present=!finale&&(checkpointId==='complete'||checkpointId==='diary'&&chapterId!=='chimphu');
+  for(const [id,group]of Object.entries(ctx.zoneGroups))group.visible=(present||finale)&&id==='stupa';
+  chapterScene.group.visible=!present;state.zone=present?'stupa':getChapter(chapterId).mapId;state.zoneType='hub';
+  chapterScene.restore(checkpointId,{animate:!fresh&&!reducedMotion.matches,reducedMotion:reducedMotion.matches});
+  const point=chapterScene.getTarget(checkpointId);
+  if(present){storyCamera.setPose({x:0,y:1.68,z:31,yaw:0,pitch:.34,fov:55});art.setLighting('dusk');}
+  else if(fresh){
+    const entryPoint=point||(chapterId==='chimphu'&&checkpointId==='diary'?chapterScene.getTarget('light'):null)||(finale&&['diary','complete'].includes(checkpointId)?chapterScene.getTarget('lamp'):null)||getChapter(chapterId).checkpoints.map(c=>chapterScene.getTarget(c.id)).find(Boolean);
+    if(entryPoint){storyCamera.setPose({x:entryPoint.x,y:chapterScene.getHeight(entryPoint.x,entryPoint.z)+1.68,z:entryPoint.z,fov:55});if(entryPoint.lookAt)faceTarget(entryPoint.lookAt);}
+    art.setLighting(finale?'dusk':'dawn');
+  }
+  setTarget(point,'chapter.'+chapterId+'.'+checkpointId+'.action',chapterInteract);
+  hud.querySelector('.story-category').textContent=t(replaying?'chapter.replaying':'chapter.fiction');
+  if(fresh&&checkpointId==='spring1')showCard('chapter.pharping.title','chapter.pharping.intro','chapter.close',()=>{});
+});
+ctx.bus.on('story:chapter-exit',()=>{
+  ++prepareToken;disposeChapterWorld();stagedScene?.dispose();stagedScene=null;
+  activeChapter=null;chapterCheckpoint=null;loading=false;enterBeat({beat:story.getState().beat});
+});
+journalButton.onclick=()=>{if(!isAnyModalOpen())journal.open();};
+ctx.debug?.register('chapters',chapters);
+ctx.debug?.register('chapterScene',{getSnapshot:()=>chapterScene?.getSnapshot(),getCheckpoint:()=>chapterCheckpoint});
+ctx.bus.on('story:beat-start', event => { if (!chapters.getState().activeChapterId) enterBeat(event); });
 const samples = [];
 ctx.debug?.register('storyRuntime', { ctx, resetMetrics: () => { samples.length = 0; }, getMetrics: () => ({ averageFps: samples.length / (samples.reduce((a, b) => a + b, 0) || 1), drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles, pointLights: (() => { let n = 0; scene.traverse(o => { if (o.isPointLight && o.visible) n++; }); return n; })(), zone: state.zone, beat: currentBeat, modal: isAnyModalOpen(), ...art.getState() }), guide, getTarget: () => currentTarget, getArrivalCount: () => arrivalCount, getVisionCount: () => visionCount });
 ctx.debug?.register('storyArt', art); ctx.debug?.register('storyCamera', storyCamera);
@@ -313,9 +430,11 @@ function frame(now) {
   state.uiOpen = isAnyModalOpen();
   // The camera bounds its own delta and substeps collisions; don't halve walking at 10 FPS.
   storyCamera.update(raw); sky.update(dt); stupa.update(dt); flags.update(dt); environment.update(dt);
-  mapInstances[state.zone]?.update(dt); art.update(dt);
+  if (activeChapter) chapterScene?.update(dt); else mapInstances[state.zone]?.update(dt);
+  art.update(dt);
   if (losang.visible && !reducedMotion.matches) losangCharacter.update(dt);
   document.body.classList.toggle('story-quality-low', art.getState().quality === 'low');
+  hud.querySelector('.story-save').textContent = ctx.save.getStatus().ok ? t('saved') : t('chapter.saveError');
   story.update(dt); phone.update(dt); documentary.update(dt); memory.update(dt); ctx.save.update(dt);
   const waypoint = hud.querySelector('.story-waypoint');
   if (currentTarget && !state.uiOpen) {
@@ -331,4 +450,6 @@ function frame(now) {
   renderer.render(scene, camera); requestAnimationFrame(frame);
 }
 art.setPreset('cinematic'); art.setLighting('day');
-story.start(); requestAnimationFrame(frame);
+story.start();
+if (chapters.getState().activeChapterId) resumeChapter();
+requestAnimationFrame(frame);

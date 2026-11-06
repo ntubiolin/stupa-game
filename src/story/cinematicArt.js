@@ -74,7 +74,7 @@ export function createCinematicArt(ctx) {
   }
 
   function applyMaterials() {
-    for (const root of [ctx.stupaGroup, ctx.zoneGroups?.pharping]) {
+    for (const root of [...new Set([ctx.stupaGroup, ...Object.values(ctx.zoneGroups || {})])]) {
       if (!root || roots.get(root) === root.children.length) continue;
       roots.set(root, root.children.length);
       root.traverse(object => {
@@ -208,6 +208,15 @@ export function createCinematicArt(ctx) {
         applyLighting();
       }
       return true;
+    },
+    releaseRoot(root) {
+      roots.delete(root);
+      root.traverse(object => {
+        for (const material of [object.material].flat().filter(Boolean)) {
+          const original = materials.get(material);
+          if (original) { Object.assign(material, original); material.needsUpdate = true; materials.delete(material); }
+        }
+      });
     },
     setLighting,
     setQuality(value) {

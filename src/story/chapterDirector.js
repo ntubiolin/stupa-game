@@ -28,7 +28,7 @@ export function createChapterDirector(ctx) {
     const chapter = getChapter(id);
     if (!chapter || disposed || story.isReadOnly() || story.getState().beat !== 'complete') return false;
     const { activeChapterId, chapters } = story.getJourney();
-    return (!activeChapterId || activeChapterId === id)
+    return (!activeChapterId || activeChapterId === id || chapters[activeChapterId]?.completed)
       && (!chapter.previousId || chapters[chapter.previousId]?.completed === true);
   }
 
@@ -71,7 +71,7 @@ export function createChapterDirector(ctx) {
       if (latest.activeChapterId !== journey.activeChapterId
         || latest.chapters[id]?.checkpointId !== record?.checkpointId) return false;
       if (replayRequested) {
-        replay = { chapterId: id, checkpointId, completed: false };
+        replay = { chapterId: id, checkpointId, completed: false, choices: {} };
       } else {
         latest.activeChapterId = id;
         latest.chapters[id] ??= { checkpointId, completed: false, choices: {}, flags: {} };
@@ -107,14 +107,19 @@ export function createChapterDirector(ctx) {
     const { checkpoints } = getChapter(chapterId);
     const index = checkpoints.findIndex(checkpoint => checkpoint.id === checkpointId);
     if (!checkpoints[index]?.signal || checkpoints[index].signal !== name) return false;
+    const choices = checkpoints[index].choices;
+    if (choices && !choices.includes(payload.choice)) return false;
+    if (!choices && payload.choice !== undefined) return false;
     const next = checkpoints[index + 1];
 
     return transition(() => {
       if (replay) {
+        if (choices) replay.choices[checkpointId] = payload.choice;
         replay.checkpointId = next.id;
         replay.completed = next.signal === null;
       } else {
         const record = journey.chapters[chapterId];
+        if (choices) record.choices[checkpointId] = payload.choice;
         record.checkpointId = next.id;
         record.completed = next.signal === null;
         if (!story.commitJourney(journey)) return false;
@@ -151,7 +156,11 @@ export function createChapterDirector(ctx) {
     replay = null;
   }
 
-  const api = { getState, canStart, start, resume, signal, exit, dispose };
+  function getChoices(id) {
+    return { ...(replay?.chapterId === id ? replay.choices : story.getJourney().chapters[id]?.choices) };
+  }
+
+  const api = { getChoices, getState, canStart, start, resume, signal, exit, dispose };
   ctx.chapters = api;
   return api;
 }

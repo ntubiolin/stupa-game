@@ -92,6 +92,8 @@ function letterEntries(pages, title, next, decision) {
 
 i18n.register({
   zh: {
+    'mirror.chapter.finale.summary': '讀完映真的信，決定代理的任務，循保管程序交還石板並點一盞燈。',
+    'mirror.chapter.finale.diary.finish': '讀完日記',
     ...letterEntries(zhLetter, (page, total) => `寫給未來的你 · ${page}／${total}`, '翻到下一頁', '查看信末的離線頁面'),
     'mirror.chapter.finale.title': '寫給未來的你／一盞燈',
     'mirror.chapter.finale.intro': '青朴石窟裡，林澈拆開了映真留下的信。信是她生前親手寫下的。',
@@ -132,6 +134,8 @@ i18n.register({
     'mirror.chapter.finale.complete.body': '窗外，陽光照亮加德滿都的屋頂。林澈喝完奶茶，起身走了出去。',
   },
   en: {
+    'mirror.chapter.finale.summary': 'Read Yingzhen’s letter, decide the proxy’s task, return the tablet and light a lamp.',
+    'mirror.chapter.finale.diary.finish': 'Finish reading',
     ...letterEntries(enLetter, (page, total) => `To You in the Future · ${page} of ${total}`, 'Turn the page', 'Open the offline page'),
     'mirror.chapter.finale.title': 'To You in the Future / A Single Lamp',
     'mirror.chapter.finale.intro': 'Inside the cave at Chimphu, Lin Che opens the letter Yingzhen wrote by hand during her lifetime.',

@@ -85,10 +85,10 @@ test('the story map is isolated, all world approaches are clear, and scene resou
   assert.equal(scene.group.parent, null);
   assert.equal(scene.group.getObjectByName('TermaRealmStoneGate').visible, false);
   assert.deepEqual(CHIMPHU_CHAPTER.checkpoints.filter(({ presentation }) => presentation === 'card')
-    .map(({ id }) => id), ['message', 'records', 'diary']);
+    .map(({ id }) => id), ['message', 'custody', 'records', 'bundle', 'diary']);
   for (const { id, signal, presentation } of CHIMPHU_CHAPTER.checkpoints) {
     const target = scene.getTarget(id);
-    if (presentation === 'card' || !signal) {
+    if (['message', 'records', 'diary'].includes(id) || !signal) {
       assert.equal(target, null);
       continue;
     }

@@ -27,7 +27,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [desktop, mobile, recovery, art]
+        suite: [desktop, mobile, recovery, art, pharping, mangyul, yarlung, samye, chimphu, finale, modes, adventure]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -41,15 +41,24 @@ jobs:
           path: dist
       - run: google-chrome --version
       - run: npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/vite.log 2>&1 &
-      - run: npm run test:browser
+      - name: Run selected real-browser scenario
+        run: |
+          case "$STORY_SUITE" in
+            pharping) node scripts/pharping-browser-test.mjs ;;
+            mangyul|yarlung|samye|chimphu|finale) CHAPTER_SUITE="$STORY_SUITE" node scripts/chapter-browser-test.mjs ;;
+            modes) node scripts/mode-switch-browser-test.mjs ;;
+            adventure) node scripts/adventure-compat-test.mjs ;;
+            *) npm run test:browser ;;
+          esac
         env:
           BROWSER_CHANNEL: chrome
           STORY_SUITE: ${{ matrix.suite }}
+          STORY_BASE_URL: http://127.0.0.1:4173
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: story-browser-evidence-${{ matrix.suite }}
-          path: artifacts/story
+          path: artifacts/
   validate:
     if: ${{ always() }}
     needs: [build, browser]

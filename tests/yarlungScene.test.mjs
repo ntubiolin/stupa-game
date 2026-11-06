@@ -81,11 +81,11 @@ test('Yarlung approaches stay walkable, and the story instance never publishes A
     assert.equal(scene.group.parent, null);
     assert.equal(story.zoneGroups.yarlung.children.length, 0);
     assert.deepEqual(YARLUNG_CHAPTER.checkpoints.filter(({ presentation }) => presentation === 'card')
-      .map(({ id }) => id), ['memory', 'boundary', 'diary']);
+      .map(({ id }) => id), ['calm', 'guardian', 'memory', 'boundary', 'diary']);
     for (const { id, presentation, signal } of YARLUNG_CHAPTER.checkpoints) {
       scene.restore(id);
       const target = scene.getTarget(id);
-      if (presentation === 'card' || !signal) {
+      if (['memory', 'boundary', 'diary'].includes(id) || !signal) {
         assert.equal(target, null);
         continue;
       }

@@ -89,7 +89,7 @@ test('the clockwise route stays within the plaza, and disposal only touches scen
   let previous;
   for (const { id, presentation } of FINALE_CHAPTER.checkpoints) {
     const point = finale.getTarget(id);
-    if (presentation === 'card') {
+    if (presentation === 'card' && id !== 'custody') {
       assert.equal(point, null);
       continue;
     }

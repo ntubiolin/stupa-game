@@ -192,7 +192,9 @@ sections; narrative progress is autosaved in its own `story` section.
 Both the novel and plan were read for this implementation. Still images are
 clearly labeled illustrative reconstructions, not archival photos. The digital
 proxy uses fixed authored dialogue and is explicitly **not Yingzhen herself**.
-The demo does not adapt the Chimphu letter or final farewell.
+The optional chapter continuation now includes Pharping, Mangyul, Yarlung, Samye,
+Chimphu and a fixed-script letter/finale. These are compact exploration adaptations,
+with reviewed text fallbacks; final media polish is tracked separately.
 
 Run `npm test` for regressions. For browser acceptance, start `npm run dev -- --host
 127.0.0.1 --port 4173`, install Playwright Chromium (`npx playwright install
@@ -200,6 +202,10 @@ chromium`), then `npm run test:browser`. Set `BROWSER_CHANNEL=chrome` to use an
 installed Chrome. See [contracts](docs/story/contracts.md),
 [validation](docs/story/validation.md), and [asset provenance](public/story/manifest.json).
 
-### 後續敘事章節規劃 / Planned narrative chapters
+### 後續敘事章節試玩 / Narrative chapter preview
 
-[章節路線與驗收契約](docs/story/chapter-roadmap.md)（#89、#91–#98）：先做帕平探索試作，再逐章擴充至青朴與尾聲。原 ARPG 戰鬥、技能、裝備、Boss 與多人模式保留；此項是規劃，尚未代表後續章節已可玩。
+完成 Demo 後開啟右上角「旅程與聖地」，從帕平依序探索到終章。每一步自動保存；完成一章即可選下一章，離開後可重訪而不改原進度。聖地頁沿用原圖鑑正文與來源。
+
+兩種模式均有「切換模式」按鈕，可切到章節、原 ARPG 或主選單。切換前會保存；寫入失敗會留在原頁並提示。原戰鬥、技能、裝備、Boss、多人與歷史地圖保留。
+
+[章節契約](docs/story/chapter-roadmap.md) · [驗證範圍](docs/story/chapter-validation.md) · Issues #91–#98。此分支供驗收，未合併 master。

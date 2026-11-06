@@ -15,7 +15,7 @@ export const FINALE_CHAPTER = Object.freeze({
     ['letter6', 'letter:read', 'card'],
     ['decision', 'proxy:decide', 'card', Object.freeze(['end', 'retain'])],
     ['response', 'proxy:acknowledge', 'card'],
-    ['custody', 'slate:return', 'action'],
+    ['custody', 'slate:return', 'card'],
     ['kora1', 'kora:walk', 'action'],
     ['kora2', 'kora:walk', 'action'],
     ['kora3', 'kora:walk', 'action'],

@@ -10,7 +10,7 @@ export const SAMYE_CHAPTER = Object.freeze({
     ['stone', 'samye:place-stone', 'action'],
     ['wood', 'samye:place-wood', 'action'],
     ['night', 'samye:witness-night', 'action'],
-    ['rebuild', 'samye:rebuild', 'action'],
+    ['rebuild', 'samye:rebuild', 'card'],
     ['hepori', 'samye:read-hepori', 'card'],
     ['memory', 'samye:read-memory', 'card'],
     ['diary', 'diary:read', 'card'],

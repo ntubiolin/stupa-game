@@ -1,3 +1,4 @@
+import '../../../i18n/storyMangyul.js';
 const altarCheckpoints = Array.from({ length: 12 }, (_, index) =>
   ({ id: `altar${index + 1}`, signal: 'altar:observe', presentation: 'action' }));
 

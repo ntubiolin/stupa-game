@@ -9,9 +9,9 @@ export const CHIMPHU_CHAPTER = Object.freeze({
   checkpoints: Object.freeze([
     ['road', 'road:arrive'],
     ['message', 'message:read', 'card'],
-    ['custody', 'custody:inspect'],
+    ['custody', 'custody:inspect', 'card'],
     ['records', 'records:verify', 'card'],
-    ['bundle', 'bundle:take'],
+    ['bundle', 'bundle:take', 'card'],
     ['cave', 'cave:observe'],
     ['light', 'light:touch'],
     ['diary', 'diary:read', 'card'],
