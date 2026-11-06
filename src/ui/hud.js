@@ -288,6 +288,9 @@ export function createHud(ctx) {
           <button id="btn-mute-toggle" type="button" class="icon-btn" aria-label="Mute">
             <span id="btn-mute-icon"></span>
           </button>
+          <button id="btn-music-toggle" type="button" class="icon-btn" aria-label="Music">
+            <span id="btn-music-icon"></span>
+          </button>
           <button id="btn-help-toggle" type="button" class="icon-btn" aria-label="Guide">
             <span>?</span>
           </button>
@@ -520,6 +523,8 @@ export function createHud(ctx) {
   const btnInventoryToggle = root.querySelector('#btn-inventory-toggle');
   const btnMuteToggle = root.querySelector('#btn-mute-toggle');
   const btnMuteIcon = root.querySelector('#btn-mute-icon');
+  const btnMusicToggle = root.querySelector('#btn-music-toggle');
+  const btnMusicIcon = root.querySelector('#btn-music-icon');
   const btnHelpToggle = root.querySelector('#btn-help-toggle');
   const btnHudHide = root.querySelector('#btn-hud-hide');
   const btnHudRestore = root.querySelector('#btn-hud-restore');
@@ -624,6 +629,18 @@ export function createHud(ctx) {
     const label = i18n.t(isMuted ? 'hud.unmute' : 'hud.mute');
     btnMuteToggle.title = label;
     btnMuteToggle.setAttribute('aria-label', label);
+    renderMusicButton();
+  }
+
+  function renderMusicButton() {
+    const on = ctx.audio?.isMusicEnabled?.() ?? true;
+    btnMusicIcon.innerHTML = on
+      ? `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`
+      : `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/><path d="m3 3 18 18"/></svg>`;
+    const label = i18n.t(on ? 'hud.musicOff' : 'hud.musicOn');
+    btnMusicToggle.title = label;
+    btnMusicToggle.setAttribute('aria-label', label);
+    btnMusicToggle.classList.toggle('is-off', !on);
   }
 
   function applyTranslations() {
@@ -784,6 +801,10 @@ export function createHud(ctx) {
 
   btnMuteToggle.addEventListener('click', () => {
     ctx.audio?.toggleMute();
+  });
+
+  btnMusicToggle.addEventListener('click', () => {
+    ctx.audio?.toggleMusic?.();
   });
 
   function setHudHidden(next) {

@@ -826,6 +826,10 @@ kbd {
   transform: translateY(-1px);
 }
 
+.icon-btn.is-off {
+  opacity: 0.55;
+}
+
 .hud-restore-btn {
   position: absolute;
   top: 18px;

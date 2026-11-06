@@ -74,6 +74,24 @@ export const CONFIG = {
     shadowMapSize: 2048,
   },
 
+  /** Procedural adaptive score (`src/systems/music.js` + `src/data/music.js`). */
+  MUSIC: {
+    tuningA4: 432,          // in tune with the 108 Hz "Om" drone & 216 Hz singing bowl SFX
+    volume: 0.55,           // engine output level at musicVolume = 1 (before master volume)
+    defaultMusicVolume: 0.7,
+    crossfade: 3.2,         // seconds, map ↔ map
+    bossCrossfade: 1.2,     // seconds, into / out of boss cham music
+    lookahead: 0.9,         // scheduler look-ahead (s)
+    tickMs: 60,
+    reverbSeconds: 3.6,
+    reverbWet: 0.32,
+    duckLevel: 0.28,        // track level while a stinger plays
+    nightThreshold: 0.55,   // nightFactor above which the stupa theme turns nocturnal
+    refreshInterval: 0.5,   // seconds between track-resolution checks
+    faintDuck: 0.12,
+    faintDuckSeconds: 3.5,
+  },
+
   /** Highland wilderness zone (accessible via north monastery gate). */
   WILD: {
     origin: { x: 1000, z: 0 },

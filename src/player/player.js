@@ -321,12 +321,25 @@ export function createPlayer(ctx) {
   });
 
   // Kora tracking
+  const koraTargets = [
+    { id: 'stupa', map: 'stupa', x: 0, z: 0, minR: 13.5, maxR: 28 },
+    { id: 'samye', map: 'samye', x: 5000, z: 0, minR: 44, maxR: 60 },
+  ];
+  state.player.koraTargets = koraTargets;
+
+  let activeKoraTargetId = 'stupa';
   let lastTheta = Math.atan2(state.player.position.z, state.player.position.x);
   let koraAccum = 0;          // radians accumulated toward current clockwise lap (0..2π)
   let koraLaps = 0;
   let lastEmittedFraction = 0;
   let ccwWindowAccum = 0;     // negative radian accumulation in recent window
   let wrongWayCooldown = 0;
+  let wasInKoraRing = true;
+
+  function findKoraTargetForZone(zone) {
+    const z = zone || 'stupa';
+    return koraTargets.find((t) => t.map === z) || null;
+  }
 
   bus.on('game:start', () => {
     koraLaps = Number(ctx.merit?.getStats()?.kora) || 0;
@@ -352,7 +365,14 @@ export function createPlayer(ctx) {
       state.player.action = 'idle';
       resetPose();
     }
-    lastTheta = Math.atan2(state.player.position.z, state.player.position.x);
+    const kt = findKoraTargetForZone(state.zone);
+    const ox = kt ? kt.x : 0;
+    const oz = kt ? kt.z : 0;
+    activeKoraTargetId = kt ? kt.id : null;
+    koraAccum = 0;
+    ccwWindowAccum = 0;
+    wasInKoraRing = false;
+    lastTheta = Math.atan2(state.player.position.z - oz, state.player.position.x - ox);
     root.position.copy(state.player.position);
     root.rotation.y = state.player.heading;
   });
@@ -657,8 +677,31 @@ export function createPlayer(ctx) {
   function updateKora(dt) {
     if (wrongWayCooldown > 0) wrongWayCooldown -= dt;
 
+    const target = findKoraTargetForZone(state.zone);
+    if (!target) return;
+
     const pos = state.player.position;
-    const theta = Math.atan2(pos.z, pos.x);
+    const dx = pos.x - target.x;
+    const dz = pos.z - target.z;
+    const dist = Math.hypot(dx, dz);
+    const maxR = target.map === 'stupa' ? Math.max(target.maxR, W.walkRadius || 38) : (target.maxR + 4);
+    const minR = Math.max(0, target.minR - 2);
+    const inRing = dist >= minR && dist <= maxR;
+    const theta = Math.atan2(dz, dx);
+
+    if (activeKoraTargetId !== target.id || !wasInKoraRing) {
+      activeKoraTargetId = target.id;
+      lastTheta = theta;
+      wasInKoraRing = inRing;
+      if (!inRing) return;
+    }
+    if (!inRing) {
+      wasInKoraRing = false;
+      lastTheta = theta;
+      return;
+    }
+    wasInKoraRing = true;
+
     const dTheta = wrapAngle(theta - lastTheta);
     lastTheta = theta;
 
@@ -674,7 +717,7 @@ export function createPlayer(ctx) {
       if (ccwWindowAccum >= deg(25) && wrongWayCooldown <= 0) {
         ccwWindowAccum = 0;
         wrongWayCooldown = 18; // throttle reminder
-        bus.emit('kora:wrongway');
+        bus.emit('kora:wrongway', { target: target.id });
       }
     } else {
       ccwWindowAccum = Math.max(0, ccwWindowAccum - dTheta * 2);
@@ -685,8 +728,9 @@ export function createPlayer(ctx) {
       koraAccum -= TWO_PI;
       koraLaps += 1;
       lastEmittedFraction = koraAccum / TWO_PI;
-      bus.emit('kora:progress', { fraction: lastEmittedFraction, laps: koraLaps });
-      bus.emit('merit', { type: 'kora' });
+      bus.emit('kora:progress', { fraction: lastEmittedFraction, laps: koraLaps, target: target.id });
+      bus.emit('merit', { type: 'kora', target: target.id });
+      bus.emit('kora:lap', { target: target.id, laps: koraLaps });
       bus.emit('sfx', { name: 'bell' });
       return;
     }
@@ -694,7 +738,7 @@ export function createPlayer(ctx) {
     const fraction = Math.max(0, Math.min(1, koraAccum / TWO_PI));
     if (Math.abs(fraction - lastEmittedFraction) >= 0.008) {
       lastEmittedFraction = fraction;
-      bus.emit('kora:progress', { fraction, laps: koraLaps });
+      bus.emit('kora:progress', { fraction, laps: koraLaps, target: target.id });
     }
   }
 
@@ -781,8 +825,8 @@ export function createPlayer(ctx) {
     }
 
     // 4. Camera-relative movement
-    const mx = (input && !state.uiOpen) ? input.move.x : 0;
-    const my = (input && !state.uiOpen) ? input.move.y : 0;
+    const mx = (input && !state.uiOpen && !state.player.lockedMovement) ? input.move.x : 0;
+    const my = (input && !state.uiOpen && !state.player.lockedMovement) ? input.move.y : 0;
     const moveMag = Math.min(1, Math.hypot(mx, my));
     const isRun = Boolean(input && input.run && moveMag > 0.1);
 
@@ -929,17 +973,20 @@ export function createPlayer(ctx) {
     root.position.copy(state.player.position);
     root.rotation.y = state.player.heading;
 
-    // 6. Kora angle tracking (only active in stupa plaza)
-    if ((state.zone || 'stupa') === 'stupa') {
+    // 6. Kora angle tracking (active in zones with koraTargets: stupa & samye)
+    if (findKoraTargetForZone(state.zone)) {
       updateKora(dt);
     }
   }
 
-  return {
+  const api = {
     update,
     mesh: root,
+    koraTargets,
     getKoraProgress() {
-      return { fraction: Math.max(0, Math.min(1, koraAccum / TWO_PI)), laps: koraLaps };
+      return { fraction: Math.max(0, Math.min(1, koraAccum / TWO_PI)), laps: koraLaps, target: activeKoraTargetId };
     },
   };
+  ctx.player = api;
+  return api;
 }

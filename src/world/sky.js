@@ -276,8 +276,58 @@ export function createSky(ctx) {
   };
 
   let currentShadowFrustumD = 46;
+  let timeOverride = null;
+
+  function setTimeOverride({ t = 0.38, speed = 0, transitionSec = 0 } = {}) {
+    const targetT = ((Number(t) % 1) + 1) % 1;
+    const curT = ((state.time.t % 1) + 1) % 1;
+    const dur = Math.max(0, Number(transitionSec) || 0);
+    const spd = Number.isFinite(speed) ? Number(speed) : 0;
+    const forwardDelta = ((targetT - curT) % 1 + 1) % 1;
+    timeOverride = {
+      active: true,
+      startT: curT,
+      targetT,
+      forwardDelta,
+      speed: spd,
+      transitionSec: dur,
+      elapsed: 0,
+    };
+    if (dur <= 0) {
+      state.time.t = targetT;
+      state.time.speed = spd;
+    } else {
+      state.time.speed = 0;
+    }
+    updateSkyState(0);
+    return timeOverride;
+  }
+
+  function clearTimeOverride() {
+    timeOverride = null;
+    state.time.speed = 1;
+    return true;
+  }
 
   function updateSkyState(dt) {
+    if (timeOverride && timeOverride.active && dt > 0) {
+      timeOverride.elapsed += dt;
+      if (timeOverride.transitionSec > 0 && timeOverride.elapsed < timeOverride.transitionSec) {
+        const u = smoothstep(0, timeOverride.transitionSec, timeOverride.elapsed);
+        state.time.t = (timeOverride.startT + timeOverride.forwardDelta * u) % 1;
+        state.time.speed = 0;
+      } else {
+        const dayLen = config.TIME?.dayLengthSec || 240;
+        if (timeOverride.transitionSec > 0 && timeOverride.elapsed - dt < timeOverride.transitionSec) {
+          state.time.t = timeOverride.targetT;
+        } else if (timeOverride.speed !== 0) {
+          state.time.t = (((state.time.t + (dt * timeOverride.speed) / dayLen) % 1) + 1) % 1;
+        } else {
+          state.time.t = timeOverride.targetT;
+        }
+        state.time.speed = timeOverride.speed;
+      }
+    }
     const t = ((state.time.t % 1) + 1) % 1;
     // t = 0 midnight, 0.25 sunrise, 0.5 noon, 0.75 sunset
     const phi = (t - 0.25) * Math.PI * 2;
@@ -394,9 +444,17 @@ export function createSky(ctx) {
   // Run once immediately so state.time.sunDir & nightFactor are populated for downstream init
   updateSkyState(0);
 
-  return {
+  const api = {
     update(dt) {
       updateSkyState(dt);
     },
+    setTimeOverride,
+    clearTimeOverride,
+    getTimeOverride() {
+      return timeOverride;
+    },
   };
+  ctx.sky = api;
+  ctx.debug?.register?.('sky', api);
+  return api;
 }
