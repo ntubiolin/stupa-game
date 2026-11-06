@@ -38,6 +38,7 @@ const ACTION_KEYS = {
   Escape: 'closeUi',
   KeyH: 'toggleHud',
   KeyP: 'pause',
+  KeyV: 'toggleFrontCam',
 };
 
 const UI_ALLOWED_ACTIONS = new Set([
