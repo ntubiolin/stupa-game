@@ -8,7 +8,10 @@ await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : {}), args: ['--enable-unsafe-swiftshader'] });
 const report = { startedAt: new Date().toISOString(), browser: browser.version(), scenarios: [], errors: [], metrics: [] };
 const seedSections = { vitals: { level: 12, exp: 77, hp: 150, mp: 60 }, quests: { active: {}, done: ['prologue.kora'], flags: { 'sentinel': true } }, inventory: { bag: [], equipped: {}, turquoise: 321 }, appearance: { displayName: 'Save sentinel' }, coop: { sentinel: 'preserve' }, merit: { points: 987 }, settings: { lang: 'zh', muted: true }, unknownFutureSection: { keep: [1, 2, 3] } };
-const shot = (page, name) => page.screenshot({ path: `${output}/${name}.png` });
+const shot = (page, name) => {
+  console.log(`Capturing ${name}`);
+  return page.screenshot({ path: `${output}/${name}.png` });
+};
 const waitBeat = (page, beat) => page.waitForFunction(b => window.__stupa?.story?.getState().beat === b, beat);
 async function fixture(context, beat, lang = 'zh') {
   await context.addInitScript(({ sections, beat, lang }) => {
@@ -20,6 +23,9 @@ async function fixture(context, beat, lang = 'zh') {
   }, { sections: seedSections, beat, lang });
 }
 function monitor(page, name) {
+  console.log(`Starting ${name}`);
+  page.setDefaultTimeout(30000);
+  page.setDefaultNavigationTimeout(30000);
   page.on('pageerror', e => report.errors.push({ scenario: name, error: e.message }));
 }
 async function ready(page) {
@@ -27,7 +33,7 @@ async function ready(page) {
   await page.waitForFunction(() => window.__stupa?.storyRuntime);
 }
 async function fullJourney(name, mobile, lang) {
-  const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 }, deviceScaleFactor: mobile ? 2 : 1, isMobile: mobile, hasTouch: mobile, reducedMotion: 'reduce', recordVideo: { dir: `${output}/video`, size: mobile ? { width: 390, height: 844 } : { width: 1280, height: 800 } } });
+  const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 }, deviceScaleFactor: mobile ? 2 : 1, isMobile: mobile, hasTouch: mobile, reducedMotion: 'reduce', ...(!process.env.CI && { recordVideo: { dir: `${output}/video`, size: mobile ? { width: 390, height: 844 } : { width: 1280, height: 800 } } }) });
   await fixture(context, null, lang);
   const page = await context.newPage(); monitor(page, name);
   const wallStart = Date.now();
@@ -48,14 +54,18 @@ async function fullJourney(name, mobile, lang) {
   await click(cardContinue());
   // Verify real input changes the ground pose before using accessible journey controls.
   const before = await page.evaluate(() => __stupa.storyCamera.getPose());
+  const waitForMovement = () => page.waitForFunction(previous => {
+    const pose = __stupa.storyCamera.getPose();
+    return Math.hypot(pose.x - previous.x, pose.z - previous.z) > .1;
+  }, before);
   if (mobile) {
     const cdp = await context.newCDPSession(page);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 60, y: 400 }] });
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 60, y: 355 }] });
-    await page.waitForTimeout(350);
+    await waitForMovement();
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   } else {
-    await page.locator('#app canvas').focus(); await page.keyboard.down('KeyW'); await page.waitForTimeout(350); await page.keyboard.up('KeyW');
+    await page.locator('#app canvas').focus(); await page.keyboard.down('KeyW'); await waitForMovement(); await page.keyboard.up('KeyW');
   }
   const after = await page.evaluate(() => __stupa.storyCamera.getPose());
   assert(Math.hypot(after.x - before.x, after.z - before.z) > .1, `${name} movement`);
@@ -153,7 +163,13 @@ try {
   assert.deepEqual(report.errors, [], 'No uncaught browser errors');
   report.result = 'PASS';
 } catch (error) {
-  report.result = 'FAIL'; report.failure = error.stack; throw error;
+  report.result = 'FAIL'; report.failure = error.stack;
+  report.failurePages = [];
+  for (const context of browser.contexts()) for (const page of context.pages()) {
+    report.failurePages.push({ url: page.url(), text: await page.locator('body').innerText({ timeout: 5000 }).catch(() => 'unavailable') });
+    await page.screenshot({ path: `${output}/failure-${report.failurePages.length}.png`, timeout: 5000 }).catch(() => {});
+  }
+  throw error;
 } finally {
   await writeFile(`${output}/report.json`, JSON.stringify(report, null, 2));
   await browser.close();
