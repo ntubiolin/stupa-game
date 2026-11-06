@@ -397,3 +397,11 @@ This is an original procedural character study, not an approved final portrait.
 Novel chapter 2 identifies Losang as an elderly lama; source-corrected reference
 request #84 still owns final face/costume acceptance. No generated text/sacred
 symbols or external assets are embedded in the folded map prop.
+## Planned chapter expansion (ADR-002, not implemented)
+
+User confirmed independent ARPG and exploration-first narrative on 2026-11-06.
+See [chapter roadmap](docs/story/chapter-roadmap.md) (#89, #91–#98) for proposed
+chapter/store/map adapter contracts and dependency gates. Existing Demo APIs and
+save schema remain unchanged by this documentation PR; next chapters require
+their own tested implementation PRs. Never import adventure gameplay serializers
+into narrative or treat shared world factories as side-effect-free.
