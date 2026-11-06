@@ -550,6 +550,11 @@ export function createBoss(ctx, def) {
       def.attacks.weatherZone(bossState, patternRunner.patterns, ctx);
     } else if (attacks.includes('summonAdds') && def.attacks?.summonAdds) {
       def.attacks.summonAdds(bossState, patternRunner.patterns, ctx);
+    } else if (Array.isArray(phaseDef.patterns)) {
+      const wzSpec = phaseDef.patterns.find((p) => p.type === 'weatherZone');
+      if (wzSpec) {
+        patternRunner.patterns.weatherZone(bossState, wzSpec);
+      }
     }
 
     def.onPhaseEnter?.(targetPhase, bossState, ctx, phaseDef, patternRunner, built);
@@ -574,7 +579,8 @@ export function createBoss(ctx, def) {
     const frac = bossState.hp / bossState.maxHp;
     const phases = def.phases || [];
     for (let i = phases.length - 1; i >= 1; i--) {
-      if (frac <= phases[i].hpBelow && bossState.phase < i + 1) {
+      const thresh = phases[i].hpBelow ?? phases[i].threshold ?? 0.5;
+      if (frac <= thresh && bossState.phase < i + 1) {
         triggerPhaseTransition(i + 1);
         break;
       }
@@ -971,6 +977,7 @@ export function createBoss(ctx, def) {
       for (let i = 0; i < chainRings.length; i++) {
         chainRings[i].rotation.z += dt * (i % 2 === 0 ? 1.2 : -1.2);
       }
+      def.onUpdate?.(dt, bossState, ctx, patternRunner, built);
       built.anim?.(dt, bossState);
       if (bossState.oathCeremonyTimer === 0 && !state.dialogueOpen) {
         chainsGroup.visible = false;
@@ -1061,21 +1068,37 @@ export function createBoss(ctx, def) {
       // Schedule next attack from current phase list
       bossState.attackTimer -= dt * (bossState.enraged ? 1.25 : 1.0);
       if (bossState.attackTimer <= 0) {
-        const attacks = phaseDef.attacks || ['slam'];
-        // Filter out weatherZone if already active
-        const available = attacks.filter(
-          (a) => !(a === 'weatherZone' && patternRunner.hasWeatherZone())
-        );
-        const list = available.length > 0 ? available : ['slam'];
-        const chosenKey = list[bossState.attackIndex % list.length];
-        bossState.attackIndex++;
-
-        const attackFn = def.attacks?.[chosenKey];
-        if (typeof attackFn === 'function') {
-          const cd = attackFn(bossState, patternRunner.patterns, ctx);
-          bossState.attackTimer = typeof cd === 'number' ? cd : (bossState.enraged ? 2.4 : 3.2);
+        if (Array.isArray(phaseDef.patterns) && phaseDef.patterns.length > 0 && !def.attacks) {
+          const availablePats = phaseDef.patterns.filter(
+            (p) => !(p.type === 'weatherZone' && patternRunner.hasWeatherZone())
+          );
+          const patList = availablePats.length > 0 ? availablePats : phaseDef.patterns;
+          const chosenPat = patList[bossState.attackIndex % patList.length];
+          bossState.attackIndex++;
+          patternRunner.startPattern?.(chosenPat, bossState);
+          bossState.attackTimer =
+            typeof chosenPat.cooldown === 'number'
+              ? chosenPat.cooldown
+              : bossState.enraged
+                ? 2.4
+                : 3.2;
         } else {
-          bossState.attackTimer = 2.8;
+          const attacks = phaseDef.attacks || ['slam'];
+          // Filter out weatherZone if already active
+          const available = attacks.filter(
+            (a) => !(a === 'weatherZone' && patternRunner.hasWeatherZone())
+          );
+          const list = available.length > 0 ? available : ['slam'];
+          const chosenKey = list[bossState.attackIndex % list.length];
+          bossState.attackIndex++;
+
+          const attackFn = def.attacks?.[chosenKey];
+          if (typeof attackFn === 'function') {
+            const cd = attackFn(bossState, patternRunner.patterns, ctx);
+            bossState.attackTimer = typeof cd === 'number' ? cd : (bossState.enraged ? 2.4 : 3.2);
+          } else {
+            bossState.attackTimer = 2.8;
+          }
         }
       }
     }

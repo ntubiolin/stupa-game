@@ -131,11 +131,16 @@ export function createEnemies(ctx) {
         height: rawDef.height ?? baseKind?.height ?? 1.55,
         stopDistance: rawDef.stopDistance ?? baseKind?.stopDistance ?? 1.3,
         ring: rawDef.ring ?? baseKind?.ring ?? 'near',
-        attacks: Array.isArray(rawDef.attacks)
+        attacks: (Array.isArray(rawDef.attacks)
           ? rawDef.attacks
           : baseKind?.attacks
             ? JSON.parse(JSON.stringify(baseKind.attacks))
-            : [],
+            : []
+        ).map((a) => ({
+          ...a,
+          id: a.id || a.name,
+          name: a.name || a.id,
+        })),
       };
       cfg.kinds[id] = merged;
     }
@@ -1002,6 +1007,7 @@ export function createEnemies(ctx) {
 
     // --- Telegraph Meshes
     let telegraphGroup = null;
+    let slamRingMesh = null;
     let telegraphFill = null;
     let chargeLineMesh = null;
     let aimLineMesh = null;
@@ -1009,21 +1015,44 @@ export function createEnemies(ctx) {
     const hasSlamOrWave =
       kind === 'migoi' ||
       (Array.isArray(kCfg.attacks) &&
-        kCfg.attacks.some((a) => a.id === 'groundSlam' || a.id === 'heatWave' || a.id === 'rootGrasp'));
+        kCfg.attacks.some(
+          (a) =>
+            a.id === 'groundSlam' ||
+            a.id === 'heatWave' ||
+            a.id === 'rootGrasp' ||
+            a.id === 'stomp'
+        ));
     const hasLineCharge =
       kind === 'tsen' ||
       (Array.isArray(kCfg.attacks) &&
-        kCfg.attacks.some((a) => a.id === 'spearCharge' || a.id === 'spinDash' || a.id === 'yakCharge' || a.id === 'redArrow'));
+        kCfg.attacks.some(
+          (a) =>
+            a.id === 'spearCharge' ||
+            a.id === 'spinDash' ||
+            a.id === 'yakCharge' ||
+            a.id === 'avalancheRoll' ||
+            a.id === 'redArrow' ||
+            a.id === 'iceShard'
+        ));
 
-    if (hasSlamOrWave) {
+    if (hasSlamOrWave || hasLineCharge) {
       telegraphGroup = new THREE.Group();
       telegraphGroup.name = `Telegraph_${id}`;
       telegraphGroup.visible = false;
+      enemyGroup.add(telegraphGroup);
+    }
 
+    if (hasSlamOrWave) {
       const isHeatWave = Array.isArray(kCfg.attacks) && kCfg.attacks.some((a) => a.id === 'heatWave');
       const isRootGrasp = Array.isArray(kCfg.attacks) && kCfg.attacks.some((a) => a.id === 'rootGrasp');
-      const aoeAtk = (kCfg.attacks || []).find((a) => a.id === 'heatWave' || a.id === 'groundSlam' || a.id === 'rootGrasp');
-      const rRatio = ((aoeAtk?.aoeRadius ?? (isHeatWave ? 2.5 : 3.5)) / 3.5);
+      const aoeAtk = (kCfg.attacks || []).find(
+        (a) =>
+          a.id === 'heatWave' ||
+          a.id === 'groundSlam' ||
+          a.id === 'rootGrasp' ||
+          a.id === 'stomp'
+      );
+      const rRatio = (aoeAtk?.aoeRadius ?? (isHeatWave ? 2.5 : 3.5)) / 3.5;
 
       const ringMat = new THREE.MeshBasicMaterial({
         color: isHeatWave
@@ -1036,9 +1065,9 @@ export function createEnemies(ctx) {
         opacity: 0.85,
         depthWrite: false,
       });
-      const ringMesh = new THREE.Mesh(slamRingGeo, ringMat);
-      ringMesh.scale.set(rRatio, 1, rRatio);
-      telegraphGroup.add(ringMesh);
+      slamRingMesh = new THREE.Mesh(slamRingGeo, ringMat);
+      slamRingMesh.scale.set(rRatio, 1, rRatio);
+      telegraphGroup.add(slamRingMesh);
 
       const fillMat = new THREE.MeshBasicMaterial({
         color: isHeatWave
@@ -1055,20 +1084,26 @@ export function createEnemies(ctx) {
       telegraphFill.scale.set(0.001, 1, 0.001);
       telegraphFill.userData.maxScale = rRatio;
       telegraphGroup.add(telegraphFill);
+    }
 
-      enemyGroup.add(telegraphGroup);
-    } else if (hasLineCharge) {
-      telegraphGroup = new THREE.Group();
-      telegraphGroup.name = `Telegraph_${id}`;
-      telegraphGroup.visible = false;
-
+    if (hasLineCharge) {
       const dashAtk = (kCfg.attacks || []).find(
-        (a) => a.id === 'spinDash' || a.id === 'spearCharge' || a.id === 'yakCharge'
+        (a) =>
+          a.id === 'spinDash' ||
+          a.id === 'spearCharge' ||
+          a.id === 'yakCharge' ||
+          a.id === 'avalancheRoll'
       );
       const lenRatio = (dashAtk?.dashDist ?? 8.0) / 8.0;
+      const widthRatio = (dashAtk?.hitWidth ?? 1.1) / 1.1;
 
       const lineMat = new THREE.MeshBasicMaterial({
-        color: dashAtk?.id === 'spinDash' ? new THREE.Color(2.1, 1.35, 0.35) : new THREE.Color(2.2, 0.2, 0.2),
+        color:
+          dashAtk?.id === 'spinDash'
+            ? new THREE.Color(2.1, 1.35, 0.35)
+            : dashAtk?.id === 'avalancheRoll'
+              ? new THREE.Color(0.55, 1.65, 2.4)
+              : new THREE.Color(2.2, 0.2, 0.2),
         toneMapped: false,
         transparent: true,
         opacity: 0.42,
@@ -1076,9 +1111,9 @@ export function createEnemies(ctx) {
         depthWrite: false,
       });
       chargeLineMesh = new THREE.Mesh(chargeLineGeo, lineMat);
-      chargeLineMesh.scale.set(1, 1, lenRatio);
+      chargeLineMesh.scale.set(widthRatio, 1, lenRatio);
       telegraphGroup.add(chargeLineMesh);
-      telegraphFill = chargeLineMesh;
+      if (!telegraphFill) telegraphFill = chargeLineMesh;
 
       const aimMat = new THREE.MeshBasicMaterial({
         color: new THREE.Color(2.2, 0.2, 0.2),
@@ -1091,8 +1126,6 @@ export function createEnemies(ctx) {
       aimLineMesh = new THREE.Mesh(aimLineGeo, aimMat);
       aimLineMesh.visible = false;
       telegraphGroup.add(aimLineMesh);
-
-      enemyGroup.add(telegraphGroup);
     }
 
     // --- Status Effect Visual Indicators (Root golden ring & Stun overhead mini-vajra)
@@ -1244,10 +1277,12 @@ export function createEnemies(ctx) {
       armorRingGroup,
       shieldMesh,
       telegraphGroup,
+      slamRingMesh,
       telegraphFill,
       chargeLineMesh,
       aimLineMesh,
       chargeData: null,
+      dashTimer: 0,
       customAnimate,
       fixedPos: opts.fixedPos || null,
       disguised: Boolean(opts.disguised ?? kCfg.disguised),
@@ -1256,6 +1291,7 @@ export function createEnemies(ctx) {
       calmDuration: 15.0,
       stationary: Boolean(opts.stationary ?? kCfg.stationary),
       animTime: Math.random() * 10,
+      animPhase: Math.random() * Math.PI * 2,
     };
 
     if (enemy.disguised && customModel?.setDisguised) {
@@ -2170,27 +2206,52 @@ export function createEnemies(ctx) {
         enemy.animNodes.mouthOrb.visible = true;
         enemy.animNodes.mouthOrb.scale.setScalar(0.01);
       }
-    } else if (atk.id === 'redArrow') {
+    } else if (atk.id === 'redArrow' || atk.id === 'iceShard') {
       if (enemy.telegraphGroup && enemy.aimLineMesh) {
         enemy.telegraphGroup.position.set(enemy.pos.x, enemy.pos.y + 0.03, enemy.pos.z);
         enemy.telegraphGroup.rotation.y = enemy.lockedHeading;
         if (enemy.chargeLineMesh) enemy.chargeLineMesh.visible = false;
+        if (enemy.slamRingMesh) enemy.slamRingMesh.visible = false;
+        if (enemy.telegraphFill && enemy.telegraphFill !== enemy.chargeLineMesh) {
+          enemy.telegraphFill.visible = false;
+        }
         enemy.aimLineMesh.visible = true;
         enemy.telegraphGroup.visible = true;
       }
-    } else if (atk.id === 'spearCharge' || atk.id === 'spinDash' || atk.id === 'yakCharge') {
+    } else if (
+      atk.id === 'spearCharge' ||
+      atk.id === 'spinDash' ||
+      atk.id === 'yakCharge' ||
+      atk.id === 'avalancheRoll'
+    ) {
       if (enemy.telegraphGroup && enemy.chargeLineMesh) {
         enemy.telegraphGroup.position.set(enemy.pos.x, enemy.pos.y + 0.03, enemy.pos.z);
         enemy.telegraphGroup.rotation.y = enemy.heading;
         if (enemy.aimLineMesh) enemy.aimLineMesh.visible = false;
+        if (enemy.slamRingMesh) enemy.slamRingMesh.visible = false;
+        if (enemy.telegraphFill && enemy.telegraphFill !== enemy.chargeLineMesh) {
+          enemy.telegraphFill.visible = false;
+        }
         enemy.chargeLineMesh.visible = true;
         enemy.telegraphGroup.visible = true;
       }
-    } else if (atk.id === 'groundSlam' || atk.id === 'heatWave' || atk.id === 'rootGrasp') {
+    } else if (
+      atk.id === 'groundSlam' ||
+      atk.id === 'heatWave' ||
+      atk.id === 'rootGrasp' ||
+      atk.id === 'stomp'
+    ) {
       if (enemy.telegraphGroup) {
         enemy.telegraphGroup.position.set(enemy.pos.x, enemy.pos.y + 0.03, enemy.pos.z);
+        enemy.telegraphGroup.rotation.y = 0;
+        if (enemy.aimLineMesh) enemy.aimLineMesh.visible = false;
+        if (enemy.chargeLineMesh) enemy.chargeLineMesh.visible = false;
+        if (enemy.slamRingMesh) enemy.slamRingMesh.visible = true;
+        if (enemy.telegraphFill) {
+          enemy.telegraphFill.visible = true;
+          enemy.telegraphFill.scale.set(0.001, 1, 0.001);
+        }
         enemy.telegraphGroup.visible = true;
-        if (enemy.telegraphFill) enemy.telegraphFill.scale.set(0.001, 1, 0.001);
       }
     } else if (atk.id === 'boulder') {
       enemy.lastAttackId = 'boulder';
@@ -2221,6 +2282,27 @@ export function createEnemies(ctx) {
         slow: atk.slow,
         magic: true,
       });
+    } else if (atk.id === 'hailCall') {
+      enemy.lastAttackId = 'hailCall';
+      bus.emit('sfx', { name: 'frost' });
+      const count = atk.count || 3;
+      const scaledDmg = getScaledAttackDamage(enemy, atk.damage);
+      const baseAngle = Math.random() * Math.PI * 2;
+      for (let hIdx = 0; hIdx < count; hIdx++) {
+        const ang = baseAngle + (hIdx / count) * Math.PI * 2;
+        const offsetR = hIdx === 0 ? 0 : 1.75;
+        const tx = playerPos.x + Math.cos(ang) * offsetR;
+        const tz = playerPos.z + Math.sin(ang) * offsetR;
+        const ty = ctx.world ? ctx.world.getHeight(tx, tz) : playerPos.y;
+        ctx.projectiles?.spawn('frostRoar', {
+          targetPos: { x: tx, y: ty, z: tz },
+          damage: scaledDmg,
+          aoeRadius: atk.aoeRadius ?? 1.9,
+          eruptDelay: (atk.eruptDelay ?? 0.85) + hIdx * 0.14,
+          slow: atk.slow ?? { mult: 0.65, duration: 1.5 },
+          magic: true,
+        });
+      }
     }
   }
 
@@ -2614,17 +2696,20 @@ export function createEnemies(ctx) {
           enemy.state = (!isPlayerInSafeZone && distToPlayer <= (cfg.leashRange ?? 25)) ? 'chase' : 'wander';
         }
       } else if (enemy.state === 'attack') {
-        // Active dash attack (Tsen spear charge)
+        // Active dash attack (Tsen spear charge / spinDash / avalancheRoll)
         if (enemy.chargeData) {
           if (isRooted) {
             enemy.attackCooldowns[enemy.activeAttack.id] = enemy.activeAttack.cooldown * cdMult;
             enemy.state = 'recover';
             enemy.stateTimer = enemy.activeAttack.recover ?? 0.35;
             enemy.chargeData = null;
+            enemy.dashTimer = 0;
           } else {
             const cd = enemy.chargeData;
-            cd.progress += (dt * slowMult) / (enemy.activeAttack.dashDuration ?? 0.4);
+            const dashDur = enemy.activeAttack.dashDuration ?? 0.4;
+            cd.progress += (dt * slowMult) / dashDur;
             const u = Math.min(1, cd.progress);
+            enemy.dashTimer = Math.max(0, (1 - u) * dashDur);
 
             enemy.pos.x = cd.startPos.x + cd.dir.x * (enemy.activeAttack.dashDist * u);
             enemy.pos.z = cd.startPos.z + cd.dir.z * (enemy.activeAttack.dashDist * u);
@@ -2657,6 +2742,7 @@ export function createEnemies(ctx) {
               enemy.state = 'recover';
               enemy.stateTimer = enemy.activeAttack.recover ?? 0.35;
               enemy.chargeData = null;
+              enemy.dashTimer = 0;
             }
           }
         }
@@ -2677,9 +2763,10 @@ export function createEnemies(ctx) {
           if (enemy.animNodes.mouthOrb) {
             enemy.animNodes.mouthOrb.scale.setScalar(Math.max(0.01, uFill));
           }
-        } else if (atk?.id === 'redArrow') {
+        } else if (atk?.id === 'redArrow' || atk?.id === 'iceShard') {
           for (const mat of enemy.materials) {
-            mat.emissive?.setRGB(0.7 * pulse, 0.05, 0.05);
+            if (atk.id === 'iceShard') mat.emissive?.setRGB(0.2 * pulse, 0.65 * pulse, 0.95 * pulse);
+            else mat.emissive?.setRGB(0.7 * pulse, 0.05, 0.05);
             if (mat.emissiveIntensity != null) mat.emissiveIntensity = 0.8;
           }
           if (enemy.aimLineMesh) {
@@ -2688,7 +2775,7 @@ export function createEnemies(ctx) {
         } else if (atk?.id === 'boulder') {
           if (enemy.animNodes.armL) enemy.animNodes.armL.rotation.x = -1.5 * uFill;
           if (enemy.animNodes.armR) enemy.animNodes.armR.rotation.x = -1.5 * uFill;
-        } else if (atk?.id === 'frostRoar') {
+        } else if (atk?.id === 'frostRoar' || atk?.id === 'hailCall') {
           if (enemy.animNodes.armL) enemy.animNodes.armL.rotation.x = -0.7 * uFill;
           if (enemy.animNodes.armR) enemy.animNodes.armR.rotation.x = -0.7 * uFill;
         } else {
@@ -2696,10 +2783,22 @@ export function createEnemies(ctx) {
             mat.emissive?.setRGB(0.7 * pulse, 0.05, 0.05);
             if (mat.emissiveIntensity != null) mat.emissiveIntensity = 0.8;
           }
-          if ((atk?.id === 'groundSlam' || atk?.id === 'heatWave' || atk?.id === 'rootGrasp') && enemy.telegraphFill) {
+          if (
+            (atk?.id === 'groundSlam' ||
+              atk?.id === 'heatWave' ||
+              atk?.id === 'rootGrasp' ||
+              atk?.id === 'stomp') &&
+            enemy.telegraphFill
+          ) {
             const maxS = enemy.telegraphFill.userData?.maxScale || 1.0;
             enemy.telegraphFill.scale.set(uFill * maxS, 1, uFill * maxS);
-          } else if ((atk?.id === 'spearCharge' || atk?.id === 'spinDash' || atk?.id === 'yakCharge') && enemy.chargeLineMesh) {
+          } else if (
+            (atk?.id === 'spearCharge' ||
+              atk?.id === 'spinDash' ||
+              atk?.id === 'yakCharge' ||
+              atk?.id === 'avalancheRoll') &&
+            enemy.chargeLineMesh
+          ) {
             enemy.chargeLineMesh.material.opacity = 0.35 + 0.35 * pulse;
           }
         }
@@ -2753,7 +2852,41 @@ export function createEnemies(ctx) {
             enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
             enemy.state = 'recover';
             enemy.stateTimer = atk.recover ?? 0.35;
-          } else if (atk.id === 'spearCharge' || atk.id === 'spinDash' || atk.id === 'yakCharge') {
+          } else if (atk.id === 'iceShard') {
+            const lockedHeading = enemy.lockedHeading ?? enemy.heading;
+            const count = atk.count || 3;
+            const spreadRad = atk.spreadRad ?? 0.24;
+            const projSpeed = atk.projectileSpeed ?? atk.speed ?? 10.5;
+            for (let k = 0; k < count; k++) {
+              const offsetAng = (k - (count - 1) * 0.5) * spreadRad;
+              const ang = lockedHeading + offsetAng;
+              const dirX = -Math.sin(ang);
+              const dirZ = -Math.cos(ang);
+              const startPos = {
+                x: enemy.pos.x + dirX * 0.45,
+                y: enemy.pos.y + 1.25,
+                z: enemy.pos.z + dirZ * 0.45,
+              };
+              ctx.projectiles?.spawn('redArrow', {
+                origin: startPos,
+                dir: { x: dirX, y: 0, z: dirZ },
+                damage: scaledDmg,
+                speed: projSpeed,
+                lifetime: atk.lifetime ?? 1.5,
+                hitRadius: atk.hitRadius ?? 0.35,
+                magic: false,
+              });
+            }
+            bus.emit('sfx', { name: 'frost' });
+            enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
+            enemy.state = 'recover';
+            enemy.stateTimer = atk.recover ?? 0.35;
+          } else if (
+            atk.id === 'spearCharge' ||
+            atk.id === 'spinDash' ||
+            atk.id === 'yakCharge' ||
+            atk.id === 'avalancheRoll'
+          ) {
             if (isRooted) {
               enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
               enemy.state = 'recover';
@@ -2769,6 +2902,7 @@ export function createEnemies(ctx) {
                 hasHit: false,
                 trailStep: 0,
               };
+              enemy.dashTimer = atk.dashDuration ?? 0.45;
               if (atk.id === 'spinDash') {
                 spawnDustTrailPatch(enemy.pos.x, enemy.pos.z);
               }
@@ -2778,11 +2912,16 @@ export function createEnemies(ctx) {
             enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
             enemy.state = 'recover';
             enemy.stateTimer = atk.recover ?? 0.45;
-          } else if (atk.id === 'frostRoar') {
+          } else if (atk.id === 'frostRoar' || atk.id === 'hailCall') {
             enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
             enemy.state = 'recover';
             enemy.stateTimer = atk.recover ?? 0.5;
-          } else if (atk.id === 'groundSlam' || atk.id === 'heatWave' || atk.id === 'rootGrasp') {
+          } else if (
+            atk.id === 'groundSlam' ||
+            atk.id === 'heatWave' ||
+            atk.id === 'rootGrasp' ||
+            atk.id === 'stomp'
+          ) {
             const isHeatWave = atk.id === 'heatWave';
             const isRootGrasp = atk.id === 'rootGrasp';
             if (isHeatWave) {
@@ -2842,7 +2981,9 @@ export function createEnemies(ctx) {
           const attacks = enemy.kindConfig.attacks || [];
 
           // Melee attack priority when in melee range
-          const meleeAtk = attacks.find((a) => a.id === 'claw' || a.id === 'groundSlam');
+          const meleeAtk = attacks.find(
+            (a) => a.id === 'claw' || a.id === 'groundSlam' || a.id === 'stomp'
+          );
           if (meleeAtk && distToPlayer <= meleeAtk.range && (enemy.attackCooldowns[meleeAtk.id] || 0) <= 0) {
             chosenAttack = meleeAtk;
           } else {
@@ -2888,9 +3029,15 @@ export function createEnemies(ctx) {
           if (chosenAttack) {
             startEnemyAttack(enemy, chosenAttack, false);
           } else if (effSpeed > 0) {
-            // Move toward player until stopDistance
-            const stopDist = enemy.kindConfig.stopDistance ?? 1.2;
-            if (distToPlayer > stopDist) {
+            // Move toward player until stopDistance (or kite away if closer than preferredMinDist)
+            const prefMin = enemy.kindConfig.preferredMinDist ?? 0;
+            const stopDist = Math.max(enemy.kindConfig.stopDistance ?? 1.2, prefMin);
+            if (prefMin > 0 && distToPlayer < prefMin - 0.3 && distToPlayer > 0.05) {
+              const retreatDist = effSpeed * 0.78 * dt;
+              enemy.pos.x -= (dxPlayer / distToPlayer) * retreatDist;
+              enemy.pos.z -= (dzPlayer / distToPlayer) * retreatDist;
+              clampEnemyPosition(enemy);
+            } else if (distToPlayer > stopDist) {
               const moveDist = Math.min(effSpeed * dt, distToPlayer - stopDist);
               enemy.pos.x += (dxPlayer / distToPlayer) * moveDist;
               enemy.pos.z += (dzPlayer / distToPlayer) * moveDist;

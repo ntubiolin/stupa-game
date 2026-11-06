@@ -901,16 +901,29 @@ export function createPatternRunner(ctx, parentGroup) {
     }
   });
 
+  const patternMap = {
+    radialAoe,
+    lineCharge,
+    targetedAoe,
+    projectileVolley,
+    ringWave,
+    summonAdds,
+    weatherZone,
+    beam,
+  };
+
   return {
-    patterns: {
-      radialAoe,
-      lineCharge,
-      targetedAoe,
-      projectileVolley,
-      ringWave,
-      summonAdds,
-      weatherZone,
-      beam,
+    patterns: patternMap,
+    startPattern(spec = {}, bossOverride) {
+      const fn = patternMap[spec.type];
+      if (typeof fn !== 'function') return null;
+      const bossObj =
+        bossOverride ||
+        ctx.bosses?.getActiveBoss?.()?.getInternalState?.() || {
+          pos: { x: state.player?.position?.x ?? 0, y: 0, z: state.player?.position?.z ?? 0 },
+          facing: 0,
+        };
+      return fn(bossObj, spec);
     },
     update,
     clear,
