@@ -1,5 +1,7 @@
 const EYE_HEIGHT = 1.68;
-const WALK_SPEED = 2;
+const WALK_SPEED = 4;
+const FAST_WALK_SPEED = 6;
+const MAX_MOVE_STEP = 0.15;
 const MAX_PITCH = Math.PI / 2 - 0.05;
 const LOOK_SENSITIVITY = 0.004;
 const JOYSTICK_RADIUS = 42;
@@ -73,11 +75,12 @@ export function createNarrativeCamera(ctx) {
   function onKeyDown(event) {
     const { code, target } = event;
     if (inputBlocked() || event.altKey || event.ctrlKey || event.metaKey) return;
-    if (!Object.hasOwn(MOVE_KEYS, code) && !Object.hasOwn(LOOK_KEYS, code)) return;
+    const shift = code === 'ShiftLeft' || code === 'ShiftRight';
+    if (!shift && !Object.hasOwn(MOVE_KEYS, code) && !Object.hasOwn(LOOK_KEYS, code)) return;
     if (target?.closest?.('input, select, textarea, [contenteditable]')) return;
     if (code.startsWith('Arrow') && target?.closest?.('button, a')) return;
     keys.add(code);
-    event.preventDefault();
+    if (!shift) event.preventDefault();
   }
 
   function onKeyUp(event) {
@@ -194,12 +197,13 @@ export function createNarrativeCamera(ctx) {
       let tilt = 0;
       for (const code of keys) {
         const move = MOVE_KEYS[code];
+        const look = LOOK_KEYS[code];
         if (move) {
           strafe += move[0];
           forward += move[1];
-        } else {
-          turn += LOOK_KEYS[code][0];
-          tilt += LOOK_KEYS[code][1];
+        } else if (look) {
+          turn += look[0];
+          tilt += look[1];
         }
       }
       yaw = wrapAngle(yaw - lookX * LOOK_SENSITIVITY + turn * seconds * 1.35);
@@ -214,14 +218,22 @@ export function createNarrativeCamera(ctx) {
       strafe = clamp(strafe, -1, 1);
       forward = clamp(forward, -1, 1);
       if (seconds > 0 && (strafe || forward)) {
-        const distance = WALK_SPEED * seconds / Math.max(1, Math.hypot(strafe, forward));
+        const fastWalk = !joystick && (keys.has('ShiftLeft') || keys.has('ShiftRight'));
+        const speed = fastWalk ? FAST_WALK_SPEED : WALK_SPEED;
+        const distance = speed * seconds / Math.max(1, Math.hypot(strafe, forward));
         const dx = (Math.cos(yaw) * strafe - Math.sin(yaw) * forward) * distance;
         const dz = (-Math.sin(yaw) * strafe - Math.cos(yaw) * forward) * distance;
         const { x, z } = position;
         const zone = state.zone || 'stupa';
-        if (!tryStep(dx, dz, zone)) {
-          if (dx) tryStep(dx, 0, zone);
-          if (dz) tryStep(0, dz, zone);
+        // Check intermediate positions so a slow frame cannot skip an obstacle.
+        const steps = Math.ceil(Math.hypot(dx, dz) / MAX_MOVE_STEP);
+        const stepX = dx / steps;
+        const stepZ = dz / steps;
+        for (let i = 0; i < steps; i++) {
+          if (!tryStep(stepX, stepZ, zone)) {
+            if (stepX) tryStep(stepX, 0, zone);
+            if (stepZ) tryStep(0, stepZ, zone);
+          }
         }
         state.player.isMoving = Math.hypot(position.x - x, position.z - z) > 1e-5;
         if (state.player.isMoving) position.y = ctx.world.getHeight(position.x, position.z, zone);
