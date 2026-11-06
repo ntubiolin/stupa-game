@@ -45,6 +45,7 @@ function setup() {
   }
   return {
     ctx, camera, canvas, indicator, captures,
+    blur: () => document.defaultView.dispatchEvent(new Event('blur')),
     key: (type, code, tag, modifiers) => {
       const origin = tag && { closest: selector => selector.split(', ').includes(tag) };
       return fire(document.defaultView, type, { code, ...modifiers }, origin);
@@ -68,6 +69,53 @@ test('eye pose uses the shared player state and positive pitch looks up', () => 
   assert.ok(direction.z < 0);
 });
 
+test('keyboard walks at 4 m/s and either held Shift raises it to 6 m/s', () => {
+  const { camera, key } = setup();
+  function expectStep(distance) {
+    const from = camera.getPose();
+    camera.update(0.1);
+    const to = camera.getPose();
+    assert.ok(Math.abs(Math.hypot(to.x - from.x, to.z - from.z) - distance) < 1e-8);
+  }
+
+  key('keydown', 'KeyW');
+  expectStep(0.4);
+  key('keydown', 'KeyD');
+  expectStep(0.4); // The diagonal has the same speed.
+  assert.equal(key('keydown', 'ShiftLeft'), true);
+  expectStep(0.6);
+  key('keydown', 'ShiftRight');
+  key('keyup', 'ShiftLeft');
+  expectStep(0.6);
+  key('keyup', 'ShiftRight');
+  expectStep(0.4);
+});
+
+test('opening a modal or losing window focus clears held movement and Shift', () => {
+  const { ctx, camera, key, blur } = setup();
+  function expectForwardStep(distance) {
+    const before = camera.getPose().z;
+    camera.update(0.1);
+    assert.ok(Math.abs(before - camera.getPose().z - distance) < 1e-8);
+  }
+
+  key('keydown', 'ShiftLeft');
+  key('keydown', 'KeyW');
+  ctx.state.uiOpen = true;
+  expectForwardStep(0);
+  ctx.state.uiOpen = false;
+  expectForwardStep(0);
+  key('keydown', 'KeyW');
+  expectForwardStep(0.4);
+
+  key('keydown', 'ShiftRight');
+  expectForwardStep(0.6);
+  blur();
+  expectForwardStep(0);
+  key('keydown', 'KeyW');
+  expectForwardStep(0.4);
+});
+
 test('keyboard movement stays inside the plaza annulus and respects box colliders', () => {
   const { ctx, camera, key } = setup();
   key('keydown', 'KeyW');
@@ -86,12 +134,23 @@ test('keyboard movement stays inside the plaza annulus and respects box collider
   assert.ok(camera.getPose().z >= 30.35 && camera.getPose().z < 30.6);
 });
 
+test('fast movement samples collisions between endpoints on slow frames', () => {
+  const { ctx, camera, key } = setup();
+  // Both ends of a full 0.6 m step clear this rock, but the straight path clips it.
+  ctx.colliders.push({ type: 'circle', x: 0.49, z: 30.7, r: 0.2 });
+  key('keydown', 'ShiftLeft');
+  key('keydown', 'KeyW');
+  camera.update(0.25);
+  assert.ok(camera.getPose().z > 30.7);
+});
+
 test('Pharping movement honors its own map origin, boundary and terrain height', () => {
   const { ctx, camera, key } = setup();
   ctx.state.zone = 'pharping';
   camera.setPose({ x: 2000, y: 4.74, z: 103 });
   key('keydown', 'KeyS');
-  for (let i = 0; i < 20; i++) camera.update(0.1);
+  key('keydown', 'ShiftLeft');
+  for (let i = 0; i < 20; i++) camera.update(0.25);
   const pose = camera.getPose();
   assert.ok(Math.abs(pose.z - 104.65) < 1e-8);
   assert.equal(pose.x, 2000);
@@ -100,6 +159,7 @@ test('Pharping movement honors its own map origin, boundary and terrain height',
 
 test('touch can walk and look simultaneously and modal clears pending input', () => {
   const { ctx, camera, key, pointer, indicator, captures, canvas } = setup();
+  key('keydown', 'ShiftLeft');
   pointer('pointerdown', 1, 70, 140, 'touch');
   pointer('pointerdown', 2, 320, 140, 'touch');
   pointer('pointermove', 1, 70, 90, 'touch');
@@ -108,6 +168,7 @@ test('touch can walk and look simultaneously and modal clears pending input', ()
   camera.update(0.1);
   const moved = camera.getPose();
   assert.ok(moved.z < 31 && moved.pitch > 0 && moved.yaw < 0);
+  assert.ok(Math.abs(Math.hypot(moved.x, moved.z - 31) - 0.4) < 1e-8);
 
   ctx.state.uiOpen = true;
   camera.update(0.1);
