@@ -457,3 +457,22 @@ checkpoints validate allowlisted `payload.choice`, stored only after successful 
 `chapters.getChoices(id)` exposes a copy. Replay choices are transient. Reader pages are
 canonical checkpoints and remain available in the journal after completion. Missing required
 choices invalidate a corrupt advanced record instead of inventing an ending.
+
+### Story preview tools (#109)
+
+The settings panel opens `createStoryDebugPanel(ctx)`, which uses the existing
+`ctx.debug.unlock(password)` session gate. Its chapter and checkpoint selectors
+call `ctx.requestChapterPreview(id, checkpointId, { choice })`, the runtime
+wrapper around `ctx.chapters.preview(...)`. The director requires the password
+unlock, stages the requested scene, and rejects stale or unsuccessful prepares.
+It publishes `story:chapter-change` with `testing: true` and reports
+`getState().testing` only for an active preview. Jumping past the finale decision
+requires an explicit test choice. Signals and choices advance only the preview
+record. They do not unlock durable progress or write the story section.
+
+Exiting a preview publishes `story:chapter-exit` with `testing: true` and the
+runtime restores the canonical active chapter or Demo beat. Runtime should pause
+canonical elapsed time and hide progression actions for the underlying Demo
+during a chapter preview. The separately labeled original Demo jump is
+available only for an unfinished Demo without chapter progress. It requires
+confirmation and uses the existing persistent `story.skipTo` debug API.
