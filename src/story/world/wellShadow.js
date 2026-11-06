@@ -99,14 +99,14 @@ export function createWellShadow(group, floor) {
       for (const { side, upper, lower, hand, fingers } of arms) {
         shoulder.set(side * 0.59, 1.87, -1.3);
         elbow.set(side * (1.2 + open * 0.35), 0.94 + open * 0.18, -0.45 - open * 0.3);
-        palm.set(side * (0.76 + open * 0.89), 0.94 + open * 0.57, 0.87 - open * 1.15);
+        palm.set(side * (0.76 + open * 0.89), 1.04 + open * 0.57, 1.045 - open * 1.29);
         poseSegment(upper, shoulder, elbow, 1.28);
         poseSegment(lower, elbow, palm, 0.91);
         hand.position.copy(palm);
         for (let i = 0; i < fingers.length; i++) {
           fingers[i].position.copy(palm);
           fingers[i].position.x += (i - 1) * 0.11;
-          fingers[i].position.y -= 0.105;
+          fingers[i].position.y -= 0.115;
           fingers[i].position.z += 0.22 - open * 0.09;
         }
       }
