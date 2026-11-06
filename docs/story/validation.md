@@ -28,11 +28,10 @@ Chrome 156.0.8078.80, macOS, desktop 1440×900 DPR1 and touch-emulated 390×844 
 Local Playwright runs record both flows under `artifacts/story/video`; screenshots and JSON
 are under `artifacts/story`. Generated test output is ignored; compressed review
 screenshots and the final JSON are committed under `docs/story/evidence`.
-CI omits video encoding but keeps all screenshot and gameplay checks. Movement
+CI omits video encoding but keeps all screenshot and gameplay checks. It
 uses the runner's preinstalled Chrome (`google-chrome --version` is logged),
 avoiding a redundant Chromium/font download; local acceptance uses Chrome too.
-Movement
-checks hold real input until the pose changes, with a 30-second timeout, rather
+Movement checks hold real input until the pose changes, with a 30-second timeout, rather
 than assuming a GPU-less runner can render enough frames in 350 milliseconds.
 Browser actions are bounded and failures include page text and screenshots;
 the full CI job has a ten-minute limit.
