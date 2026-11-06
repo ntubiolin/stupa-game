@@ -1,5 +1,7 @@
 import { DOCUMENTARY_CLIPS } from '../../data/story/documentary.js';
 import '../../i18n/storyDocumentary.js';
+import '../../i18n/storyVideo.js';
+import { createCueVideo } from './cueVideo.js';
 import './documentary.css';
 
 function element(tag, className) {
@@ -20,6 +22,7 @@ export function createDocumentary(ctx) {
   const t = (key, params) => i18n.t(`story.documentary.${key}`, params);
   let session = null;
   let image = null;
+  let video = null;
   let disposed = false;
 
   const dialog = element('dialog', 'story-documentary');
@@ -45,9 +48,24 @@ export function createDocumentary(ctx) {
   const skipButton = controlButton('skip');
   const closeButton = controlButton('close');
   const nextButton = controlButton('next');
-  controls.append(toggleButton, replayButton, skipButton, closeButton, nextButton);
+  const motionButton = controlButton('motion');
+  motionButton.hidden = true;
+  const seek = element('input', 'story-documentary-seek');
+  seek.type = 'range';
+  seek.min = '0';
+  seek.step = '0.1';
+  seek.hidden = true;
+  controls.append(toggleButton, replayButton, skipButton, closeButton, nextButton, motionButton, seek);
   dialog.append(title, still, provenance, captions, progress, controls);
   document.body.append(dialog);
+
+  function preferStill() {
+    const browser = globalThis.window;
+    return browser?.matchMedia?.('(prefers-reduced-motion: reduce)').matches ||
+      browser?.navigator?.connection?.saveData ||
+      browser?.navigator?.mozConnection?.saveData ||
+      browser?.navigator?.webkitConnection?.saveData;
+  }
 
   function refreshLabels() {
     if (!session) return;
@@ -55,16 +73,22 @@ export function createDocumentary(ctx) {
     dialog.dataset.paused = String(paused);
     const cue = clip.cues[index];
     title.textContent = i18n.t(clip.titleKey);
-    source.textContent = i18n.t(cue.sourceKey);
-    caption.textContent = i18n.t(cue.subtitleKey);
-    provenance.textContent = t(cue.image ? 'visual.generated' : 'visual.diagram');
+    const nextSource = i18n.t(cue.sourceKey);
+    const nextCaption = i18n.t(cue.subtitleKey);
+    if (source.textContent !== nextSource) source.textContent = nextSource;
+    if (caption.textContent !== nextCaption) caption.textContent = nextCaption;
+    provenance.textContent = t(still.dataset.playing === 'true' ? 'visual.video'
+      : cue.image || cue.video?.poster ? 'visual.generated' : 'visual.diagram');
     fallback.textContent = t('visual.missing');
     progress.textContent = t('progress', { current: index + 1, total: clip.cues.length });
     toggleButton.textContent = t(paused ? 'resume' : 'pause');
     replayButton.textContent = t('replay');
     skipButton.textContent = t('skip');
     closeButton.textContent = t('close');
-    nextButton.textContent = t(index === clip.cues.length - 1 ? 'finish' : 'next');
+    nextButton.textContent = t(index === clip.cues.length - 1 ? 'finish' : clip.cues.some(c => c.video) ? 'nextCue' : 'next');
+    motionButton.hidden = !cue.video?.src || !session.staticDefault || Boolean(video) || session.videoFailed;
+    motionButton.textContent = t('playMotion');
+    seek.setAttribute('aria-label', t('seek'));
   }
 
   function clearImage() {
@@ -73,25 +97,74 @@ export function createDocumentary(ctx) {
     fallback.hidden = true;
   }
 
-  function renderCue() {
-    const cue = session.clip.cues[session.index];
-    still.dataset.frame = cue.frame;
-    refreshLabels();
-    if (image?.getAttribute('src') === cue.image) return;
+  function showStill(src, poster) {
+    if (image && image.dataset.primary === (src || '') && image.dataset.poster === (poster || '')) return;
     clearImage();
-    if (!cue.image) return;
-
+    if (!src && !poster) return;
     const nextImage = element('img');
     nextImage.alt = '';
     nextImage.decoding = 'async';
+    nextImage.dataset.primary = src || '';
+    nextImage.dataset.poster = poster || '';
     nextImage.addEventListener('error', () => {
       if (nextImage !== image) return;
+      if (poster && nextImage.getAttribute('src') !== poster) {
+        nextImage.src = poster;
+        return;
+      }
       nextImage.hidden = true;
-      fallback.hidden = false;
-    }, { once: true });
+      fallback.hidden = still.dataset.playing === 'true';
+    });
     image = nextImage;
     still.prepend(image);
-    image.src = cue.image;
+    image.src = src || poster;
+  }
+
+  function clearVideo() {
+    video?.dispose();
+    video = null;
+    still.dataset.playing = 'false';
+    seek.hidden = true;
+  }
+
+  function startVideo() {
+    const cue = session?.clip.cues[session.index];
+    if (!cue?.video?.src || session.videoFailed || video) return;
+    const node = element('video');
+    still.append(node);
+    video = createCueVideo(node, cue.video.src, {
+      onReady() {
+        still.dataset.playing = 'true';
+        fallback.hidden = true;
+        refreshLabels();
+      },
+      onProgress(seconds, duration) {
+        seek.max = String(duration);
+        seek.value = String(seconds);
+        seek.hidden = still.dataset.playing !== 'true';
+      },
+      onFailure() {
+        session.videoFailed = true;
+        clearVideo();
+        fallback.hidden = Boolean(image && !image.hidden);
+        refreshLabels();
+      },
+    });
+    video.play();
+    refreshLabels();
+  }
+
+  function renderCue() {
+    const cue = session.clip.cues[session.index];
+    clearVideo();
+    session.videoFailed = false;
+    session.staticDefault = Boolean(preferStill());
+    still.dataset.frame = cue.frame;
+    still.dataset.video = String(Boolean(cue.video?.src));
+    showStill(cue.image, cue.video?.poster);
+    if (cue.video?.src && !image) fallback.hidden = false;
+    if (dialog.open && !session.paused && !session.staticDefault) startVideo();
+    refreshLabels();
   }
 
   function play(id) {
@@ -100,22 +173,24 @@ export function createDocumentary(ctx) {
     state.uiOpen = true;
     renderCue();
     dialog.showModal();
+    if (!session.staticDefault) startVideo();
     return true;
   }
 
   function pause() {
     if (!session || session.paused) return false;
     session.paused = true;
-    dialog.dataset.paused = 'true';
-    toggleButton.textContent = t('resume');
+    video?.pause();
+    refreshLabels();
     return true;
   }
 
   function resume() {
     if (!session?.paused) return false;
     session.paused = false;
-    dialog.dataset.paused = 'false';
-    toggleButton.textContent = t('pause');
+    if (video) video.play();
+    else if (!session.staticDefault) startVideo();
+    refreshLabels();
     return true;
   }
 
@@ -130,6 +205,7 @@ export function createDocumentary(ctx) {
     if (!session) return false;
     const { id } = session;
     session = null;
+    clearVideo();
     clearImage();
     state.uiOpen = false;
     dialog.close();
@@ -169,6 +245,12 @@ export function createDocumentary(ctx) {
   skipButton.addEventListener('click', skip);
   closeButton.addEventListener('click', close);
   nextButton.addEventListener('click', () => advance());
+  motionButton.addEventListener('click', () => {
+    if (!session || motionButton.hidden) return;
+    session.paused = false;
+    startVideo();
+  });
+  seek.addEventListener('input', () => video?.seek(Number(seek.value)));
   dialog.addEventListener('cancel', event => {
     event.preventDefault();
     close();

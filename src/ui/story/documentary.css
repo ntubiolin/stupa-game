@@ -125,10 +125,39 @@
 @keyframes story-memory-drift { from { transform: scale(1); } to { transform: scale(1.065) translateY(-1%); } }
 @media (prefers-reduced-motion: reduce) { .story-documentary-still img { animation: none; } }
 
-/* Preserve the approved full-frame stills and keep captions outside the art. */
-.story-documentary-still[data-frame="full"] img {
+/* Preserve the approved full compositions, including the fallback frame. */
+.story-documentary-still[data-frame="full"] img,
+.story-documentary-still[data-video="true"] img,
+.story-documentary-still video {
+  position: absolute;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
   object-position: center;
   animation: none;
-  transform: none;
+}
+
+.story-documentary-still[data-video="true"] img {
+  z-index: 1;
+}
+
+.story-documentary-still[data-playing="true"] img {
+  visibility: hidden;
+}
+
+.story-documentary-fallback {
+  position: relative;
+  z-index: 2;
+}
+
+.story-documentary-seek {
+  flex: 1 0 100%;
+  min-width: 0;
+  min-height: 44px;
+  accent-color: #e3bd83;
+}
+
+.story-documentary-seek:focus-visible {
+  outline: 2px solid #ffd383;
+  outline-offset: 2px;
 }
