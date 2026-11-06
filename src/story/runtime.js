@@ -20,6 +20,7 @@ import '../i18n/storyArt.js';
 import { createPhone } from '../ui/story/phone.js';
 import { createDocumentary } from '../ui/story/documentary.js';
 import { createMemorySystem } from './memorySystem.js';
+import { createLosang } from './characters/losang.js';
 import './runtime.css';
 
 const t = (key, args) => i18n.t(`mirror.${key}`, args);
@@ -126,11 +127,16 @@ function bowl() {
 renderer.domElement.addEventListener('pointerdown', beginSound);
 root.addEventListener('click', beginSound);
 
-// Adult-proportioned distant silhouette, no close-up facial performance or lights.
-const losang = new THREE.Group();
-const robe = new THREE.Mesh(new THREE.ConeGeometry(.28, 1.25, 10), new THREE.MeshStandardMaterial({ color: 0x604441, roughness: .97 })); robe.position.y = .7;
-const head = new THREE.Mesh(new THREE.SphereGeometry(.13, 12, 10), new THREE.MeshStandardMaterial({ color: 0x9b816a, roughness: 1 })); head.position.y = 1.49;
-losang.add(robe, head); losang.position.set(-27, 0, 10); stupaGroup.add(losang);
+// Provisional original character study; approved portrait/costume follows #84.
+const losangCharacter = createLosang(THREE);
+const losang = losangCharacter.group;
+losang.position.set(-27, 0, 10); losang.rotation.y = .16; stupaGroup.add(losang);
+const losangCollider = { type: 'circle', x: -27, z: 10, r: .35, zone: 'stupa' };
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+window.addEventListener('pagehide', event => {
+  // A bfcache page may return with its existing scene, so keep those resources.
+  if (!event.persisted) losangCharacter.dispose();
+});
 const mark = new THREE.Mesh(new THREE.TorusGeometry(.65, .025, 6, 40), new THREE.MeshBasicMaterial({ color: 0xd3ba84, transparent: true, opacity: .7 })); mark.rotation.x = -Math.PI / 2; scene.add(mark);
 
 async function setWorld(zone, token) {
@@ -150,6 +156,9 @@ async function setWorld(zone, token) {
   for (const [id, group] of Object.entries(ctx.zoneGroups)) group.visible = id === zone;
   state.zone = zone; state.zoneType = 'hub';
   losang.visible = zone === 'stupa' && ['losang', 'map', 'return', 'complete'].includes(currentBeat);
+  const colliderIndex = ctx.colliders.indexOf(losangCollider);
+  if (losang.visible && colliderIndex === -1) ctx.colliders.push(losangCollider);
+  else if (!losang.visible && colliderIndex !== -1) ctx.colliders.splice(colliderIndex, 1);
   return true;
 }
 const arrivalStops = [{ x: 12, z: 29 }, { x: -9, z: 29 }, { x: -26, z: 16 }];
@@ -225,7 +234,7 @@ async function enterBeat({ beat }) {
       setTarget({ x: 0, z: 31 }, 'photo.action', () => memory.open()); break;
     case 'restoration': setTarget(null, 'restoration.action', () => story.playClip('restoration')); story.playClip('restoration'); break;
     case 'losang':
-      losangLine = 0; setTarget({ x: -26.5, z: 12 }, 'losang.action', showLosang); break;
+      losangLine = 0; setTarget({ x: -26.5, z: 13 }, 'losang.action', showLosang); break;
     case 'map': setTarget(null, 'map.hotel', showMap); showMap(); break;
     case 'vision': {
       visionCount = 0; art.setLighting('dawn');
@@ -248,7 +257,10 @@ function distanceToTarget() { return currentTarget ? Math.hypot(state.player.pos
 function guide() {
   if (isAnyModalOpen() || !currentTarget) return;
   const { x, z } = currentTarget;
-  storyCamera.setPose({ x, y: ctx.world.getHeight(x, z) + 1.68, z, yaw: state.zone === 'stupa' ? Math.atan2(x, z) : 0, pitch: .18 });
+  const facingLosang = currentBeat === 'losang';
+  storyCamera.setPose({ x, y: ctx.world.getHeight(x, z) + 1.68, z,
+    yaw: facingLosang ? Math.atan2(x - losang.position.x, z - losang.position.z) : state.zone === 'stupa' ? Math.atan2(x, z) : 0,
+    pitch: facingLosang ? -.14 : .18 });
   renderer.domElement.focus({ preventScroll: true });
 }
 function showSettings() {
@@ -302,6 +314,7 @@ function frame(now) {
   // The camera bounds its own delta and substeps collisions; don't halve walking at 10 FPS.
   storyCamera.update(raw); sky.update(dt); stupa.update(dt); flags.update(dt); environment.update(dt);
   mapInstances[state.zone]?.update(dt); art.update(dt);
+  if (losang.visible && !reducedMotion.matches) losangCharacter.update(dt);
   document.body.classList.toggle('story-quality-low', art.getState().quality === 'low');
   story.update(dt); phone.update(dt); documentary.update(dt); memory.update(dt); ctx.save.update(dt);
   const waypoint = hud.querySelector('.story-waypoint');

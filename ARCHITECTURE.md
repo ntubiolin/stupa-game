@@ -382,3 +382,18 @@ substeps and its own 100 ms delta limit. Low quality disables the phone/card
 backdrop blur as well as shadows; runtime mirrors quality to a body class without
 changing adventure styles. Documentary manual Next/Finish uses the same guarded
 completion path as automatic playback and remains available while paused.
+
+## Narrative Losang character (#90)
+
+`src/story/characters/losang.js` exports `createLosang(THREE)` returning
+`{group, update(dt), dispose()}`. Origin is at the feet, front is +Z; the factory
+creates no lights, DOM, event subscriptions or saves. It owns deduplicated
+geometry/material sets and disposes them once. Narrative runtime owns placement,
+a 0.35 m collision circle, visibility, update (disabled for reduced motion), and
+non-bfcache pagehide disposal. The accessible guide faces the character from
+3 m away. Adventure NPC builders and saves are unchanged.
+
+This is an original procedural character study, not an approved final portrait.
+Novel chapter 2 identifies Losang as an elderly lama; source-corrected reference
+request #84 still owns final face/costume acceptance. No generated text/sacred
+symbols or external assets are embedded in the folded map prop.

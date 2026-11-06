@@ -1,0 +1,66 @@
+[
+  {
+    "name": "desktop-before",
+    "metric": {
+      "averageFps": 58.77886899659575,
+      "drawCalls": 80,
+      "triangles": 225592,
+      "pointLights": 0,
+      "zone": "stupa",
+      "beat": "losang",
+      "modal": false,
+      "preset": "cinematic",
+      "lighting": "dusk",
+      "quality": "high"
+    },
+    "result": "PASS"
+  },
+  {
+    "name": "desktop-after",
+    "metric": {
+      "averageFps": 56.2521973514591,
+      "drawCalls": 116,
+      "triangles": 235298,
+      "pointLights": 0,
+      "zone": "stupa",
+      "beat": "losang",
+      "modal": false,
+      "preset": "cinematic",
+      "lighting": "dusk",
+      "quality": "high"
+    },
+    "result": "PASS"
+  },
+  {
+    "name": "mobile-before",
+    "metric": {
+      "averageFps": 59.26218578695253,
+      "drawCalls": 64,
+      "triangles": 161256,
+      "pointLights": 0,
+      "zone": "stupa",
+      "beat": "losang",
+      "modal": false,
+      "preset": "cinematic",
+      "lighting": "dusk",
+      "quality": "high"
+    },
+    "result": "PASS"
+  },
+  {
+    "name": "mobile-after",
+    "metric": {
+      "averageFps": 59.01881224640361,
+      "drawCalls": 100,
+      "triangles": 170962,
+      "pointLights": 0,
+      "zone": "stupa",
+      "beat": "losang",
+      "modal": false,
+      "preset": "cinematic",
+      "lighting": "dusk",
+      "quality": "high"
+    },
+    "result": "PASS"
+  }
+]

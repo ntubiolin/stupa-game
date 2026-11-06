@@ -73,3 +73,12 @@ Low quality also disables phone/card backdrop blur via runtime's
 `body.story-quality-low`, retaining overlay tints and restoring blur in High.
 Follow-up agents own isolated #81/#82/#83 worktrees based on `f88b1a6`; reference
 PRs target `codex/80-feedback-base`, and reviewed commits are integrated in #80.
+
+### Losang visual follow-up (#90)
+
+Runtime owns `createLosang(THREE)` from `story/characters/losang.js`: detached
+feet-origin +Z-facing group, `update(dt)` breathing and `dispose()` cleanup.
+Model factory has no gameplay/save side effects and no lights. Runtime skips
+animation for reduced motion and protects bfcache restoration on pagehide.
+The guide uses a 3 m approach facing Losang, and a collision circle prevents
+walking into the model. Six-line fixed dialogue and map progression unchanged.

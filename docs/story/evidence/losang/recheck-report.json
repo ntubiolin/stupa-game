@@ -1,0 +1,34 @@
+[
+  {
+    "name": "desktop-after",
+    "metric": {
+      "averageFps": 49.09317885346388,
+      "drawCalls": 116,
+      "triangles": 235298,
+      "pointLights": 0,
+      "zone": "stupa",
+      "beat": "losang",
+      "modal": false,
+      "preset": "cinematic",
+      "lighting": "dusk",
+      "quality": "high"
+    },
+    "result": "PASS"
+  },
+  {
+    "name": "mobile-after",
+    "metric": {
+      "averageFps": 53.75000000000006,
+      "drawCalls": 100,
+      "triangles": 170962,
+      "pointLights": 0,
+      "zone": "stupa",
+      "beat": "losang",
+      "modal": false,
+      "preset": "cinematic",
+      "lighting": "dusk",
+      "quality": "high"
+    },
+    "result": "PASS"
+  }
+]
