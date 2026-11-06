@@ -3,23 +3,29 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { STORY_BEATS } from '../src/data/story/beats.js';
+import { adventureBrowserArgs } from './adventure-browser-start.mjs';
 
 const base = process.env.STORY_BASE_URL || 'http://127.0.0.1:4173';
 const output = process.env.STORY_ARTIFACTS || 'artifacts/story-media';
 const key = 'stupa.save.v2';
 const assets = '/story/';
+const linuxCI = Boolean(process.env.CI) && process.platform === 'linux';
+const deviceScaleFactor = linuxCI ? 0.25 : process.env.CI ? 0.5 : 1;
 const browser = await chromium.launch({
   ...(process.env.BROWSER_CHANNEL && { channel: process.env.BROWSER_CHANNEL }),
-  args: ['--enable-unsafe-swiftshader'],
+  args: [
+    ...adventureBrowserArgs,
+    ...(linuxCI ? ['--disable-accelerated-video-decode'] : []),
+  ],
 });
 await mkdir(output, { recursive: true });
-const report = { browser: browser.version(), scenarios: [], errors: [] };
+const report = { browser: browser.version(), deviceScaleFactor, linuxSoftwareProfile: linuxCI, scenarios: [], errors: [] };
 const mediaTraffic = new Map();
 
 async function openScenario(name, { mobile = false, reduced = false, activeChapter = false, abort } = {}) {
   const context = await browser.newContext({
     viewport: mobile ? { width: 390, height: 844 } : { width: 1152, height: 760 },
-    deviceScaleFactor: process.env.CI ? 0.5 : 1,
+    deviceScaleFactor,
     reducedMotion: reduced ? 'reduce' : 'no-preference',
     hasTouch: mobile,
     isMobile: mobile,
