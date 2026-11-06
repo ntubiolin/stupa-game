@@ -51,3 +51,145 @@ test('scoped story flush preserves newer adventure writes from another tab', () 
     if (original) Object.defineProperty(globalThis, 'localStorage', original); else delete globalThis.localStorage;
   }
 });
+
+function mockSaveStorage(t, doc) {
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  let raw = JSON.stringify(doc);
+  let error;
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: () => {
+        if (error === 'SecurityError') throw new DOMException('test read failure', error);
+        return raw;
+      },
+      setItem: (_, value) => {
+        if (error) throw new DOMException('test write failure', error);
+        raw = value;
+      },
+    },
+  });
+  t.after(() => {
+    if (original) Object.defineProperty(globalThis, 'localStorage', original);
+    else delete globalThis.localStorage;
+  });
+  return {
+    read: () => JSON.parse(raw),
+    replace: value => { raw = JSON.stringify(value); },
+    fail: value => { error = value; },
+  };
+}
+
+test('opposite mode writes preserve newly added and removed sections and opaque story fields', t => {
+  const originalStory = { version: 1, beat: 'complete' };
+  const { read, replace } = mockSaveStorage(t, {
+    version: 2,
+    sections: { story: originalStory, vitals: { level: 7 }, waypoints: { reached: ['plaza'] }, obsolete: { remove: true } },
+  });
+  const adventure = createSave({});
+  const story = createSave({}, { writableSections: ['story'] });
+  const waypoints = adventure.get('waypoints');
+  adventure.register('waypoints', () => waypoints);
+
+  const opaque = { version: 2, beat: 'complete', journey: { chapters: {} }, future: { nested: ['keep'] } };
+  assert.deepEqual(story.commitSection('story', opaque), { ok: true });
+  const fresh = read();
+  delete fresh.sections.obsolete;
+  fresh.sections.waypoints.reached.push('pharping');
+  fresh.sections.futureSection = ['arbitrary', 'payload'];
+  replace(fresh);
+
+  adventure.set('vitals', { level: 8 });
+  assert.equal(adventure.flush(), true);
+  assert.deepEqual(read().sections, {
+    story: opaque, vitals: { level: 8 }, waypoints: { reached: ['plaza', 'pharping'] },
+    futureSection: ['arbitrary', 'payload'],
+  });
+
+  const advanced = { ...opaque, journey: { activeChapterId: 'pharping' } };
+  assert.equal(story.commitSection('story', advanced).ok, true);
+  assert.equal(read().sections.vitals.level, 8);
+  assert.equal(read().sections.waypoints.reached.length, 2);
+  assert.deepEqual(createSave({}).get('story', null), advanced);
+  assert.equal(adventure.importString(createSave({}).exportString(), { reload: false }), true);
+  assert.deepEqual(read().sections.story, advanced);
+  assert.deepEqual(read().sections.futureSection, ['arbitrary', 'payload']);
+});
+
+test('commit failure rolls back memory and dirty flush failures retry without replacing unrelated sections', t => {
+  const { read, fail, replace } = mockSaveStorage(t, {
+    version: 2, sections: { story: { version: 2, beat: 'complete' }, vitals: { level: 7 } },
+  });
+  const save = createSave({});
+  save.set('vitals', { level: 9 });
+  const oldStory = save.get('story');
+  fail('QuotaExceededError');
+  assert.equal(save.commitSection('story', { version: 2, beat: 'arrival' }).ok, false);
+  assert.deepEqual(save.get('story'), oldStory);
+  assert.equal(save.flush(), false);
+  assert.equal(save.getWriteCount(), 0);
+  assert.deepEqual(save.getStatus(), { ok: false, error: 'storage-unavailable' });
+  assert.equal(read().sections.vitals.level, 7);
+
+  fail('SecurityError');
+  assert.equal(save.flush(), false);
+  fail(null);
+  const fresh = read();
+  fresh.sections.unknown = { metadata: true };
+  replace(fresh);
+  save.update(1);
+  assert.equal(save.getWriteCount(), 1);
+  assert.equal(read().sections.vitals.level, 9);
+  assert.deepEqual(read().sections.story, oldStory);
+  assert.deepEqual(read().sections.unknown, { metadata: true });
+  assert.deepEqual(save.getStatus(), { ok: true });
+});
+
+test('future story payloads are opaque in adventure and future roots reject all mutations', t => {
+  const futureStory = { version: 3, beat: 'future', arbitrary: [{ id: 17 }] };
+  const root = { version: 2, sections: { story: futureStory, vitals: { level: 7 } } };
+  const { read, replace } = mockSaveStorage(t, root);
+  const adventure = createSave({});
+  const story = createSave({}, { writableSections: ['story'] });
+  adventure.set('vitals', { level: 8 });
+  assert.equal(adventure.flush(), true);
+  assert.equal(story.commitSection('story', { version: 2, beat: 'prologue' }).ok, false);
+  assert.deepEqual(read().sections.story, futureStory);
+
+  const futureRoot = { version: 3, data: ['unrecognized', 'shape'] };
+  replace(futureRoot);
+  adventure.set('vitals', { level: 9 });
+  assert.equal(adventure.flush(), false);
+  assert.equal(adventure.isReadOnly(), true);
+  assert.equal(adventure.reset(), false);
+  assert.equal(adventure.importString(JSON.stringify(root), { reload: false }), false);
+  const reopened = createSave({});
+  assert.equal(reopened.isReadOnly(), true);
+  assert.equal(reopened.flush(), false);
+  assert.equal(reopened.commitSection('story', { version: 2 }).ok, false);
+  assert.deepEqual(JSON.parse(reopened.exportString()), futureRoot);
+  assert.deepEqual(read(), futureRoot);
+});
+
+test('explicit reset and import replace their own sections without reviving removed data', t => {
+  const { read } = mockSaveStorage(t, {
+    version: 2, sections: { story: { version: 1 }, settings: { lang: 'en' }, dungeon: { depth: 1 } },
+  });
+  const adventure = createSave({});
+  const story = createSave({}, { writableSections: ['story'] });
+  let depth = 1;
+  adventure.register('dungeon', () => ({ depth }));
+  depth = 2;
+  adventure.markDirty('dungeon');
+  assert.equal(adventure.reset(), true);
+  adventure.set('vitals', { level: 1 });
+  assert.equal(adventure.flush(), true);
+  assert.deepEqual(read().sections, { settings: { lang: 'en' }, vitals: { level: 1 } });
+  assert.equal(story.importString(JSON.stringify({
+    version: 2, sections: { story: { version: 1, beat: 'arrival' }, settings: { lang: 'zh' } },
+  }), { reload: false }), true);
+  assert.equal(read().sections.settings.lang, 'en');
+  assert.equal(read().sections.story.beat, 'arrival');
+  assert.equal(story.reset(), true);
+  assert.deepEqual(read().sections, { settings: { lang: 'en' }, vitals: { level: 1 } });
+});
