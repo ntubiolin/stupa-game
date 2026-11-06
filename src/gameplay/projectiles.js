@@ -618,7 +618,11 @@ export function createProjectiles(ctx) {
       slot.speed = params.speed ?? 22.0;
       slot.maxRange = params.range ?? 14.0;
       slot.lifetime = slot.maxRange / Math.max(1, slot.speed);
-      slot.damageMult = params.damageMult ?? 0.60;
+      let dmgMult = params.damageMult ?? 0.60;
+      if (!params.tsogyalBoosted && ctx.powers?.consumeTsogyalHum?.()) {
+        dmgMult *= 2.0;
+      }
+      slot.damageMult = dmgMult;
       slot.rank = params.rank ?? 1;
       slot.enh = params.enh ?? null;
       slot.maxHits = params.maxHits ?? (slot.enh === 'a' ? 3 : 1);
@@ -882,7 +886,12 @@ export function createProjectiles(ctx) {
     const playerRadius = config.PLAYER?.radius ?? 0.35;
 
     // --- Update Hum Bolts (Friendly Skill Projectiles)
-    const enemiesList = ctx.enemies?.getActiveEnemies ? ctx.enemies.getActiveEnemies() : [];
+    const rawEnemies = ctx.enemies?.getActiveEnemies ? ctx.enemies.getActiveEnemies() : [];
+    const activeBossState = ctx.bosses?.getActiveBoss?.()?.getInternalState?.();
+    const enemiesList =
+      activeBossState && !activeBossState.defeated && activeBossState.hp > 0
+        ? [...rawEnemies, activeBossState]
+        : rawEnemies;
     for (let i = 0; i < HUM_POOL_CAP; i++) {
       const hb = humBoltPool[i];
       if (!hb.active) continue;

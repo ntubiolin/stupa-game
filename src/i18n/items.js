@@ -131,6 +131,12 @@ export const ITEMS_STRINGS = {
     'legendary.chimphuStill.power': '靜止 1.5 秒進入「止觀」：技能傷害 +25%、每秒 +5 MP',
     'legendary.samyeMandala.name': '桑耶鎮寺法輪',
     'legendary.samyeMandala.power': '每第 3 次施放六字真言觸發 9m 桑耶金剛壇城（ATK × 1.8）',
+    'legendary.tsogyalMemory.name': '措嘉的空行念珠',
+    'legendary.tsogyalMemory.power': '每次施放六字真言後，下一發吽字光彈傷害 +100%',
+    'legendary.tertonFind.name': '伏藏師之戒',
+    'legendary.tertonFind.power': '在伏藏秘境中打破伏藏晶石時，有 20% 機率額外掉落一件精良或更高品質裝備',
+    'legendary.retreatShield.name': '青朴閉關法衣',
+    'legendary.retreatShield.power': '蓮花結界結束時，其剩餘冷卻時間減少 50%',
 
     // Currency & ground loot interaction
     'item.turquoise': '綠松石 ×{n}',
@@ -309,6 +315,12 @@ export const ITEMS_STRINGS = {
     'legendary.chimphuStill.power': 'Standing still for 1.5s grants Samatha: +25% skill damage and +5 MP/s',
     'legendary.samyeMandala.name': 'Dharma Wheel of Samye',
     'legendary.samyeMandala.power': 'Every 3rd Mantra cast triggers a 9m Samye Mandala ring (ATK × 1.8)',
+    'legendary.tsogyalMemory.name': 'Dakini Mala of Tsogyal',
+    'legendary.tsogyalMemory.power': 'After casting Six-Syllable Mantra, the next Hung Orb deals +100% damage',
+    'legendary.tertonFind.name': "Tertön's Signet Ring",
+    'legendary.tertonFind.power': 'Breaking a Terma Crystal in the dungeon has a 20% chance to drop an extra Rare or higher item',
+    'legendary.retreatShield.name': 'Chimphu Retreat Robe',
+    'legendary.retreatShield.power': 'When Lotus Shield ends, its remaining cooldown is reduced by 50%',
 
     // Currency & ground loot interaction
     'item.turquoise': 'Turquoise ×{n}',

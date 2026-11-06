@@ -955,9 +955,31 @@ export function createQuests(ctx) {
 
     // 5. If skipping to ch5, complete Chapter 4
     if (targetIdx >= 4) {
-      ['ch4.done', 'ch5.unlocked', 'skill.vajraGuru', 'protector.pehar'].forEach((f) => {
+      ['ch4.foundation', 'ch4.dayNight', 'ch4.hepori', 'ch4.pehar', 'ch4.samye'].forEach(markQuestDoneSilent);
+      [
+        'ch4.introSeen',
+        'ch4.foundation.done',
+        'ch4.dayNight.done',
+        'ch4.hepori.done',
+        'ch4.pehar.done',
+        'ch4.samye.done',
+        'ch4.done',
+        'ch5.unlocked',
+        'skill.vajraGuru',
+        'protector.pehar',
+      ].forEach((f) => {
         questData.flags[f] = true;
       });
+      [
+        'samye',
+        'samyeMandala',
+        'hepori',
+        'pehar',
+        'samyeName',
+        'sevenTestedMen',
+        'shantarakshita',
+        'trisongDetsen',
+      ].forEach((cId) => ctx.codex?.unlock?.(cId));
       ctx.skills?.unlock?.('vajraGuru');
       ctx.protectors?.unlock?.('pehar');
       ctx.allies?.unlock?.('pehar');
@@ -990,7 +1012,7 @@ export function createQuests(ctx) {
       ch2: 'ch2.envoy',
       ch3: 'ch3.valley',
       ch4: 'ch4.foundation',
-      ch5: 'ch5.retreat',
+      ch5: 'ch5.tsogyal',
     };
     const qToStart = firstQuestMap[norm];
     if (qToStart && registry.has(qToStart) && !isActive(qToStart) && !isDone(qToStart)) {

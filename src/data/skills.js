@@ -51,7 +51,11 @@ export const SKILLS = [
     unlock: { flag: null, hintKey: null },
     cast(ctx, { rank = 1, enh = null, origin, dir, target }) {
       const idx = Math.max(0, Math.min(4, rank - 1));
-      const damageMult = this.rankScaling.damageMult[idx] ?? 0.60;
+      let damageMult = this.rankScaling.damageMult[idx] ?? 0.60;
+      const tsogyalBoosted = Boolean(ctx.powers?.consumeTsogyalHum?.());
+      if (tsogyalBoosted) {
+        damageMult *= 2.0;
+      }
       const castDir = typeof dir === 'number' ? dir : (ctx.state?.player?.heading || 0);
       if (ctx.state?.player) {
         ctx.state.player.heading = castDir;
@@ -65,6 +69,7 @@ export const SKILLS = [
         rank,
         enh,
         damageMult,
+        tsogyalBoosted,
         speed: 22,
         maxRange: 14,
       });

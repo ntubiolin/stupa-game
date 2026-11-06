@@ -232,6 +232,16 @@ export function createSkills(ctx) {
     return true;
   }
 
+  function reduceCooldown(slotOrId, fraction = 0.5) {
+    const def = getSkillDef(slotOrId);
+    if (!def) return 0;
+    const st = skillStates[def.id];
+    if (!st || st.cooldownRemaining <= 0) return 0;
+    const frac = Math.max(0, Math.min(1, Number(fraction) || 0));
+    st.cooldownRemaining = Number((st.cooldownRemaining * (1 - frac)).toFixed(4));
+    return st.cooldownRemaining;
+  }
+
   function canCast(slotOrId) {
     const def = getSkillDef(slotOrId);
     if (!def) return false;
@@ -672,6 +682,7 @@ export function createSkills(ctx) {
     getCooldownFraction,
     getEffectiveCooldown,
     resetCooldown,
+    reduceCooldown,
     addUltCharge,
     fillUlt,
     getUltCharge,
@@ -708,6 +719,7 @@ export function createSkills(ctx) {
     addUltCharge: (n = 1) => api.addUltCharge(n),
     getUltCharge: () => api.getUltCharge(),
     resetCooldown: (slotOrId) => api.resetCooldown(slotOrId),
+    reduceCooldown: (slotOrId, frac) => api.reduceCooldown(slotOrId, frac),
     respec: () => api.respec(),
     cast: (slotOrId) => api.cast(slotOrId),
     getEffectiveCooldown: (slotOrId) => api.getEffectiveCooldown(slotOrId),

@@ -66,11 +66,12 @@ export function createZones(ctx) {
 
   function getHeight(x, z, mapId = state.zone) {
     const m = getMap(mapId);
-    if (!m || m.type === 'hub') return 0;
+    if (!m) return 0;
     const inst = mapInstances[m.id];
     if (inst && typeof inst.getHeight === 'function') {
       return inst.getHeight(x, z);
     }
+    if (m.type === 'hub') return 0;
     if (ctx.wilderness?.getHeight) {
       return ctx.wilderness.getHeight(x, z);
     }

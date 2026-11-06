@@ -37,8 +37,11 @@ export const NPCS = [
     look: 'lama',
     nameKey: 'npc.oldLama',
     idle: 'pray',
-    quests: ['prologue.vow', 'prologue.north'],
+    quests: ['prologue.vow', 'prologue.north', 'ch5.epilogue'],
     dialogue: [
+      { if: { questStep: 'ch5.epilogue:talk_old_lama' }, id: 'ch5.oldLama.epilogue' },
+      { if: { questActive: 'ch5.epilogue' }, id: 'ch5.oldLama.epilogue' },
+      { if: { flag: 'ch5.done' }, id: 'ch5.oldLama.done' },
       { if: { questStep: 'prologue.north:talk_report' }, id: 'prologue.oldLama.northReport' },
       { if: { questStep: 'prologue.north:talk_intro' }, id: 'prologue.oldLama.northIntro' },
       { if: { questActive: 'prologue.north' }, id: 'prologue.oldLama.northActive' },
