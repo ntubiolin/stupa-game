@@ -2058,6 +2058,7 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
 }
 
 .inv-modal {
+  pointer-events: auto;
   position: fixed;
   inset: 0;
   z-index: 650;
