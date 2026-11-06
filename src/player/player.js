@@ -1001,9 +1001,8 @@ export function createPlayer(ctx) {
       const d = Math.hypot(dx, dz);
       const kb = config.ENEMIES?.playerKnockback ?? 1.5;
       if (d > 1e-4) {
-        state.player.position.x += (dx / d) * kb;
-        state.player.position.z += (dz / d) * kb;
-        resolveCollisions(state.player.position);
+        movePlayerWithCollisions((dx / d) * kb, (dz / d) * kb);
+        root.position.copy(state.player.position);
       }
     }
     flashHurt();
@@ -1105,7 +1104,78 @@ export function createPlayer(ctx) {
   const camRight = new THREE.Vector3();
 
   // ---------------------------------------------------------------- collision resolution
-  function resolveCollisions(pos) {
+  function resolveColliderList(pos, colliders, zoneName, pr, prevX, prevZ) {
+    if (!Array.isArray(colliders)) return;
+    for (let pass = 0; pass < 3; pass++) {
+      let pX = pass === 0 ? prevX : pos.x;
+      let pZ = pass === 0 ? prevZ : pos.z;
+      for (let i = 0; i < colliders.length; i++) {
+        const c = colliders[i];
+        if (!c) continue;
+        if ((c.zone || 'stupa') !== zoneName) continue;
+        if (c.type === 'circle') {
+          const cdx = pos.x - c.x;
+          const cdz = pos.z - c.z;
+          const minDist = (c.r || 0) + pr;
+          const d2 = cdx * cdx + cdz * cdz;
+          if (d2 < minDist * minDist) {
+            if (d2 > 1e-6) {
+              const d = Math.sqrt(d2);
+              const push = (minDist - d) / d;
+              pos.x += cdx * push;
+              pos.z += cdz * push;
+            } else {
+              const pdx = pX - c.x;
+              const pdz = pZ - c.z;
+              const pd = Math.hypot(pdx, pdz);
+              if (pd > 1e-6) {
+                pos.x = c.x + (pdx / pd) * minDist;
+                pos.z = c.z + (pdz / pd) * minDist;
+              } else {
+                pos.x = c.x + minDist;
+              }
+            }
+            pX = pos.x;
+            pZ = pos.z;
+          }
+        } else if (c.type === 'box') {
+          const cx = Math.max(c.minX, Math.min(c.maxX, pos.x));
+          const cz = Math.max(c.minZ, Math.min(c.maxZ, pos.z));
+          const cdx = pos.x - cx;
+          const cdz = pos.z - cz;
+          const d2 = cdx * cdx + cdz * cdz;
+          if (d2 < pr * pr) {
+            if (d2 > 1e-6) {
+              const d = Math.sqrt(d2);
+              pos.x = cx + (cdx / d) * pr;
+              pos.z = cz + (cdz / d) * pr;
+            } else {
+              // Player center is inside the box: prefer pushing back toward previous side
+              if (pX <= c.minX) pos.x = c.minX - pr;
+              else if (pX >= c.maxX) pos.x = c.maxX + pr;
+              else if (pZ <= c.minZ) pos.z = c.minZ - pr;
+              else if (pZ >= c.maxZ) pos.z = c.maxZ + pr;
+              else {
+                const dl = Math.abs(pos.x - c.minX);
+                const dr = Math.abs(c.maxX - pos.x);
+                const dtb = Math.abs(pos.z - c.minZ);
+                const dbb = Math.abs(pos.z - c.maxZ);
+                const m = Math.min(dl, dr, dtb, dbb);
+                if (m === dl) pos.x = c.minX - pr;
+                else if (m === dr) pos.x = c.maxX + pr;
+                else if (m === dtb) pos.z = c.minZ - pr;
+                else pos.z = c.maxZ + pr;
+              }
+            }
+            pX = pos.x;
+            pZ = pos.z;
+          }
+        }
+      }
+    }
+  }
+
+  function resolveCollisions(pos, prevX = pos.x, prevZ = pos.z) {
     const pr = P.radius;
     const currentZone = state.zone || 'stupa';
 
@@ -1122,51 +1192,25 @@ export function createPlayer(ctx) {
         pos.z = wOrigin.z + dz * s;
       }
 
-      const colliders = ctx.colliders;
-      if (Array.isArray(colliders)) {
-        for (let i = 0; i < colliders.length; i++) {
-          const c = colliders[i];
-          if (!c) continue;
-          if ((c.zone || 'stupa') !== currentZone) continue;
-          if (c.type === 'circle') {
-            const cdx = pos.x - c.x;
-            const cdz = pos.z - c.z;
-            const minDist = (c.r || 0) + pr;
-            const d2 = cdx * cdx + cdz * cdz;
-            if (d2 < minDist * minDist) {
-              if (d2 > 1e-6) {
-                const d = Math.sqrt(d2);
-                const push = (minDist - d) / d;
-                pos.x += cdx * push;
-                pos.z += cdz * push;
-              } else {
-                pos.x = c.x + minDist;
-              }
-            }
-          } else if (c.type === 'box') {
-            const cx = Math.max(c.minX, Math.min(c.maxX, pos.x));
-            const cz = Math.max(c.minZ, Math.min(c.maxZ, pos.z));
-            const cdx = pos.x - cx;
-            const cdz = pos.z - cz;
-            const d2 = cdx * cdx + cdz * cdz;
-            if (d2 < pr * pr) {
-              if (d2 > 1e-6) {
-                const d = Math.sqrt(d2);
-                pos.x = cx + (cdx / d) * pr;
-                pos.z = cz + (cdz / d) * pr;
-              } else {
-                const dl = Math.abs(pos.x - c.minX);
-                const dr = Math.abs(c.maxX - pos.x);
-                const dtb = Math.abs(pos.z - c.minZ);
-                const dbb = Math.abs(pos.z - c.maxZ);
-                const m = Math.min(dl, dr, dtb, dbb);
-                if (m === dl) pos.x = c.minX - pr;
-                else if (m === dr) pos.x = c.maxX + pr;
-                else if (m === dtb) pos.z = c.minZ - pr;
-                else pos.z = c.maxZ + pr;
-              }
-            }
-          }
+      resolveColliderList(pos, ctx.colliders, currentZone, pr, prevX, prevZ);
+
+      // Keep inside active dungeon rooms/corridors so walls can never be tunneled through
+      if (currentZone === 'terma' && ctx.dungeon?.isActive?.() && typeof ctx.dungeon.clampPosition === 'function') {
+        ctx.dungeon.clampPosition(pos, pr);
+        resolveColliderList(pos, ctx.colliders, currentZone, pr, pos.x, pos.z);
+        ctx.dungeon.clampPosition(pos, pr);
+      }
+
+      // Keep inside active boss arena barrier
+      const bState = state.boss?.active;
+      if (bState && !bState.dead && bState.arena && bState.arena.map === currentZone) {
+        const bdx = pos.x - bState.arena.x;
+        const bdz = pos.z - bState.arena.z;
+        const bd = Math.hypot(bdx, bdz);
+        const maxBR = Math.max(1, (bState.arena.r || 13.5) - pr - 0.15);
+        if (bd > maxBR) {
+          pos.x = bState.arena.x + (bdx / bd) * maxBR;
+          pos.z = bState.arena.z + (bdz / bd) * maxBR;
         }
       }
 
@@ -1202,50 +1246,7 @@ export function createPlayer(ctx) {
     }
 
     // 2. Dynamic/static colliders from ctx.colliders
-    const colliders = ctx.colliders;
-    if (Array.isArray(colliders)) {
-      for (let i = 0; i < colliders.length; i++) {
-        const c = colliders[i];
-        if (!c) continue;
-        if ((c.zone || 'stupa') !== 'stupa') continue;
-        if (c.type === 'circle') {
-          const dx = pos.x - c.x;
-          const dz = pos.z - c.z;
-          const minDist = (c.r || 0) + pr;
-          const d2 = dx * dx + dz * dz;
-          if (d2 < minDist * minDist) {
-            const d = Math.sqrt(d2) || 0.001;
-            const push = (minDist - d) / d;
-            pos.x += dx * push;
-            pos.z += dz * push;
-          }
-        } else if (c.type === 'box') {
-          const cx = Math.max(c.minX, Math.min(c.maxX, pos.x));
-          const cz = Math.max(c.minZ, Math.min(c.maxZ, pos.z));
-          const dx = pos.x - cx;
-          const dz = pos.z - cz;
-          const d2 = dx * dx + dz * dz;
-          if (d2 < pr * pr) {
-            if (d2 > 1e-6) {
-              const d = Math.sqrt(d2);
-              pos.x = cx + (dx / d) * pr;
-              pos.z = cz + (dz / d) * pr;
-            } else {
-              // Inside box: push out to nearest edge
-              const dl = Math.abs(pos.x - c.minX);
-              const dr = Math.abs(c.maxX - pos.x);
-              const dtb = Math.abs(pos.z - c.minZ);
-              const dbb = Math.abs(c.maxZ - pos.z);
-              const m = Math.min(dl, dr, dtb, dbb);
-              if (m === dl) pos.x = c.minX - pr;
-              else if (m === dr) pos.x = c.maxX + pr;
-              else if (m === dtb) pos.z = c.minZ - pr;
-              else pos.z = c.maxZ + pr;
-            }
-          }
-        }
-      }
-    }
+    resolveColliderList(pos, ctx.colliders, 'stupa', pr, prevX, prevZ);
 
     // Re-clamp to outer/inner ring in case obstacle pushed player across boundary
     r = Math.hypot(pos.x, pos.z);
@@ -1257,6 +1258,27 @@ export function createPlayer(ctx) {
       pos.z *= maxR / r;
     }
     pos.y = 0;
+  }
+
+  function movePlayerWithCollisions(dx, dz) {
+    const pos = state.player.position;
+    const dist = Math.hypot(dx, dz);
+    if (dist <= 1e-6) {
+      resolveCollisions(pos, pos.x, pos.z);
+      return;
+    }
+    // Sub-step movement so large knockbacks/velocities never tunnel through thin walls
+    const maxStep = 0.15;
+    const steps = Math.max(1, Math.ceil(dist / maxStep));
+    const stepX = dx / steps;
+    const stepZ = dz / steps;
+    for (let i = 0; i < steps; i++) {
+      const prevX = pos.x;
+      const prevZ = pos.z;
+      pos.x += stepX;
+      pos.z += stepZ;
+      resolveCollisions(pos, prevX, prevZ);
+    }
   }
 
   // ---------------------------------------------------------------- pose helpers
@@ -1627,9 +1649,7 @@ export function createPlayer(ctx) {
       state.player.velocity.set(0, 0, 0);
     }
 
-    state.player.position.x += state.player.velocity.x * dt;
-    state.player.position.z += state.player.velocity.z * dt;
-    resolveCollisions(state.player.position);
+    movePlayerWithCollisions(state.player.velocity.x * dt, state.player.velocity.z * dt);
 
     const isSlowed = state.elapsed < (state.player?.slowUntil || 0);
     if (flashTimer > 0) {
@@ -1740,6 +1760,8 @@ export function createPlayer(ctx) {
     update,
     mesh: root,
     koraTargets,
+    resolveCollisions,
+    moveWithCollisions: movePlayerWithCollisions,
     getKoraProgress() {
       return { fraction: Math.max(0, Math.min(1, koraAccum / TWO_PI)), laps: koraLaps, target: activeKoraTargetId };
     },

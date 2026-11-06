@@ -921,6 +921,16 @@ export function createProjectiles(ctx) {
               hitObstacle = true;
               break;
             }
+          } else if (c.type === 'box') {
+            if (
+              hb.pos.x >= c.minX - 0.15 &&
+              hb.pos.x <= c.maxX + 0.15 &&
+              hb.pos.z >= c.minZ - 0.15 &&
+              hb.pos.z <= c.maxZ + 0.15
+            ) {
+              hitObstacle = true;
+              break;
+            }
           }
         }
       }
@@ -1046,6 +1056,16 @@ export function createProjectiles(ctx) {
               hitObstacle = true;
               break;
             }
+          } else if (c.type === 'box') {
+            if (
+              gf.pos.x >= c.minX - 0.15 &&
+              gf.pos.x <= c.maxX + 0.15 &&
+              gf.pos.z >= c.minZ - 0.15 &&
+              gf.pos.z <= c.maxZ + 0.15
+            ) {
+              hitObstacle = true;
+              break;
+            }
           }
         }
       }
@@ -1126,6 +1146,16 @@ export function createProjectiles(ctx) {
             const cdz = ra.pos.z - c.z;
             const minDist = (c.r || 0) + 0.15;
             if (cdx * cdx + cdz * cdz <= minDist * minDist) {
+              hitObstacle = true;
+              break;
+            }
+          } else if (c.type === 'box') {
+            if (
+              ra.pos.x >= c.minX - 0.15 &&
+              ra.pos.x <= c.maxX + 0.15 &&
+              ra.pos.z >= c.minZ - 0.15 &&
+              ra.pos.z <= c.maxZ + 0.15
+            ) {
               hitObstacle = true;
               break;
             }

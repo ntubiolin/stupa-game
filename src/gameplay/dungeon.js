@@ -1846,6 +1846,79 @@ export function createDungeon(ctx) {
     return { ...state.dungeon };
   }
 
+  /**
+   * Clamps a world position `(pos.x, pos.z)` so it remains strictly inside the
+   * walkable interior of the current floor's rooms and open doorway corridors.
+   * Prevents knockbacks, dashes, or corner squeezes from ever pushing entities outside walls.
+   */
+  function clampPosition(pos, radius = 0.35) {
+    if (!active || !floorLayout?.rooms?.length || !pos) return pos;
+    const innerHalf = Math.max(1.0, CELL_SIZE / 2 - 0.55 - radius);
+    const doorHalf = Math.max(0.5, DOOR_WIDTH / 2 - radius);
+    const activeBoss = state.boss?.active;
+    const lockBossRoom =
+      currentFloor === 3 &&
+      activeBoss &&
+      activeBoss.id === 'termaGuardian' &&
+      !activeBoss.dead &&
+      floorLayout.exitRoom;
+
+    if (lockBossRoom) {
+      const er = floorLayout.exitRoom;
+      if (
+        Math.abs(pos.x - er.wx) <= CELL_SIZE * 0.85 &&
+        Math.abs(pos.z - er.wz) <= CELL_SIZE * 0.85
+      ) {
+        pos.x = Math.max(er.wx - innerHalf, Math.min(er.wx + innerHalf, pos.x));
+        pos.z = Math.max(er.wz - innerHalf, Math.min(er.wz + innerHalf, pos.z));
+        return pos;
+      }
+    }
+
+    let bestX = pos.x;
+    let bestZ = pos.z;
+    let minDistSq = Infinity;
+
+    function testBox(minX, maxX, minZ, maxZ) {
+      const cx = Math.max(minX, Math.min(maxX, pos.x));
+      const cz = Math.max(minZ, Math.min(maxZ, pos.z));
+      const dx = pos.x - cx;
+      const dz = pos.z - cz;
+      const d2 = dx * dx + dz * dz;
+      if (d2 < minDistSq) {
+        minDistSq = d2;
+        bestX = cx;
+        bestZ = cz;
+      }
+    }
+
+    for (let i = 0; i < floorLayout.rooms.length; i++) {
+      const r = floorLayout.rooms[i];
+      testBox(r.wx - innerHalf, r.wx + innerHalf, r.wz - innerHalf, r.wz + innerHalf);
+      if (minDistSq === 0) return pos;
+
+      if (r.doors?.N) {
+        testBox(r.wx - doorHalf, r.wx + doorHalf, r.wz - 8.6, r.wz - innerHalf + 0.2);
+      }
+      if (r.doors?.S) {
+        testBox(r.wx - doorHalf, r.wx + doorHalf, r.wz + innerHalf - 0.2, r.wz + 8.6);
+      }
+      if (r.doors?.W) {
+        testBox(r.wx - 8.6, r.wx - innerHalf + 0.2, r.wz - doorHalf, r.wz + doorHalf);
+      }
+      if (r.doors?.E) {
+        testBox(r.wx + innerHalf - 0.2, r.wx + 8.6, r.wz - doorHalf, r.wz + doorHalf);
+      }
+      if (minDistSq === 0) return pos;
+    }
+
+    if (minDistSq > 0 && minDistSq < Infinity) {
+      pos.x = bestX;
+      pos.z = bestZ;
+    }
+    return pos;
+  }
+
   function update(dt) {
     if (tierSelectOpen && ctx.input?.pressed?.('closeUi')) {
       closeTierSelect();
@@ -1903,6 +1976,7 @@ export function createDungeon(ctx) {
       return highestClearedTier;
     },
     getLayout: () => floorLayout,
+    clampPosition,
     getState,
   };
 

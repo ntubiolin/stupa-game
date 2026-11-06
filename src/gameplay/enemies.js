@@ -1365,25 +1365,55 @@ export function createEnemies(ctx) {
       }
     }
 
-    // 3. Obstacle colliders
+    // 3. Obstacle colliders (circle + box) & dungeon room bounds
     const currentZone = state.zone || 'stupa';
+    const er = enemy.radius || 0.45;
     if (Array.isArray(ctx.colliders)) {
-      for (let i = 0; i < ctx.colliders.length; i++) {
-        const c = ctx.colliders[i];
-        if (!c || (c.zone || 'stupa') !== currentZone) continue;
-        if (c.type === 'circle') {
-          const cdx = enemy.pos.x - c.x;
-          const cdz = enemy.pos.z - c.z;
-          const minDist = (c.r || 0) + enemy.radius;
-          const d2 = cdx * cdx + cdz * cdz;
-          if (d2 < minDist * minDist) {
-            const d = Math.sqrt(d2) || 0.001;
-            const push = (minDist - d) / d;
-            enemy.pos.x += cdx * push;
-            enemy.pos.z += cdz * push;
+      for (let pass = 0; pass < 2; pass++) {
+        for (let i = 0; i < ctx.colliders.length; i++) {
+          const c = ctx.colliders[i];
+          if (!c || (c.zone || 'stupa') !== currentZone) continue;
+          if (c.type === 'circle') {
+            const cdx = enemy.pos.x - c.x;
+            const cdz = enemy.pos.z - c.z;
+            const minDist = (c.r || 0) + er;
+            const d2 = cdx * cdx + cdz * cdz;
+            if (d2 < minDist * minDist) {
+              const d = Math.sqrt(d2) || 0.001;
+              const push = (minDist - d) / d;
+              enemy.pos.x += cdx * push;
+              enemy.pos.z += cdz * push;
+            }
+          } else if (c.type === 'box') {
+            const cx = Math.max(c.minX, Math.min(c.maxX, enemy.pos.x));
+            const cz = Math.max(c.minZ, Math.min(c.maxZ, enemy.pos.z));
+            const cdx = enemy.pos.x - cx;
+            const cdz = enemy.pos.z - cz;
+            const d2 = cdx * cdx + cdz * cdz;
+            if (d2 < er * er) {
+              if (d2 > 1e-6) {
+                const d = Math.sqrt(d2);
+                enemy.pos.x = cx + (cdx / d) * er;
+                enemy.pos.z = cz + (cdz / d) * er;
+              } else {
+                const dl = Math.abs(enemy.pos.x - c.minX);
+                const dr = Math.abs(c.maxX - enemy.pos.x);
+                const dtb = Math.abs(enemy.pos.z - c.minZ);
+                const dbb = Math.abs(c.maxZ - enemy.pos.z);
+                const m = Math.min(dl, dr, dtb, dbb);
+                if (m === dl) enemy.pos.x = c.minX - er;
+                else if (m === dr) enemy.pos.x = c.maxX + er;
+                else if (m === dtb) enemy.pos.z = c.minZ - er;
+                else enemy.pos.z = c.maxZ + er;
+              }
+            }
           }
         }
       }
+    }
+
+    if (currentZone === 'terma' && ctx.dungeon?.isActive?.() && typeof ctx.dungeon.clampPosition === 'function') {
+      ctx.dungeon.clampPosition(enemy.pos, er);
     }
 
     // 4. Ground height
