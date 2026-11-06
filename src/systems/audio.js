@@ -3,7 +3,15 @@
  * butter-lamp ignition whoosh, rhesus macaque FM chirps, prayer-wheel clicks,
  * soft stone footsteps, wind-modulated bandpass noise, subtle "Om" harmonic pad,
  * and nocturnal crickets. Zero external audio files.
+ *
+ * Also hosts the adaptive procedural score (`music.js` engine + `data/music.js`):
+ * picks the map / chapter-variant / boss track from game state and fires stingers
+ * on chapter intros, chapter completion, boss subjugation and Guru Rinpoche visions.
  */
+import { CONFIG } from '../config.js';
+import { createMusicEngine } from './music.js';
+import { MUSIC_TRACKS, MUSIC_STINGERS, keyOffset } from '../data/music.js';
+
 const MUTE_STORAGE_KEY = 'stupa.audio.muted';
 const VOL_STORAGE_KEY = 'stupa.audio.volume';
 
@@ -23,11 +31,25 @@ export function createAudio(ctx) {
   let started = false;
   let cricketTimer = 0;
 
+  // Adaptive score
+  const MUSIC_CFG = CONFIG.MUSIC;
+  let music = null;
+  let musicEnabled = true;
+  let musicVolume = MUSIC_CFG.defaultMusicVolume;
+  let musicRefreshTimer = 0;
+  let musicForced = null; // debug override: { id, vars }
+  const bossMusic = { active: false, id: null, phase: 1 };
+  let samyeSiege = false; // Ch.4 night-defense phase (`samye:nightStarted` → `samye:nightSurvived`)
+
   if (ctx.save) {
     const settings = ctx.save.get('settings', { muted: false, volume: 0.75 });
     muted = Boolean(settings.muted);
     if (typeof settings.volume === 'number' && !Number.isNaN(settings.volume)) {
       volume = Math.max(0, Math.min(1, settings.volume));
+    }
+    if (settings.music === false) musicEnabled = false;
+    if (typeof settings.musicVolume === 'number' && !Number.isNaN(settings.musicVolume)) {
+      musicVolume = Math.max(0, Math.min(1, settings.musicVolume));
     }
   } else {
     try {
@@ -171,6 +193,20 @@ export function createAudio(ctx) {
     cricketGain = ac.createGain();
     cricketGain.gain.value = 0;
     cricketGain.connect(masterGain);
+
+    // 4. Adaptive procedural score (shares the master volume / mute)
+    try {
+      music = createMusicEngine({
+        ac,
+        destination: masterGain,
+        tracks: MUSIC_TRACKS,
+        stingers: MUSIC_STINGERS,
+        config: { ...MUSIC_CFG, volume: musicEnabled ? MUSIC_CFG.volume * musicVolume : 0 },
+      });
+    } catch (err) {
+      console.warn('[audio] music engine unavailable', err);
+      music = null;
+    }
 
     started = true;
     return ac;
@@ -1261,6 +1297,64 @@ export function createAudio(ctx) {
     });
   }
 
+  // ---------------------------------------------------------------- adaptive score glue
+  const hasQuestFlag = (flag) => Boolean(ctx.quests?.hasFlag?.(flag));
+
+  /** Map game state → { id, vars } of the score track that should be playing. */
+  function resolveMusicTrack() {
+    if (musicForced) return musicForced;
+    if (bossMusic.active && bossMusic.id) {
+      const id = MUSIC_TRACKS[`boss.${bossMusic.id}`] ? `boss.${bossMusic.id}` : 'boss.default';
+      return { id, vars: { phase: bossMusic.phase } };
+    }
+    const zone = state.zone || 'stupa';
+    switch (zone) {
+      case 'stupa':
+        return { id: 'stupa', vars: { night: (state.time?.nightFactor ?? 0) > MUSIC_CFG.nightThreshold } };
+      case 'pharping':
+        return { id: hasQuestFlag('ch1.rain') ? 'pharping.rain' : 'pharping.drought', vars: {} };
+      case 'mangyul':
+        return { id: hasQuestFlag('ch2.storm.done') ? 'mangyul.calm' : 'mangyul.storm', vars: {} };
+      case 'yarlung':
+        return { id: hasQuestFlag('ch3.yaks.done') ? 'yarlung.calm' : 'yarlung.unrest', vars: {} };
+      case 'samye':
+        if (hasQuestFlag('ch4.pehar.done')) return { id: 'samye.complete', vars: {} };
+        return { id: samyeSiege ? 'samye.night' : 'samye.day', vars: {} };
+      default:
+        return { id: 'wild', vars: {} };
+    }
+  }
+
+  function canPlayMusic() {
+    return Boolean(music) && musicEnabled && !muted && state.mode === 'play';
+  }
+
+  function refreshMusic(fade) {
+    if (!music) return;
+    if (!canPlayMusic()) {
+      if (music.getCurrent()) music.stop(1.0);
+      return;
+    }
+    const { id, vars } = resolveMusicTrack();
+    music.play(id, vars, fade != null ? { fade } : {});
+  }
+
+  /** Key offset (semitones from D) of the current track, so stingers sit in key. */
+  function currentKeyOffset() {
+    const cur = music?.getCurrent();
+    return cur?.root != null ? keyOffset(cur.root) : 0;
+  }
+
+  function playMusicStinger(id, extra = {}) {
+    if (!music || !canPlayMusic()) return;
+    music.stinger(id, { tr: currentKeyOffset(), ...extra });
+  }
+
+  function applyMusicVolume() {
+    if (!music) return;
+    music.setVolume(musicEnabled ? MUSIC_CFG.volume * musicVolume : 0, 0.5);
+  }
+
   // ---------------------------------------------------------------- bus listeners
   bus.on('game:start', () => {
     const context = ensureContext();
@@ -1271,6 +1365,8 @@ export function createAudio(ctx) {
     } else {
       playSingingBowl(1.0);
     }
+    // state.mode flips to 'play' in a sibling listener — resolve on the next tick.
+    setTimeout(() => refreshMusic(), 0);
   });
 
   bus.on('sfx', (payload) => {
@@ -1448,33 +1544,69 @@ export function createAudio(ctx) {
     }
   }
 
-  bus.on('boss:start', ({ phase }) => {
+  bus.on('boss:start', ({ id, phase } = {}) => {
     bossCombatActive = true;
     bossCurrentPhase = phase || 1;
     bossDrumTimer = 0.05;
     if (started) playBossDrum(false);
+    bossMusic.active = true;
+    bossMusic.id = id || null;
+    bossMusic.phase = bossCurrentPhase;
+    refreshMusic(MUSIC_CFG.bossCrossfade);
   });
 
-  bus.on('boss:phase', ({ phase }) => {
+  bus.on('boss:phase', ({ phase } = {}) => {
     bossCurrentPhase = phase || 2;
     if (started) playBossDrum(bossCurrentPhase >= 3);
+    bossMusic.phase = bossCurrentPhase;
+    refreshMusic();
+    playMusicStinger('phaseShift');
   });
 
   bus.on('boss:end', () => {
     bossCombatActive = false;
     bossCurrentPhase = 1;
+    bossMusic.active = false;
+    refreshMusic(MUSIC_CFG.bossCrossfade);
   });
 
   bus.on('boss:reset', () => {
     bossCombatActive = false;
     bossCurrentPhase = 1;
+    bossMusic.active = false;
+    refreshMusic(MUSIC_CFG.bossCrossfade);
   });
 
   bus.on('boss:subdued', () => {
+    // Stinger first, in the boss track's key, before the map theme fades back in.
+    playMusicStinger('subdued');
     bossCombatActive = false;
     bossCurrentPhase = 1;
+    bossMusic.active = false;
     if (started) playBossSubduedChord();
+    refreshMusic(MUSIC_CFG.bossCrossfade * 2);
   });
+
+  // Chapter "Pure Vision" intro card, chapter completion banner, quest flags
+  bus.on('chapter:intro', () => {
+    setTimeout(() => playMusicStinger('vision'), 0);
+  });
+  bus.on('chapter:banner', () => playMusicStinger('chapterComplete'));
+  bus.on('flag:set', () => refreshMusic());
+  bus.on('quest:complete', () => refreshMusic());
+
+  // Talking with Guru Rinpoche's pure-vision NPCs → Vajra Guru leitmotif
+  bus.on('dialogue:open', ({ npcId } = {}) => {
+    if (typeof npcId === 'string' && npcId.startsWith('guruVision')) playMusicStinger('guru');
+  });
+
+  bus.on('player:faint', () => {
+    if (music && canPlayMusic()) music.duck(MUSIC_CFG.faintDuck, MUSIC_CFG.faintDuckSeconds, 2.5);
+  });
+
+  // Ch.4 Samye: "built by day, torn down by night"
+  bus.on('samye:nightStarted', () => { samyeSiege = true; refreshMusic(MUSIC_CFG.bossCrossfade * 2); });
+  bus.on('samye:nightSurvived', () => { samyeSiege = false; refreshMusic(); });
 
   function getAmbienceProfile(mapId = state.zone) {
     const mapDef = ctx.world?.getMap(mapId);
@@ -1484,6 +1616,7 @@ export function createAudio(ctx) {
 
   // Crossfade between Stupa and Wilderness ambient profiles on zone change (~0.8s transition)
   bus.on('zone:change', ({ to }) => {
+    if (to !== 'samye') samyeSiege = false;
     if (!ac || !started) return;
     const now = ac.currentTime;
     const isWildAmbience = (getAmbienceProfile(to) !== 'stupa');
@@ -1495,6 +1628,9 @@ export function createAudio(ctx) {
     // Highland wind resonant filter Q modulation
     const targetQ = isWildAmbience ? 3.6 : 2.8;
     windFilter.Q.setTargetAtTime(targetQ, now, 0.28);
+
+    // Crossfade the score to the new map's theme
+    refreshMusic();
   });
 
   // ---------------------------------------------------------------- update
@@ -1503,6 +1639,13 @@ export function createAudio(ctx) {
 
   function update(dt) {
     if (!ac || !started) return;
+
+    // Periodically re-resolve the score track (day/night, quest-flag variants)
+    musicRefreshTimer -= dt;
+    if (musicRefreshTimer <= 0) {
+      musicRefreshTimer = MUSIC_CFG.refreshInterval;
+      refreshMusic();
+    }
 
     const windStrength = state.wind?.strength ?? 0.5;
     const nightFactor = state.time?.nightFactor ?? 0;
@@ -1545,8 +1688,9 @@ export function createAudio(ctx) {
       }
     }
 
-    // Layered ritual drum pulse during Boss combat (speeds up in Phase 3)
-    if (bossCombatActive && state.mode === 'play') {
+    // Layered ritual drum pulse during Boss combat (speeds up in Phase 3).
+    // When the adaptive score is playing, its cham-dance boss track replaces this loop.
+    if (bossCombatActive && state.mode === 'play' && !canPlayMusic()) {
       bossDrumTimer -= dt;
       if (bossDrumTimer <= 0) {
         const isPhase3 = bossCurrentPhase >= 3;
@@ -1561,6 +1705,8 @@ export function createAudio(ctx) {
       const settings = ctx.save.get('settings', {});
       settings.muted = muted;
       settings.volume = volume;
+      settings.music = musicEnabled;
+      settings.musicVolume = musicVolume;
       ctx.save.set('settings', settings);
     } else {
       try {
@@ -1570,12 +1716,17 @@ export function createAudio(ctx) {
     }
   }
 
+  function emitAudioChange() {
+    bus.emit('audio:change', { muted, volume, music: musicEnabled, musicVolume });
+  }
+
   function setMuted(nextMuted) {
     muted = Boolean(nextMuted);
     saveAudioSettings();
     if (!muted && state.mode === 'play') ensureContext();
     applyMasterGain();
-    bus.emit('audio:change', { muted, volume });
+    refreshMusic();
+    emitAudioChange();
   }
 
   function toggleMute() {
@@ -1587,7 +1738,23 @@ export function createAudio(ctx) {
     volume = Math.max(0, Math.min(1, Number(v) || 0));
     saveAudioSettings();
     applyMasterGain();
-    bus.emit('audio:change', { muted, volume });
+    emitAudioChange();
+  }
+
+  function setMusicEnabled(next) {
+    musicEnabled = Boolean(next);
+    saveAudioSettings();
+    if (musicEnabled && state.mode === 'play') ensureContext();
+    applyMusicVolume();
+    refreshMusic(1.5);
+    emitAudioChange();
+  }
+
+  function setMusicVolume(v) {
+    musicVolume = Math.max(0, Math.min(1, Number(v) || 0));
+    saveAudioSettings();
+    applyMusicVolume();
+    emitAudioChange();
   }
 
   const api = {
@@ -1597,6 +1764,20 @@ export function createAudio(ctx) {
     toggleMute,
     getVolume() { return volume; },
     setVolume,
+    isMusicEnabled() { return musicEnabled; },
+    setMusicEnabled,
+    toggleMusic() { setMusicEnabled(!musicEnabled); return musicEnabled; },
+    getMusicVolume() { return musicVolume; },
+    setMusicVolume,
+    /** Current score track `{ id, vars, root }` or null. */
+    getMusicTrack() { return music?.getCurrent() ?? null; },
+    /** Debug: force a score track (`null` restores automatic selection). */
+    forceMusic(id, vars = {}) {
+      musicForced = id ? { id, vars } : null;
+      refreshMusic(1.0);
+    },
+    /** Debug: fire a score stinger ('vision' | 'chapterComplete' | 'subdued' | 'guru' | 'phaseShift'). */
+    playMusicStinger,
     playEagleCry,
     playDistantBell,
     playBossDrum,

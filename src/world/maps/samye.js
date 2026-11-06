@@ -1070,19 +1070,31 @@ export function createMap(ctx, mapDef = SAMYE_MAP) {
       if (nightNum >= 3 && s === 1) kind = 'du';
       if (nightNum >= 3 && s === 3) kind = 'gyalpo';
 
-      const spawned = ctx.enemies.spawn(kind, { x: sx, z: sz, level: 24 + nightNum });
-      if (spawned) {
-        spawned.noSplit = true;
-        spawned.state = 'chase';
-        spawned.wallTarget = {
-          segIndex: s,
-          x: seg.wx,
-          z: seg.wz,
-          active: !seg.broken,
-          onHit(dmg) {
-            damageWall(s, dmg);
-          },
-        };
+      const wallTarget = {
+        segIndex: s,
+        x: seg.wx,
+        z: seg.wz,
+        active: !seg.broken,
+        onHit(dmg) {
+          damageWall(s, dmg);
+        },
+      };
+      const spawned = ctx.enemies.spawn(kind, {
+        x: sx,
+        z: sz,
+        level: 24 + nightNum,
+        noSplit: true,
+        wallTarget,
+      });
+      const activeList = ctx.enemies?.getActiveEnemies?.() || ctx.enemies?.getActive?.() || [];
+      const inst =
+        typeof spawned === 'string'
+          ? activeList.find((en) => en.id === spawned)
+          : spawned;
+      if (inst && typeof inst === 'object') {
+        inst.noSplit = true;
+        inst.state = 'chase';
+        inst.wallTarget = wallTarget;
       }
     }
   }
@@ -1116,7 +1128,7 @@ export function createMap(ctx, mapDef = SAMYE_MAP) {
     nightTimer = 0;
 
     // Clear remaining night wave enemies
-    const list = ctx.enemies?.getActive?.() || [];
+    const list = ctx.enemies?.getActiveEnemies?.() || ctx.enemies?.getActive?.() || [];
     for (let i = list.length - 1; i >= 0; i--) {
       if (list[i].wallTarget) {
         ctx.enemies.damage(list[i].id, 999999, 'magic', { execute: true });
@@ -1231,17 +1243,26 @@ export function createMap(ctx, mapDef = SAMYE_MAP) {
       const a = (i / defs.length) * TWO_PI;
       const sx = cx + Math.cos(a) * 8.5;
       const sz = cz + Math.sin(a) * 8.5;
-      const e = ctx.enemies.spawn(defs[i].kind, {
+      const spawned = ctx.enemies.spawn(defs[i].kind, {
         x: sx,
         z: sz,
         level: 26 + waveNum,
         rank: defs[i].rank,
         affixes: defs[i].affixes || [],
+        noSplit: true,
       });
-      if (e) {
-        e.noSplit = true;
-        e.state = 'chase';
-        heporiState.spawnedIds.push(e.id);
+      const activeList = ctx.enemies?.getActiveEnemies?.() || ctx.enemies?.getActive?.() || [];
+      const inst =
+        typeof spawned === 'string'
+          ? activeList.find((en) => en.id === spawned)
+          : spawned;
+      const eid = typeof spawned === 'string' ? spawned : inst?.id;
+      if (inst && typeof inst === 'object') {
+        inst.noSplit = true;
+        inst.state = 'chase';
+      }
+      if (eid) {
+        heporiState.spawnedIds.push(eid);
       }
     }
   }
@@ -1263,7 +1284,7 @@ export function createMap(ctx, mapDef = SAMYE_MAP) {
     heporiState.pauseTimer = 0;
 
     // Liberate any remaining gauntlet enemies
-    const activeList = ctx.enemies?.getActive?.() || [];
+    const activeList = ctx.enemies?.getActiveEnemies?.() || ctx.enemies?.getActive?.() || [];
     for (let i = activeList.length - 1; i >= 0; i--) {
       if (heporiState.spawnedIds.includes(activeList[i].id)) {
         ctx.enemies.damage(activeList[i].id, 999999, 'magic', { execute: true });
@@ -1427,7 +1448,10 @@ export function createMap(ctx, mapDef = SAMYE_MAP) {
   setStage(loadInitialStage());
 
   // If entering Samye during `ch4.dayNight`, apply morning sky
-  if (ctx.quests?.getActive?.()?.some?.((q) => q.id === 'ch4.dayNight')) {
+  if (
+    ctx.quests?.isActive?.('ch4.dayNight') ||
+    ctx.quests?.getActive?.()?.some?.((q) => q.id === 'ch4.dayNight')
+  ) {
     applyMorningSky();
   }
 
@@ -1475,6 +1499,10 @@ export function createMap(ctx, mapDef = SAMYE_MAP) {
   ctx.hepori = heporiApi;
   ctx.debug?.register?.('samye', samyeApi);
   ctx.debug?.register?.('hepori', heporiApi);
+  if (typeof window !== 'undefined' && window.__stupa) {
+    window.__stupa.samye = samyeApi;
+    window.__stupa.hepori = heporiApi;
+  }
 
   // ---------------------------------------------------------------- 13. Per-Frame Update & Interaction Prompts
   let hudTick = 0;
@@ -1627,7 +1655,8 @@ export function createMap(ctx, mapDef = SAMYE_MAP) {
         pPos &&
         !heporiState.active &&
         !heporiState.cleared &&
-        ctx.quests?.getActive?.()?.some?.((q) => q.id === 'ch4.hepori') &&
+        (ctx.quests?.isActive?.('ch4.hepori') ||
+          ctx.quests?.getActive?.()?.some?.((q) => q.id === 'ch4.hepori')) &&
         Math.hypot(pPos.x - (ox + 75), pPos.z - (oz - 10)) <= 12.0
       ) {
         startHeporiGauntlet();
@@ -1648,7 +1677,7 @@ export function createMap(ctx, mapDef = SAMYE_MAP) {
 
       // Tick Mount Hepo Ri 4-Wave Gauntlet
       if (heporiState.active) {
-        const activeList = ctx.enemies?.getActive?.() || [];
+        const activeList = ctx.enemies?.getActiveEnemies?.() || ctx.enemies?.getActive?.() || [];
         const aliveCount = activeList.filter(
           (e) => heporiState.spawnedIds.includes(e.id) && e.hp > 0 && e.state !== 'liberated'
         ).length;

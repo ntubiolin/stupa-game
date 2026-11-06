@@ -107,7 +107,8 @@ export function createBoss(ctx, def) {
 
   // ---------------------------------------------------------------- 1. Build Procedural Boss Model
   const built = def.buildModel(THREE);
-  const bossMeshGroup = built.group;
+  const bossMeshGroup = built.group || built.root;
+  built.group = bossMeshGroup;
   const startY = getGroundY(arena.x, arena.z);
   bossMeshGroup.position.set(arena.x, startY, arena.z);
   rootGroup.add(bossMeshGroup);
@@ -552,8 +553,11 @@ export function createBoss(ctx, def) {
       def.attacks.summonAdds(bossState, patternRunner.patterns, ctx);
     } else if (Array.isArray(phaseDef.patterns)) {
       const wzSpec = phaseDef.patterns.find((p) => p.type === 'weatherZone');
+      const saSpec = phaseDef.patterns.find((p) => p.type === 'summonAdds');
       if (wzSpec) {
         patternRunner.patterns.weatherZone(bossState, wzSpec);
+      } else if (saSpec) {
+        patternRunner.patterns.summonAdds(bossState, saSpec);
       }
     }
 
@@ -579,7 +583,7 @@ export function createBoss(ctx, def) {
     const frac = bossState.hp / bossState.maxHp;
     const phases = def.phases || [];
     for (let i = phases.length - 1; i >= 1; i--) {
-      const thresh = phases[i].hpBelow ?? phases[i].threshold ?? 0.5;
+      const thresh = phases[i].hpBelow ?? phases[i].threshold ?? phases[i].hpThreshold ?? 0.5;
       if (frac <= thresh && bossState.phase < i + 1) {
         triggerPhaseTransition(i + 1);
         break;

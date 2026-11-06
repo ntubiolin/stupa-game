@@ -39,7 +39,9 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/systems/quests.js` | Gameplay | data-driven quest system (9 step types), collectible quest props, 3D diamond world marker, reward distribution |
 | `src/systems/interaction.js` | Gameplay | nearest-interactable selection (NPC highest priority), prompt, dispatch |
 | `src/systems/merit.js` | Gameplay | counters, achievements, persistence (localStorage) |
-| `src/systems/audio.js` | Gameplay | Web Audio synthesized singing bowl, wind crossfade, bells, chant drone, raptor eagle cry |
+| `src/systems/audio.js` | Gameplay | Web Audio synthesized singing bowl, wind crossfade, bells, chant drone, raptor eagle cry; adaptive score glue (track selection, stingers) |
+| `src/systems/music.js` | Gameplay | procedural music engine: synthesized Himalayan instruments, bar look-ahead sequencer, crossfades, stingers, ducking, reverb |
+| `src/data/music.js` | Data | score: leitmotifs, per-map / chapter-variant / boss tracks and stingers (A4 = 432 Hz) |
 | `src/ui/hud.js`, `src/style.css` | Gameplay | title screen, HUD, prompts, toasts, time slider, language toggle, mobile 2x2 action buttons |
 | `src/ui/dialogue.js` | Gameplay | bottom glassmorphic dialogue box, 2D canvas speaker portrait, typewriter text, codex link parser, choices & actions |
 | `src/ui/quests.js` | Gameplay | right-side Quest Tracker (up to 3), Quest Journal modal (`J`), projected diamond & edge directional arrow, completion banner |
@@ -100,7 +102,7 @@ export function createX(ctx, ...extra) {
 | `dialogue` | `{ update(dt), open(id, opts?), close(), advance(), selectChoice(idx), register(defs), isOpen(), state() }` |
 | `questUi` | `{ update(dt), openJournal(), closeJournal(), toggleJournal(), isOpen() }` |
 | `merit` | `{ update(dt), reset, getStats, getAchievementsList }` |
-| `audio` | `{ update(dt), isMuted, setMuted, toggleMute, getVolume, setVolume, playEagleCry, playDistantBell }` |
+| `audio` | `{ update(dt), isMuted, setMuted, toggleMute, getVolume, setVolume, isMusicEnabled, setMusicEnabled, toggleMusic, getMusicVolume, setMusicVolume, getMusicTrack, forceMusic(id, vars), playMusicStinger(id), playEagleCry, playDistantBell }` |
 
 Update order per frame: `input → save → sky → stupa → flags → environment → zones → player → mantra → enemies → projectiles → items → lamps → monkeys → vitals → quests → npcs → cameraRig → merit → interaction → audio → hud → dialogue → questUi`.
 
@@ -298,6 +300,12 @@ $$\text{Wander} \longleftrightarrow \text{Notice} \longrightarrow \text{Chase} \
   - Stupa Zone: Warm "Om" harmonic drone pad (108 Hz fundamental + harmonics) + serene plaza wind + periodic distant temple bells.
   - Wilderness Zone: Highland wind profile (higher gain + Q resonance) + periodic synthesized Himalayan eagle/hawk cry (`playEagleCry()`, sweeping FM warble every 12–20s).
   - Crossfade on `zone:change` smoothly interpolates over ~0.8s via AudioParam time constants.
+- **Adaptive Score** (`src/systems/music.js` engine + `src/data/music.js` score, tunables in `CONFIG.MUSIC`):
+  - Track resolution (`audio.js#resolveMusicTrack`): boss active → `boss.<bossId>` (live `phase` var: tempo / layers) › zone + quest flags → `stupa` (live `night` var), `wild`, `pharping.drought|rain` (`ch1.rain`), `mangyul.storm|calm` (`ch2.storm.done`), `yarlung.unrest|calm` (`ch3.yaks.done`), `samye.day|night|complete` (`samye:nightStarted/nightSurvived`, `ch4.pehar.done`). Re-resolved on `zone:change`, boss events, `flag:set`, `quest:complete`, and every `refreshInterval` seconds.
+  - Different track id → crossfade (`crossfade` / `bossCrossfade`); same id → vars merged live (no restart).
+  - Stingers (duck the track bus): `chapter:intro` → `vision`, `chapter:banner` → `chapterComplete`, `boss:subdued` → `subdued`, `boss:phase` → `phaseShift`, `dialogue:open` with a `guruVision.*` NPC → `guru`. Stingers are transposed into the current track's key.
+  - Music shares the master gain (mute / volume) and has its own on/off + volume (`settings.music`, `settings.musicVolume`, HUD 🎵 button). When music is off, the legacy boss drum loop takes over.
+  - Score authoring: phrases are strings `"NOTE:beats[:accent][^grace]"`; each track's `bar(api, vars)` runs once per bar and `api.line(phrase, startBar, instrument, vel, opts)` plays the slice that falls in the bar. Audition every track at `/music-lab.html` (dev server only).
 - **Mobile Multi-Touch Controls**:
   - Virtual joystick occupies left half of the screen (`clientX < window.innerWidth * 0.5`).
   - Action buttons (Chant, Prostrate, Interact, Feed) are positioned on the bottom right in an ergonomic 2x2 cluster on screens $\le 720\text{px}$.

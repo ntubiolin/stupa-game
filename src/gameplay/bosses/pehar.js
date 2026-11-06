@@ -237,8 +237,17 @@ export function buildPeharModel() {
   riderGroup.add(haloRing);
 
   return {
+    group: root,
     root,
-    anim(mode, t, dt, bossState) {
+    anim(arg1, arg2, arg3, arg4) {
+      let mode = arg1;
+      let t = arg2 || 0;
+      let bossState = arg4;
+      if (typeof arg1 === 'number') {
+        bossState = arg2;
+        mode = bossState?.animState || 'idle';
+        t = bossState?.ctx?.state?.elapsed || 0;
+      }
       const isKneel = mode === 'kneel' || Boolean(bossState?.subdued);
 
       if (isKneel) {

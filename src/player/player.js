@@ -979,7 +979,7 @@ export function createPlayer(ctx) {
     }
   }
 
-  return {
+  const api = {
     update,
     mesh: root,
     koraTargets,
@@ -987,4 +987,6 @@ export function createPlayer(ctx) {
       return { fraction: Math.max(0, Math.min(1, koraAccum / TWO_PI)), laps: koraLaps, target: activeKoraTargetId };
     },
   };
+  ctx.player = api;
+  return api;
 }
