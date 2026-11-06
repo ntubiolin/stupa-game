@@ -319,6 +319,7 @@ export function createPotions(ctx) {
     update,
     use: () => use(false),
     refill,
+    refillAll: refill,
     set: setCharges,
     get() {
       const pot = state.player.potions;

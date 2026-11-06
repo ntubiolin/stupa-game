@@ -73,28 +73,30 @@ export const WORLD_ROUTE_NODES = [
     levelKey: 'worldNode.samye.level',
     descKey: 'worldNode.samye.desc',
     labelZh: '海波日山・桑耶寺 Lv.22–32',
-    connectsTo: ['chimpu'],
+    connectsTo: ['chimphu'],
   },
   {
-    id: 'chimpu',
+    id: 'chimphu',
+    aliasId: 'chimpu',
     chapter: 5,
     nx: 0.85,
     ny: 0.24,
     nameKey: 'worldNode.chimpu.name',
     levelKey: 'worldNode.chimpu.level',
     descKey: 'worldNode.chimpu.desc',
-    labelZh: '青朴修行地 Lv.32–40',
-    connectsTo: ['zangdokPalri'],
+    labelZh: '青朴修行地 Lv.30–40',
+    connectsTo: ['terma'],
   },
   {
-    id: 'zangdokPalri',
-    chapter: 6,
+    id: 'terma',
+    aliasId: 'zangdokPalri',
+    chapter: 5,
     nx: 0.88,
     ny: 0.66,
     nameKey: 'worldNode.zangdokPalri.name',
     levelKey: 'worldNode.zangdokPalri.level',
     descKey: 'worldNode.zangdokPalri.desc',
-    labelZh: '伏藏界 Lv.35–40',
+    labelZh: '伏藏秘境 Lv.31–40',
     connectsTo: [],
   },
   {
@@ -131,10 +133,12 @@ export function renderZoneRadarCanvas(canvas, ctx, opts = {}) {
   const origin = mapDef.origin || { x: 0, z: 0 };
   const walkRadius = mapDef.walkRadius || 38;
 
-  const viewRadiusM = opts.viewRadiusM || 45;
+  const viewRadiusM =
+    opts.viewRadiusM || (curZone === 'terma' && state.dungeon?.showLayout ? 55 : 45);
   const scale = radiusPx / viewRadiusM;
-  const centerOnOrigin = Boolean(opts.centerOnOrigin);
-  const debugAll = Boolean(opts.debugAll);
+  const centerOnOrigin =
+    Boolean(opts.centerOnOrigin) || Boolean(curZone === 'terma' && state.dungeon?.showLayout);
+  const debugAll = Boolean(opts.debugAll) || Boolean(curZone === 'terma' && state.dungeon?.showLayout);
 
   const px = state.player?.position?.x ?? origin.x;
   const pz = state.player?.position?.z ?? origin.z;
@@ -227,6 +231,114 @@ export function renderZoneRadarCanvas(canvas, ctx, opts = {}) {
       g.arc(lp.x, lp.y, 2.5, 0, Math.PI * 2);
       g.fillStyle = '#fb923c';
       g.fill();
+    }
+  } else if (curZone === 'terma' && state.dungeon?.rooms?.length) {
+    const dState = state.dungeon;
+    const cellPx = 16 * scale;
+    const roomSizePx = 13.2 * scale;
+    const templateColors = {
+      hall: 'rgba(56, 189, 248, 0.42)',
+      colonnade: 'rgba(168, 85, 247, 0.42)',
+      pool: 'rgba(20, 184, 166, 0.48)',
+      corridor: 'rgba(148, 163, 184, 0.40)',
+      mandala: 'rgba(251, 191, 36, 0.45)',
+      vein: 'rgba(45, 212, 191, 0.52)',
+    };
+
+    // Draw background 6x6 grid lines when showLayout is active
+    if (dState.showLayout) {
+      g.strokeStyle = 'rgba(148, 163, 184, 0.16)';
+      g.lineWidth = 1;
+      for (let gx = 0; gx < 6; gx++) {
+        for (let gz = 0; gz < 6; gz++) {
+          const wx = origin.x + (gx - 2.5) * 16;
+          const wz = origin.z + (gz - 2.5) * 16;
+          const cp = toCanvas(wx, wz);
+          g.strokeRect(cp.x - cellPx * 0.5, cp.y - cellPx * 0.5, cellPx, cellPx);
+        }
+      }
+    }
+
+    // Draw doorway corridors connecting rooms
+    g.strokeStyle = '#5eead4';
+    g.lineWidth = Math.max(3, 4.2 * scale);
+    for (const r of dState.rooms) {
+      const rp = toCanvas(r.wx, r.wz);
+      if (r.doors?.E) {
+        const ep = toCanvas(r.wx + 16, r.wz);
+        g.beginPath();
+        g.moveTo(rp.x, rp.y);
+        g.lineTo(ep.x, ep.y);
+        g.stroke();
+      }
+      if (r.doors?.S) {
+        const sp = toCanvas(r.wx, r.wz + 16);
+        g.beginPath();
+        g.moveTo(rp.x, rp.y);
+        g.lineTo(sp.x, sp.y);
+        g.stroke();
+      }
+    }
+
+    // Draw each room cell
+    for (const r of dState.rooms) {
+      const rp = toCanvas(r.wx, r.wz);
+      const half = roomSizePx * 0.5;
+      g.fillStyle =
+        r.role === 'start'
+          ? 'rgba(34, 197, 94, 0.58)'
+          : r.role === 'boss' || r.role === 'exit'
+            ? 'rgba(245, 158, 11, 0.65)'
+            : templateColors[r.template] || 'rgba(56, 189, 248, 0.38)';
+      g.strokeStyle =
+        r.role === 'start'
+          ? '#4ade80'
+          : r.role === 'boss' || r.role === 'exit'
+            ? '#fbbf24'
+            : '#38bdf8';
+      g.lineWidth = 1.6;
+      g.fillRect(rp.x - half, rp.y - half, roomSizePx, roomSizePx);
+      g.strokeRect(rp.x - half, rp.y - half, roomSizePx, roomSizePx);
+
+      if (dState.showLayout) {
+        g.fillStyle = '#fef08a';
+        g.font = `bold ${Math.max(8, Math.round(roomSizePx * 0.42))}px sans-serif`;
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        const tag =
+          r.role === 'start'
+            ? 'S'
+            : r.role === 'boss'
+              ? 'B'
+              : r.role === 'exit'
+                ? 'G'
+                : (r.template || 'H')[0].toUpperCase();
+        g.fillText(tag, rp.x, rp.y);
+      }
+    }
+
+    // Draw Terma Crystal nodes
+    for (const c of dState.crystals || []) {
+      if (c.broken) continue;
+      const cp = toCanvas(c.x, c.z);
+      g.beginPath();
+      g.arc(cp.x, cp.y, 3.2, 0, Math.PI * 2);
+      g.fillStyle = '#2dd4bf';
+      g.fill();
+      g.strokeStyle = '#fef08a';
+      g.lineWidth = 1;
+      g.stroke();
+    }
+
+    // Draw seed & floor badge at top of radar when showLayout is enabled
+    if (dState.showLayout) {
+      g.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      g.fillRect(cx - 52, 8, 104, 18);
+      g.fillStyle = '#5eead4';
+      g.font = 'bold 10px monospace';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(`S:${dState.seed} F${dState.floor} (${dState.rooms.length}R)`, cx, 17);
     }
   } else {
     // Safe zones in combat maps

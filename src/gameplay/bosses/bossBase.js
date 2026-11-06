@@ -440,8 +440,10 @@ export function createBoss(ctx, def) {
   }
 
   function start(opts = {}) {
+    def.onBeforeStart?.(bossState, ctx, opts);
     // Ensure player is in the right map; if triggered via debug API from another zone, teleport
-    const spawnPos = { x: arena.x, y: startY, z: arena.z + arena.r * 0.65 };
+    const curStartY = getGroundY(arena.x, arena.z);
+    const spawnPos = { x: arena.x, y: curStartY, z: arena.z + arena.r * 0.65 };
     if (state.zone !== arena.map) {
       state.zone = arena.map;
       if (ctx.zones?.teleport) {
@@ -454,14 +456,14 @@ export function createBoss(ctx, def) {
         });
       }
       if (state.player?.position) {
-        state.player.position.set(spawnPos.x, startY, spawnPos.z);
+        state.player.position.set(spawnPos.x, curStartY, spawnPos.z);
         state.player.velocity?.set(0, 0, 0);
         state.player.heading = 0;
       }
     } else if (state.player?.position) {
       const dist = Math.hypot(state.player.position.x - arena.x, state.player.position.z - arena.z);
       if (dist > arena.r - 1.2) {
-        state.player.position.set(arena.x, startY, arena.z + arena.r * 0.68);
+        state.player.position.set(arena.x, curStartY, arena.z + arena.r * 0.68);
         state.player.velocity?.set(0, 0, 0);
       }
     }
@@ -489,12 +491,18 @@ export function createBoss(ctx, def) {
 
     chainsGroup.visible = false;
     invulnMesh.visible = false;
+    barrierGroup.position.set(arena.x, curStartY, arena.z);
+    oathStoneGroup.position.set(arena.x, curStartY, arena.z);
     barrierGroup.visible = true;
     oathStoneGroup.visible = false;
     bossMeshGroup.visible = true;
     removeOathStoneInteractable();
 
     def.onStart?.(bossState, ctx, patternRunner, built);
+    const postStartY = getGroundY(arena.x, arena.z);
+    barrierGroup.position.set(arena.x, postStartY, arena.z);
+    oathStoneGroup.position.set(arena.x, postStartY, arena.z);
+    bossState.setPosition(arena.x, arena.z);
 
     // If Phase 1 includes weatherZone, activate it on start
     const p1 = getCurrentPhaseDef();
@@ -991,7 +999,17 @@ export function createBoss(ctx, def) {
 
     // Auto-start when player steps inside arena radius (if not yet subdued)
     const pPos = state.player?.position;
+    const allowAuto = typeof def.canAutoStart === 'function' ? def.canAutoStart(bossState, ctx) : true;
+    if (!allowAuto && !bossState.active) {
+      bossMeshGroup.visible = false;
+      oathStoneGroup.visible = false;
+      return;
+    }
+    if (allowAuto && !bossState.active && !bossState.subdued) {
+      bossMeshGroup.visible = true;
+    }
     if (
+      allowAuto &&
       !bossState.active &&
       !bossState.subdued &&
       pPos &&

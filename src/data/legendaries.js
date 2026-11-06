@@ -59,6 +59,36 @@ export const LEGENDARIES = [
     nameKey: 'legendary.samyeMandala.name',
     powerKey: 'legendary.samyeMandala.power',
   },
+  {
+    id: 'tsogyalMemory',
+    powerId: 'tsogyalMemory',
+    baseId: 'turquoiseMala',
+    slot: 'neck',
+    minIlvl: 25,
+    dungeonOnly: true,
+    nameKey: 'legendary.tsogyalMemory.name',
+    powerKey: 'legendary.tsogyalMemory.power',
+  },
+  {
+    id: 'tertonFind',
+    powerId: 'tertonFind',
+    baseId: 'coralRing',
+    slot: 'ring',
+    minIlvl: 25,
+    dungeonOnly: true,
+    nameKey: 'legendary.tertonFind.name',
+    powerKey: 'legendary.tertonFind.power',
+  },
+  {
+    id: 'retreatShield',
+    powerId: 'retreatShield',
+    baseId: 'goldThreadRobe',
+    slot: 'body',
+    minIlvl: 26,
+    dungeonOnly: true,
+    nameKey: 'legendary.retreatShield.name',
+    powerKey: 'legendary.retreatShield.power',
+  },
 ];
 
 export const LEGENDARIES_BY_ID = Object.fromEntries(

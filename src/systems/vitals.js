@@ -703,7 +703,9 @@ export function createVitals(ctx) {
 
         if (!faintTeleported && faintTimer >= teleportTime) {
           faintTeleported = true;
-          if (ctx.zones?.teleport) {
+          if (state.zone === 'terma' && ctx.dungeon?.onPlayerFaint) {
+            ctx.dungeon.onPlayerFaint();
+          } else if (ctx.zones?.teleport) {
             ctx.zones.teleport('stupa', { spawn: 'south', skipFade: true });
           } else {
             const startAng = deg(config.PLAYER?.startAngleDeg ?? 90);

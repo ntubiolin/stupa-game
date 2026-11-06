@@ -101,18 +101,25 @@ export function createLoot(ctx) {
   }
 
   // ---------------------------------------------------------------- Rarity Roll
-  function rollRarity({ rank = 'normal', findBonus } = {}) {
+  function rollRarity({ rank = 'normal', findBonus, tier } = {}) {
     const bonus =
       findBonus != null
         ? Number(findBonus) || 0
         : Number(state.player?.findBonus) || 0;
     const shrineMult = Number(state.player?.shrineFindMult) || 1;
     const mfMult = Math.max(0, 1 + bonus / 100) * shrineMult;
+    const effTier =
+      tier != null
+        ? Number(tier) || 0
+        : state.zone === 'terma'
+          ? Number(state.dungeon?.tier) || 0
+          : 0;
 
     const wNormal = RARITY_WEIGHTS.normal;
     const wBlessed = RARITY_WEIGHTS.blessed * mfMult;
     const wRare = RARITY_WEIGHTS.rare * mfMult;
-    const wTerma = RARITY_WEIGHTS.terma * mfMult;
+    const wTerma =
+      (RARITY_WEIGHTS.terma + (effTier > 0 ? 0.3 * effTier : 0)) * mfMult;
 
     const total = wNormal + wBlessed + wRare + wTerma;
     const r = Math.random() * total;
@@ -333,16 +340,32 @@ export function createLoot(ctx) {
       rarity = 'terma';
     } else {
       if (!rarity) {
-        rarity = rollRarity({ rank: opts.rank, findBonus: opts.findBonus });
+        rarity = rollRarity({
+          rank: opts.rank,
+          findBonus: opts.findBonus,
+          tier: opts.tier,
+        });
       }
       if (rarity === 'terma') {
+        const inDungeon = Boolean(
+          opts.inDungeon ||
+            (opts.tier != null && Number(opts.tier) > 0) ||
+            state.zone === 'terma'
+        );
+        const allowLeg = (l) => (!l.dungeonOnly || inDungeon);
         let legPool = LEGENDARIES.filter((l) => {
+          if (!allowLeg(l)) return false;
           if (opts.slot && l.slot !== opts.slot) return false;
           if (opts.baseId && l.baseId !== opts.baseId) return false;
           return l.minIlvl <= ilvl;
         });
         if (legPool.length === 0) {
-          legPool = LEGENDARIES.filter((l) => !opts.slot || l.slot === opts.slot);
+          legPool = LEGENDARIES.filter(
+            (l) => allowLeg(l) && (!opts.slot || l.slot === opts.slot)
+          );
+        }
+        if (legPool.length === 0) {
+          legPool = LEGENDARIES.filter(allowLeg);
         }
         if (legPool.length === 0) legPool = LEGENDARIES;
         legendaryDef = legPool[randInt(0, legPool.length - 1)];
@@ -427,11 +450,26 @@ export function createLoot(ctx) {
   }
 
   // ---------------------------------------------------------------- Simulation
-  function simulate(n = 20000, { rank = 'normal', ilvl = 10, findBonus = 0 } = {}) {
+  function simulate(nOrOpts = 20000, maybeOpts = {}) {
+    let n = 20000;
+    let opts = maybeOpts || {};
+    if (nOrOpts && typeof nOrOpts === 'object') {
+      opts = nOrOpts;
+      n = opts.n ?? opts.total ?? 20000;
+    } else {
+      n = nOrOpts;
+    }
+    const { rank = 'normal', ilvl = 10, findBonus = 0, tier } = opts;
+    const effTier =
+      tier != null
+        ? Number(tier) || 0
+        : state.zone === 'terma'
+          ? Number(state.dungeon?.tier) || 0
+          : 0;
     const total = Math.max(1, Math.floor(Number(n) || 20000));
     const counts = { normal: 0, blessed: 0, rare: 0, terma: 0 };
     for (let i = 0; i < total; i++) {
-      const r = rollRarity({ rank, findBonus });
+      const r = rollRarity({ rank, findBonus, tier: effTier });
       counts[r] = (counts[r] || 0) + 1;
     }
     const ratios = {
@@ -445,6 +483,7 @@ export function createLoot(ctx) {
       ilvl,
       rank,
       findBonus,
+      tier: effTier,
       counts,
       ratios,
     };

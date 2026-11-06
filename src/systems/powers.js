@@ -39,6 +39,22 @@ export function createPowers(ctx) {
   let stillTimer = 0;
   let samathaActive = false;
   let mantraCastCount = 0;
+  let tsogyalNextHumReady = false;
+
+  function consumeTsogyalHum() {
+    if (!has('tsogyalMemory')) {
+      tsogyalNextHumReady = false;
+      if (state.player) state.player.tsogyalNextHum = false;
+      return false;
+    }
+    if (tsogyalNextHumReady || state.player?.tsogyalNextHum) {
+      tsogyalNextHumReady = false;
+      if (state.player) state.player.tsogyalNextHum = false;
+      bus?.emit('power:tsogyalMemory', { mult: 2.0 });
+      return true;
+    }
+    return false;
+  }
 
   function getEquippedMap() {
     if (ctx.inventory?.getEquipment) return ctx.inventory.getEquipment();
@@ -223,6 +239,20 @@ export function createPowers(ctx) {
     } else {
       mantraCastCount = 0;
     }
+
+    // 7. tsogyalMemory (措嘉的空行念珠): casting mantra empowers the next humBolt for +100% damage
+    if (has('tsogyalMemory')) {
+      tsogyalNextHumReady = true;
+      if (state.player) state.player.tsogyalNextHum = true;
+    }
+  });
+
+  // 9. retreatShield (青朴閉關法衣): when Lotus Shield ends, reduce remaining cooldown by 50%
+  bus?.on('shield:ended', ({ source } = {}) => {
+    if (source === 'lotusShield' && has('retreatShield')) {
+      const remaining = ctx.skills?.reduceCooldown?.('lotusShield', 0.5);
+      bus?.emit('power:retreatShield', { remaining });
+    }
   });
 
   bus?.on('lotusShield:burst', ({ origin } = {}) => {
@@ -320,6 +350,8 @@ export function createPowers(ctx) {
     stillTimer = 0;
     samathaActive = false;
     mantraCastCount = 0;
+    tsogyalNextHumReady = false;
+    if (state.player) state.player.tsogyalNextHum = false;
   });
 
   const api = {
@@ -327,6 +359,8 @@ export function createPowers(ctx) {
     has,
     set,
     listActive,
+    consumeTsogyalHum,
+    isTsogyalHumReady: () => Boolean(has('tsogyalMemory') && (tsogyalNextHumReady || state.player?.tsogyalNextHum)),
     getFrostFields: () => frostFields.length,
     isSamathaActive: () => samathaActive,
     resetTenmaCooldown: () => {

@@ -61,6 +61,8 @@ import { createDialogue } from './ui/dialogue.js';
 import { createQuestUi } from './ui/quests.js';
 import { createWorldMap } from './ui/worldmap.js';
 import { createMinimap } from './ui/minimap.js';
+import { createCredits } from './ui/credits.js';
+import { createDungeon } from './gameplay/dungeon.js';
 
 // ---------------------------------------------------------------- renderer
 const container = document.getElementById('app');
@@ -185,17 +187,19 @@ const questUi = createQuestUi(ctx);
 const worldmap = createWorldMap(ctx);
 const minimap = createMinimap(ctx);
 const bosses = createBosses(ctx);
+const dungeon = createDungeon(ctx);
+const credits = createCredits(ctx);
 
 const modules = [
   ctx.input,
   ctx.save,
   sky, stupa, flags, environment,
   zones,
-  player, mantra, enemies, bosses, projectiles, targeting, loot, inventory, groundLoot, items, lamps, monkeys,
+  player, mantra, enemies, bosses, dungeon, projectiles, targeting, loot, inventory, groundLoot, items, lamps, monkeys,
   vitals, skills, potions, shrines,
   codex, waypoints, quests, npcs,
   cameraRig,
-  merit, interaction, audio, hud, skillbar, inventoryUi, dialogue, questUi, minimap,
+  merit, interaction, audio, hud, skillbar, inventoryUi, dialogue, questUi, minimap, credits,
 ];
 
 // ---------------------------------------------------------------- post-processing

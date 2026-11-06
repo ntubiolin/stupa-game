@@ -19,10 +19,17 @@ export const ALL_WAYPOINT_IDS = [
   'mangyul',
   'yarlung',
   'samye',
+  'chimphu',
+  'terma',
   'chimpu',
   'zangdokPalri',
   'sandbox',
 ];
+
+function normalizeWaypointId(id) {
+  if (id === 'chimpu') return 'chimphu';
+  return id;
+}
 
 export function resolveWaypointCoords(mapDef) {
   if (!mapDef || !mapDef.waypoint) return null;
@@ -701,11 +708,13 @@ export function createWaypoints(ctx) {
     return translated !== nodeKey ? translated : mapId;
   }
 
-  function unlock(mapId, opts = {}) {
-    if (!mapId || typeof mapId !== 'string') return false;
+  function unlock(rawMapId, opts = {}) {
+    if (!rawMapId || typeof rawMapId !== 'string') return false;
+    const mapId = normalizeWaypointId(rawMapId);
     if (unlockedSet.has(mapId)) return false;
 
     unlockedSet.add(mapId);
+    if (mapId === 'chimphu') unlockedSet.add('chimpu');
     save?.markDirty?.();
 
     const mesh = waypointMeshes.get(mapId);
@@ -736,8 +745,9 @@ export function createWaypoints(ctx) {
     return list();
   }
 
-  function isUnlocked(mapId) {
-    return unlockedSet.has(mapId);
+  function isUnlocked(rawMapId) {
+    const mapId = normalizeWaypointId(rawMapId);
+    return unlockedSet.has(mapId) || unlockedSet.has(rawMapId);
   }
 
   function isPlayerNearWaypoint(radius = WAYPOINT_UNLOCK_RADIUS) {
@@ -754,8 +764,9 @@ export function createWaypoints(ctx) {
     return Math.min(distWorld, distLocal) <= radius;
   }
 
-  function teleportTo(mapId) {
-    if (!unlockedSet.has(mapId)) return Promise.resolve(false);
+  function teleportTo(rawMapId) {
+    const mapId = normalizeWaypointId(rawMapId);
+    if (!isUnlocked(mapId)) return Promise.resolve(false);
     const targetMap = MAPS[mapId];
     if (!targetMap) return Promise.resolve(false);
 
