@@ -199,3 +199,7 @@ Run `npm test` for regressions. For browser acceptance, start `npm run dev -- --
 chromium`), then `npm run test:browser`. Set `BROWSER_CHANNEL=chrome` to use an
 installed Chrome. See [contracts](docs/story/contracts.md),
 [validation](docs/story/validation.md), and [asset provenance](public/story/manifest.json).
+
+### 後續敘事章節規劃 / Planned narrative chapters
+
+[章節路線與驗收契約](docs/story/chapter-roadmap.md)（#89、#91–#98）：先做帕平探索試作，再逐章擴充至青朴與尾聲。原 ARPG 戰鬥、技能、裝備、Boss 與多人模式保留；此項是規劃，尚未代表後續章節已可玩。

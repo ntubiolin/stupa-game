@@ -382,3 +382,12 @@ substeps and its own 100 ms delta limit. Low quality disables the phone/card
 backdrop blur as well as shadows; runtime mirrors quality to a body class without
 changing adventure styles. Documentary manual Next/Finish uses the same guarded
 completion path as automatic playback and remains available while paused.
+
+## Planned chapter expansion (ADR-002, not implemented)
+
+User confirmed independent ARPG and exploration-first narrative on 2026-11-06.
+See [chapter roadmap](docs/story/chapter-roadmap.md) (#89, #91–#98) for proposed
+chapter/store/map adapter contracts and dependency gates. Existing Demo APIs and
+save schema remain unchanged by this documentation PR; next chapters require
+their own tested implementation PRs. Never import adventure gameplay serializers
+into narrative or treat shared world factories as side-effect-free.
