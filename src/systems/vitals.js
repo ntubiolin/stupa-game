@@ -551,8 +551,8 @@ export function createVitals(ctx) {
     if (state.vitals?.god || p.shrineInvuln) {
       invulnTimer = V.invulnDuration ?? 0.8;
       p.invulnUntil = state.elapsed + invulnTimer;
-      bus.emit('player:hurt', { amount: 0, type, sourcePos: extra.sourcePos });
-      bus.emit('player:damaged', { amount: 0, type, sourcePos: extra.sourcePos });
+      bus.emit('player:hurt', { amount: 0, type, sourcePos: extra.sourcePos, knockback: extra.knockback });
+      bus.emit('player:damaged', { amount: 0, type, sourcePos: extra.sourcePos, knockback: extra.knockback });
       return 0;
     }
 
@@ -596,8 +596,8 @@ export function createVitals(ctx) {
       p.slowUntil = Math.max(p.slowUntil || 0, state.elapsed + extra.slow);
     }
 
-    bus.emit('player:hurt', { amount: dmg, absorbed: shieldAbsorbedNow, type, sourcePos: extra.sourcePos });
-    bus.emit('player:damaged', { amount: dmg, absorbed: shieldAbsorbedNow, type, sourcePos: extra.sourcePos });
+    bus.emit('player:hurt', { amount: dmg, absorbed: shieldAbsorbedNow, type, sourcePos: extra.sourcePos, knockback: extra.knockback });
+    bus.emit('player:damaged', { amount: dmg, absorbed: shieldAbsorbedNow, type, sourcePos: extra.sourcePos, knockback: extra.knockback });
 
     save();
     emitChanged({ deltaHp: -dmg, absorbed: shieldAbsorbedNow, type, source: extra.source });
