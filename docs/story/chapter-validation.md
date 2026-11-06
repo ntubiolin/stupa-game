@@ -20,8 +20,8 @@ adaptations use the novel/spec revisions recorded in `chapter-roadmap.md`.
 Browser screenshots and reports are ignored `artifacts/` outputs, published as CI artifacts.
 Desktop and emulated touch coverage is not a physical low-end-phone performance claim.
 Party tests cover local BroadcastChannel behavior; remote multiplayer service availability
-is outside this local fixture. Source-checked text fallback is intentional while #84/#85
-final stills/Google Flow clips are pending; no generated deceased voice is used.
+is outside this local fixture. Source-checked text fallback remains available with approved #84/#85 stills and
+optional 360p Google Flow clips. No generated deceased voice is used.
 
 ## Independent review
 AGY invoked with `--model gemini-4-argon-high --output-format json --mode plan --sandbox`.
@@ -46,3 +46,22 @@ be recorded with the PR. Lead inspection and independent browser runs remain man
 Component drafts: #101–#108. Their frozen bases keep module diffs reviewable; the full
 playable branch contains shared runtime/UI and follow-up review fixes. Do not merge these
 review baselines into master independently. Integrator PR is the acceptance candidate.
+
+## Follow-up acceptance (#84/#85/#109)
+
+- Build, 2,486 keys per language and 81 Node tests pass.
+- Lead independently exercised the original Demo, password GUI, transient chapter
+  previews, explicit finale branch, load failure, exit and canonical-save restoration.
+- Continuous new Demo → Pharping → Mangyul → Yarlung → Samye → Chimphu → Finale
+  passed, including all 75 chapter checkpoints, direct completed-chapter handoffs
+  and final reload. Accessible navigation and manual reading advance were used;
+  no password/debug progression or seeded chapter completion.
+- Independent Sol real-media acceptance: desktop and phone-size touch, real H.264
+  decode, pause/seek/replay/next, single-cue fetch, V3 failure, all-media failure,
+  reduced-motion opt-in and optional V4 leaving canonical progress unchanged.
+- Original CI's chapter/art/desktop/mobile suites passed. Adventure, modes and
+  recovery encountered software-rendering startup stalls. Their revised CI-only
+  framebuffer profile keeps CSS viewports and gameplay assertions, and polls
+  startup with a wall clock. Remote rerun remains the authoritative CI result.
+- Dot art follow-ups: #113 Losang map handover, #114 later-chapter illustrations.
+  Procedural chapter visuals remain the current gameplay presentation.

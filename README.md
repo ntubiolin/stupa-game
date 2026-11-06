@@ -209,3 +209,15 @@ installed Chrome. See [contracts](docs/story/contracts.md),
 兩種模式均有「切換模式」按鈕，可切到章節、原 ARPG 或主選單。切換前會保存；寫入失敗會留在原頁並提示。原戰鬥、技能、裝備、Boss、多人與歷史地圖保留。
 
 [章節契約](docs/story/chapter-roadmap.md) · [驗證範圍](docs/story/chapter-validation.md) · Issues #91–#98。此分支供驗收，未合併 master。
+
+在故事設定的「章節測試工具」輸入 `amitabha`，可選任意章節與檢查點。
+「開始試玩」只改暫存測試狀態，退出後回到原進度；結局分支需明確選擇。
+原 Demo 另有清楚警告、需確認的正式進度跳轉，與安全章節試玩分開。
+
+修復歷史已接入核准的四張圖片與三段靜音 360p 影片，可手動下一段、暫停、
+重播與拖曳影片進度。降低動態偏好預設顯示靜態圖。到達淨相後可從設定
+開啟「泉邊的光影」短片；互動場景本身仍可直接探索。
+
+`STORY_SUITE=journey npm run test:browser` 可從新 Demo 連續操作至六章終局，
+不使用 debug 推進。媒體與跳關分別由 `scripts/story-media-browser-test.mjs`、
+`scripts/story-debug-browser-test.mjs` 驗證。

@@ -8,6 +8,7 @@ export function createCueVideo(node, src, { onReady, onProgress, onFailure }) {
   let hasPlayed = false;
   let seeking = false;
   let disposed = false;
+  let lastProgress = -1;
 
   function clearStartup() {
     clearTimeout(pending);
@@ -19,6 +20,10 @@ export function createCueVideo(node, src, { onReady, onProgress, onFailure }) {
   }
 
   function updateProgress() {
+    if (Number.isFinite(node.currentTime)) {
+      if (playing && hasPlayed && !seeking && !node.seeking && node.currentTime > lastProgress) clearStartup();
+      lastProgress = node.currentTime;
+    }
     if (Number.isFinite(node.duration) && node.duration > 0) {
       onProgress(node.currentTime, node.duration);
     }
@@ -34,10 +39,13 @@ export function createCueVideo(node, src, { onReady, onProgress, onFailure }) {
   node.addEventListener('timeupdate', updateProgress, { signal });
   node.addEventListener('ended', clearStartup, { signal });
   node.addEventListener('seeked', () => { seeking = false; }, { signal });
-  for (const event of ['error', 'stalled']) node.addEventListener(event, fail, { signal });
-  node.addEventListener('waiting', () => {
-    if (playing && hasPlayed && !seeking && !node.seeking && !node.ended) fail();
-  }, { signal });
+  node.addEventListener('error', fail, { signal });
+  function waitForBuffer() {
+    if (!playing || !hasPlayed || seeking || node.seeking || node.ended || pending !== undefined) return;
+    // Brief buffer/renderer pressure is recoverable. Do not discard a paused clip.
+    pending = setTimeout(fail, 2500);
+  }
+  for (const event of ['stalled', 'waiting']) node.addEventListener(event, waitForBuffer, { signal });
 
   node.preload = 'none';
   node.muted = true;

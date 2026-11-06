@@ -333,7 +333,7 @@ Public narrative APIs and ordered beat/event schemas are specified in
 | `story/narrativeCamera.js` | `ctx.storyCamera` | Eye-pose camera, keyboard/mouse/touch movement with collisions |
 | `story/cinematicArt.js` | `ctx.storyArt` | Reversible material/light grade, three light presets, two quality settings |
 | `ui/story/phone.js` | `ctx.phone` | Novel-based fixed messages, diaries, evidence, train transcript |
-| `ui/story/documentary.js` | `ctx.documentary` | Lazy still cues, captions, next/finish, pause/replay/skip/cancel and fallback |
+| `ui/story/documentary.js` | `ctx.documentary` | Lazy full-frame still/video cues, captions, next/finish, pause/seek/replay/skip/cancel and fallback |
 | `story/memorySystem.js` | `ctx.memory` | Pose threshold evaluation, accessible camera assistance and explicit capture |
 | `story/runtime.js` | bootstrap owner only | World exploration, Losang, map, three spring interactions, return, focus/overlay integration |
 
@@ -482,3 +482,16 @@ Run the GUI regression against a production preview with
 `BROWSER_CHANNEL=chrome node scripts/story-debug-browser-test.mjs`. It covers
 password rejection, desktop and touch previews, branch selection, load failure,
 and save preservation through exit and reload.
+
+### Optional motion cues (#84/#85)
+
+A documentary cue accepts `video: {src, poster}` alongside its existing image and
+caption/source keys. `createCueVideo` owns only the current muted inline media and
+releases it on cue change/close. The documentary owns progression; media ending
+does not itself complete a cue. Errors or a bounded 2.5-second unrecovered buffer
+wait fall back to the high-quality still, then poster, then readable captions.
+Brief pauses/buffering do not discard a usable clip. Reduced-motion and Data Saver
+start with stills and expose an explicit Play motion button. Captions and provenance
+remain outside an uncropped frame. V1–V3 augment restoration, D stays static; V4 is
+an optional settings viewer after reaching the vision, with no story signal or
+chapter advancement. No media is used as documentary historical evidence.

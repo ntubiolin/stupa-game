@@ -269,10 +269,15 @@ test('optional motion loads one cue, plays silently and follows pause, seek, rep
 });
 
 test('media stalls, blocked playback and image errors preserve captions and cue timing', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const { player, caption, still, video, events } = harness(t, { media: true });
   player.play('restoration');
   const motion = video();
+  motion.currentTime = 0;
+  motion.dispatchEvent(new Event('timeupdate')); // Initial metadata must not cancel startup timeout.
   motion.dispatchEvent(new Event('stalled'));
+  assert.equal(video(), motion);
+  t.mock.timers.tick(2500);
   assert.equal(video(), undefined);
   assert.equal(still.dataset.playing, 'false');
   assert.equal(still.children[0].getAttribute('src'), '/story/restoration-memory.jpg');
@@ -298,6 +303,20 @@ test('media stalls, blocked playback and image errors preserve captions and cue 
   assert.equal(video(), waiting);
   waiting.dispatchEvent(new Event('playing'));
   waiting.dispatchEvent(new Event('waiting'));
+  t.mock.timers.tick(1500);
+  assert.equal(video(), waiting);
+  waiting.currentTime = 1;
+  waiting.dispatchEvent(new Event('timeupdate')); // Recovery cancels the buffer deadline.
+  t.mock.timers.tick(2000);
+  assert.equal(video(), waiting);
+  player.pause();
+  waiting.dispatchEvent(new Event('stalled'));
+  t.mock.timers.tick(3000);
+  assert.equal(video(), waiting); // A paused clip must not be discarded.
+  player.resume();
+  waiting.dispatchEvent(new Event('playing'));
+  waiting.dispatchEvent(new Event('waiting'));
+  t.mock.timers.tick(2500);
   assert.equal(video(), undefined);
   assert.match(caption.textContent, /reply$/);
   player.update(22);

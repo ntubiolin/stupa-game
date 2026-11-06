@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
+import { CHAPTERS } from '../src/data/story/chapters.js';
+import { adventureCIOptions, startAdventureWithInput } from './adventure-browser-start.mjs';
 
 const base = process.env.STORY_BASE_URL || 'http://127.0.0.1:4173';
 const output = process.env.STORY_ARTIFACTS || 'artifacts/story';
 const ciDevice = process.env.CI ? { deviceScaleFactor: .5 } : {};
 const suite = process.env.STORY_SUITE || 'all';
-assert(['all', 'desktop', 'mobile', 'recovery', 'art'].includes(suite), 'Unknown STORY_SUITE');
+assert(['all', 'desktop', 'mobile', 'recovery', 'art', 'journey'].includes(suite), 'Unknown STORY_SUITE');
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : {}), args: ['--enable-unsafe-swiftshader'] });
 const report = { startedAt: new Date().toISOString(), browser: browser.version(), suite, renderProfile: process.env.CI ? 'Software CI: low journey quality, 0.5 render DPR; CSS viewport unchanged. Not art/performance acceptance.' : 'Native quality/DPR: art and layout acceptance', scenarios: [], errors: [], metrics: [] };
@@ -149,13 +151,51 @@ async function fullJourney(name, mobile, lang) {
   await click(page.locator('[data-action="phone"]'));
   assert.equal(await page.locator('.story-phone__message--outgoing').count(), 7, `${name} retains archive after final reload`);
   await click(page.locator('.story-phone__close'));
+  if (suite === 'journey') {
+    for (const chapter of CHAPTERS) {
+      await click(page.locator('[data-action="journal"]'));
+      await click(page.locator(`[data-chapter-action="start-${chapter.id}"]`));
+      const waitCheckpoint = id => page.waitForFunction(({ chapterId, id }) =>
+        window.__stupa?.chapters?.getState().activeChapterId === chapterId
+        && window.__stupa?.chapterScene?.getCheckpoint() === id, { chapterId: chapter.id, id });
+      await waitCheckpoint(chapter.entryCheckpoint);
+      if (chapter.id === 'pharping') await click(cardContinue());
+      for (const [index, step] of chapter.checkpoints.entries()) {
+        await waitCheckpoint(step.id);
+        console.log('continuous-journey', chapter.id, step.id);
+        if (!step.signal) break;
+        await action().waitFor({ state: 'visible' }); // HUD resumes on the next render after a card closes.
+        if (await guide().isVisible()) await click(guide());
+        await click(action());
+        if (step.id === 'diary') await click(page.locator('[data-chapter-action="read-diary"]'));
+        else if (step.choices) await click(page.locator('[data-card-choice="end"]'));
+        else if (step.presentation === 'card' || step.id.startsWith('altar')
+          || chapter.id === 'pharping' && ['shadow', 'release'].includes(step.id)) await click(cardContinue());
+        await waitCheckpoint(chapter.checkpoints[index + 1].id);
+      }
+      await shot(page, `journey-${chapter.id}-complete`);
+      const journey = await page.evaluate(() => __stupa.chapters.getState());
+      assert.equal(journey.chapters[chapter.id].completed, true);
+      assert.equal(journey.activeChapterId, chapter.id);
+      // Start the next chapter directly from the completed chapter: no seeded save,
+      // no password, no debug advancement and no intermediate reset/exit.
+    }
+    await page.reload();
+    await page.waitForFunction(() => window.__stupa?.chapters?.getState().activeChapterId === 'finale'
+      && window.__stupa?.chapterScene?.getCheckpoint() === 'complete');
+    const sections = await page.evaluate(() => JSON.parse(localStorage.getItem('stupa.save.v2')).sections);
+    for (const chapter of CHAPTERS) assert.equal(sections.story.journey.chapters[chapter.id].completed, true);
+    assert.equal(sections.story.journey.chapters.finale.choices.decision, 'end');
+    for (const [key, value] of Object.entries(expected)) assert.deepEqual(sections[key], value);
+    report.scenarios.push({ name: 'continuous-six-chapter-handoff', result: 'PASS', checkpoints: CHAPTERS.reduce((n,c) => n+c.checkpoints.length, 0) });
+  }
   if (!mobile && suite === 'all') await artMatrix(page);
   report.scenarios.push({ name, result: 'PASS', mode: 'complete user-facing flow, assisted navigation, no debug beat progression', language: lang, gameElapsedSeconds: final.sections.story.elapsedSeconds, automatedWallSeconds: (Date.now() - wallStart) / 1000, pacingNote: 'Fast automated path with navigation/photo assistance and manual cue advance; not a 15-minute human reading test' });
   await context.close();
 }
 
 try {
-  if (suite === 'all' || suite === 'desktop') await fullJourney('desktop', false, 'zh');
+  if (suite === 'all' || suite === 'desktop' || suite === 'journey') await fullJourney('desktop', false, 'zh');
   if (suite === 'all' || suite === 'mobile') await fullJourney('mobile', true, 'en');
   if (suite === 'art') {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...ciDevice, reducedMotion: 'reduce' });
@@ -182,12 +222,10 @@ try {
     await shot(fp, 'missing-media-fallback');
     await fp.locator('.story-documentary-controls [data-action="skip"]').click(); await waitBeat(fp, 'losang');
     report.scenarios.push({ name: 'missing-media-fallback', result: 'PASS' }); await fallback.close();
-    const adventure = await browser.newContext(ciDevice); const ap = await adventure.newPage(); monitor(ap, 'adventure');
+    const adventure = await browser.newContext({ ...ciDevice, ...adventureCIOptions }); const ap = await adventure.newPage(); monitor(ap, 'adventure');
     await ap.goto(`${base}/?mode=adventure&debug=1`);
-    await ap.waitForFunction(() => window.__stupa?.quests && window.__stupa?.save);
+    await startAdventureWithInput(ap);
     assert.equal(await ap.evaluate(() => Boolean(__stupa.story)), false);
-    await ap.locator('#btn-begin').click();
-    await ap.waitForFunction(() => __stupa.state.mode === 'play');
     const adventureChecks = await ap.evaluate(async () => {
       __stupa.inventory.give('magic');
       const bag = __stupa.inventory.getBag();
