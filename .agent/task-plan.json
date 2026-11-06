@@ -306,10 +306,11 @@
       ],
       "issue_number": 74,
       "issue_url": "https://github.com/ntubiolin/stupa-game/issues/74",
-      "pr_number": null,
+      "pr_number": 80,
       "status": "VERIFIED_LOCAL",
       "claim": null,
       "owner": "lead"
     }
-  ]
+  ],
+  "integration_pr": "https://github.com/ntubiolin/stupa-game/pull/80"
 }

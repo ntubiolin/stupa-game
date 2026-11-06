@@ -1,6 +1,6 @@
 # Mirror Demo validation — 2026-11-06
 
-Playable integration: `codex/68-mirror-demo`, human merge only. Module review PRs:
+Playable integration: [PR #80](https://github.com/ntubiolin/stupa-game/pull/80), branch `codex/68-mirror-demo`, human merge only. Module review PRs:
 [#75](https://github.com/ntubiolin/stupa-game/pull/75) Director,
 [#76](https://github.com/ntubiolin/stupa-game/pull/76) camera/art,
 [#77](https://github.com/ntubiolin/stupa-game/pull/77) phone,
