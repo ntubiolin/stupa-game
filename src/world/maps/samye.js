@@ -135,7 +135,7 @@ function createMiniStupaGeometry() {
   return merged;
 }
 
-export function createMap(ctx, mapDef = SAMYE_MAP) {
+export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } = {}) {
   const { state, bus, i18n } = ctx;
   const origin = mapDef?.origin || { x: 5000, z: 0 };
   const ox = origin.x; // 5000
@@ -410,7 +410,7 @@ export function createMap(ctx, mapDef = SAMYE_MAP) {
     g.add(ring);
     nodeBeacons.push(ring);
 
-    if (Array.isArray(ctx.interactables)) {
+    if (!presentationOnly && Array.isArray(ctx.interactables)) {
       const nodePos = new THREE.Vector3(node.wx, ny, node.wz);
       ctx.interactables.push({
         id: `samye:${node.id}`,
@@ -865,6 +865,8 @@ export function createMap(ctx, mapDef = SAMYE_MAP) {
       updateMiniStupasTransform(1.0);
     }
 
+    if (presentationOnly) return s;
+
     // Persist flag & save state
     if (ctx.quests?.setFlag) {
       ctx.quests.setFlag(`ch4.stage.${s}`, true);
@@ -874,6 +876,20 @@ export function createMap(ctx, mapDef = SAMYE_MAP) {
     }
     bus.emit('samye:stageChanged', { stage: s });
     return s;
+  }
+
+  // Narrative callers own the detached map and drive visual stages directly.
+  // Exit before constructing defense state or registering any adventure hooks.
+  if (presentationOnly) {
+    setStage(0);
+    for (const beacon of nodeBeacons) beacon.visible = false;
+    peharArenaGroup.visible = false;
+    vajraDanceAura.visible = false;
+    return {
+      group, getHeight: getHeightWorld, setStage,
+      structure: monasteryGroup,
+      nightTorches: wallTorchesGroup,
+    };
   }
 
   // ---------------------------------------------------------------- 9. Day-Build / Night-Destroy Defense System & Top HUD
