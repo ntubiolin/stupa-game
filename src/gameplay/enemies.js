@@ -3284,46 +3284,54 @@ export function createEnemies(ctx) {
     // 2b. Update Elite Hazards (`frozen` orbs, `molten` fire patches, `molten` death bombs, smoke puffs)
     for (let i = activeFrozenOrbs.length - 1; i >= 0; i--) {
       const f = activeFrozenOrbs[i];
-      f.timer -= dt;
-      const u = Math.min(1, 1 - Math.max(0, f.timer) / f.maxTimer);
-      f.orbMesh.rotation.y += dt * 4.5;
-      f.orbMesh.rotation.x += dt * 3.0;
-      f.orbMesh.scale.setScalar(0.3 + u * 0.85);
-      f.fillMesh.scale.set(Math.max(0.05, u * f.radius), 1, Math.max(0.05, u * f.radius));
+      f.age = (f.age || 0) + dt;
+      const fuse = f.fuseTime || f.maxTimer || 1.5;
+      const u = Math.min(1, f.age / fuse);
+      if (f.orbMesh) {
+        f.orbMesh.rotation.y += dt * 4.5;
+        f.orbMesh.rotation.x += dt * 3.0;
+        f.orbMesh.scale.setScalar(0.3 + u * 0.85);
+      }
+      if (f.fillMesh) {
+        f.fillMesh.scale.set(Math.max(0.05, u * f.radius), 1, Math.max(0.05, u * f.radius));
+      }
 
-      if (f.timer <= 0) {
+      if (f.age >= fuse) {
         if (playerPos && !isPlayerInSafeZone) {
           const d = Math.hypot(playerPos.x - f.x, playerPos.z - f.z);
           if (d <= f.radius) {
-            const dmg = Math.max(1, Math.round(8 * f.dmgMult));
+            const dmg = f.damage ?? Math.max(1, Math.round(8 * (f.dmgMult || 1)));
             bus.emit('vitals:damage', {
               amount: dmg,
               type: 'magic',
-              slow: 2.0,
+              slow: f.slow ?? 2.0,
               sourcePos: { x: f.x, y: f.y, z: f.z },
             });
           }
         }
         spawnSmokePuff({ x: f.x, y: f.y + 0.35, z: f.z }, 0x38bdf8, f.radius * 1.1, 0.35);
-        enemyGroup.remove(f.group);
+        eliteHazardGroup.remove(f.group);
+        f.ringMat?.dispose?.();
+        f.fillMat?.dispose?.();
         activeFrozenOrbs.splice(i, 1);
       }
     }
 
     for (let i = activeMoltenPatches.length - 1; i >= 0; i--) {
       const mp = activeMoltenPatches[i];
-      mp.timer -= dt;
+      mp.age = (mp.age || 0) + dt;
       mp.tickTimer -= dt;
-      const lifeRatio = Math.max(0, mp.timer / (mp.maxTimer || 3.0));
-      const mat = mp.mat || mp.mesh?.material;
-      if (mat) mat.opacity = 0.5 * Math.min(1, lifeRatio * 2.5);
+      const dur = mp.duration || mp.maxTimer || 3.5;
+      const lifeRatio = Math.max(0, 1 - mp.age / dur);
+      if (mp.fillMat) mp.fillMat.opacity = 0.48 * Math.min(1, lifeRatio * 2.5);
+      if (mp.ringMat) mp.ringMat.opacity = 0.82 * Math.min(1, lifeRatio * 2.5);
 
       if (mp.tickTimer <= 0) {
-        mp.tickTimer += 0.5;
+        mp.tickTimer += mp.tickInterval || 0.5;
         if (playerPos && !isPlayerInSafeZone) {
           const d = Math.hypot(playerPos.x - mp.x, playerPos.z - mp.z);
           if (d <= mp.radius) {
-            const dmg = Math.max(1, Math.round(2 * mp.dmgMult));
+            const dmg = mp.damage ?? Math.max(1, Math.round(2 * (mp.dmgMult || 1)));
             bus.emit('vitals:damage', {
               amount: dmg,
               type: 'magic',
@@ -3335,25 +3343,31 @@ export function createEnemies(ctx) {
         }
       }
 
-      if (mp.timer <= 0) {
-        enemyGroup.remove(mp.mesh);
-        mat?.dispose?.();
+      if (mp.age >= dur) {
+        eliteHazardGroup.remove(mp.group);
+        mp.fillMat?.dispose?.();
+        mp.ringMat?.dispose?.();
         activeMoltenPatches.splice(i, 1);
       }
     }
 
     for (let i = activeMoltenBombs.length - 1; i >= 0; i--) {
       const b = activeMoltenBombs[i];
-      b.timer -= dt;
-      const u = Math.min(1, 1 - Math.max(0, b.timer) / b.maxTimer);
-      b.fillMesh.scale.set(Math.max(0.05, u * b.radius), 1, Math.max(0.05, u * b.radius));
-      b.coreMesh.scale.setScalar(0.5 + u * 1.3);
+      b.age = (b.age || 0) + dt;
+      const fuse = b.fuseTime || b.maxTimer || 1.5;
+      const u = Math.min(1, b.age / fuse);
+      if (b.fillMesh) {
+        b.fillMesh.scale.set(Math.max(0.05, u * b.radius), 1, Math.max(0.05, u * b.radius));
+      }
+      if (b.coreMesh) {
+        b.coreMesh.scale.setScalar(0.5 + u * 1.3);
+      }
 
-      if (b.timer <= 0) {
+      if (b.age >= fuse) {
         if (playerPos && !isPlayerInSafeZone) {
           const d = Math.hypot(playerPos.x - b.x, playerPos.z - b.z);
           if (d <= b.radius) {
-            const dmg = Math.max(1, Math.round(14 * b.dmgMult));
+            const dmg = b.damage ?? Math.max(1, Math.round(14 * (b.dmgMult || 1)));
             bus.emit('vitals:damage', {
               amount: dmg,
               type: 'magic',
@@ -3363,21 +3377,26 @@ export function createEnemies(ctx) {
         }
         bus.emit('sfx', { name: 'fireball' });
         spawnSmokePuff({ x: b.x, y: b.y + 0.5, z: b.z }, 0xf97316, b.radius * 1.15, 0.45);
-        enemyGroup.remove(b.group);
+        eliteHazardGroup.remove(b.group);
+        b.ringMat?.dispose?.();
+        b.fillMat?.dispose?.();
         activeMoltenBombs.splice(i, 1);
       }
     }
 
     for (let i = activePuffs.length - 1; i >= 0; i--) {
       const pf = activePuffs[i];
-      pf.timer -= dt;
-      const u = Math.min(1, 1 - Math.max(0, pf.timer) / pf.maxTimer);
-      const s = pf.startScale + (pf.endScale - pf.startScale) * u;
-      pf.mesh.scale.setScalar(s);
-      pf.mat.opacity = 0.65 * (1 - u);
-      if (pf.timer <= 0) {
-        enemyGroup.remove(pf.mesh);
-        pf.mat.dispose();
+      pf.age = (pf.age || 0) + dt;
+      const dur = pf.duration || pf.maxTimer || 0.45;
+      const u = Math.min(1, pf.age / dur);
+      const startS = pf.startScale ?? 0.2;
+      const endS = pf.endScale ?? pf.maxScale ?? 1.8;
+      const s = startS + (endS - startS) * u;
+      if (pf.mesh) pf.mesh.scale.setScalar(s);
+      if (pf.mat) pf.mat.opacity = 0.65 * (1 - u);
+      if (pf.age >= dur) {
+        eliteHazardGroup.remove(pf.mesh);
+        pf.mat?.dispose?.();
         activePuffs.splice(i, 1);
       }
     }

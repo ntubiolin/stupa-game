@@ -11,6 +11,8 @@
  */
 import * as THREE from 'three';
 import '../i18n/quests.js';
+import '../i18n/murals.js';
+import { MuralScrollCanvas, getChapterMural, getMuralEpisodeByQuest } from './mural/scroll.js';
 
 function escapeHtml(str) {
   return String(str || '')
@@ -74,6 +76,9 @@ export function createQuestUi(ctx) {
           <span id="quest-tracker-count" class="quest-tracker__count">0</span>
         </button>
         <div class="quest-tracker__actions">
+          <button id="quest-tracker-mural-btn" type="button" class="quest-tracker__btn" title="Mural Scroll">
+            <span aria-hidden="true">🎨</span>
+          </button>
           <button id="quest-tracker-journal-btn" type="button" class="quest-tracker__btn" title="Quest Journal (J)">
             <kbd>J</kbd>
           </button>
@@ -85,13 +90,17 @@ export function createQuestUi(ctx) {
       <div id="quest-tracker-body" class="quest-tracker__body"></div>
     </aside>
 
-    <!-- 3. Quest Complete Center Banner -->
+    <!-- 3. Quest Complete Center Banner (with Live Mural Coloring Viewport) -->
     <div id="quest-complete-banner" class="quest-complete-banner is-hidden" aria-live="polite">
       <div class="quest-complete-burst" aria-hidden="true"></div>
       <div class="quest-complete-card glass-panel">
         <div class="quest-complete-lotus" aria-hidden="true">☸</div>
         <div id="quest-complete-title" class="quest-complete-title"></div>
         <div id="quest-complete-rewards" class="quest-complete-rewards"></div>
+        <div id="quest-complete-mural-wrap" class="quest-complete-mural-wrap is-hidden" title="">
+          <canvas id="quest-complete-mural-canvas" class="quest-complete-mural-canvas" width="640" height="360"></canvas>
+          <div id="quest-complete-mural-hint" class="quest-complete-mural-hint"></div>
+        </div>
       </div>
     </div>
 
@@ -104,15 +113,28 @@ export function createQuestUi(ctx) {
       </div>
     </div>
 
-    <!-- 3c. Pure Vision Chapter Intro Card (淨相開場) -->
-    <div id="chapter-intro-overlay" class="chapter-intro-overlay is-hidden" role="dialog" aria-modal="true" style="position:fixed;inset:0;z-index:88;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 45%, rgba(255, 224, 112, 0.34) 0%, rgba(28, 18, 10, 0.92) 68%, rgba(12, 8, 6, 0.97) 100%);backdrop-filter:blur(6px);cursor:pointer;transition:opacity 0.55s ease;">
-      <div class="chapter-intro-card glass-panel" style="max-width:620px;width:90%;padding:38px 34px;text-align:center;border:1px solid rgba(255, 214, 102, 0.55);box-shadow:0 0 64px rgba(245, 186, 54, 0.28);border-radius:16px;background:rgba(24, 16, 12, 0.85);">
-        <div style="font-size:28px;color:#ffd86b;margin-bottom:8px;text-shadow:0 0 16px rgba(255,200,60,0.8);">☸</div>
-        <div id="chapter-intro-meta" style="font-size:13px;letter-spacing:0.18em;color:#e5c07b;text-transform:uppercase;margin-bottom:10px;"></div>
-        <h2 id="chapter-intro-title" style="font-size:30px;font-weight:800;color:#fff4d2;margin:0 0 18px;letter-spacing:0.06em;text-shadow:0 2px 18px rgba(255,190,50,0.5);"></h2>
-        <div style="width:84px;height:1px;background:linear-gradient(90deg,transparent,#ffd86b,transparent);margin:0 auto 20px;"></div>
-        <p id="chapter-intro-narration" style="font-size:16px;line-height:1.85;color:#f3e5ab;margin:0 0 26px;white-space:pre-line;"></p>
-        <div id="chapter-intro-hint" style="font-size:12px;letter-spacing:0.12em;color:rgba(255, 224, 140, 0.75);"></div>
+    <!-- 3c. Pure Vision Chapter Intro Scroll (章節開場壁畫畫卷) -->
+    <div id="chapter-intro-overlay" class="chapter-intro-overlay is-hidden" role="dialog" aria-modal="true" style="position:fixed;inset:0;z-index:930;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 45%, rgba(255, 224, 112, 0.28) 0%, rgba(24, 15, 9, 0.94) 68%, rgba(10, 7, 5, 0.98) 100%);backdrop-filter:blur(6px);transition:opacity 0.55s ease;">
+      <div class="chapter-intro-card mural-scroll-modal glass-panel">
+        <header class="mural-scroll-header">
+          <div class="mural-scroll-header__titles">
+            <div id="chapter-intro-meta" class="mural-scroll-meta"></div>
+            <h2 id="chapter-intro-title" class="mural-scroll-title"></h2>
+          </div>
+          <div id="chapter-intro-episodes" class="mural-episode-bar" role="toolbar" aria-label="Mural episodes"></div>
+        </header>
+
+        <div class="mural-scroll-stage">
+          <canvas id="chapter-intro-mural-canvas" class="mural-scroll-canvas" width="1280" height="720"></canvas>
+        </div>
+
+        <footer class="mural-scroll-footer">
+          <p id="chapter-intro-narration" class="mural-scroll-narration"></p>
+          <div class="mural-scroll-actions">
+            <button id="chapter-intro-enter-btn" type="button" class="mural-enter-btn"></button>
+            <div id="chapter-intro-hint" class="mural-scroll-hint"></div>
+          </div>
+        </footer>
       </div>
     </div>
 
@@ -153,6 +175,7 @@ export function createQuestUi(ctx) {
   const trackerPillBtn = root.querySelector('#quest-tracker-pill-btn');
   const trackerTitleEl = root.querySelector('#quest-tracker-title');
   const trackerCountEl = root.querySelector('#quest-tracker-count');
+  const trackerMuralBtn = root.querySelector('#quest-tracker-mural-btn');
   const trackerJournalBtn = root.querySelector('#quest-tracker-journal-btn');
   const trackerCollapseBtn = root.querySelector('#quest-tracker-collapse-btn');
   const trackerChevronEl = root.querySelector('#quest-tracker-chevron');
@@ -161,6 +184,9 @@ export function createQuestUi(ctx) {
   const bannerEl = root.querySelector('#quest-complete-banner');
   const bannerTitleEl = root.querySelector('#quest-complete-title');
   const bannerRewardsEl = root.querySelector('#quest-complete-rewards');
+  const bannerMuralWrapEl = root.querySelector('#quest-complete-mural-wrap');
+  const bannerMuralCanvasEl = root.querySelector('#quest-complete-mural-canvas');
+  const bannerMuralHintEl = root.querySelector('#quest-complete-mural-hint');
 
   const chapterBannerEl = root.querySelector('#chapter-unlock-banner');
   const chapterKickerEl = root.querySelector('#chapter-unlock-kicker');
@@ -170,8 +196,18 @@ export function createQuestUi(ctx) {
   const chapterIntroEl = root.querySelector('#chapter-intro-overlay');
   const chapterIntroMetaEl = root.querySelector('#chapter-intro-meta');
   const chapterIntroTitleEl = root.querySelector('#chapter-intro-title');
+  const chapterIntroEpisodesEl = root.querySelector('#chapter-intro-episodes');
+  const chapterIntroCanvasEl = root.querySelector('#chapter-intro-mural-canvas');
   const chapterIntroNarrationEl = root.querySelector('#chapter-intro-narration');
+  const chapterIntroEnterBtn = root.querySelector('#chapter-intro-enter-btn');
   const chapterIntroHintEl = root.querySelector('#chapter-intro-hint');
+
+  const introMural = chapterIntroCanvasEl
+    ? new MuralScrollCanvas(chapterIntroCanvasEl, { ctx, chapterId: 'ch1' })
+    : null;
+  const bannerMural = bannerMuralCanvasEl
+    ? new MuralScrollCanvas(bannerMuralCanvasEl, { ctx, chapterId: 'ch1' })
+    : null;
 
   const journalModalEl = root.querySelector('#quest-journal-modal');
   const journalTitleEl = root.querySelector('#quest-journal-title');
@@ -235,7 +271,11 @@ export function createQuestUi(ctx) {
   }
 
   function getChapterTitle(chapter) {
-    const chKey = chapter === 'prologue' ? 0 : (chapter ?? 0);
+    let chKey = chapter ?? 0;
+    if (chKey === 'prologue') chKey = 0;
+    else if (typeof chKey === 'string' && chKey.startsWith('ch')) {
+      chKey = Number(chKey.slice(2)) || 0;
+    }
     const key = `quest.chapter.${chKey}`;
     return i18n.t(key);
   }
@@ -286,9 +326,19 @@ export function createQuestUi(ctx) {
 
     let html = '';
     for (const [ch, list] of groups.entries()) {
+      const chMural = getChapterMural(ch);
       html += `
         <div class="quest-chapter-group">
-          <h3 class="quest-chapter-heading">${escapeHtml(getChapterTitle(ch))}</h3>
+          <div class="quest-chapter-heading-row">
+            <h3 class="quest-chapter-heading">${escapeHtml(getChapterTitle(ch))}</h3>
+            ${
+              chMural
+                ? `<button type="button" class="quest-mural-open-btn" data-open-mural="${escapeHtml(String(ch))}">
+                     📜 ${escapeHtml(i18n.t('mural.ui.viewScroll'))}
+                   </button>`
+                : ''
+            }
+          </div>
           <div class="quest-chapter-cards">
       `;
 
@@ -297,6 +347,7 @@ export function createQuestUi(ctx) {
         const title = escapeHtml(i18n.t(def.titleKey));
         const desc = escapeHtml(i18n.t(def.descKey));
         const rewardText = formatRewardsSummary(i18n, def.rewards);
+        const hasMuralEpisode = Boolean(getMuralEpisodeByQuest(def.id));
 
         let stepsHtml = '';
         if (Array.isArray(def.steps)) {
@@ -325,7 +376,16 @@ export function createQuestUi(ctx) {
             ? `<button type="button" class="quest-track-btn ${activeInfo.tracked ? 'is-tracked' : ''}" data-track-quest="${escapeHtml(def.id)}">
                  ${escapeHtml(i18n.t(activeInfo.tracked ? 'quest.journal.tracked' : 'quest.journal.track'))}
                </button>`
-            : `<span class="quest-done-badge">${escapeHtml(i18n.t('quest.journal.doneBadge'))}</span>`;
+            : `<div class="quest-card__done-actions">
+                 ${
+                   hasMuralEpisode
+                     ? `<button type="button" class="quest-mural-replay-btn" data-replay-mural="${escapeHtml(def.id)}">
+                          🎨 ${escapeHtml(i18n.t('mural.ui.replayColor'))}
+                        </button>`
+                     : ''
+                 }
+                 <span class="quest-done-badge">${escapeHtml(i18n.t('quest.journal.doneBadge'))}</span>
+               </div>`;
 
         html += `
           <article class="quest-card ${status === 'done' ? 'is-done' : 'is-active'}">
@@ -403,21 +463,127 @@ export function createQuestUi(ctx) {
 
   let activeIntroPayload = null;
   let introOpenedAt = 0;
+  let activeIntroMuralId = 'ch1';
+  let activeIntroFocusQuestId = null;
+
+  function renderIntroEpisodeToolbar(mural, selectedQuestId = null) {
+    if (!chapterIntroEpisodesEl || !mural) return;
+    const episodes = mural.episodes || [];
+    const pillsHtml = episodes
+      .map((ep) => {
+        const epState = introMural
+          ? introMural.getEpisodeState(ep)
+          : ctx.quests?.isDone?.(ep.questId)
+            ? 'painted'
+            : ctx.quests?.isActive?.(ep.questId)
+              ? 'active'
+              : 'sketch';
+        const isDone = epState === 'painted';
+        const isActive = epState === 'active';
+        const stateCls = isDone ? 'is-painted' : isActive ? 'is-active' : 'is-sketch';
+        const isFocused = selectedQuestId === ep.questId ? 'is-focused' : '';
+        const label = escapeHtml(i18n.t(ep.titleKey));
+        const statusBadge = isDone
+          ? i18n.t('mural.ui.statusPainted')
+          : isActive
+            ? i18n.t('mural.ui.statusActive')
+            : i18n.t('mural.ui.statusSketch');
+        return `
+          <button type="button" class="mural-ep-btn ${stateCls} ${isFocused}" data-mural-ep="${escapeHtml(ep.questId)}" title="${escapeHtml(statusBadge)}">
+            <span class="mural-ep-btn__num">${escapeHtml(ep.num)}</span>
+            <span class="mural-ep-btn__label">${label}</span>
+          </button>
+        `;
+      })
+      .join('');
+
+    const firstDoneEp =
+      episodes.find((ep) => ep.questId === selectedQuestId) ||
+      episodes.find((ep) => (introMural ? introMural.getEpisodeState(ep) === 'painted' : ctx.quests?.isDone?.(ep.questId))) ||
+      episodes[0];
+
+    chapterIntroEpisodesEl.innerHTML = `
+      <button type="button" class="mural-ep-btn mural-ep-btn--tool ${!selectedQuestId ? 'is-focused' : ''}" data-mural-action="overview">
+        <span>☸</span>
+        <span>${escapeHtml(i18n.t('mural.ui.overview'))}</span>
+      </button>
+      <button type="button" class="mural-ep-btn mural-ep-btn--tool" data-mural-action="pan">
+        <span>👁</span>
+        <span>${escapeHtml(i18n.t('mural.ui.panTour'))}</span>
+      </button>
+      ${pillsHtml}
+      ${
+        firstDoneEp
+          ? `<button type="button" class="mural-ep-btn mural-ep-btn--replay" data-mural-replay="${escapeHtml(firstDoneEp.questId)}">
+               <span>🎨</span>
+               <span>${escapeHtml(i18n.t('mural.ui.replayColor'))}</span>
+             </button>`
+          : ''
+      }
+    `;
+  }
 
   function showChapterIntro(payload = {}) {
     if (!chapterIntroEl) return;
     activeIntroPayload = payload;
     introOpenedAt = performance.now();
 
-    const loc = payload.locationKey ? i18n.t(payload.locationKey) : '';
-    const era = payload.eraKey ? i18n.t(payload.eraKey) : '';
+    const inferredChapter =
+      payload.chapterId ||
+      payload.mapId ||
+      (typeof payload.flag === 'string' && payload.flag.includes('.') ? payload.flag.split('.')[0] : null) ||
+      state.zone ||
+      'ch1';
+    const mural = getChapterMural(inferredChapter);
+    activeIntroMuralId = mural?.id || 'ch1';
+    activeIntroFocusQuestId = payload.revealQuestId || payload.focusQuestId || null;
+
+    const locKey = payload.locationKey || mural?.locationKey;
+    const eraKey = payload.eraKey || mural?.eraKey;
+    const titleKey = payload.titleKey || mural?.titleKey;
+    const narrationKey = payload.narrationKey || mural?.narrationKey;
+
+    const loc = locKey ? i18n.t(locKey) : '';
+    const era = eraKey ? i18n.t(eraKey) : '';
     chapterIntroMetaEl.textContent = [loc, era].filter(Boolean).join(' · ');
-    chapterIntroTitleEl.textContent = payload.titleKey ? i18n.t(payload.titleKey) : '';
-    chapterIntroNarrationEl.textContent = payload.narrationKey ? i18n.t(payload.narrationKey) : '';
+    chapterIntroTitleEl.textContent = titleKey ? i18n.t(titleKey) : '';
+
+    if (narrationKey) {
+      chapterIntroNarrationEl.textContent = i18n.t(narrationKey);
+    } else if (Array.isArray(payload.lines) && payload.lines.length > 0) {
+      chapterIntroNarrationEl.textContent = payload.lines.map((k) => i18n.t(k)).join(' ');
+    } else {
+      chapterIntroNarrationEl.textContent = '';
+    }
+
+    if (chapterIntroEnterBtn) {
+      chapterIntroEnterBtn.textContent = `☸ ${i18n.t('mural.ui.enterVision')}`;
+    }
     chapterIntroHintEl.textContent = i18n.t(payload.hintKey || 'ch1.intro.hint');
+
+    // Hide mini completion banner if open so full-screen scroll is unobstructed
+    if (bannerEl) {
+      bannerEl.classList.add('is-hidden');
+      bannerMural?.stop();
+    }
+
+    if (introMural && mural) {
+      introMural.setChapter(mural.id);
+      introMural.start();
+      if (payload.revealQuestId) {
+        introMural.playColoringReveal(payload.revealQuestId, { duration: 2.35, immediateFocus: false });
+      } else if (payload.focusQuestId) {
+        introMural.focusEpisode(payload.focusQuestId, false);
+      } else {
+        introMural.startPanTour();
+      }
+    }
+
+    renderIntroEpisodeToolbar(mural, activeIntroFocusQuestId);
 
     chapterIntroEl.style.display = 'flex';
     chapterIntroEl.classList.remove('is-hidden');
+
     bus.emit('sfx', { name: 'bowl' });
   }
 
@@ -425,6 +591,9 @@ export function createQuestUi(ctx) {
     if (!activeIntroPayload || !chapterIntroEl) return;
     const flag = activeIntroPayload.flag;
     activeIntroPayload = null;
+    if (introMural) {
+      introMural.stop();
+    }
     chapterIntroEl.classList.add('is-hidden');
     chapterIntroEl.style.display = 'none';
     if (flag) {
@@ -433,23 +602,100 @@ export function createQuestUi(ctx) {
     bus.emit('sfx', { name: 'bell' });
   }
 
-  if (chapterIntroEl) {
-    chapterIntroEl.style.display = 'none';
-    chapterIntroEl.addEventListener('click', (e) => {
+  if (chapterIntroEpisodesEl) {
+    chapterIntroEpisodesEl.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const mural = getChapterMural(activeIntroMuralId);
+      const epBtn = e.target.closest?.('[data-mural-ep]');
+      if (epBtn && introMural) {
+        const qId = epBtn.getAttribute('data-mural-ep');
+        activeIntroFocusQuestId = qId;
+        introMural.focusEpisode(qId, false);
+        renderIntroEpisodeToolbar(mural, activeIntroFocusQuestId);
+        bus.emit('sfx', { name: 'step' });
+        return;
+      }
+      const actionBtn = e.target.closest?.('[data-mural-action]');
+      if (actionBtn && introMural) {
+        const act = actionBtn.getAttribute('data-mural-action');
+        activeIntroFocusQuestId = null;
+        if (act === 'pan') {
+          introMural.startPanTour();
+        } else {
+          introMural.focusOverview(false);
+        }
+        renderIntroEpisodeToolbar(mural, null);
+        bus.emit('sfx', { name: 'step' });
+        return;
+      }
+      const replayBtn = e.target.closest?.('[data-mural-replay]');
+      if (replayBtn && introMural) {
+        const qId =
+          activeIntroFocusQuestId ||
+          replayBtn.getAttribute('data-mural-replay');
+        if (qId) {
+          activeIntroFocusQuestId = qId;
+          introMural.playColoringReveal(qId, { duration: 2.35, immediateFocus: false });
+          renderIntroEpisodeToolbar(mural, qId);
+          bus.emit('sfx', { name: 'bowl' });
+        }
+      }
+    });
+  }
+
+  if (chapterIntroCanvasEl) {
+    chapterIntroCanvasEl.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!introMural) return;
+      const mural = getChapterMural(activeIntroMuralId);
+      if (!mural || !Array.isArray(mural.episodes) || mural.episodes.length === 0) return;
+      const idx = mural.episodes.findIndex((ep) => ep.questId === activeIntroFocusQuestId);
+      if (idx === -1) {
+        activeIntroFocusQuestId = mural.episodes[0].questId;
+        introMural.focusEpisode(activeIntroFocusQuestId, false);
+      } else if (idx + 1 < mural.episodes.length) {
+        activeIntroFocusQuestId = mural.episodes[idx + 1].questId;
+        introMural.focusEpisode(activeIntroFocusQuestId, false);
+      } else {
+        activeIntroFocusQuestId = null;
+        introMural.focusOverview(false);
+      }
+      renderIntroEpisodeToolbar(mural, activeIntroFocusQuestId);
+    });
+  }
+
+  if (chapterIntroEnterBtn) {
+    chapterIntroEnterBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       if (performance.now() - introOpenedAt < 180) return;
       dismissChapterIntro();
     });
   }
+
+  if (chapterIntroEl) {
+    chapterIntroEl.style.display = 'none';
+    chapterIntroEl.addEventListener('click', (e) => {
+      if (e.target === chapterIntroEl) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (performance.now() - introOpenedAt < 180) return;
+        dismissChapterIntro();
+      }
+    });
+  }
   if (typeof window !== 'undefined') {
-    window.addEventListener('keydown', () => {
-      if (activeIntroPayload && performance.now() - introOpenedAt >= 180) {
+    window.addEventListener('keydown', (e) => {
+      if (!activeIntroPayload || performance.now() - introOpenedAt < 180) return;
+      if (e.code === 'Escape' || e.code === 'Enter' || e.code === 'Space') {
         dismissChapterIntro();
       }
     });
   }
 
+  let lastBannerQuestId = null;
   function showCompletionBanner(payload) {
     if (!payload) return;
     const def = ctx.quests?.getQuestDef?.(payload.id);
@@ -464,12 +710,45 @@ export function createQuestUi(ctx) {
       bannerRewardsEl.style.display = 'none';
     }
 
+    const hit = getMuralEpisodeByQuest(payload.id);
+    lastBannerQuestId = payload.id;
+    if (hit && bannerMural && bannerMuralWrapEl) {
+      bannerMuralWrapEl.classList.remove('is-hidden');
+      if (bannerMuralHintEl) {
+        bannerMuralHintEl.textContent = `🎨 ${i18n.t('mural.ui.episodePainted')} · ${i18n.t('mural.ui.clickToExpand')}`;
+      }
+      bannerMural.setChapter(hit.mural.id);
+      bannerMural.start();
+      bannerMural.playColoringReveal(payload.id, { duration: 2.15, immediateFocus: true });
+    } else if (bannerMuralWrapEl) {
+      bannerMuralWrapEl.classList.add('is-hidden');
+      bannerMural?.stop();
+    }
+
     bannerEl.classList.remove('is-hidden');
     if (bannerTimer) clearTimeout(bannerTimer);
     bannerTimer = setTimeout(() => {
       bannerEl.classList.add('is-hidden');
+      bannerMural?.stop();
       bannerTimer = null;
-    }, 3400);
+    }, hit ? 5400 : 3400);
+  }
+
+  if (bannerMuralWrapEl) {
+    bannerMuralWrapEl.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!lastBannerQuestId) return;
+      const hit = getMuralEpisodeByQuest(lastBannerQuestId);
+      if (hit) {
+        bannerEl.classList.add('is-hidden');
+        bannerMural?.stop();
+        showChapterIntro({
+          chapterId: hit.mural.id,
+          revealQuestId: lastBannerQuestId,
+        });
+      }
+    });
   }
 
   // ---------------------------------------------------------------- Event Listeners
@@ -490,6 +769,18 @@ export function createQuestUi(ctx) {
       toggleJournal();
     }
   });
+
+  if (trackerMuralBtn) {
+    trackerMuralBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const activeList = ctx.quests?.getActiveQuestsDetailed?.() || [];
+      const firstActive = activeList.find((q) => q.tracked) || activeList[0];
+      const hit = firstActive ? getMuralEpisodeByQuest(firstActive.id) : null;
+      const chId = hit?.mural?.id || state.zone || 'prologue';
+      showChapterIntro({ chapterId: chId });
+    });
+  }
 
   trackerJournalBtn.addEventListener('click', (e) => {
     e.preventDefault();
@@ -528,6 +819,30 @@ export function createQuestUi(ctx) {
   }
 
   journalContentEl.addEventListener('click', (e) => {
+    const openMuralBtn = e.target.closest?.('[data-open-mural]');
+    if (openMuralBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const chId = openMuralBtn.getAttribute('data-open-mural');
+      closeJournal();
+      showChapterIntro({ chapterId: chId });
+      return;
+    }
+
+    const replayMuralBtn = e.target.closest?.('[data-replay-mural]');
+    if (replayMuralBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const qId = replayMuralBtn.getAttribute('data-replay-mural');
+      const hit = getMuralEpisodeByQuest(qId);
+      closeJournal();
+      showChapterIntro({
+        chapterId: hit?.mural?.id || state.zone || 'ch1',
+        revealQuestId: qId,
+      });
+      return;
+    }
+
     const trackBtn = e.target.closest?.('[data-track-quest]');
     if (trackBtn) {
       e.preventDefault();
@@ -674,11 +989,30 @@ export function createQuestUi(ctx) {
     closeJournal,
     toggleJournal,
     renderTracker,
+    showChapterIntro,
+    dismissChapterIntro,
+    openMuralScroll(chapterId = state.zone || 'ch1', opts = {}) {
+      showChapterIntro({ chapterId, ...opts });
+    },
+    replayQuestColoring(questId) {
+      const hit = getMuralEpisodeByQuest(questId);
+      if (!hit) return false;
+      showChapterIntro({ chapterId: hit.mural.id, revealQuestId: questId });
+      return true;
+    },
     isOpen() {
       return journalOpen;
     },
   };
 
   ctx.questUi = api;
+  ctx.mural = {
+    openScroll: (chapterId, opts) => api.openMuralScroll(chapterId, opts),
+    closeScroll: () => dismissChapterIntro(),
+    replayQuestColoring: (questId) => api.replayQuestColoring(questId),
+    introMural,
+    bannerMural,
+  };
+  ctx.debug?.register?.('mural', ctx.mural);
   return api;
 }

@@ -806,13 +806,13 @@ export function createQuests(ctx) {
   bus.on('zone:change', ({ to }) => {
     const mapDef = ctx.world?.getMap?.(to);
     const intro = mapDef?.chapterIntro;
-    if (intro && intro.flag && !hasFlag(intro.flag)) {
-      bus.emit('chapter:intro', intro);
-    }
     if (intro?.startQuest && !isActive(intro.startQuest) && !isDone(intro.startQuest)) {
       start(intro.startQuest);
     }
     checkAutoStartQuests();
+    if (intro && intro.flag && !hasFlag(intro.flag)) {
+      bus.emit('chapter:intro', intro);
+    }
   });
 
   // ---------------------------------------------------------------- Skip-To Chapter Helper (`__stupa.quests.skipTo`)
@@ -1040,6 +1040,9 @@ export function createQuests(ctx) {
     } else {
       checkAutoStartQuests();
     }
+
+    // Clear target chapter's introSeen flag so skipping to a chapter always unfolds its Mural Scroll
+    delete questData.flags[`${norm}.introSeen`];
 
     // Teleport to target chapter map if it exists in MAPS
     const mapTarget = {

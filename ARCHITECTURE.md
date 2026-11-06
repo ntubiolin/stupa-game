@@ -13,7 +13,7 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/core/events.js` | **Architect** | event bus (`on`, `off`, `emit`) |
 | `src/core/debug.js` | **Architect** | console inspection & debug API (`window.__stupa`) |
 | `src/core/input.js` | Gameplay | keyboard / mouse-drag / touch virtual joystick (`JOY_RADIUS = 60`) + mobile arc skill pad → action state |
-| `src/i18n.js`, `src/i18n/*.js` | Gameplay | `zh-Hant` / `en` strings (`1,531` keys), `i18n.register(dict)`, dynamic substitution (`maps`, `quests`, `items`, `skills`, `codex`, `prologue`, `ch1`–`ch5`) |
+| `src/i18n.js`, `src/i18n/*.js` | Gameplay | `zh-Hant` / `en` strings (`1,580` keys), `i18n.register(dict)`, dynamic substitution (`maps`, `quests`, `items`, `skills`, `codex`, `murals`, `prologue`, `ch1`–`ch5`) |
 | `src/world/sky.js` | World | sky dome, sun/moon, stars, lights, fog, exposure — writes `state.time.sunDir/nightFactor` |
 | `src/world/stupa.js` | World | stupa, wall, prayer wheels, night string lights; exports `flagAnchors` |
 | `src/world/prayerFlags.js` | World | wind-animated five-color flags (vertex shader) |
@@ -35,6 +35,7 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/data/enemies/*.js` | Data | chapter enemy definitions (`pharping`, `mangyul`, `yarlung`, `samye`), auto-discovered via `import.meta.glob` |
 | `src/data/quests/*.js`, `src/data/dialogues/*.js` | Data | Prologue + Ch1–Ch5 quest chains (`22` main quests) and conditional branching dialogue trees |
 | `src/data/codex.js`, `src/data/codex/*.js` | Data | 38 Dharma Codex entries (`place`, `person`, `deity`, `concept`, `practice`) with `[史實]`/`[傳說]` tags & 59 external URLs |
+| `src/data/murals.js`, `public/murals/*.webp` | Data / Art | 20 offline Tibetan mural cutout sprites & 6 chapter mural scroll layouts (`prologue`, `ch1`–`ch5`, 22 quest episodes) |
 | `src/player/player.js` | Gameplay | pilgrim mesh, movement, collision, prostration animation, kora tracking |
 | `src/player/cameraRig.js` | Gameplay | third-person follow camera + intro orbit + cutscene camera override |
 | `src/gameplay/mantra.js` | Gameplay | Six-Syllable Mantra (六字大明咒) area wave, syllables pool, cooldown & MP handling |
@@ -60,8 +61,9 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/data/music.js` | Data | score: leitmotifs, per-map / chapter-variant / boss tracks and stingers (A4 = 432 Hz) |
 | `src/ui/hud.js`, `skillbar.js`, `style.css` | Gameplay | title screen, HUD, bottom 7-slot skillbar + mobile arc skill pad, prompts, toasts, time slider, language toggle |
 | `src/ui/inventory.js`, `shop.js`, `crafting.js` | Gameplay | `I`/`C` Inventory & Character modal, tooltip comparison, mobile action bar, Merchant shop, Artisan reforge/consecrate/salvage |
-| `src/ui/dialogue.js`, `quests.js` | Gameplay | bottom glassmorphic dialogue box with `[codex:id|text]` links, right-side Quest Tracker, `J` Quest Journal, Pure Vision Intro Card |
-| `src/ui/worldmap.js`, `minimap.js`, `credits.js` | Gameplay | `M`/`L` 3-tab World Map / Zone Map / Dharma Codex modal, top-right circular radar minimap (`Tab`), Finale Ending Credits |
+| `src/ui/mural/scroll.js` | Gameplay | `MuralScrollCanvas` (`1600×900`): Sobel sepia-ink `白描粉本` (`sketch`) extractor, procedural mineral-green mountains/rivers/cloud borders, pan tour, and wet-brush coloring reveal (`playColoringReveal`) |
+| `src/ui/dialogue.js`, `src/ui/quests.js` | Gameplay | bottom glassmorphic dialogue box with `[codex:id|text]` links, right-side Quest Tracker, `J` Quest Journal, Chapter Intro Mural Scroll & Quest Completion Wet-Brush Coloring Reveal |
+| `src/ui/worldmap.js`, `src/ui/minimap.js`, `src/ui/credits.js` | Gameplay | `M`/`L` 4-tab World Map / Zone Map / Dharma Codex / Mural Scrolls (`壁畫長卷`) modal, top-right circular radar minimap (`Tab`), Finale Ending Credits |
 | `scripts/balance-report.mjs`, `check-i18n.mjs`, `check-links.mjs` | Tooling | Lv 1–40 TTK & economy balance simulator, bilingual i18n key verifier, and Codex URL link checker |
 
 Subagents edit **only** files they own. If a contract change is needed, report it to the architect instead of editing shared files.

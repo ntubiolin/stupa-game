@@ -4741,20 +4741,62 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  overflow: hidden;
+  overflow: visible;
   user-select: none;
   -webkit-user-select: none;
   transition: transform 0.14s ease, border-color 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
 }
 
-.skill-slot--basic {
-  border-color: rgba(255, 212, 96, 0.72);
-  background: radial-gradient(circle at 50% 35%, rgba(112, 54, 24, 0.88), rgba(26, 14, 22, 0.95));
+.skill-slot--basic,
+.skill-slot[data-skill-id="humBolt"],
+.skill-row__icon[data-skill-id="humBolt"],
+.arc-btn[data-skill-id="humBolt"] {
+  border-color: rgba(250, 204, 21, 0.72);
+  background: radial-gradient(circle at 50% 35%, rgba(112, 62, 16, 0.9), rgba(16, 18, 34, 0.96));
 }
 
-.skill-slot--ultimate {
-  border-color: rgba(251, 191, 36, 0.75);
-  box-shadow: inset 0 0 12px rgba(245, 158, 11, 0.25);
+.skill-slot[data-skill-id="mantra"],
+.skill-row__icon[data-skill-id="mantra"],
+.arc-btn[data-skill-id="mantra"] {
+  border-color: rgba(45, 212, 191, 0.58);
+  background: radial-gradient(circle at 50% 35%, rgba(92, 48, 22, 0.88), rgba(14, 24, 32, 0.96));
+}
+
+.skill-slot[data-skill-id="phurba"],
+.skill-row__icon[data-skill-id="phurba"],
+.arc-btn[data-skill-id="phurba"] {
+  border-color: rgba(248, 113, 113, 0.62);
+  background: radial-gradient(circle at 50% 35%, rgba(104, 24, 34, 0.9), rgba(22, 10, 20, 0.96));
+}
+
+.skill-slot[data-skill-id="vajraBell"],
+.skill-row__icon[data-skill-id="vajraBell"],
+.arc-btn[data-skill-id="vajraBell"] {
+  border-color: rgba(56, 189, 248, 0.62);
+  background: radial-gradient(circle at 50% 35%, rgba(24, 62, 98, 0.9), rgba(14, 16, 30, 0.96));
+}
+
+.skill-slot[data-skill-id="lotusShield"],
+.skill-row__icon[data-skill-id="lotusShield"],
+.arc-btn[data-skill-id="lotusShield"] {
+  border-color: rgba(110, 231, 183, 0.62);
+  background: radial-gradient(circle at 50% 35%, rgba(22, 76, 62, 0.9), rgba(22, 12, 28, 0.96));
+}
+
+.skill-slot[data-skill-id="protector"],
+.skill-row__icon[data-skill-id="protector"],
+.arc-btn[data-skill-id="protector"] {
+  border-color: rgba(192, 132, 252, 0.62);
+  background: radial-gradient(circle at 50% 35%, rgba(74, 28, 104, 0.9), rgba(18, 12, 28, 0.96));
+}
+
+.skill-slot--ultimate,
+.skill-slot[data-skill-id="vajraGuru"],
+.skill-row__icon[data-skill-id="vajraGuru"],
+.arc-btn[data-skill-id="vajraGuru"] {
+  border-color: rgba(251, 191, 36, 0.8);
+  background: radial-gradient(circle at 50% 35%, rgba(124, 72, 14, 0.92), rgba(28, 14, 24, 0.96));
+  box-shadow: inset 0 0 12px rgba(245, 158, 11, 0.28);
 }
 
 .skill-slot:hover:not(.is-locked) {
@@ -4768,13 +4810,47 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
 }
 
 .skill-slot__glyph {
-  font-family: var(--font-serif);
-  font-size: 1.38rem;
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
   line-height: 1;
   color: #fff5d6;
-  text-shadow: 0 0 10px rgba(255, 195, 65, 0.82);
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.65));
   z-index: 2;
+}
+
+.skill-slot__glyph .skill-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.skill-slot__tooltip {
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%) translateY(3px);
+  padding: 3px 8px;
+  border-radius: 7px;
+  background: rgba(14, 9, 22, 0.94);
+  border: 1px solid rgba(238, 195, 108, 0.55);
+  color: #fff6dc;
+  font-family: var(--font-serif);
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.65);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 12;
+}
+
+.skill-slot:hover .skill-slot__tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 .skill-slot__key {
@@ -4822,6 +4898,7 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
 .skill-slot__cd {
   position: absolute;
   inset: 0;
+  border-radius: 12.5px;
   pointer-events: none;
   z-index: 3;
 }
@@ -5020,11 +5097,19 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
 }
 
 .skill-row__glyph {
-  font-family: var(--font-serif);
-  font-size: 1.45rem;
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
   color: #fff4d2;
-  text-shadow: 0 0 10px rgba(255, 195, 65, 0.8);
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.65));
+}
+
+.skill-row__glyph .skill-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .skill-row__key {
@@ -5276,7 +5361,8 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
 }
 
 .arc-btn--primary .arc-btn__glyph {
-  font-size: 1.85rem;
+  width: 46px;
+  height: 46px;
 }
 
 .arc-btn--sat {
@@ -5344,13 +5430,21 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
 }
 
 .arc-btn__glyph {
-  font-family: var(--font-serif);
-  font-size: 1.2rem;
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 31px;
+  height: 31px;
   line-height: 1;
   color: #fff5d6;
-  text-shadow: 0 0 8px rgba(255, 195, 65, 0.85);
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.65));
   z-index: 2;
+}
+
+.arc-btn__glyph .skill-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .arc-btn__cd {
@@ -5554,7 +5648,19 @@ body.is-touch-device .mobile-skill-pad {
 }
 
 .protector-select-card__glyph {
-  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6));
+}
+
+.protector-select-card__glyph .protector-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .protector-select-card__name {

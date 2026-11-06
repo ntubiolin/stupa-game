@@ -126,6 +126,15 @@ export const MAPS = {
     },
     ambience: 'wild',
     enterToastKey: 'toast.enterWild',
+    chapterIntro: {
+      flag: 'prologue.introSeen',
+      chapterId: 'prologue',
+      titleKey: 'mural.prologue.title',
+      locationKey: 'mural.prologue.location',
+      eraKey: 'mural.prologue.era',
+      narrationKey: 'mural.prologue.narration',
+      hintKey: 'ch1.intro.hint',
+    },
     tutorialKey: 'stupa_wild_tutorial_v1',
     tutorials: [
       { delay: 0.4, key: 'tutorial.wild1' },

@@ -1,7 +1,10 @@
 import '../i18n/codex.js';
+import '../i18n/murals.js';
 import { i18n } from '../i18n.js';
 import { MAPS } from '../data/maps.js';
 import { CODEX_CATEGORIES } from '../data/codex.js';
+import { CHAPTER_MURALS, getChapterMural } from '../data/murals.js';
+import { MuralScrollCanvas } from './mural/scroll.js';
 import { resolveWaypointCoords } from '../gameplay/waypoints.js';
 
 /**
@@ -592,11 +595,13 @@ export function createWorldMap(ctx) {
 
   const { state, bus } = ctx;
   let isOpen = false;
-  let activeTab = 'map'; // 'map' | 'world' | 'codex'
+  let activeTab = 'map'; // 'map' | 'world' | 'codex' | 'murals'
   let waypointTeleportMode = false;
   let selectedWorldNodeId = 'stupa';
   let activeCodexCategory = 'all';
   let selectedCodexId = 'boudhanath';
+  let selectedMuralChapterId = 'ch1';
+  let galleryMural = null;
 
   // Build Modal DOM
   const uiRoot = typeof document !== 'undefined' ? document.getElementById('ui') || document.body : null;
@@ -611,6 +616,10 @@ export function createWorldMap(ctx) {
   let codexCountEl = null;
   let codexGridEl = null;
   let codexReaderEl = null;
+  let muralsSubtitleEl = null;
+  let muralsListEl = null;
+  let muralsDetailEl = null;
+  let muralsCanvasEl = null;
   let zoneSubtitleEl = null;
   let legendListEl = null;
 
@@ -628,6 +637,7 @@ export function createWorldMap(ctx) {
             <button type="button" class="worldmap-tab is-active" data-tab="map" role="tab"></button>
             <button type="button" class="worldmap-tab" data-tab="world" role="tab"></button>
             <button type="button" class="worldmap-tab" data-tab="codex" role="tab"></button>
+            <button type="button" class="worldmap-tab" data-tab="murals" role="tab"></button>
           </div>
           <button type="button" class="worldmap-modal__close" data-action="close" aria-label="Close">✕</button>
         </header>
@@ -670,6 +680,20 @@ export function createWorldMap(ctx) {
               <article class="codex-reader"></article>
             </div>
           </section>
+
+          <!-- TAB 4: Tibetan Mural Scrolls Gallery -->
+          <section class="worldmap-view is-hidden" data-view="murals">
+            <div class="mural-gallery-subtitle"></div>
+            <div class="mural-gallery-layout">
+              <div class="mural-gallery-list"></div>
+              <div class="mural-gallery-preview">
+                <div class="mural-gallery-stage">
+                  <canvas class="mural-gallery-canvas" width="960" height="540"></canvas>
+                </div>
+                <div class="mural-gallery-detail"></div>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
     `;
@@ -687,6 +711,13 @@ export function createWorldMap(ctx) {
     codexCountEl = overlayEl.querySelector('.codex-counter');
     codexGridEl = overlayEl.querySelector('.codex-grid');
     codexReaderEl = overlayEl.querySelector('.codex-reader');
+    muralsSubtitleEl = overlayEl.querySelector('.mural-gallery-subtitle');
+    muralsListEl = overlayEl.querySelector('.mural-gallery-list');
+    muralsDetailEl = overlayEl.querySelector('.mural-gallery-detail');
+    muralsCanvasEl = overlayEl.querySelector('.mural-gallery-canvas');
+    if (muralsCanvasEl) {
+      galleryMural = new MuralScrollCanvas(muralsCanvasEl, { ctx, chapterId: 'ch1' });
+    }
 
     overlayEl.addEventListener('click', (e) => {
       const closeBtn = e.target.closest('[data-action="close"]');
@@ -711,9 +742,11 @@ export function createWorldMap(ctx) {
     const tabMap = overlayEl.querySelector('[data-tab="map"]');
     const tabWorld = overlayEl.querySelector('[data-tab="world"]');
     const tabCodex = overlayEl.querySelector('[data-tab="codex"]');
+    const tabMurals = overlayEl.querySelector('[data-tab="murals"]');
     if (tabMap) tabMap.textContent = i18n.t('mapModal.tab.map');
     if (tabWorld) tabWorld.textContent = i18n.t('mapModal.tab.world');
     if (tabCodex) tabCodex.textContent = i18n.t('mapModal.tab.codex');
+    if (tabMurals) tabMurals.textContent = i18n.t('mapModal.tab.murals');
 
     const legendTitle = overlayEl.querySelector('.zone-map-legend__title');
     if (legendTitle) legendTitle.textContent = i18n.t('mapModal.legend.title');
@@ -883,17 +916,29 @@ export function createWorldMap(ctx) {
       </div>
       <div class="world-detail__status ${isUnl ? 'is-unlocked' : 'is-locked'}">${statusText}</div>
       <p class="world-detail__desc">${i18n.t(node.descKey)}</p>
-      ${
-        showTpBtn
-          ? `<button type="button" class="world-detail__tp-btn" data-tp-node="${node.id}">${i18n.t('mapModal.world.teleportBtn')}</button>`
-          : ''
-      }
+      <div class="world-detail__actions">
+        ${
+          showTpBtn
+            ? `<button type="button" class="world-detail__tp-btn" data-tp-node="${node.id}">${i18n.t('mapModal.world.teleportBtn')}</button>`
+            : ''
+        }
+        <button type="button" class="quest-mural-open-btn" data-mural-node="${node.id}">
+          📜 ${i18n.t('mural.ui.viewScroll')}
+        </button>
+      </div>
     `;
 
     const tpBtn = worldDetailEl.querySelector('[data-tp-node]');
     if (tpBtn) {
       tpBtn.addEventListener('click', () => {
         handleTeleportToNode(node.id);
+      });
+    }
+    const muralBtn = worldDetailEl.querySelector('[data-mural-node]');
+    if (muralBtn) {
+      muralBtn.addEventListener('click', () => {
+        close();
+        ctx.questUi?.openMuralScroll?.(node.id);
       });
     }
   }
@@ -1042,10 +1087,118 @@ export function createWorldMap(ctx) {
     `;
   }
 
+  function renderMuralsTab() {
+    if (!overlayEl || !muralsListEl || !muralsDetailEl) return;
+    if (muralsSubtitleEl) {
+      muralsSubtitleEl.textContent = i18n.t('mural.gallery.subtitle');
+    }
+
+    const muralList = Object.values(CHAPTER_MURALS);
+    const activeMural = getChapterMural(selectedMuralChapterId) || muralList[0];
+    selectedMuralChapterId = activeMural.id;
+
+    muralsListEl.innerHTML = muralList
+      .map((m) => {
+        const total = m.episodes.length;
+        const done = m.episodes.filter((ep) => ctx.quests?.isDone?.(ep.questId)).length;
+        const isSel = m.id === selectedMuralChapterId;
+        const progText = i18n.t('mural.gallery.progress', { done, total });
+        return `
+          <button
+            type="button"
+            class="mural-gallery-card ${isSel ? 'is-selected' : ''} ${done === total ? 'is-complete' : ''}"
+            data-mural-ch="${m.id}"
+          >
+            <div class="mural-gallery-card__title">${i18n.t(m.titleKey)}</div>
+            <div class="mural-gallery-card__meta">
+              <span>${i18n.t(m.locationKey)}</span>
+              <span class="mural-gallery-card__prog">${progText}</span>
+            </div>
+          </button>
+        `;
+      })
+      .join('');
+
+    muralsListEl.querySelectorAll('[data-mural-ch]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        selectedMuralChapterId = btn.getAttribute('data-mural-ch') || 'ch1';
+        renderMuralsTab();
+      });
+    });
+
+    if (galleryMural) {
+      galleryMural.setChapter(activeMural.id);
+      galleryMural.focusOverview(true);
+      galleryMural.start();
+    }
+
+    const epButtonsHtml = activeMural.episodes
+      .map((ep) => {
+        const isDone = Boolean(ctx.quests?.isDone?.(ep.questId));
+        const isActive = Boolean(ctx.quests?.isActive?.(ep.questId));
+        const cls = isDone ? 'is-painted' : isActive ? 'is-active' : 'is-sketch';
+        return `
+          <button type="button" class="mural-ep-btn ${cls}" data-gallery-ep="${ep.questId}">
+            <span class="mural-ep-btn__num">${ep.num}</span>
+            <span>${i18n.t(ep.titleKey)}</span>
+          </button>
+        `;
+      })
+      .join('');
+
+    muralsDetailEl.innerHTML = `
+      <div class="mural-gallery-detail__top">
+        <div>
+          <h3 class="mural-gallery-detail__title">${i18n.t(activeMural.titleKey)}</h3>
+          <p class="mural-gallery-detail__narration">${i18n.t(activeMural.narrationKey)}</p>
+        </div>
+        <button type="button" class="mural-enter-btn" data-gallery-open="${activeMural.id}">
+          📜 ${i18n.t('mural.gallery.openFull')}
+        </button>
+      </div>
+      <div class="mural-episode-bar">
+        <button type="button" class="mural-ep-btn mural-ep-btn--tool" data-gallery-overview="1">
+          <span>☸</span>
+          <span>${i18n.t('mural.ui.overview')}</span>
+        </button>
+        ${epButtonsHtml}
+      </div>
+    `;
+
+    const openBtn = muralsDetailEl.querySelector('[data-gallery-open]');
+    if (openBtn) {
+      openBtn.addEventListener('click', () => {
+        const chId = openBtn.getAttribute('data-gallery-open');
+        close();
+        ctx.questUi?.openMuralScroll?.(chId);
+      });
+    }
+
+    const overviewBtn = muralsDetailEl.querySelector('[data-gallery-overview]');
+    if (overviewBtn && galleryMural) {
+      overviewBtn.addEventListener('click', () => {
+        galleryMural.focusOverview(false);
+      });
+    }
+
+    muralsDetailEl.querySelectorAll('[data-gallery-ep]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const qId = btn.getAttribute('data-gallery-ep');
+        if (galleryMural && qId) {
+          galleryMural.playColoringReveal(qId, { duration: 2.2, immediateFocus: false });
+        }
+      });
+    });
+  }
+
   function switchTab(tab) {
-    if (!['map', 'world', 'codex'].includes(tab)) tab = 'map';
+    if (!['map', 'world', 'codex', 'murals'].includes(tab)) tab = 'map';
     activeTab = tab;
     if (!overlayEl) return;
+
+    if (activeTab !== 'murals' && galleryMural) {
+      galleryMural.stop();
+    }
 
     overlayEl.querySelectorAll('[data-tab]').forEach((btn) => {
       btn.classList.toggle('is-active', btn.getAttribute('data-tab') === activeTab);
@@ -1057,6 +1210,7 @@ export function createWorldMap(ctx) {
     if (activeTab === 'map') renderZoneMapTab();
     else if (activeTab === 'world') renderWorldRouteTab();
     else if (activeTab === 'codex') renderCodexTab();
+    else if (activeTab === 'murals') renderMuralsTab();
   }
 
   function open(tab = 'map', opts = {}) {
@@ -1083,6 +1237,7 @@ export function createWorldMap(ctx) {
     if (!isOpen || !overlayEl) return;
     isOpen = false;
     waypointTeleportMode = false;
+    galleryMural?.stop();
     overlayEl.classList.add('is-hidden');
 
     // Keep state.uiOpen true if another modal (such as dialogue) is still active underneath

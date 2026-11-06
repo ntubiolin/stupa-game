@@ -30,8 +30,8 @@ export function createZones(ctx) {
       scene.add(grp);
       ctx.zoneGroups[mapId] = grp;
     }
-    if (mapId === 'stupa') {
-      mapInstances.stupa = {
+    if (mapId === 'stupa' || mapId === 'terma') {
+      mapInstances[mapId] = {
         getHeight: () => 0,
         update: () => {},
       };

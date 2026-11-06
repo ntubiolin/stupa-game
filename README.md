@@ -49,8 +49,8 @@ A zero-asset procedural 3D pilgrimage and Diablo-style action RPG in the browser
 | **行囊背包 / Inventory** | `I` | 開啟 8 欄護身法器裝備與 30 格行囊面板 |
 | **修行法相 / Character** | `C` | 檢視詳細屬性（攻防、暴擊、降魔、減冷卻、尋寶）與已啟用伏藏密意 |
 | **密法修持面板 / Skills** | `K` | 分配技能點（Rank 1–5）、選擇 Rank 3 A/B 專精分支與切換出戰護法 |
-| **朝聖日誌 / Quest Journal** | `J` | 檢視當前追蹤任務、已完成任務與章節進度 |
-| **世界輿圖 / World Map** | `M` | 開啟《蓮師足跡》全境路線圖、區域地圖與道標傳送 |
+| **朝聖日誌 / Quest Journal** | `J` | 檢視當前追蹤任務、已完成任務、章節壁畫畫卷與重播設色 |
+| **世界輿圖・壁畫長卷 / World Map & Murals** | `M` | 開啟《蓮師足跡》全境路線圖、區域地圖、道標傳送與**壁畫長卷收藏館** |
 | **法教圖鑑 / Dharma Codex** | `L` | 開啟 38 則藏傳佛教歷史與傳說百科圖鑑 |
 | **小地圖縮放 / Minimap Zoom** | `Tab` | 切換右上角雷達小地圖視野（`45m` / `90m`） |
 | **顯示地面掉落物 / Show Loot** | `Alt`（按住） | 強制顯示地面所有戰利品名牌與光柱 |
@@ -118,6 +118,17 @@ A zero-asset procedural 3D pilgrimage and Diablo-style action RPG in the browser
   - 頭目戰為羌姆金剛舞，隨階段加速加層；章節開場、圓滿、調伏與蓮師現身皆有專屬樂句。
   - HUD 🎵 按鈕可單獨開關配樂；開發模式下可於 `/music-lab.html` 試聽全部曲目。
 
+### 6. 藏傳寺院壁畫關卡劇情圖說 / Tibetan Temple Mural Story Scrolls
+- **離線礦物彩繪點陣圖 × 程序化青綠山水長卷**：
+  - 內建 20 張手工繪製風格之藏傳壁畫去背元件（蓮師雙身相、金剛亥母、普巴金剛橛、黑蛇那伽王、赤松德贊與寂護大師、白哈爾護法、桑耶曼荼羅、博達哈大佛塔、雍布拉康、益西措嘉等），搭配程序化繪製的石綠／青金石山巒、浪花渦卷暗河、藏式如意雲頭與金箔泥金榜題框。
+  - **自動「白描粉本（Pounce Sketch）」提取**：瀏覽器載入彩色點陣圖後，自動透過 Sobel 邊緣梯度與赭石墨線演算法即時生成單色「白描粉本」圖層。
+- **章節開場畫卷（Chapter Intro Scroll）**：
+  - 踏入新章節時展開整幅寺院壁畫長卷，未完成之劇情段落以「白描粉本」呈現，已完成段落則綻放礦物彩繪與金箔光澤，並支援自動橫移導覽（Pan Tour）與點擊分鏡聚焦。
+- **完成任務・逐段設色（Wet-Brush Coloring Reveal）**：
+  - 每當完成一個主線任務（全劇共 6 章、22 個分鏡段落），任務圓滿橫幅會將鏡頭聚焦至該劇情壁畫分鏡，以不規則水彩筆觸遮罩（Wet-Brush Radial Mask）伴隨灑金粒子，將白描底稿現場渲染為全彩金碧壁畫。
+- **壁畫長卷收藏館（Mural Scrolls Gallery）**：
+  - 可隨時於 `M` 世界輿圖的 **「壁畫長卷（Mural Scrolls）」** 分頁、世界路線圖節點、或 `J` 朝聖日誌中展開各章全幅畫卷，並任意點選已完成分鏡重播「白描 → 礦物設色」動畫。
+
 ---
 
 ## 📚 史實與傳說考據 / Historical & Cultural Sources
@@ -138,7 +149,7 @@ npm install
 # 啟動本地開發伺服器（加 ?debug=1 可啟用 window.__stupa 除錯 API）
 npm run dev
 
-# 執行雙語 i18n 完整性檢查（驗證 zh-Hant 與 en 共 1,531 個鍵值對稱且無缺漏）
+# 執行雙語 i18n 完整性檢查（驗證 zh-Hant 與 en 共 1,580 個鍵值對稱且無缺漏）
 npm run check:i18n
 
 # 執行法教圖鑑外部文獻連結有效性檢查（驗證 38 則圖鑑共 59 條 URL）

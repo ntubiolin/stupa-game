@@ -14,6 +14,7 @@
 import { SKILLS } from '../data/skills.js';
 import { i18n } from '../i18n.js';
 import '../i18n/skills.js';
+import { getSkillIconSvg, getProtectorIconSvg } from './skillIcons.js';
 
 const ULT_RING_R = 23;
 const ULT_RING_CIRC = 2 * Math.PI * ULT_RING_R;
@@ -66,14 +67,16 @@ export function createSkillbar(ctx) {
              </svg>`
           : ''
       }
-      <span class="skill-slot__glyph" aria-hidden="true">${def.glyph}</span>
+      <span class="skill-slot__glyph" aria-hidden="true">${getSkillIconSvg(def.id)}</span>
       <span class="skill-slot__lock" aria-hidden="true">🔒</span>
       <kbd class="skill-slot__key">${def.keyLabel}</kbd>
       ${def.mpCost > 0 ? `<span class="skill-slot__mp">${def.mpCost}</span>` : ''}
       ${isUlt ? `<span class="skill-slot__charge">0/${def.maxCharge}</span>` : ''}
       <span class="skill-slot__cd-text" aria-hidden="true"></span>
       <span class="skill-slot__rank-dots" aria-hidden="true"></span>
+      <span class="skill-slot__tooltip" aria-hidden="true">${i18n.t(def.nameKey)}</span>
     `;
+    btn.setAttribute('aria-label', `${i18n.t(def.nameKey)} (${def.keyLabel})`);
     btn.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
       e.preventDefault();
@@ -89,12 +92,14 @@ export function createSkillbar(ctx) {
     skillBarEl.appendChild(btn);
     slotEls.set(def.id, {
       btn,
+      def,
       cdEl: btn.querySelector('.skill-slot__cd'),
       cdTextEl: btn.querySelector('.skill-slot__cd-text'),
       mpEl: btn.querySelector('.skill-slot__mp'),
       rankDotsEl: btn.querySelector('.skill-slot__rank-dots'),
       ultFillEl: btn.querySelector('.skill-slot__ult-fill'),
       chargeEl: btn.querySelector('.skill-slot__charge'),
+      tooltipEl: btn.querySelector('.skill-slot__tooltip'),
     });
   }
 
@@ -138,7 +143,7 @@ export function createSkillbar(ctx) {
   centerBtn.dataset.skillId = basicDef.id;
   centerBtn.innerHTML = `
     <div class="arc-btn__cd" aria-hidden="true"></div>
-    <span class="arc-btn__glyph" aria-hidden="true">${basicDef.glyph}</span>
+    <span class="arc-btn__glyph" aria-hidden="true">${getSkillIconSvg(basicDef.id)}</span>
     <kbd class="arc-btn__key">${basicDef.keyLabel}</kbd>
   `;
   centerBtn.addEventListener('pointerdown', (e) => {
@@ -168,7 +173,7 @@ export function createSkillbar(ctx) {
     if (def.alias) b.dataset.skillAlias = def.alias;
     b.innerHTML = `
       <div class="arc-btn__cd" aria-hidden="true"></div>
-      <span class="arc-btn__glyph" aria-hidden="true">${def.glyph}</span>
+      <span class="arc-btn__glyph" aria-hidden="true">${getSkillIconSvg(def.id)}</span>
       <span class="arc-btn__lock" aria-hidden="true">🔒</span>
       ${def.mpCost > 0 ? `<span class="arc-btn__mp">${def.mpCost}</span>` : ''}
       <kbd class="arc-btn__key">${def.keyLabel}</kbd>
@@ -328,7 +333,7 @@ export function createSkillbar(ctx) {
               ${p.unlocked ? '' : 'disabled'}
             >
               <div class="protector-select-card__head">
-                <span class="protector-select-card__glyph">${p.glyph}</span>
+                <span class="protector-select-card__glyph" aria-hidden="true">${getProtectorIconSvg(p.id)}</span>
                 <span class="protector-select-card__name">${p.name}</span>
                 <span class="protector-select-card__role">${p.roleName}</span>
                 <span class="protector-select-card__badge">
@@ -397,8 +402,8 @@ export function createSkillbar(ctx) {
 
       row.innerHTML = `
         <div class="skill-row__main">
-          <div class="skill-row__icon">
-            <span class="skill-row__glyph">${def.glyph}</span>
+          <div class="skill-row__icon" data-skill-id="${def.id}">
+            <span class="skill-row__glyph" aria-hidden="true">${getSkillIconSvg(def.id)}</span>
             <kbd class="skill-row__key">${def.keyLabel}</kbd>
           </div>
           <div class="skill-row__info">
@@ -544,8 +549,13 @@ export function createSkillbar(ctx) {
     return openModal();
   }
 
-  // Re-render modal when language or skill ranks/points/protectors change
+  // Re-render modal & tooltips when language or skill ranks/points/protectors change
   i18n.onChange(() => {
+    for (const ui of slotEls.values()) {
+      const name = i18n.t(ui.def.nameKey);
+      if (ui.tooltipEl) ui.tooltipEl.textContent = name;
+      ui.btn.setAttribute('aria-label', `${name} (${ui.def.keyLabel})`);
+    }
     if (modalOpen) renderModal();
   });
   bus?.on('skill:rank', () => {
