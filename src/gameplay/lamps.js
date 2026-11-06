@@ -1,11 +1,15 @@
 /**
  * Butter-lamp offering stations (酥油燈台) — carved stone & timber shrines
  * around the kora path, InstancedMesh brass butter-lamp bowls, custom shader
- * flickering teardrop flames + bloom glow sprites, and 1 PointLight per station.
+ * flickering teardrop flames + bloom glow sprites, 1 PointLight per station,
+ * and 3D Floating Pilgrim Prayer Plaques synced with `ctx.community`.
  */
 import { deg, polar } from '../config.js';
+import '../i18n/community.js';
 
 const BURN_DURATION = 210; // seconds before a lit lamp gently burns out
+const PLAQUE_CYCLE_SEC = 5.5;
+const PLAQUE_VISIBLE_DIST = 10.0;
 
 function createGlowTexture(THREE) {
   const size = 64;
@@ -25,8 +29,89 @@ function createGlowTexture(THREE) {
   return tex;
 }
 
+function drawRoundedRect(g, x, y, w, h, r) {
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.lineTo(x + w - r, y);
+  g.quadraticCurveTo(x + w, y, x + w, y + r);
+  g.lineTo(x + w, y + h - r);
+  g.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  g.lineTo(x + r, y + h);
+  g.quadraticCurveTo(x, y + h, x, y + h - r);
+  g.lineTo(x, y + r);
+  g.quadraticCurveTo(x, y, x + r, y);
+  g.closePath();
+}
+
+function createPrayerPlaqueSprite(THREE) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 136;
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.SpriteMaterial({
+    map: tex,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+  });
+  const sprite = new THREE.Sprite(mat);
+  sprite.position.set(0, 2.35, 0);
+  sprite.scale.set(2.35, 0.62, 1);
+  sprite.visible = false;
+  return { sprite, canvas, tex, mat, lastRenderedKey: '' };
+}
+
+function renderPlaqueCanvas(plaque, offering, i18n) {
+  if (!plaque || !offering) return;
+  const lang = i18n?.lang || 'zh';
+  const renderKey = `${lang}:${offering.id}:${offering.rejoiceCount}:${offering.message}`;
+  if (plaque.lastRenderedKey === renderKey) return;
+  plaque.lastRenderedKey = renderKey;
+
+  const { canvas, tex } = plaque;
+  const g = canvas.getContext('2d');
+  const w = canvas.width;
+  const h = canvas.height;
+  g.clearRect(0, 0, w, h);
+
+  // Dark-gold Tibetan plaque background
+  const bg = g.createLinearGradient(0, 0, w, h);
+  bg.addColorStop(0, 'rgba(24, 15, 30, 0.90)');
+  bg.addColorStop(0.5, 'rgba(38, 22, 34, 0.92)');
+  bg.addColorStop(1, 'rgba(20, 13, 26, 0.90)');
+  drawRoundedRect(g, 6, 6, w - 12, h - 12, 18);
+  g.fillStyle = bg;
+  g.fill();
+
+  g.lineWidth = 2.5;
+  g.strokeStyle = 'rgba(242, 201, 107, 0.78)';
+  g.stroke();
+
+  // Header line: 🪔 [Tag] PilgrimName · 🙏 count
+  const tagText = i18n?.t?.(`tag.${offering.tag || 'peace'}`) || offering.tag || '';
+  const headerStr = `🪔 [${tagText}] ${offering.pilgrimName}   🙏 ${offering.rejoiceCount || 1}`;
+  g.font = 'bold 22px "Noto Serif TC", "Outfit", sans-serif';
+  g.fillStyle = '#f6d379';
+  g.textBaseline = 'top';
+  g.fillText(headerStr, 24, 20, w - 48);
+
+  // Message line (up to 2 lines truncated gracefully)
+  const msg = String(offering.message || '');
+  g.font = '20px "Noto Serif TC", "Outfit", serif';
+  g.fillStyle = '#fff7e8';
+  const line1 = msg.slice(0, 23);
+  const line2 = msg.length > 23 ? (msg.slice(23, 44) + (msg.length > 44 ? '…' : '')) : '';
+  g.fillText(`「${line1}${line2 ? '' : '」'}`, 22, 56, w - 44);
+  if (line2) {
+    g.fillText(`  ${line2}」`, 22, 86, w - 44);
+  }
+
+  tex.needsUpdate = true;
+}
+
 export function createLamps(ctx) {
-  const { THREE, scene, state, config, bus } = ctx;
+  const { THREE, scene, state, config, bus, i18n } = ctx;
   const L = config.LAMPS;
   const stationDefs = L.stations || [];
   const lampsPerStation = L.lampsPerStation || 12;
@@ -134,7 +219,6 @@ export function createLamps(ctx) {
   });
 
   // ---------------------------------------------------------------- instanced lamp bowls
-  // Each brass butter-lamp bowl (ting) is a stemmed chalice
   const bowlGeo = new THREE.CylinderGeometry(0.068, 0.042, 0.065, 12);
   bowlGeo.translate(0, 0.032, 0);
   const bowlInstanced = new THREE.InstancedMesh(bowlGeo, brassMat, totalLamps);
@@ -147,14 +231,12 @@ export function createLamps(ctx) {
   const gheeInstanced = new THREE.InstancedMesh(gheeGeo, gheeMat, totalLamps);
   group.add(gheeInstanced);
 
-  // Crossed-plane flame geometry for each lamp
   function createFlameMesh(seed) {
     const plane1 = new THREE.PlaneGeometry(0.075, 0.145, 1, 6);
     plane1.translate(0, 0.072, 0);
     const plane2 = plane1.clone();
     plane2.rotateY(Math.PI / 2);
 
-    // Merge the 2 crossed planes manually
     const p1 = plane1.attributes.position.array;
     const p2 = plane2.attributes.position.array;
     const u1 = plane1.attributes.uv.array;
@@ -199,7 +281,6 @@ export function createLamps(ctx) {
     const pos = polar(angle, def.radius);
     const stationGroup = new THREE.Group();
     stationGroup.position.set(pos.x, 0, pos.z);
-    // Orient table tangent to the kora circle, facing outward toward the walkway
     const facingYaw = Math.atan2(-pos.x, -pos.z) + Math.PI;
     stationGroup.rotation.y = facingYaw;
     group.add(stationGroup);
@@ -260,6 +341,10 @@ export function createLamps(ctx) {
     light.castShadow = false;
     stationGroup.add(light);
 
+    // 3D Floating Prayer Plaque Sprite above station (y = 2.35, 0 PointLights)
+    const plaque = createPrayerPlaqueSprite(THREE);
+    stationGroup.add(plaque.sprite);
+
     // Arrange 12 lamps in 2 rows × 6 columns on the brass tray (y = 0.98)
     const cols = 6;
     const rows = Math.ceil(lampsPerStation / cols);
@@ -297,12 +382,14 @@ export function createLamps(ctx) {
       stationGroup.add(glow);
 
       lampEntries.push({
+        idx: i,
         lit: false,
         burnRemaining: 0,
         igniteAnim: 0,
         flame,
         glow,
         seed,
+        communityId: null,
       });
     }
 
@@ -328,8 +415,11 @@ export function createLamps(ctx) {
     const worldPos = new THREE.Vector3(pos.x, 1.0, pos.z);
     const station = {
       id: `lamp-${sIdx}`,
+      stationIdx: sIdx,
       worldPos,
       light,
+      plaque,
+      plaqueCycleIndex: 0,
       lamps: lampEntries,
       pendingTimers: [],
       countLit() {
@@ -360,12 +450,15 @@ export function createLamps(ctx) {
         const nextLamp = station.findNextUnlit();
         if (!nextLamp) {
           bus.emit('toast', { key: 'toast.allLit' });
+          ctx.lampOfferingUi?.open?.({ stationIdx: sIdx, lampIdx: 0, tab: 'wall' });
           return;
         }
+        const lampIdx = nextLamp.idx ?? station.lamps.indexOf(nextLamp);
+
         // Trigger pilgrim bow & lighting gesture
         bus.emit('player:gesture', { name: 'light', target: station.worldPos });
 
-        // Ignite the bowl right as the player's hand reaches forward (~0.25s)
+        // Ignite the bowl right as the player's hand reaches forward
         nextLamp.lit = true;
         nextLamp.burnRemaining = BURN_DURATION;
         nextLamp.igniteAnim = 0.01;
@@ -379,6 +472,9 @@ export function createLamps(ctx) {
           source: 'lamp',
         });
 
+        bus.emit('lamp:litByPlayer', { stationIdx: sIdx, lampIdx });
+        ctx.lampOfferingUi?.open?.({ stationIdx: sIdx, lampIdx, tab: 'offer', fromStationLight: true });
+
         if (!station.findNextUnlit()) {
           bus.emit('toast', { key: 'toast.allLit' });
         }
@@ -389,6 +485,72 @@ export function createLamps(ctx) {
   bowlInstanced.instanceMatrix.needsUpdate = true;
   gheeInstanced.instanceMatrix.needsUpdate = true;
 
+  // ---------------------------------------------------------------- Community Lamp Sync & Helpers
+  function lightLampAt(stationIdx = 0, lampIdx = null, bonusSec = 0, communityId = null) {
+    const st = stations[stationIdx];
+    if (!st) return null;
+    let target = null;
+    if (typeof lampIdx === 'number' && st.lamps[lampIdx]) {
+      target = st.lamps[lampIdx];
+    } else {
+      target = st.findNextUnlit() || st.lamps[0];
+    }
+    if (!target) return null;
+
+    const wasLit = target.lit;
+    target.lit = true;
+    target.burnRemaining = Math.max(
+      target.burnRemaining,
+      BURN_DURATION + Math.max(0, Number(bonusSec) || 0)
+    );
+    target.igniteAnim = wasLit ? target.igniteAnim : 0.05;
+    target.flame.visible = true;
+    target.glow.visible = true;
+    if (communityId) target.communityId = communityId;
+    return target;
+  }
+
+  let communitySynced = false;
+  function syncCommunityLamps() {
+    if (!ctx.community?.getLamps) return;
+    communitySynced = true;
+    const commLamps = ctx.community.getLamps();
+    // Light up to 6 community lamps per station so at least 6 bowls remain unlit for player interaction
+    const countPerStation = [0, 0, 0];
+    for (const item of commLamps) {
+      const sIdx = Math.max(0, Math.min(2, Number(item.stationIdx) || 0));
+      if (countPerStation[sIdx] >= 6) continue;
+      const bowlIdx = typeof item.lampIdx === 'number' ? (item.lampIdx % 6) : countPerStation[sIdx];
+      lightLampAt(sIdx, bowlIdx, item.burnBonusSec || 0, item.id);
+      countPerStation[sIdx]++;
+    }
+  }
+
+  syncCommunityLamps();
+
+  bus.on('community:lampOffered', (entry) => {
+    if (!entry) return;
+    const sIdx = Math.max(0, Math.min(2, Number(entry.stationIdx) || 0));
+    lightLampAt(sIdx, entry.lampIdx, entry.burnBonusSec || 120, entry.id);
+  });
+
+  bus.on('community:lampRejoiced', ({ id, lamp } = {}) => {
+    if (!id) return;
+    for (const st of stations) {
+      const found = st.lamps.find((l) => l.communityId === id);
+      if (found) {
+        found.lit = true;
+        found.burnRemaining += 120;
+        found.flame.visible = true;
+        found.glow.visible = true;
+        return;
+      }
+    }
+    if (lamp && typeof lamp.stationIdx === 'number') {
+      lightLampAt(lamp.stationIdx, lamp.lampIdx, 120, id);
+    }
+  });
+
   // ---------------------------------------------------------------- zone visibility
   bus.on('zone:change', ({ to }) => {
     const isStupa = (to === 'stupa');
@@ -396,15 +558,27 @@ export function createLamps(ctx) {
       if (stations[s].light) {
         stations[s].light.visible = isStupa;
       }
+      if (!isStupa && stations[s].plaque?.sprite) {
+        stations[s].plaque.sprite.visible = false;
+      }
     }
   });
 
   // ---------------------------------------------------------------- update
+  let plaqueTimer = 0;
+
   function update(dt) {
+    if (!communitySynced && ctx.community) {
+      syncCommunityLamps();
+    }
+
     if (state.zone && state.zone !== 'stupa') {
       for (let s = 0; s < stations.length; s++) {
         if (stations[s].light && stations[s].light.visible) {
           stations[s].light.visible = false;
+        }
+        if (stations[s].plaque?.sprite?.visible) {
+          stations[s].plaque.sprite.visible = false;
         }
       }
       return;
@@ -422,6 +596,13 @@ export function createLamps(ctx) {
 
     const nightFactor = state.time.nightFactor ?? 0;
     const nightBoost = 0.75 + nightFactor * 1.45;
+
+    plaqueTimer += dt;
+    const advancePlaque = plaqueTimer >= PLAQUE_CYCLE_SEC;
+    if (advancePlaque) plaqueTimer = 0;
+
+    const allCommunityLamps = ctx.community?.getLamps?.() || null;
+    const playerPos = state.player?.position;
 
     for (let s = 0; s < stations.length; s++) {
       const st = stations[s];
@@ -469,11 +650,47 @@ export function createLamps(ctx) {
         st.light.intensity = (0.55 + frac * 2.1) * nightBoost * flicker;
         st.light.distance = 5.5 + frac * 4.5 + nightFactor * 2.5;
       }
+
+      // Update 3D Floating Prayer Plaque when player is within 10m
+      if (st.plaque && playerPos && allCommunityLamps && allCommunityLamps.length > 0) {
+        const dx = playerPos.x - st.worldPos.x;
+        const dz = playerPos.z - st.worldPos.z;
+        const dist = Math.hypot(dx, dz);
+
+        if (dist <= PLAQUE_VISIBLE_DIST && state.mode === 'play') {
+          const stationOfferings = allCommunityLamps.filter((l) => l.stationIdx === s);
+          const pool = stationOfferings.length > 0 ? stationOfferings : allCommunityLamps;
+          if (advancePlaque) {
+            st.plaqueCycleIndex = (st.plaqueCycleIndex + 1) % pool.length;
+          }
+          const currentOffering = pool[st.plaqueCycleIndex % pool.length];
+          renderPlaqueCanvas(st.plaque, currentOffering, i18n);
+
+          st.plaque.sprite.visible = true;
+          st.plaque.sprite.position.y = 2.35 + Math.sin(state.elapsed * 1.8 + s * 1.7) * 0.045;
+          const targetAlpha = Math.min(0.94, Math.max(0, (PLAQUE_VISIBLE_DIST - dist) / 2.5));
+          st.plaque.mat.opacity += (targetAlpha - st.plaque.mat.opacity) * Math.min(1, dt * 6);
+        } else if (st.plaque.sprite.visible) {
+          st.plaque.mat.opacity = Math.max(0, st.plaque.mat.opacity - dt * 4);
+          if (st.plaque.mat.opacity <= 0.02) {
+            st.plaque.sprite.visible = false;
+          }
+        }
+      }
     }
   }
 
-  return {
+  const api = {
     update,
     stations,
+    lightLampAt,
   };
+
+  ctx.lamps = api;
+  ctx.debug?.register('lamps', {
+    stations: () => stations,
+    lightLampAt: (sIdx, lIdx, bonus) => lightLampAt(sIdx, lIdx, bonus),
+  });
+
+  return api;
 }

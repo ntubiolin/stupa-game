@@ -63,6 +63,8 @@ import { createWorldMap } from './ui/worldmap.js';
 import { createMinimap } from './ui/minimap.js';
 import { createCredits } from './ui/credits.js';
 import { createDungeon } from './gameplay/dungeon.js';
+import { createCommunity } from './systems/community.js';
+import { createLampOfferingUi } from './ui/lampOffering.js';
 
 // ---------------------------------------------------------------- renderer
 const container = document.getElementById('app');
@@ -161,6 +163,8 @@ const loot = createLoot(ctx);
 const inventory = createInventory(ctx);
 const groundLoot = createGroundLoot(ctx);
 const items = createItems(ctx);
+const merit = createMerit(ctx);
+const community = createCommunity(ctx);
 const lamps = createLamps(ctx);
 const monkeys = createMonkeys(ctx);
 const vitals = createVitals(ctx);
@@ -176,10 +180,10 @@ const quests = createQuests(ctx);
 const npcs = createNpcs(ctx);
 const cameraRig = createCameraRig(ctx);
 
-const merit = createMerit(ctx);
 const interaction = createInteraction(ctx);
 const audio = createAudio(ctx);
 const hud = createHud(ctx);
+const lampOfferingUi = createLampOfferingUi(ctx);
 const skillbar = createSkillbar(ctx);
 const inventoryUi = createInventoryUi(ctx);
 const dialogue = createDialogue(ctx);
@@ -195,11 +199,12 @@ const modules = [
   ctx.save,
   sky, stupa, flags, environment,
   zones,
-  player, mantra, enemies, bosses, dungeon, projectiles, targeting, loot, inventory, groundLoot, items, lamps, monkeys,
+  player, mantra, enemies, bosses, dungeon, projectiles, targeting, loot, inventory, groundLoot, items,
+  community, lamps, monkeys,
   vitals, skills, potions, shrines,
   codex, waypoints, quests, npcs,
   cameraRig,
-  merit, interaction, audio, hud, skillbar, inventoryUi, dialogue, questUi, minimap, credits,
+  merit, interaction, audio, hud, lampOfferingUi, skillbar, inventoryUi, dialogue, questUi, minimap, credits,
 ];
 
 // ---------------------------------------------------------------- post-processing
