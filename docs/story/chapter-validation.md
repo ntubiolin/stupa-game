@@ -65,3 +65,17 @@ review baselines into master independently. Integrator PR is the acceptance cand
   startup with a wall clock. Remote rerun remains the authoritative CI result.
 - Dot art follow-ups: #113 Losang map handover, #114 later-chapter illustrations.
   Procedural chapter visuals remain the current gameplay presentation.
+
+## Remote CI exception — #116
+
+After three remote cycles, Linux Adventure startup/mode navigation remains unverified.
+The latest checks observe the title button and APIs before locator/protocol calls stall;
+Modes cannot complete its first evaluation after navigation. Local production checks
+pass, including forced SwiftShader, but do not replace the failed Linux jobs.
+Issue #116 records reproduction evidence and acceptance; PR #110 is not merge-ready.
+The media suite separately pins Linux software decode for its third remote attempt.
+
+A further bounded AGY source-excerpt review of chapter previews and video lifecycle
+timed out after 120 seconds with no output. This is not a passing code audit.
+The earlier design review and independent Sol/lead implementation validation remain
+the available evidence; no review or branch protection was bypassed.
