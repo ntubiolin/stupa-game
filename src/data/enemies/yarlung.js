@@ -6,9 +6,9 @@ export const YARLUNG_ENEMIES = {
   nyen: {
     id: 'nyen',
     nameKey: 'enemy.nyen',
-    hp: 50,
+    hp: 96,
     speed: 1.6,
-    exp: 14,
+    exp: 22,
     radius: 0.68,
     height: 1.95,
     stopDistance: 1.8,
@@ -46,9 +46,9 @@ export const YARLUNG_ENEMIES = {
   wildYak: {
     id: 'wildYak',
     nameKey: 'enemy.wildYak',
-    hp: 70,
+    hp: 125,
     speed: 2.6,
-    exp: 12,
+    exp: 26,
     radius: 0.82,
     height: 1.65,
     stopDistance: 1.6,

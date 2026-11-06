@@ -852,7 +852,11 @@ export function createBoss(ctx, def) {
 
     // Apply Boss defense mitigation slightly while keeping damage responsive
     const raw = Math.max(1, Number(amount) || 1);
-    const finalDmg = Math.max(1, Math.round(raw));
+    const bossDef = Math.max(0, Number(bossState.def ?? def.def) || 0);
+    const finalDmg =
+      opts.ignoreDef || raw >= bossState.hp
+        ? Math.max(1, Math.round(raw))
+        : Math.max(1, Math.round(raw * (50 / (50 + bossDef))));
     bossState.hp = Math.max(0, bossState.hp - finalDmg);
     bus.emit('sfx', { name: 'hit' });
 

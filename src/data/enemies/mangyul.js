@@ -6,9 +6,9 @@
 export const MANGYUL_ENEMIES = {
   snowSprite: {
     nameKey: 'enemy.snowSprite',
-    hp: 26,
+    hp: 68,
     speed: 2.4,
-    exp: 8,
+    exp: 14,
     radius: 0.65,
     aggroRadius: 14,
     leashRadius: 22,
@@ -36,9 +36,9 @@ export const MANGYUL_ENEMIES = {
 
   hailGhost: {
     nameKey: 'enemy.hailGhost',
-    hp: 34,
+    hp: 85,
     speed: 1.6,
-    exp: 10,
+    exp: 17,
     radius: 0.72,
     aggroRadius: 13,
     leashRadius: 22,
@@ -65,9 +65,9 @@ export const MANGYUL_ENEMIES = {
 
   avalancheBrute: {
     nameKey: 'enemy.avalancheBrute',
-    hp: 90,
+    hp: 118,
     speed: 1.3,
-    exp: 25,
+    exp: 27,
     radius: 1.15,
     aggroRadius: 13,
     leashRadius: 24,

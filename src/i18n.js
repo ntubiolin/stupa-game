@@ -419,6 +419,7 @@ function format(str, params) {
 
 export const i18n = {
   get lang() { return current; },
+  getStrings() { return STRINGS; },
   /** Translate `key`; falls back to English, then to the key itself. */
   t(key, params) {
     const s = STRINGS[current][key] ?? STRINGS.en[key] ?? key;

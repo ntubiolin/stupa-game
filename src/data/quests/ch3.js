@@ -47,7 +47,7 @@ export const CH3_QUESTS = [
       },
     ],
     rewards: {
-      exp: 360,
+      exp: 1800,
       turquoise: 65,
       codex: ['yarlungValley', 'yumbulagang'],
       flags: ['ch3.valley.done'],
@@ -95,7 +95,7 @@ export const CH3_QUESTS = [
       },
     ],
     rewards: {
-      exp: 420,
+      exp: 1600,
       turquoise: 85,
       codex: ['sheldrak', 'terma'],
       flags: ['ch3.sheldrak.done'],
@@ -141,7 +141,7 @@ export const CH3_QUESTS = [
       },
     ],
     rewards: {
-      exp: 460,
+      exp: 2400,
       turquoise: 80,
       flags: ['ch3.yaks.done'],
       nextQuest: 'ch3.shampo',
@@ -198,7 +198,7 @@ export const CH3_QUESTS = [
       },
     ],
     rewards: {
-      exp: 680,
+      exp: 3200,
       turquoise: 130,
       skillUnlock: 'lotusShield',
       protector: 'whiteYak',

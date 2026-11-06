@@ -146,6 +146,38 @@ export const CH3_I18N = {
       '「雅拉香波山神已歸入三昧耶誓言，[[codex:yarlungValley|雅隆河谷]]與[[codex:sheldrak|協扎]]水晶崖的加持將長存雪域。前往桑耶寺吧！」',
     'dlg.ch3.vision.done.choice.ok': '「頂禮上師。」',
 
+    // Canonical dlg.ch3.* aliases used by src/data/dialogues/ch3.js
+    'dlg.ch3.keeper.valleyIntro.1':
+      '「吉祥如意，遠道而來的行者。你如今登臨的這座[[codex:yumbulagang|雍布拉康]]，自第一代贊普聶赤贊普降臨[[codex:yarlungValley|雅隆河谷]]以來，便世代俯瞰著這片青稞良田與奔流河水。」',
+    'dlg.ch3.keeper.valleyIntro.2':
+      '「然而近日北方主峰[[codex:yarlhaShampo|雅拉香波]]山神震怒，山頂黑雲翻湧、寒風呼嘯，不僅山林間偽裝成古木青石的[[codex:nyen|年]]神紛紛躁動，連河谷牧場裡的野犛牛群也雙目泛白、四處衝撞。」',
+    'dlg.ch3.keeper.valleyIntro.3':
+      '「另外，東側峭壁上的[[codex:sheldrak|協扎]]水晶洞近日有奇異虹光透出，洞中四座水晶柱似乎守護著一處古老伏藏匣。你若前往河谷安撫受驚的犛牛群，不妨也順道探訪協扎水晶洞。」',
+    'dlg.ch3.keeper.valleyIntro.choice.accept': '「多謝老僧指引，我先去安撫河谷中的狂暴犛牛，並探訪協扎水晶洞。」',
+    'dlg.ch3.keeper.valleyIntro.choice.askSheldrak': '「請問協扎水晶洞與伏藏有何因緣？」',
+    'dlg.ch3.keeper.valleyIntro.askReply':
+      '「[[codex:sheldrak|協扎]]水晶崖是蓮花生大士入藏閉關並封存[[codex:terma|伏藏]]的聖境。只要依序轉動洞中四座水晶柱，令日光折射匯聚於伏藏匣，便能取回大士留下的伏藏經卷碎片。」',
+    'dlg.ch3.herder.yaksActive.1':
+      '「唉！行者小心啊！河谷草甸上的野犛牛原本性情溫厚，卻被北方[[codex:yarlhaShampo|雅拉香波]]雪山吹來的刺骨妖風驚得發了狂！請你以咒力讓 15 頭狂暴野犛牛平靜下來吧！」',
+    'dlg.ch3.herder.yaksActive.choice.ok': '「別擔心，我這就去讓受驚的犛牛群安靜下來。」',
+    'dlg.ch3.herder.afterShampo.1':
+      '「白犛牛山神已經化為白衣童子立誓護法了！如今牧場風清日朗，犛牛群安然吃草，真是多虧了蓮師與你！」',
+    'dlg.ch3.herder.afterShampo.choice.ok': '「願牧場平安吉祥。」',
+    'dlg.ch3.villager1.default':
+      '「[[codex:yarlungValley|雅隆河谷]]的青稞今年長得格外飽滿，只盼北方的[[codex:yarlhaShampo|雅拉香波]]山神莫再降下冰雹才好。山林間還有偽裝成青苔石塊的[[codex:nyen|年]]神，路過時可得留神！」',
+    'dlg.ch3.villager2.default':
+      '「雅隆河水推動著水磨坊日夜不停地磨出青稞糌粑。聽說東邊[[codex:sheldrak|協扎]]水晶崖的岩洞裡有四根會折射日光的奇異水晶柱，還沒人能把四道光完全對準呢！」',
+    'dlg.ch3.vision.shampoActive.1':
+      '「具信的行者，[[codex:yarlhaShampo|雅拉香波]]乃吐蕃最古老的大力山神。當牠狂暴衝撞時，我將以『金剛鉤索』縛其身形；屆時你須擊碎四周升起的四顆冰雹核心，方能破其傲慢堅冰！」',
+    'dlg.ch3.vision.shampoActive.choice.ok': '「謹遵上師教言，我這便步入牧場調伏山神！」',
+    'dlg.ch3.vision.shampoComplete.1':
+      '「善哉，行者！連吐蕃最尊貴傲慢的[[codex:yarlhaShampo|雅拉香波]]白犛牛，亦已在金剛鉤索與空性悲心前折服，化為白衣童子獻出心命、立誓護持佛法。」',
+    'dlg.ch3.vision.shampoComplete.2':
+      '「當知世間[[codex:eightClasses|八部鬼神]]與山岳[[codex:nyen|年]]神，本性皆非離心之外的實有魔敵。若安住如蓮華出污泥而不染之空性定慧，則狂暴山神亦轉為最堅固的護法資糧。」',
+    'dlg.ch3.vision.shampoComplete.3':
+      '「今傳授汝『蓮華護盾』密印，並賜白犛牛護法隨侍。吐蕃贊普赤松德贊已在雅魯藏布江北岸籌建第一座佛法僧三寶具足的寺院——前往第四章『桑耶寺』，成就奠基大業吧！」',
+    'dlg.ch3.vision.shampoComplete.choice.complete': '「頂禮蓮花生大士！弟子領受『蓮華護盾』與白犛牛護法，啟程前往桑耶寺！」',
+
     // 6 Chapter 3 Codex Entries (150-300 chars in zh-Hant) + Terma entry
     'codex.yarlungValley.title': '雅隆河谷（Yarlung Valley）',
     'codex.yarlungValley.body':
@@ -313,6 +345,38 @@ export const CH3_I18N = {
     'dlg.ch3.vision.done.1':
       '"Yarlha Shampo abides within his samaya oath, and the blessings of [[codex:yarlungValley|Yarlung Valley]] and [[codex:sheldrak|Sheldrak]] endure. Proceed to Samye Monastery!"',
     'dlg.ch3.vision.done.choice.ok': '"Homage to the Guru."',
+
+    // Canonical dlg.ch3.* aliases used by src/data/dialogues/ch3.js
+    'dlg.ch3.keeper.valleyIntro.1':
+      '"Tashi Delek, traveler. From this ridge of [[codex:yumbulagang|Yumbulagang Palace]], the early Tibetan kings have watched over the fertile [[codex:yarlungValley|Yarlung Valley]] since the days of Nyatri Tsenpo."',
+    'dlg.ch3.keeper.valleyIntro.2':
+      '"Yet dark storm clouds now crown Mount [[codex:yarlhaShampo|Yarlha Shampo]] to the north. The mountain god\'s fury has awakened disguised [[codex:nyen|Nyen]] spirits among the rocks and driven the valley\'s wild yaks into a white-eyed frenzy."',
+    'dlg.ch3.keeper.valleyIntro.3':
+      '"Meanwhile, a beam of sunlight now shines into [[codex:sheldrak|Sheldrak Crystal Cave]] on the eastern cliff, where four rotatable crystal pillars guard an ancient Terma casket. As you calm the yaks in the valley, you may wish to explore Sheldrak Cave as well."',
+    'dlg.ch3.keeper.valleyIntro.choice.accept': '"Thank you, venerable keeper. I will calm the yak herd and visit Sheldrak Crystal Cave."',
+    'dlg.ch3.keeper.valleyIntro.choice.askSheldrak': '"Tell me about Sheldrak Crystal Cave and the Terma."',
+    'dlg.ch3.keeper.valleyIntro.askReply':
+      '"[[codex:sheldrak|Sheldrak]] is a sacred meditation cliff where Guru Rinpoche concealed [[codex:terma|Terma]] treasures. Align the four crystal pillars inside so the sunbeam reaches the casket to reveal the scroll shard."',
+    'dlg.ch3.herder.yaksActive.1':
+      '"Watch out, traveler! Our wild yaks are gentle beasts by nature, but icy gales from Mount [[codex:yarlhaShampo|Yarlha Shampo]] have driven them berserk! Please use your mantra to calm 15 rampaging wild yaks so they return to grazing!"',
+    'dlg.ch3.herder.yaksActive.choice.ok': '"Rest assured, I will calm the frightened yaks."',
+    'dlg.ch3.herder.afterShampo.1':
+      '"The Great White Yak transformed into a white-robed youth and swore an oath to Guru Rinpoche! The pasture is calm once more—thank you!"',
+    'dlg.ch3.herder.afterShampo.choice.ok': '"May your herds prosper in peace."',
+    'dlg.ch3.villager1.default':
+      '"The barley in [[codex:yarlungValley|Yarlung Valley]] grows tall by the river, though we pray [[codex:yarlhaShampo|Yarlha Shampo]] spares us from hail. Watch out for [[codex:nyen|Nyen]] spirits disguised as mossy boulders along the slopes!"',
+    'dlg.ch3.villager2.default':
+      '"The Yarlung River turns our watermill wheel day and night to grind tsampa. Up in [[codex:sheldrak|Sheldrak Crystal Cave]] on the eastern cliff, four crystal pillars catch the sunbeam—if someone aligns them all, the Terma casket at the back may open!"',
+    'dlg.ch3.vision.shampoActive.1':
+      '"Faithful practitioner, [[codex:yarlhaShampo|Yarlha Shampo]] is the chief mountain deity of Yarlung. When its fury peaks, I shall bind it at the center of the pasture with the golden Vajra Hook & Lasso—shatter the 4 Hail Cores around the rim to break its icy pride!"',
+    'dlg.ch3.vision.shampoActive.choice.ok': '"I understand, Guru. I will step into the pasture and subdue the White Yak!"',
+    'dlg.ch3.vision.shampoComplete.1':
+      '"Well done! Even proud [[codex:yarlhaShampo|Yarlha Shampo]], the Great White Yak of Yarlung, has bowed before the Vajra Hook & Lasso, assuming the form of a white-robed youth to offer his life-vein and guard the Dharma."',
+    'dlg.ch3.vision.shampoComplete.2':
+      '"Know that the [[codex:eightClasses|Eight Classes of spirits]] and mountain [[codex:nyen|Nyen]] are not external enemies separate from mind. Met with the unstained emptiness and compassion of the lotus, even the fiercest mountain god becomes a steadfast protector."',
+    'dlg.ch3.vision.shampoComplete.3':
+      '"I bestow upon you the empowerment of the \'Lotus Shield\' and the Sacred White Yak protector. North of the Tsangpo River, King Trisong Detsen is laying the foundation of Tibet\'s first monastery—journey onward to Chapter IV: Samye Monastery!"',
+    'dlg.ch3.vision.shampoComplete.choice.complete': '"Homage to Guru Rinpoche! I receive the Lotus Shield and set forth for Samye Monastery!"',
 
     // 6 Chapter 3 Codex Entries + Terma
     'codex.yarlungValley.title': 'Yarlung Valley',

@@ -322,7 +322,7 @@ export const PEHAR_BOSS = {
   nameKey: 'boss.pehar.name',
   titleKey: 'boss.pehar.title',
   level: 30,
-  hp: 7500,
+  hp: 11000,
   def: 40,
   speed: 3.8,
   radius: 1.45,

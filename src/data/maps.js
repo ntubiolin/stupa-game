@@ -178,9 +178,28 @@ export const MAPS = {
   },
 };
 
+import PHARPING_MAP from './maps/pharping.js';
+import MANGYUL_MAP from './maps/mangyul.js';
+import YARLUNG_MAP from './maps/yarlung.js';
+import SAMYE_MAP from './maps/samye.js';
+import CHIMPHU_MAP from './maps/chimphu.js';
+import TERMA_MAP from './maps/terma.js';
+
 // Auto-discover chapter map definitions (`src/data/maps/*.js`) and chapter i18n (`src/i18n/*.js`)
-import.meta.glob('../i18n/*.js', { eager: true });
-const chapterMapModules = import.meta.glob('./maps/*.js', { eager: true });
+if (typeof import.meta.glob === 'function') {
+  import.meta.glob('../i18n/*.js', { eager: true });
+}
+const chapterMapModules =
+  typeof import.meta.glob === 'function'
+    ? import.meta.glob('./maps/*.js', { eager: true })
+    : {
+        pharping: { PHARPING_MAP },
+        mangyul: { MANGYUL_MAP },
+        yarlung: { YARLUNG_MAP },
+        samye: { SAMYE_MAP },
+        chimphu: { CHIMPHU_MAP },
+        terma: { TERMA_MAP },
+      };
 for (const mod of Object.values(chapterMapModules)) {
   if (!mod || typeof mod !== 'object') continue;
   for (const val of Object.values(mod)) {

@@ -266,7 +266,7 @@ export const TENMA_STORM_BOSS = {
   nameKey: 'boss.tenmaStorm.name',
   titleKey: 'boss.tenmaStorm.title',
   level: 16,
-  hp: 3600,
+  hp: 4600,
   def: 24,
   speed: 2.2,
   radius: 1.55,

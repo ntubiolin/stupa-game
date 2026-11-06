@@ -111,8 +111,23 @@ export function registerNpcs(defs) {
   }
 }
 
+import CH1_NPCS from './npcs/ch1.js';
+import CH2_NPCS from './npcs/ch2.js';
+import CH3_NPCS from './npcs/ch3.js';
+import CH4_NPCS from './npcs/ch4.js';
+import CH5_NPCS from './npcs/ch5.js';
+
 // Auto-discover chapter NPC modules (`src/data/npcs/*.js`)
-const chapterNpcModules = import.meta.glob('./npcs/*.js', { eager: true });
+const chapterNpcModules =
+  typeof import.meta.glob === 'function'
+    ? import.meta.glob('./npcs/*.js', { eager: true })
+    : {
+        ch1: { CH1_NPCS },
+        ch2: { CH2_NPCS },
+        ch3: { CH3_NPCS },
+        ch4: { CH4_NPCS },
+        ch5: { CH5_NPCS },
+      };
 for (const mod of Object.values(chapterNpcModules)) {
   if (!mod || typeof mod !== 'object') continue;
   for (const val of Object.values(mod)) {

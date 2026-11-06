@@ -163,6 +163,12 @@ export const CODEX_ENTRIES = [
 
 export const CODEX_BY_ID = Object.fromEntries(CODEX_ENTRIES.map((e) => [e.id, e]));
 
+import CH1_CODEX_ENTRIES from './codex/ch1.js';
+import CH2_CODEX_ENTRIES from './codex/ch2.js';
+import CH3_CODEX_ENTRIES from './codex/ch3.js';
+import CH4_CODEX_ENTRIES from './codex/ch4.js';
+import CH5_CODEX from './codex/ch5.js';
+
 export function registerCodexEntries(entries) {
   const list = Array.isArray(entries) ? entries : [];
   for (const entry of list) {
@@ -177,8 +183,17 @@ export function registerCodexEntries(entries) {
   }
 }
 
-// Auto-discover chapter codex entries (`src/data/codex/*.js`)
-const chapterCodexModules = import.meta.glob('./codex/*.js', { eager: true });
+// Auto-discover chapter codex entries (`src/data/codex/*.js`) with Node.js fallback
+const chapterCodexModules =
+  typeof import.meta.glob === 'function'
+    ? import.meta.glob('./codex/*.js', { eager: true })
+    : {
+        ch1: { CH1_CODEX_ENTRIES },
+        ch2: { CH2_CODEX_ENTRIES },
+        ch3: { CH3_CODEX_ENTRIES },
+        ch4: { CH4_CODEX_ENTRIES },
+        ch5: { CH5_CODEX },
+      };
 for (const mod of Object.values(chapterCodexModules)) {
   if (!mod || typeof mod !== 'object') continue;
   for (const val of Object.values(mod)) {

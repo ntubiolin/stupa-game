@@ -307,7 +307,7 @@ export const TERMA_GUARDIAN_DEF = {
   nameKey: 'boss.termaGuardian.name',
   titleKey: 'boss.termaGuardian.title',
   level: 31,
-  hp: 3960,
+  hp: 9240,
   def: 36,
   ccResist: 0.75,
   radius: 1.45,
@@ -339,7 +339,7 @@ export const TERMA_GUARDIAN_DEF = {
     // Monster level = 30 + tier; HP scaled by (1 + 0.20 * (level - 1)) * (1 + 0.1 * tier)
     const level = 30 + tier;
     const tierHpMult = Number((1 + 0.1 * tier).toFixed(2));
-    const baseHp = 520;
+    const baseHp = 1200;
     const scaledHp = Math.round(baseHp * (1 + 0.20 * (level - 1)) * tierHpMult);
 
     bossState.tier = tier;

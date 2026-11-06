@@ -507,6 +507,8 @@ export function createInventory(ctx) {
 
   ctx.debug?.register('inventory', {
     give: (rarity, opts) => api.give(rarity, opts),
+    add: (item) => api.add(item),
+    pickup: (item) => api.add(item),
     equip: (uid) => api.equip(uid),
     unequip: (slot) => api.unequip(slot),
     equipBest: () => api.equipBest(),

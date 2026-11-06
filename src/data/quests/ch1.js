@@ -66,7 +66,7 @@ export const CH1_QUESTS = [
       },
     ],
     rewards: {
-      exp: 140,
+      exp: 220,
       turquoise: 30,
       codex: ['pharping'],
       flags: ['ch1.drought.done'],
@@ -122,7 +122,7 @@ export const CH1_QUESTS = [
       },
     ],
     rewards: {
-      exp: 180,
+      exp: 280,
       turquoise: 40,
       codex: ['yangleshoCave'],
       flags: ['ch1.lamps.done'],
@@ -178,7 +178,7 @@ export const CH1_QUESTS = [
       },
     ],
     rewards: {
-      exp: 220,
+      exp: 340,
       turquoise: 50,
       codex: ['vajrakilaya'],
       flags: ['ch1.scrolls.done'],
@@ -234,7 +234,7 @@ export const CH1_QUESTS = [
       },
     ],
     rewards: {
-      exp: 350,
+      exp: 520,
       turquoise: 80,
       skillUnlock: 'phurba',
       items: [

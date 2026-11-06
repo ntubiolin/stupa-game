@@ -59,7 +59,7 @@ const MOVE_KEYS = {
   KeyD: [1, 0], ArrowRight: [1, 0],
 };
 
-const JOY_RADIUS = 56;     // px
+const JOY_RADIUS = 60;     // px
 const TOUCH_LOOK_SCALE = 1.35;
 
 function isTypingTarget(el) {
@@ -150,9 +150,27 @@ export function createInput(ctx) {
     },
   };
 
+  function setTouchDeviceMode(active) {
+    if (typeof document === 'undefined' || !document.body) return;
+    api.isTouch = Boolean(active);
+    document.body.classList.toggle('is-touch-device', Boolean(active));
+    document.body.classList.toggle('is-mouse-active', !active);
+  }
+
+  if (typeof window !== 'undefined') {
+    setTouchDeviceMode(isTouch || window.innerWidth <= 820);
+    window.addEventListener('touchstart', () => setTouchDeviceMode(true), { passive: true });
+    window.addEventListener('resize', () => {
+      if (window.innerWidth <= 820) setTouchDeviceMode(true);
+    });
+  }
+
   // ------------------------------------------------------------ keyboard
   window.addEventListener('keydown', (e) => {
     if (isTypingTarget(e.target)) return;
+    if (typeof window !== 'undefined' && window.innerWidth > 820) {
+      setTouchDeviceMode(false);
+    }
     if (e.code === 'AltLeft' || e.code === 'AltRight' || e.key === 'Alt') {
       held.add('AltLeft');
       return;
@@ -197,6 +215,8 @@ export function createInput(ctx) {
   function releaseJoy() {
     joy.id = null; joy.dx = 0; joy.dy = 0;
     joyEl.classList.remove('is-active');
+    joyEl.style.left = '';
+    joyEl.style.top = '';
     knobEl.style.transform = 'translate(-50%, -50%)';
   }
 
@@ -211,6 +231,7 @@ export function createInput(ctx) {
 
     canvas.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'touch') {
+        setTouchDeviceMode(true);
         if (ctx.state.mode !== 'play') return;
         if (e.clientX < window.innerWidth * 0.5 && joy.id === null) {
           joy.id = e.pointerId; joy.ox = e.clientX; joy.oy = e.clientY; joy.dx = 0; joy.dy = 0;
@@ -223,6 +244,9 @@ export function createInput(ctx) {
         try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
         e.preventDefault();
         return;
+      }
+      if (typeof window !== 'undefined' && window.innerWidth > 820) {
+        setTouchDeviceMode(false);
       }
       if (e.button === 0 || e.button === 2) {
         dragId = e.pointerId; lastX = e.clientX; lastY = e.clientY;

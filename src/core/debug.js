@@ -15,6 +15,8 @@ export function createDebug(ctx) {
         state: ctx.state,
         bus: ctx.bus,
         renderer: ctx.renderer,
+        scene: ctx.scene,
+        camera: ctx.camera,
         register(name, api) {
           window.__stupa[name] = api;
         },

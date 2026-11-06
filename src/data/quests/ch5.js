@@ -42,7 +42,7 @@ export const CH5_QUESTS = [
       },
     ],
     rewards: {
-      exp: 600,
+      exp: 1200,
       turquoise: 150,
       codex: ['chimphu', 'yesheTsogyal', 'terma', 'terton'],
       flags: ['ch5.tsogyal.done'],
@@ -96,7 +96,7 @@ export const CH5_QUESTS = [
       },
     ],
     rewards: {
-      exp: 900,
+      exp: 1800,
       turquoise: 250,
       item: { rarity: 'terma', ilvl: 32, inDungeon: true },
       flags: ['ch5.firstTerma.done'],
@@ -136,7 +136,7 @@ export const CH5_QUESTS = [
       },
     ],
     rewards: {
-      exp: 1200,
+      exp: 2000,
       turquoise: 300,
       flags: ['ch5.done', 'ch5.epilogue.done'],
       banner: 'ch5.banner.complete',

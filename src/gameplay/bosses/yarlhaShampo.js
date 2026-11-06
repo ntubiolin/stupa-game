@@ -465,7 +465,7 @@ export const YARLHA_SHAMPO_DEF = {
   nameKey: 'boss.yarlhaShampo.name',
   titleKey: 'boss.yarlhaShampo.title',
   level: 23,
-  hp: 5200,
+  hp: 7200,
   def: 32,
   ccResist: 0.75,
   radius: 1.95,

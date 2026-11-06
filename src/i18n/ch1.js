@@ -6,11 +6,14 @@ export const CH1_I18N = {
     'map.pharping': '帕平・揚列雪',
     'toast.enterPharping': '踏入尼泊爾帕平谷地 —— 三年大旱，赤地千里',
     'ch1.intro.title': '第一章：帕平・揚列雪',
+    'ch1.intro.kicker': '第一章・尼泊爾南境',
     'ch1.intro.location': '尼泊爾・帕平谷地（Pharping · Yangleshö）',
     'ch1.intro.era': '約公元八世紀',
     'ch1.intro.narration':
       '三年未降甘霖，帕平谷地赤土龜裂，三處泉眼盡皆乾涸。\n在懸崖下的揚列雪岩洞中，來自烏仗那的蓮花生大士正入甚深禪定，\n調伏盤踞山谷的旱障魔眾，祈請普巴金剛法要以解蒼生焦渴。',
     'ch1.intro.hint': '按任意鍵或點擊繼續',
+    'ch1.intro.dismiss': '按任意鍵或點擊繼續',
+    'prompt.leaveWild': '按 [E] 離開此區域',
 
     // Chapter Completion Banner
     'ch1.banner.complete.kicker': '第一章 完成',
@@ -52,6 +55,8 @@ export const CH1_I18N = {
     // NPCs
     'npc.villageElder': '帕平村長老',
     'npc.pharpingVillager': '帕平村民',
+    'npc.pharpingVillager1': '帕平農夫・索南',
+    'npc.pharpingVillager2': '帕平織女・卓瑪',
     'npc.guruVision.pharping': '蓮花生大士（淨相）',
     'npc.messenger': '印度行者',
 
@@ -175,6 +180,74 @@ export const CH1_I18N = {
       '「揚列雪的大手印與普巴金剛雙運成就已永駐此巖。願汝持守金剛定力，利益雪域有情。」',
     'ch1.guru.completed.choice1': '「頂禮蓮花生大士。」',
 
+    // Canonical dlg.ch1.* aliases used by src/data/dialogues/ch1.js
+    'dlg.ch1.elder.droughtIntro.1':
+      '「遠方來的行者啊，願三寶護佑你。你雙足踏上的這片[[codex:pharping|帕平]]谷地，已經整整三年沒有落下一滴雨水了。」',
+    'dlg.ch1.elder.droughtIntro.2':
+      '「山谷裡的三處古泉眼被熾熱的旱魅盤踞，石槽乾裂，田疇枯焦。老朽懇請你前往三處泉眼，以慈悲咒力驅散旱魅，疏通石槽，哪怕能引出一絲活水也好！」',
+    'dlg.ch1.elder.droughtIntro.choice.accept': '「長老請寬心，我這便前往三處泉眼。」',
+    'dlg.ch1.elder.droughtIntro.choice.ask': '「請問這場三年大旱是如何引起的？」',
+    'dlg.ch1.elder.droughtIntro.askReply':
+      '「據傳有來自烏仗那的大士在懸崖下的[[codex:yangleshoCave|揚列雪洞]]修持殊勝法門，山谷中的[[codex:droughtLegend|旱障魔眾]]心生嫉恨，鎖閉了雲雨。唯有先清淨三處古泉，再去祈請大士方有轉機啊！」',
+    'dlg.ch1.elder.droughtActive.1':
+      '「三處泉眼分別在村莊西南方、東南方與正南谷地。先度脫盤踞泉邊的旱魅，再查看泉眼石槽吧。」',
+    'dlg.ch1.elder.droughtActive.choice.ok': '「我明白。」',
+    'dlg.ch1.elder.droughtReport.1':
+      '「啊！石槽中竟重新滲出清涼的水珠，村裡的古井也有了濕氣！行者，你真是帕平谷地的恩人。」',
+    'dlg.ch1.elder.droughtReport.2':
+      '「然而山巔的熱浪仍未消退。聽聞近日有一位來自烏仗那的偉大修行者，正在東南懸崖下的[[codex:yangleshoCave|揚列雪洞]]中閉關入定。若能點亮洞中七盞供燈祈請，必能感得大士指引。」',
+    'dlg.ch1.elder.droughtReport.choice.accept': '「我即刻前往揚列雪洞點燈祈請。」',
+    'dlg.ch1.elder.afterRain.1':
+      '「看那漫天甘霖！枯木抽芽，三泉滿溢，帕平谷地終於得救了。世代村民都將銘記蓮師與行者的恩德！」',
+    'dlg.ch1.elder.afterRain.choice.ok': '「願風調雨順，眾生安樂。」',
+    'dlg.ch1.villager1.dry':
+      '「三年大旱，連井底的泥土都乾裂如鐵……聽說東南方的[[codex:yangleshoCave|揚列雪洞]]裡有聖者入定，不知何時才能降下甘霖？」',
+    'dlg.ch1.villager1.rain':
+      '「下雨了！真的下雨了！泉水重新湧出，梯田裡的青苗都活過來了！」',
+    'dlg.ch1.villager2.dry':
+      '「田裡的莊稼全枯了，山上的[[codex:asuraCave|阿蘇拉洞]]每天還吹來陣陣灼人的熱風，請行者務必當心。」',
+    'dlg.ch1.villager2.rain':
+      '「甘霖普降，清涼的雨水洗淨了整座[[codex:pharping|帕平]]山谷，感恩蓮師與行者的慈悲！」',
+    'dlg.ch1.vision.lampsTalk.1':
+      '「善哉，具信的行者。七盞智慧明燈照亮了[[codex:yangleshoCave|揚列雪洞]]，也照見了籠罩此谷的無明障雲。」',
+    'dlg.ch1.vision.lampsTalk.2':
+      '「我在修持大樂蓮師法門時，山谷中的[[codex:droughtLegend|旱障魔眾]]以嗔火鎖閉雲雨、百般撓亂。要摧伏此等猛烈障礙，須以[[codex:vajrakilaya|普巴金剛]]（金剛童子）之威猛事業方能成辦。」',
+    'dlg.ch1.vision.lampsTalk.3':
+      '「我已遣使自印度那爛陀迎請《普巴金剛續》經函。那位背負經函的印度行者正抵達西側峽谷入口，卻遭沙塵精與旱魅圍困。請你速去接應，護送他來到洞中。」',
+    'dlg.ch1.vision.lampsTalk.choice.accept': '「謹遵上師教言，我立刻前往西側峽谷接應！」',
+    'dlg.ch1.vision.scrollsActive.1':
+      '「背負《[[codex:vajrakilaya|普巴金剛]]續》的印度行者正在西側峽谷入口等候，請速去護送他穿過峽谷。」',
+    'dlg.ch1.vision.scrollsActive.choice.ok': '「弟子即刻前往。」',
+    'dlg.ch1.messenger.start.1':
+      '「呼……謝天謝地！我自印度一路兼程，背上負著蓮師囑託的《[[codex:vajrakilaya|普巴金剛]]續》梵夾，但這峽谷裡狂沙蔽日、障魔四起，我實在寸步難行。」',
+    'dlg.ch1.messenger.start.2':
+      '「請你在前方開路護持！若我途中氣力不支，只需坐下調息片刻便能再行。」',
+    'dlg.ch1.messenger.start.choice.escort': '「請隨我來，我會護送你安全抵達揚列雪洞。」',
+    'dlg.ch1.messenger.escorting':
+      '「揚列雪洞就在峽谷東端，請小心沿途伏擊的沙塵精與旱魅！」',
+    'dlg.ch1.messenger.arrived':
+      '「《普巴金剛續》經函分毫未損，終於送抵揚列雪洞了！快向蓮師稟報吧。」',
+    'dlg.ch1.vision.scrollsDeliver.1':
+      '「《[[codex:vajrakilaya|普巴金剛]]》法要既至，緣起已然具足。所謂『普巴』（[[codex:phurba|普巴橛]]），三棱鋒刃並非外傷眾生之兵器，而是直刺貪、嗔、癡三毒根本的慈悲智慧。」',
+    'dlg.ch1.vision.scrollsDeliver.2':
+      '「旱障魔主此刻正退守北側懸崖上方的[[codex:asuraCave|阿蘇拉洞]]，以焦土幻相惑亂人心。」',
+    'dlg.ch1.vision.scrollsDeliver.3':
+      '「當牠化出三重幻影時，切記以六字大明咒之真言光明照破幻相，直取本體！」',
+    'dlg.ch1.vision.scrollsDeliver.choice.accept': '「頂禮上師，我這便登臨阿蘇拉洞調伏旱障！」',
+    'dlg.ch1.vision.kilayaActive.1':
+      '「北側懸崖上的[[codex:asuraCave|阿蘇拉洞]]便是旱障魔主盤踞之處。以定慧雙運之心前往調伏吧。」',
+    'dlg.ch1.vision.kilayaActive.choice.ok': '「謹記在心。」',
+    'dlg.ch1.vision.kilayaComplete.1':
+      '「善哉！你看帕平谷地甘霖普降，焦土化為青疇，三處泉眼再度湧流不息。」',
+    'dlg.ch1.vision.kilayaComplete.2':
+      '「行者當知：外在的旱災與障礙，皆由眾生內心的執著與瞋恨所感召。[[codex:phurba|普巴金剛橛]]所釘住的，正是我執與煩惱的動搖之心。當嗔火轉為事業智慧，障礙本身即是成就的助伴。」',
+    'dlg.ch1.vision.kilayaComplete.3':
+      '「今授汝『普巴金剛橛』密印，並留此《揚列雪之橛》伏藏法器。北方吐蕃國王赤松德贊之迎請使者已至[[codex:pharping|帕平]]北方山口，前往芒域・吉隆山口，踏上翻越喜馬拉雅的旅途吧！」',
+    'dlg.ch1.vision.kilayaComplete.choice.complete': '「頂禮蓮師！弟子領受法要，啟程北上。」',
+    'dlg.ch1.vision.done.1':
+      '「揚列雪的大手印與普巴金剛雙運成就已永駐此巖。願汝持守金剛定力，利益雪域有情。」',
+    'dlg.ch1.vision.done.choice.ok': '「頂禮蓮花生大士。」',
+
     // 6 Chapter 1 Codex Entries (150-300 chars each in zh-Hant)
     'codex.pharping.title': '帕平（Pharping）',
     'codex.pharping.body':
@@ -206,11 +279,14 @@ export const CH1_I18N = {
     'map.pharping': 'Pharping · Yangleshö',
     'toast.enterPharping': 'Entered Pharping Valley — Parched by three years of drought',
     'ch1.intro.title': 'Chapter I: Pharping · Yangleshö',
+    'ch1.intro.kicker': 'Chapter I · Southern Rim of Kathmandu',
     'ch1.intro.location': 'Pharping Valley, Nepal',
     'ch1.intro.era': 'Circa 8th Century CE',
     'ch1.intro.narration':
       'For three long years not a drop of rain has fallen upon Pharping; its three ancient springs lie dry and cracked.\nBeneath the southern cliffs in Yangleshö Cave, Padmasambhava of Oddiyana abides in deep samādhi,\nsubduing the drought-causing spirits and awaiting the Vajrakīlaya tantras to restore life to the valley.',
     'ch1.intro.hint': 'Press any key or click to continue',
+    'ch1.intro.dismiss': 'Press any key or click to continue',
+    'prompt.leaveWild': 'Press [E] to leave this area',
 
     // Chapter Completion Banner
     'ch1.banner.complete.kicker': 'Chapter I Complete',
@@ -252,6 +328,8 @@ export const CH1_I18N = {
     // NPCs
     'npc.villageElder': 'Pharping Village Elder',
     'npc.pharpingVillager': 'Pharping Villager',
+    'npc.pharpingVillager1': 'Pharping Farmer Sonam',
+    'npc.pharpingVillager2': 'Pharping Weaver Dolma',
     'npc.guruVision.pharping': 'Guru Rinpoche (Pure Vision)',
     'npc.messenger': 'Indian Messenger',
 
@@ -370,6 +448,74 @@ export const CH1_I18N = {
     'ch1.guru.completed.1':
       '"The union of Mahāmudrā and Vajrakīlaya accomplished at Yangleshö abides forever in this cliff. May your vajra samādhi benefit all beings of the Snow Land."',
     'ch1.guru.completed.choice1': '"Homage to Guru Rinpoche."',
+
+    // Canonical dlg.ch1.* aliases used by src/data/dialogues/ch1.js
+    'dlg.ch1.elder.droughtIntro.1':
+      '"May the Three Jewels bless you, traveler. This valley of [[codex:pharping|Pharping]] beneath your feet has not seen a single drop of rain for three whole years."',
+    'dlg.ch1.elder.droughtIntro.2':
+      '"Fiery Drought Sprites have seized our three ancient springs, leaving the stone basins parched and our terraces barren. Please go to the three springs, liberate those spirits with compassion, and clear the basins so water may seep again!"',
+    'dlg.ch1.elder.droughtIntro.choice.accept': '"Rest assured, Elder. I will head to the three springs at once."',
+    'dlg.ch1.elder.droughtIntro.choice.ask': '"How did this three-year drought begin?"',
+    'dlg.ch1.elder.droughtIntro.askReply':
+      '"While a great master from Oddiyana meditated in [[codex:yangleshoCave|Yangleshö Cave]], [[codex:droughtLegend|hostile drought spirits]] grew jealous and locked away the rain-clouds. Clear the three springs first, then seek the Master\'s guidance!"',
+    'dlg.ch1.elder.droughtActive.1':
+      '"The three springs lie to the southwest, east, and south of our village. Liberate the Drought Sprites around each spring and clear the stone basins."',
+    'dlg.ch1.elder.droughtActive.choice.ok': '"I understand."',
+    'dlg.ch1.elder.droughtReport.1':
+      '"Look! Cool water beads are seeping back into the stone basins, and even our village well feels damp again! You have saved our people from despair."',
+    'dlg.ch1.elder.droughtReport.2':
+      '"Yet a scorching malice still clings to the upper cliffs. I heard a great practitioner from Oddiyana is meditating in [[codex:yangleshoCave|Yangleshö Cave]] down the southeastern cliff. If you light the seven lamp niches there, his wisdom vision may guide us."',
+    'dlg.ch1.elder.droughtReport.choice.accept': '"I will go to Yangleshö Cave and light the seven lamps."',
+    'dlg.ch1.elder.afterRain.1':
+      '"Behold the blessed rain! Dead branches sprout green leaves and the three springs overflow. Generations in Pharping will remember the grace of the Lotus-Born Master and your deeds!"',
+    'dlg.ch1.elder.afterRain.choice.ok': '"May peace and timely rain bless this valley."',
+    'dlg.ch1.villager1.dry':
+      '"Three years of drought have baked the soil hard as iron... They say a holy master meditates in [[codex:yangleshoCave|Yangleshö Cave]]. When will the rain return?"',
+    'dlg.ch1.villager1.rain':
+      '"It\'s raining! Truly raining! The springs are brimming and the terraced fields are turning green before our eyes!"',
+    'dlg.ch1.villager2.dry':
+      '"Our crops have withered, and scorching gusts blow down from [[codex:asuraCave|Asura Cave]] on the upper cliff every day. Please stay safe, traveler."',
+    'dlg.ch1.villager2.rain':
+      '"Sweet rain washes over all of [[codex:pharping|Pharping]] Valley! Praise be to Guru Rinpoche and your compassionate deeds!"',
+    'dlg.ch1.vision.lampsTalk.1':
+      '"Well done, faithful practitioner. The seven lamps of wisdom illuminate [[codex:yangleshoCave|Yangleshö Cave]] and reveal the cloud of ignorance shrouding this valley."',
+    'dlg.ch1.vision.lampsTalk.2':
+      '"While I meditated on Yangdak Heruka, [[codex:droughtLegend|malignant drought spirits]] bound the rain-clouds in anger and stirred up fierce obstacles. To sever such hardened obstructions requires the wrathful compassion of [[codex:vajrakilaya|Vajrakīlaya]]."',
+    'dlg.ch1.vision.lampsTalk.3':
+      '"I requested the Vajrakīlaya tantra scrolls from India. The messenger carrying them has just reached the Western Canyon entrance, but Dust Devils and Drought Sprites block his path. Go quickly and escort him here."',
+    'dlg.ch1.vision.lampsTalk.choice.accept': '"I will head to the Western Canyon and escort him at once!"',
+    'dlg.ch1.vision.scrollsActive.1':
+      '"The Indian Messenger carrying the [[codex:vajrakilaya|Vajrakīlaya]] tantras awaits at the Western Canyon entrance. Escort him safely through the canyon."',
+    'dlg.ch1.vision.scrollsActive.choice.ok': '"I am on my way."',
+    'dlg.ch1.messenger.start.1':
+      '"Thank goodness you are here! I traveled day and night from India carrying the [[codex:vajrakilaya|Vajrakīlaya]] scriptures on my back, but swirling sandstorms and spirits have trapped me in this canyon."',
+    'dlg.ch1.messenger.start.2':
+      '"Please lead the way! If my strength gives out along the trail, I only need to sit and catch my breath for five seconds before continuing."',
+    'dlg.ch1.messenger.start.choice.escort': '"Stay close — I will escort you safely to Yangleshö Cave."',
+    'dlg.ch1.messenger.escorting':
+      '"Yangleshö Cave lies at the eastern end of this canyon. Watch out for ambushes along the rocks!"',
+    'dlg.ch1.messenger.arrived':
+      '"The Vajrakīlaya scrolls have arrived unharmed at Yangleshö Cave! Please present them to Guru Rinpoche."',
+    'dlg.ch1.vision.scrollsDeliver.1':
+      '"Now that the [[codex:vajrakilaya|Vajrakīlaya]] scriptures have arrived, all auspicious conditions are complete. Know that the three-bladed [[codex:phurba|Phurba]] is no weapon of harm — it pierces directly through the three poisons of clinging, anger, and delusion."',
+    'dlg.ch1.vision.scrollsDeliver.2':
+      '"The Drought Lord has retreated to [[codex:asuraCave|Asura Cave]] high on the northern cliff, conjuring scorching mirages."',
+    'dlg.ch1.vision.scrollsDeliver.3':
+      '"When its power wanes, it splits into three mirages — shine the Six-Syllable Mantra upon the illusions to dispel them and strike its true form!"',
+    'dlg.ch1.vision.scrollsDeliver.choice.accept': '"I bow to the Guru. I will ascend to Asura Cave and subdue the Drought Lord!"',
+    'dlg.ch1.vision.kilayaActive.1':
+      '"[[codex:asuraCave|Asura Cave]] lies atop the northern cliff. Go forth with unwavering samādhi and compassion."',
+    'dlg.ch1.vision.kilayaActive.choice.ok': '"I will."',
+    'dlg.ch1.vision.kilayaComplete.1':
+      '"Marvelous! Look how gentle rain pours over Pharping Valley — parched earth turns emerald green and the three springs brim with living water."',
+    'dlg.ch1.vision.kilayaComplete.2':
+      '"Remember this, practitioner: outer droughts and obstacles arise from inner clinging and anger. What the [[codex:phurba|Vajra Phurba]] pins down is none other than the restless, self-grasping mind. When anger is transmuted into enlightened activity, obstacles become the very fuel of awakening."',
+    'dlg.ch1.vision.kilayaComplete.3':
+      '"I bestow upon you the empowerment of the Vajra Phurba and the Terma relic \'Phurba of Yangleshö\'. Envoys of King Trisong Detsen now await at the northern pass — journey onward to Mangyul · Kyirong Pass and cross the Himalayas into Tibet!"',
+    'dlg.ch1.vision.kilayaComplete.choice.complete': '"Homage to the Guru! I receive this teaching and set forth northward."',
+    'dlg.ch1.vision.done.1':
+      '"The union of Mahāmudrā and Vajrakīlaya accomplished at Yangleshö abides forever in this cliff. May your vajra samādhi benefit all beings of the Snow Land."',
+    'dlg.ch1.vision.done.choice.ok': '"Homage to Guru Rinpoche."',
 
     // 6 Chapter 1 Codex Entries
     'codex.pharping.title': 'Pharping',

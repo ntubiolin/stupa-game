@@ -1275,6 +1275,7 @@ export function createEnemies(ctx) {
       moltenTimer: 0.25,
       teleportTimer: 5.0,
       group,
+      customModel,
       model: customModel || animNodes,
       materials,
       animNodes,
@@ -1401,6 +1402,16 @@ export function createEnemies(ctx) {
     }
     if (e.animNodes?.mouthOrb) {
       e.animNodes.mouthOrb.visible = false;
+    }
+    const customRoot = e.customModel?.group || e.customModel?.root;
+    if (customRoot) {
+      customRoot.traverse((child) => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+          if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose?.());
+          else child.material.dispose?.();
+        }
+      });
     }
     enemyGroup.remove(e.group);
     if (Array.isArray(e.materials)) {
