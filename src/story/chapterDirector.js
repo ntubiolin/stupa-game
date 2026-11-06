@@ -12,6 +12,10 @@ export function createChapterDirector(ctx) {
     const journey = story.getJourney();
     const chapters = Object.fromEntries(Object.entries(journey.chapters).map(([id, record]) =>
       [id, { checkpointId: record.checkpointId, completed: record.completed }]));
+    if (replay) {
+      const { chapterId, checkpointId, completed } = replay;
+      chapters[chapterId] = { checkpointId, completed };
+    }
     return {
       activeChapterId: replay?.chapterId ?? journey.activeChapterId,
       chapters,
@@ -67,7 +71,7 @@ export function createChapterDirector(ctx) {
       if (latest.activeChapterId !== journey.activeChapterId
         || latest.chapters[id]?.checkpointId !== record?.checkpointId) return false;
       if (replayRequested) {
-        replay = { chapterId: id, checkpointId };
+        replay = { chapterId: id, checkpointId, completed: false };
       } else {
         latest.activeChapterId = id;
         latest.chapters[id] ??= { checkpointId, completed: false, choices: {}, flags: {} };
@@ -108,6 +112,7 @@ export function createChapterDirector(ctx) {
     return transition(() => {
       if (replay) {
         replay.checkpointId = next.id;
+        replay.completed = next.signal === null;
       } else {
         const record = journey.chapters[chapterId];
         record.checkpointId = next.id;
