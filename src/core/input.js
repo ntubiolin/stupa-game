@@ -169,6 +169,8 @@ export function createInput(ctx) {
   // ------------------------------------------------------------ keyboard
   window.addEventListener('keydown', (e) => {
     if (isTypingTarget(e.target)) return;
+    // The native mode dialog owns focus navigation and button activation.
+    if (e.target?.closest?.('.mode-switch-dialog, .mode-switch-button')) return;
     if (typeof window !== 'undefined' && window.innerWidth > 820) {
       setTouchDeviceMode(false);
     }
