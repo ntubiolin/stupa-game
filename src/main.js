@@ -65,6 +65,8 @@ import { createCredits } from './ui/credits.js';
 import { createDungeon } from './gameplay/dungeon.js';
 import { createCommunity } from './systems/community.js';
 import { createLampOfferingUi } from './ui/lampOffering.js';
+import { createPersonalStupa } from './gameplay/personalStupa.js';
+import { createStupaBuilderUi } from './ui/stupaBuilder.js';
 
 // ---------------------------------------------------------------- renderer
 const container = document.getElementById('app');
@@ -168,6 +170,7 @@ const community = createCommunity(ctx);
 const lamps = createLamps(ctx);
 const monkeys = createMonkeys(ctx);
 const vitals = createVitals(ctx);
+const personalStupa = createPersonalStupa(ctx);
 const protectors = createAllies(ctx);
 const powers = createPowers(ctx);
 const activeSkills = createActiveSkills(ctx);
@@ -184,6 +187,7 @@ const interaction = createInteraction(ctx);
 const audio = createAudio(ctx);
 const hud = createHud(ctx);
 const lampOfferingUi = createLampOfferingUi(ctx);
+const stupaBuilderUi = createStupaBuilderUi(ctx);
 const skillbar = createSkillbar(ctx);
 const inventoryUi = createInventoryUi(ctx);
 const dialogue = createDialogue(ctx);
@@ -200,11 +204,11 @@ const modules = [
   sky, stupa, flags, environment,
   zones,
   player, mantra, enemies, bosses, dungeon, projectiles, targeting, loot, inventory, groundLoot, items,
-  community, lamps, monkeys,
+  community, lamps, personalStupa, monkeys,
   vitals, skills, potions, shrines,
   codex, waypoints, quests, npcs,
   cameraRig,
-  merit, interaction, audio, hud, lampOfferingUi, skillbar, inventoryUi, dialogue, questUi, minimap, credits,
+  merit, interaction, audio, hud, lampOfferingUi, stupaBuilderUi, skillbar, inventoryUi, dialogue, questUi, minimap, credits,
 ];
 
 // ---------------------------------------------------------------- post-processing
