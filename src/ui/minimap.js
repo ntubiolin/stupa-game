@@ -35,7 +35,8 @@ export function createMinimap(ctx) {
     wrapEl.setAttribute('aria-label', 'Minimap');
 
     wrapEl.innerHTML = `
-      <div class="minimap-ring-frame" title="Click to open Map & Codex (M)">
+      <div class="minimap-ring-frame" title="拖曳可移動位置 · 點擊開啟地圖與圖鑑 (M)">
+        <div class="minimap-drag-handle" title="拖曳移動小地圖 / Drag to move" aria-hidden="true">⠿</div>
         <canvas id="minimap-canvas" class="minimap-canvas" width="160" height="160"></canvas>
         <div class="minimap-zone-tag" id="minimap-zone-tag"></div>
       </div>
@@ -60,9 +61,114 @@ export function createMinimap(ctx) {
     mapBtnEl = wrapEl.querySelector('#minimap-btn-open');
     recallBtnEl = wrapEl.querySelector('#minimap-btn-recall');
 
+    const POS_STORAGE_KEY = 'stupa.minimap.pos.v1';
+    function clampAndApplyPosition(left, top) {
+      if (!wrapEl || typeof window === 'undefined') return;
+      const w = wrapEl.offsetWidth || 174;
+      const h = wrapEl.offsetHeight || 206;
+      const maxLeft = Math.max(8, window.innerWidth - w - 8);
+      const maxTop = Math.max(8, window.innerHeight - h - 8);
+      const clampedLeft = Math.min(Math.max(8, Math.round(left)), maxLeft);
+      const clampedTop = Math.min(Math.max(8, Math.round(top)), maxTop);
+      wrapEl.style.left = `${clampedLeft}px`;
+      wrapEl.style.top = `${clampedTop}px`;
+      wrapEl.style.right = 'auto';
+      wrapEl.style.bottom = 'auto';
+      return { left: clampedLeft, top: clampedTop };
+    }
+
+    // Restore saved draggable position if present
+    try {
+      const rawPos = localStorage.getItem(POS_STORAGE_KEY);
+      if (rawPos) {
+        const parsed = JSON.parse(rawPos);
+        if (parsed && typeof parsed.left === 'number' && typeof parsed.top === 'number') {
+          requestAnimationFrame(() => clampAndApplyPosition(parsed.left, parsed.top));
+        }
+      }
+    } catch {
+      /* ignore storage errors */
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', () => {
+        if (wrapEl.style.left && wrapEl.style.left !== 'auto') {
+          clampAndApplyPosition(parseFloat(wrapEl.style.left) || 8, parseFloat(wrapEl.style.top) || 8);
+        }
+      });
+    }
+
     const frameEl = wrapEl.querySelector('.minimap-ring-frame');
+    let dragState = null;
+    let suppressNextClick = false;
+
     if (frameEl) {
-      frameEl.addEventListener('click', () => {
+      frameEl.addEventListener('pointerdown', (e) => {
+        if (e.button !== undefined && e.button !== 0) return;
+        e.stopPropagation();
+        const rect = wrapEl.getBoundingClientRect();
+        dragState = {
+          pointerId: e.pointerId,
+          startX: e.clientX,
+          startY: e.clientY,
+          originLeft: rect.left,
+          originTop: rect.top,
+          moved: false,
+        };
+        try {
+          frameEl.setPointerCapture(e.pointerId);
+        } catch {
+          /* ignore */
+        }
+      });
+
+      frameEl.addEventListener('pointermove', (e) => {
+        if (!dragState || e.pointerId !== dragState.pointerId) return;
+        const dx = e.clientX - dragState.startX;
+        const dy = e.clientY - dragState.startY;
+        if (!dragState.moved && Math.hypot(dx, dy) > 5) {
+          dragState.moved = true;
+          wrapEl.classList.add('is-dragging');
+        }
+        if (dragState.moved) {
+          e.preventDefault();
+          clampAndApplyPosition(dragState.originLeft + dx, dragState.originTop + dy);
+        }
+      });
+
+      const finishDrag = (e) => {
+        if (!dragState || (e.pointerId !== undefined && e.pointerId !== dragState.pointerId)) return;
+        const wasMoved = dragState.moved;
+        dragState = null;
+        wrapEl.classList.remove('is-dragging');
+        try {
+          frameEl.releasePointerCapture(e.pointerId);
+        } catch {
+          /* ignore */
+        }
+        if (wasMoved) {
+          suppressNextClick = true;
+          try {
+            const left = parseFloat(wrapEl.style.left);
+            const top = parseFloat(wrapEl.style.top);
+            if (!Number.isNaN(left) && !Number.isNaN(top)) {
+              localStorage.setItem(POS_STORAGE_KEY, JSON.stringify({ left, top }));
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+      };
+
+      frameEl.addEventListener('pointerup', finishDrag);
+      frameEl.addEventListener('pointercancel', finishDrag);
+
+      frameEl.addEventListener('click', (e) => {
+        if (suppressNextClick) {
+          suppressNextClick = false;
+          e.stopPropagation();
+          return;
+        }
         worldmap.toggle('map');
       });
     }
