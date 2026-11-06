@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
-import { adventureCIOptions, startAdventureWithInput } from './adventure-browser-start.mjs';
+import { adventureBrowserArgs, adventureCIOptions, startAdventureWithInput } from './adventure-browser-start.mjs';
 
 const base = process.env.STORY_BASE_URL || 'http://127.0.0.1:4173';
 const output = process.env.ADVENTURE_ARTIFACTS || process.env.STORY_ARTIFACTS || 'artifacts/adventure-compat';
@@ -29,7 +29,7 @@ await mkdir(output, { recursive: true });
 const browser = await chromium.launch({
   headless: true,
   ...(process.env.BROWSER_CHANNEL && { channel: process.env.BROWSER_CHANNEL }),
-  args: ['--enable-unsafe-swiftshader'],
+  args: adventureBrowserArgs,
 });
 const report = { browser: browser.version(), suite, scenarios: [], errors: [] };
 

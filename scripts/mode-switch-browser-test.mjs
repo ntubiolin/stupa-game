@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
-import { adventureCIOptions, startAdventureWithInput } from './adventure-browser-start.mjs';
+import { adventureBrowserArgs, adventureCIOptions, startAdventureWithInput, waitForBrowserStartup } from './adventure-browser-start.mjs';
 
 const base = process.env.STORY_BASE_URL || 'http://127.0.0.1:4173';
 const output = process.env.MODE_SWITCH_ARTIFACTS || 'artifacts/mode-switch';
@@ -29,7 +29,7 @@ await mkdir(output, { recursive: true });
 const browser = await chromium.launch({
   headless: true,
   ...(process.env.BROWSER_CHANNEL && { channel: process.env.BROWSER_CHANNEL }),
-  args: ['--enable-unsafe-swiftshader'],
+  args: adventureBrowserArgs,
 });
 const report = { browser: browser.version(), scenarios: [], errors: [] };
 
@@ -82,7 +82,10 @@ async function runModeSwitch(mobile) {
       page.waitForURL(url => url.pathname === destination.pathname && url.search === destination.search),
       activate(target(mode)),
     ]);
-    await page.waitForFunction(previous => window.modeTestDocument && window.modeTestDocument !== previous, previous, polling);
+    await waitForBrowserStartup(page, previous => {
+      const marker = window.modeTestDocument;
+      return { ready: Boolean(marker && marker !== previous), hasMarker: Boolean(marker), sameDocument: marker === previous };
+    }, previous, `New ${mode} document`);
   }
 
   await page.goto(`${base}/?mode=story`);
