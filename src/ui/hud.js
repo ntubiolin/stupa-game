@@ -114,7 +114,7 @@ export function createHud(ctx) {
     </section>
 
     <!-- PLAY HUD -->
-    <div id="play-hud" class="play-hud is-hidden">
+    <div id="play-hud" class="play-hud is-hidden" inert>
       <!-- Top-Center: Boss Health Bar -->
       <section id="boss-bar" class="boss-bar glass-panel is-hidden" aria-label="Boss health">
         <div class="boss-bar__header">
@@ -864,6 +864,7 @@ export function createHud(ctx) {
   bus.on('game:start', () => {
     titleScreen.classList.add('is-hidden');
     playHud.classList.remove('is-hidden');
+    playHud.inert = hudHidden;
     showToast({ key: 'toast.welcome', kind: 'info' });
   });
 
@@ -900,6 +901,7 @@ export function createHud(ctx) {
   function setHudHidden(next) {
     hudHidden = Boolean(next);
     playHud.classList.toggle('is-hud-minimized', hudHidden);
+    playHud.inert = hudHidden || playHud.classList.contains('is-hidden');
     btnHudRestore.classList.toggle('is-hidden', !hudHidden);
     if (hudHidden) {
       showToast({ key: 'toast.hudHidden', kind: 'info' });
