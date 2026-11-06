@@ -294,6 +294,9 @@ export function createHud(ctx) {
           <button id="btn-help-toggle" type="button" class="icon-btn" aria-label="Guide">
             <span>?</span>
           </button>
+          <button id="btn-debug-toggle" type="button" class="icon-btn" aria-label="Debug / 跳關" title="Debug Mode / 跳關">
+            <span>🔑</span>
+          </button>
           <button id="btn-hud-hide" type="button" class="icon-btn" aria-label="Hide HUD">
             <span>👁</span>
           </button>
@@ -438,6 +441,93 @@ export function createHud(ctx) {
         <footer class="modal-footer">
           <button id="btn-reset-progress" type="button" class="btn-subtle" data-i18n="help.reset"></button>
           <button id="btn-help-close-bottom" type="button" class="btn-secondary" data-i18n="help.close"></button>
+        </footer>
+      </div>
+    </div>
+
+    <!-- Debug & Chapter Skip Modal (Unlocked with password amitabha) -->
+    <div id="debug-modal" class="modal-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="debug-modal-title">
+      <div class="modal-card glass-panel debug-modal-card">
+        <header class="modal-header">
+          <h2 id="debug-modal-title" class="modal-title">🔑 密續除錯與跳關模式 (Debug Mode)</h2>
+          <button id="btn-debug-close" type="button" class="icon-btn" aria-label="Close">✕</button>
+        </header>
+
+        <div class="modal-body">
+          <!-- Locked Password View -->
+          <section id="debug-lock-view" class="modal-section debug-lock-section">
+            <p class="debug-lock-desc">請輸入解鎖密語以開啟「章節跳關」與「除錯工具」面板：</p>
+            <div class="debug-password-row">
+              <input
+                id="debug-password-input"
+                type="password"
+                class="debug-password-input"
+                placeholder="請輸入密語..."
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <button id="btn-debug-unlock" type="button" class="btn-primary debug-unlock-btn">
+                <span>解鎖 / Unlock</span>
+              </button>
+            </div>
+            <p id="debug-password-error" class="debug-password-error is-hidden">密語不正確，請重新輸入。</p>
+          </section>
+
+          <!-- Unlocked Chapter Skip & Debug Tools View -->
+          <div id="debug-panel-view" class="is-hidden">
+            <section class="modal-section">
+              <h3 class="modal-section__title">☸ 選擇章節跳關 (Chapter Skip)</h3>
+              <p class="debug-panel-sub">點擊任一章節即可自動配發該章等級、技能與全套裝備並直接傳送前往：</p>
+              <div class="debug-chapter-grid">
+                <button type="button" class="debug-chapter-btn" data-skip-chapter="stupa">
+                  <span class="debug-chapter-btn__tag">序章 · Hub</span>
+                  <span class="debug-chapter-btn__title">博達哈大佛塔</span>
+                  <span class="debug-chapter-btn__desc">回到加德滿都大佛塔主城</span>
+                </button>
+                <button type="button" class="debug-chapter-btn" data-skip-chapter="ch1">
+                  <span class="debug-chapter-btn__tag">Chapter 1 · Lv.1+</span>
+                  <span class="debug-chapter-btn__title">第一章・帕平與揚列雪</span>
+                  <span class="debug-chapter-btn__desc">迎請蓮師・修持普巴金剛</span>
+                </button>
+                <button type="button" class="debug-chapter-btn" data-skip-chapter="ch2">
+                  <span class="debug-chapter-btn__tag">Chapter 2 · Lv.8+</span>
+                  <span class="debug-chapter-btn__title">第二章・芒域山口與十二丹瑪</span>
+                  <span class="debug-chapter-btn__desc">暴風雪山口・調伏十二丹瑪女神</span>
+                </button>
+                <button type="button" class="debug-chapter-btn" data-skip-chapter="ch3">
+                  <span class="debug-chapter-btn__tag">Chapter 3 · Lv.15+</span>
+                  <span class="debug-chapter-btn__title">第三章・雅隆河谷與雅拉香波</span>
+                  <span class="debug-chapter-btn__desc">雍布拉康・謝札水晶洞・雅拉香波雪山</span>
+                </button>
+                <button type="button" class="debug-chapter-btn" data-skip-chapter="ch4">
+                  <span class="debug-chapter-btn__tag">Chapter 4 · Lv.22+</span>
+                  <span class="debug-chapter-btn__title">第四章・桑耶寺與海波日山</span>
+                  <span class="debug-chapter-btn__desc">晝建夜毀・海波日山金剛舞・白哈爾王</span>
+                </button>
+                <button type="button" class="debug-chapter-btn" data-skip-chapter="ch5">
+                  <span class="debug-chapter-btn__tag">Chapter 5 · Lv.28+</span>
+                  <span class="debug-chapter-btn__title">第五章・青朴聖地與伏藏界</span>
+                  <span class="debug-chapter-btn__desc">益西措嘉・無盡伏藏秘境・終章圓滿</span>
+                </button>
+              </div>
+            </section>
+
+            <section class="modal-section">
+              <h3 class="modal-section__title">🛠️ 快捷除錯工具 (Quick Tools)</h3>
+              <div class="debug-tools-row">
+                <button type="button" class="btn-secondary debug-tool-btn" data-debug-action="heal">❤️ 狀態全滿 (HP/MP/甘露)</button>
+                <button type="button" class="btn-secondary debug-tool-btn" data-debug-action="god" id="btn-debug-god">🛡️ 無敵模式：關閉</button>
+                <button type="button" class="btn-secondary debug-tool-btn" data-debug-action="turquoise">💎 +500 綠松石</button>
+                <button type="button" class="btn-secondary debug-tool-btn" data-debug-action="levelup">⬆️ +3000 經驗值</button>
+                <button type="button" class="btn-secondary debug-tool-btn" data-debug-action="step">✅ 完成當前任務步驟</button>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <footer class="modal-footer">
+          <span class="debug-footer-hint">Console API: <code>window.__stupa</code></span>
+          <button id="btn-debug-close-bottom" type="button" class="btn-secondary" data-i18n="help.close">關閉</button>
         </footer>
       </div>
     </div>
@@ -829,6 +919,132 @@ export function createHud(ctx) {
   helpModal.addEventListener('click', (e) => {
     if (e.target === helpModal) openHelp(false);
   });
+
+  // ---------------------------------------------------------------- Debug & Chapter Skip Modal
+  const btnDebugToggle = root.querySelector('#btn-debug-toggle');
+  const debugModal = root.querySelector('#debug-modal');
+  const btnDebugClose = root.querySelector('#btn-debug-close');
+  const btnDebugCloseBottom = root.querySelector('#btn-debug-close-bottom');
+  const debugLockView = root.querySelector('#debug-lock-view');
+  const debugPanelView = root.querySelector('#debug-panel-view');
+  const debugPasswordInput = root.querySelector('#debug-password-input');
+  const btnDebugUnlock = root.querySelector('#btn-debug-unlock');
+  const debugPasswordError = root.querySelector('#debug-password-error');
+  const btnDebugGod = root.querySelector('#btn-debug-god');
+
+  function syncDebugModalState() {
+    const isUnlocked = Boolean(ctx.debug?.unlockedByPassword);
+    debugLockView?.classList.toggle('is-hidden', isUnlocked);
+    debugPanelView?.classList.toggle('is-hidden', !isUnlocked);
+    debugPasswordError?.classList.add('is-hidden');
+    if (btnDebugGod) {
+      const godOn = Boolean(state.vitals?.god);
+      btnDebugGod.textContent = godOn ? '🛡️ 無敵模式：開啟' : '🛡️ 無敵模式：關閉';
+    }
+  }
+
+  function openDebugModal(open) {
+    if (!debugModal) return;
+    debugModal.classList.toggle('is-hidden', !open);
+    state.uiOpen = Boolean(
+      open ||
+        ctx.dialogue?.isOpen?.() ||
+        ctx.questUi?.isOpen?.() ||
+        ctx.shop?.isOpen?.() ||
+        ctx.crafting?.isOpen?.() ||
+        ctx.inventoryUi?.isOpen?.()
+    );
+    if (open) {
+      syncDebugModalState();
+      if (!ctx.debug?.unlockedByPassword && debugPasswordInput) {
+        debugPasswordInput.value = '';
+        setTimeout(() => debugPasswordInput.focus(), 40);
+      }
+    }
+  }
+
+  function attemptDebugUnlock() {
+    const raw = debugPasswordInput?.value || '';
+    const ok = ctx.debug?.unlock
+      ? ctx.debug.unlock(raw)
+      : String(raw).trim().toLowerCase() === 'amitabha';
+    if (ok) {
+      ctx.debug?.enable?.();
+      syncDebugModalState();
+      bus.emit('sfx', { name: 'bowl' });
+      showToast({ text: '☸ 已解鎖 Debug 跳關模式！', kind: 'info' });
+    } else {
+      debugPasswordError?.classList.remove('is-hidden');
+      if (debugPasswordInput) {
+        debugPasswordInput.select();
+      }
+    }
+  }
+
+  btnDebugToggle?.addEventListener('click', () => {
+    openDebugModal(debugModal.classList.contains('is-hidden'));
+  });
+  btnDebugClose?.addEventListener('click', () => openDebugModal(false));
+  btnDebugCloseBottom?.addEventListener('click', () => openDebugModal(false));
+  debugModal?.addEventListener('click', (e) => {
+    if (e.target === debugModal) openDebugModal(false);
+  });
+  btnDebugUnlock?.addEventListener('click', attemptDebugUnlock);
+  debugPasswordInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      attemptDebugUnlock();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      openDebugModal(false);
+    }
+  });
+
+  for (const chBtn of root.querySelectorAll('[data-skip-chapter]')) {
+    chBtn.addEventListener('click', async () => {
+      const target = chBtn.getAttribute('data-skip-chapter');
+      openDebugModal(false);
+      if (target === 'stupa') {
+        await ctx.zones?.teleport?.('stupa', { spawn: 'south' });
+        showToast({ text: '☸ 已傳送回博達哈大佛塔', kind: 'info' });
+      } else if (target) {
+        await ctx.quests?.skipTo?.(target);
+        showToast({ text: `☸ 已跳關至 ${target.toUpperCase()}`, kind: 'info' });
+      }
+    });
+  }
+
+  for (const toolBtn of root.querySelectorAll('[data-debug-action]')) {
+    toolBtn.addEventListener('click', () => {
+      const act = toolBtn.getAttribute('data-debug-action');
+      if (act === 'heal') {
+        if (state.player) {
+          ctx.vitals?.set?.({ hp: state.player.maxHp || 100, mp: state.player.maxMp || 60 });
+        }
+        ctx.potions?.refill?.();
+        showToast({ text: '❤️ HP / MP 與甘露丸已全滿', kind: 'info' });
+      } else if (act === 'god') {
+        const nextGod = !Boolean(state.vitals?.god);
+        ctx.vitals?.god?.(nextGod);
+        syncDebugModalState();
+        showToast({ text: nextGod ? '🛡️ 無敵模式已開啟' : '🛡️ 無敵模式已關閉', kind: 'info' });
+      } else if (act === 'turquoise') {
+        ctx.inventory?.addTurquoise?.(500);
+        showToast({ text: '💎 已獲得 +500 綠松石', kind: 'info' });
+      } else if (act === 'levelup') {
+        ctx.vitals?.addExp?.(3000);
+      } else if (act === 'step') {
+        const activeList = ctx.quests?.getActive?.() || [];
+        const firstActive = activeList[0];
+        if (firstActive) {
+          ctx.quests?.completeStep?.(firstActive.id);
+          showToast({ text: `✅ 已推進任務步驟：${firstActive.id}`, kind: 'info' });
+        } else {
+          showToast({ text: '目前沒有進行中的任務步驟', kind: 'info' });
+        }
+      }
+    });
+  }
 
   btnResetProgress.addEventListener('click', () => {
     if (window.confirm(i18n.t('help.resetConfirm'))) {
