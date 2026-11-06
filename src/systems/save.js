@@ -290,8 +290,8 @@ export function createSave(ctx, { writableSections = null } = {}) {
       const base = hasSections(latest) ? latest : raw === null ? { sections: {} } : store;
       const sections = replacement === null ? { ...base.sections } : replacement(base.sections);
       for (const [section, data] of updates) {
-        if (section === 'story' && data !== undefined) {
-          if (base.sections.story?.version > STORY_SAVE_VERSION || data?.version > STORY_SAVE_VERSION) {
+        if (section === 'story') {
+          if (data?.version > STORY_SAVE_VERSION) {
             return fail('unsupported-story-version');
           }
           // This mode owns a complete story snapshot. Refuse to roll back
@@ -302,6 +302,12 @@ export function createSave(ctx, { writableSections = null } = {}) {
         }
         if (data === undefined) delete sections[section];
         else sections[section] = data;
+      }
+      // Import can carry a newer story as opaque data, but an older runtime
+      // cannot delete or replace one already present in storage.
+      if (base.sections.story?.version > STORY_SAVE_VERSION
+        && JSON.stringify(sections.story) !== JSON.stringify(base.sections.story)) {
+        return fail('unsupported-story-version');
       }
       const next = { ...base, version: SAVE_VERSION, savedAt: Date.now(), sections };
       localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(next));

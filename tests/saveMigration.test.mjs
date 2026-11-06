@@ -154,6 +154,12 @@ test('future story payloads are opaque in adventure and future roots reject all 
   adventure.set('vitals', { level: 8 });
   assert.equal(adventure.flush(), true);
   assert.equal(story.commitSection('story', { version: 2, beat: 'prologue' }).ok, false);
+  const olderBackup = JSON.stringify({ version: 2, sections: { story: { version: 2, beat: 'prologue' } } });
+  for (const save of [adventure, story]) {
+    assert.equal(save.reset(), false);
+    assert.equal(save.importString(olderBackup, { reload: false }), false);
+    assert.deepEqual(save.getStatus(), { ok: false, error: 'unsupported-story-version' });
+  }
   assert.deepEqual(read().sections.story, futureStory);
 
   const futureRoot = { version: 3, data: ['unrecognized', 'shape'] };

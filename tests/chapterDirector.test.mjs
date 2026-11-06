@@ -105,10 +105,13 @@ test('migrates terminal Demo on explicit Continue, reloads every checkpoint and 
   const final = raw();
   const replay = load();
   assert.equal(await replay.chapters.start('pharping', { replay: true }), true);
-  for (const [checkpointId, signal] of flow.slice(0, -1)) {
-    assert.equal(replay.chapters.signal(signal, { checkpointId }), true);
-    assert.equal(replay.chapters.getState().chapters.pharping.checkpointId, 'complete');
+  for (const [checkpointId, signal] of flow) {
+    assert.deepEqual(replay.chapters.getState().chapters.pharping, {
+      checkpointId, completed: checkpointId === 'complete',
+    });
+    assert.equal(replay.story.getJourney().chapters.pharping.checkpointId, 'complete');
     assert.equal(raw(), final);
+    if (signal) assert.equal(replay.chapters.signal(signal, { checkpointId }), true);
   }
   assert.equal(replay.chapters.exit(), true);
   assert.equal(replay.chapters.getState().activeChapterId, null);
