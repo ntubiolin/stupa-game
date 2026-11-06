@@ -31,6 +31,11 @@ screenshots and the final JSON are committed under `docs/story/evidence`.
 CI omits video encoding but keeps all screenshot and gameplay checks. It
 uses the runner's preinstalled Chrome (`google-chrome --version` is logged),
 avoiding a redundant Chromium/font download; local acceptance uses Chrome too.
+Software-rendered CI journeys select the supported low-quality setting and 0.5
+render DPR, retaining the original CSS viewport and all gameplay assertions.
+The A/B loop still selects both quality settings but uses 0.5 render DPR on CI.
+CI screenshots/metrics are diagnostic, not visual-quality or device-performance
+acceptance; the committed art evidence comes from full-resolution local runs.
 Movement checks hold real input until the pose changes, with a 30-second timeout, rather
 than assuming a GPU-less runner can render enough frames in 350 milliseconds.
 Browser actions are bounded and failures include page text and screenshots;

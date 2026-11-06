@@ -6,7 +6,7 @@ const base = process.env.STORY_BASE_URL || 'http://127.0.0.1:4173';
 const output = process.env.STORY_ARTIFACTS || 'artifacts/story';
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : {}), args: ['--enable-unsafe-swiftshader'] });
-const report = { startedAt: new Date().toISOString(), browser: browser.version(), scenarios: [], errors: [], metrics: [] };
+const report = { startedAt: new Date().toISOString(), browser: browser.version(), renderProfile: process.env.CI ? 'Software CI: low journey quality, 0.5 render DPR; CSS viewport unchanged. Not art/performance acceptance.' : 'Native quality/DPR: art and layout acceptance', scenarios: [], errors: [], metrics: [] };
 const seedSections = { vitals: { level: 12, exp: 77, hp: 150, mp: 60 }, quests: { active: {}, done: ['prologue.kora'], flags: { 'sentinel': true } }, inventory: { bag: [], equipped: {}, turquoise: 321 }, appearance: { displayName: 'Save sentinel' }, coop: { sentinel: 'preserve' }, merit: { points: 987 }, settings: { lang: 'zh', muted: true }, unknownFutureSection: { keep: [1, 2, 3] } };
 const shot = (page, name) => {
   console.log(`Capturing ${name}`);
@@ -31,6 +31,10 @@ function monitor(page, name) {
 async function ready(page) {
   await page.goto(`${base}/?mode=story&debug=1`);
   await page.waitForFunction(() => window.__stupa?.storyRuntime);
+  if (process.env.CI) await page.evaluate(() => {
+    __stupa.storyArt.setQuality('low');
+    __stupa.storyRuntime.ctx.renderer.setPixelRatio(.5);
+  });
 }
 async function fullJourney(name, mobile, lang) {
   const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 }, deviceScaleFactor: mobile ? 2 : 1, isMobile: mobile, hasTouch: mobile, reducedMotion: 'reduce', ...(!process.env.CI && { recordVideo: { dir: `${output}/video`, size: mobile ? { width: 390, height: 844 } : { width: 1280, height: 800 } } }) });
@@ -105,12 +109,13 @@ async function fullJourney(name, mobile, lang) {
   const expected = structuredClone(seedSections); expected.settings.lang = lang;
   for (const [key, value] of Object.entries(expected)) assert.deepEqual(final.sections[key], value, `${name} preserves ${key}`);
   assert.equal(final.sections.story.evidence.length, 5);
-  await page.reload(); await waitBeat(page, 'complete'); await click(cardContinue());
+  await ready(page); await waitBeat(page, 'complete'); await click(cardContinue());
   if (!mobile) {
     // Same pose, all 3 lighting × 2 quality × 2 art combinations.
     await page.evaluate(() => __stupa.storyCamera.setPose({ x: 0, y: 1.68, z: 31, yaw: 0, pitch: .34, fov: 55 }));
     for (const lighting of ['dawn', 'day', 'dusk']) for (const quality of ['high', 'low']) for (const preset of ['legacy', 'cinematic']) {
       await page.evaluate(({ lighting, quality, preset }) => { __stupa.storyArt.setLighting(lighting); __stupa.storyArt.setQuality(quality); __stupa.storyArt.setPreset(preset); __stupa.storyRuntime.resetMetrics(); }, { lighting, quality, preset });
+      if (process.env.CI) await page.evaluate(() => __stupa.storyRuntime.ctx.renderer.setPixelRatio(.5));
       await page.waitForTimeout(1200);
       await shot(page, `art-${lighting}-${quality}-${preset}`);
       const metric = await page.evaluate(() => __stupa.storyRuntime.getMetrics());
