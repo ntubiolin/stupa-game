@@ -4,6 +4,7 @@ import { chromium } from 'playwright';
 
 const base = process.env.STORY_BASE_URL || 'http://127.0.0.1:4173';
 const output = process.env.STORY_ARTIFACTS || 'artifacts/story';
+const ciDevice = process.env.CI ? { deviceScaleFactor: .5 } : {};
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : {}), args: ['--enable-unsafe-swiftshader'] });
 const report = { startedAt: new Date().toISOString(), browser: browser.version(), renderProfile: process.env.CI ? 'Software CI: low journey quality, 0.5 render DPR; CSS viewport unchanged. Not art/performance acceptance.' : 'Native quality/DPR: art and layout acceptance', scenarios: [], errors: [], metrics: [] };
@@ -33,11 +34,10 @@ async function ready(page) {
   await page.waitForFunction(() => window.__stupa?.storyRuntime);
   if (process.env.CI) await page.evaluate(() => {
     __stupa.storyArt.setQuality('low');
-    __stupa.storyRuntime.ctx.renderer.setPixelRatio(.5);
   });
 }
 async function fullJourney(name, mobile, lang) {
-  const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 }, deviceScaleFactor: mobile ? 2 : 1, isMobile: mobile, hasTouch: mobile, reducedMotion: 'reduce', ...(!process.env.CI && { recordVideo: { dir: `${output}/video`, size: mobile ? { width: 390, height: 844 } : { width: 1280, height: 800 } } }) });
+  const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 }, deviceScaleFactor: mobile ? 2 : 1, ...ciDevice, isMobile: mobile, hasTouch: mobile, reducedMotion: 'reduce', ...(!process.env.CI && { recordVideo: { dir: `${output}/video`, size: mobile ? { width: 390, height: 844 } : { width: 1280, height: 800 } } }) });
   await fixture(context, null, lang);
   const page = await context.newPage(); monitor(page, name);
   const wallStart = Date.now();
@@ -115,7 +115,6 @@ async function fullJourney(name, mobile, lang) {
     await page.evaluate(() => __stupa.storyCamera.setPose({ x: 0, y: 1.68, z: 31, yaw: 0, pitch: .34, fov: 55 }));
     for (const lighting of ['dawn', 'day', 'dusk']) for (const quality of ['high', 'low']) for (const preset of ['legacy', 'cinematic']) {
       await page.evaluate(({ lighting, quality, preset }) => { __stupa.storyArt.setLighting(lighting); __stupa.storyArt.setQuality(quality); __stupa.storyArt.setPreset(preset); __stupa.storyRuntime.resetMetrics(); }, { lighting, quality, preset });
-      if (process.env.CI) await page.evaluate(() => __stupa.storyRuntime.ctx.renderer.setPixelRatio(.5));
       await page.waitForTimeout(1200);
       await shot(page, `art-${lighting}-${quality}-${preset}`);
       const metric = await page.evaluate(() => __stupa.storyRuntime.getMetrics());
@@ -131,19 +130,19 @@ try {
   await fullJourney('mobile', true, 'en');
   // Resume every checkpoint with genuine saved data, never a debug transition.
   for (const beat of ['prologue', 'arrival', 'photography', 'restoration', 'losang', 'map', 'vision', 'return', 'complete']) {
-    const context = await browser.newContext(); await fixture(context, beat);
+    const context = await browser.newContext(ciDevice); await fixture(context, beat);
     const page = await context.newPage(); monitor(page, `resume-${beat}`); await ready(page); await waitBeat(page, beat);
     await page.waitForFunction(() => document.querySelector('dialog[open]') || !document.querySelector('.story-modal').hidden || !document.querySelector('[data-action="interact"]').hidden);
     report.scenarios.push({ name: `resume-${beat}`, result: 'PASS' }); await context.close();
   }
-  const fallback = await browser.newContext(); await fixture(fallback, 'restoration');
+  const fallback = await browser.newContext(ciDevice); await fixture(fallback, 'restoration');
   await fallback.route('**/story/restoration-memory.jpg', route => route.abort());
   const fp = await fallback.newPage(); monitor(fp, 'media-fallback'); await ready(fp);
   await fp.locator('.story-documentary-fallback').waitFor({ state: 'visible' });
   await shot(fp, 'missing-media-fallback');
   await fp.locator('.story-documentary-controls button').nth(2).click(); await waitBeat(fp, 'losang');
   report.scenarios.push({ name: 'missing-media-fallback', result: 'PASS' }); await fallback.close();
-  const adventure = await browser.newContext(); const ap = await adventure.newPage(); monitor(ap, 'adventure');
+  const adventure = await browser.newContext(ciDevice); const ap = await adventure.newPage(); monitor(ap, 'adventure');
   await ap.goto(`${base}/?mode=adventure&debug=1`);
   await ap.waitForFunction(() => window.__stupa?.quests && window.__stupa?.save);
   assert.equal(await ap.evaluate(() => Boolean(__stupa.story)), false);
