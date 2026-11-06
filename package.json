@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "check:i18n": "node scripts/check-i18n.mjs",
-    "check:links": "node scripts/check-links.mjs"
+    "check:links": "node scripts/check-links.mjs",
+    "test:combat-settings": "node scripts/combat-settings-test.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"

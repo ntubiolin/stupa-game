@@ -1,3 +1,4 @@
+import { getDifficulty } from '../data/combatSettings.js';
 import { deg, polar } from '../config.js';
 
 /**
@@ -575,6 +576,9 @@ export function createVitals(ctx) {
     if (protRed > 0 || buffMult !== 1.0) {
       dmg = Math.max(1, Math.round(dmg * (1 - protRed) * buffMult));
     }
+
+    // Difficulty scales mitigated incoming damage once, before shield absorption.
+    dmg = Math.max(1, Math.round(dmg * getDifficulty(ctx).damageTaken));
 
     // Absorb from active shield first (#27 Lotus Shield / Tenma Oath)
     let shieldAbsorbedNow = 0;
