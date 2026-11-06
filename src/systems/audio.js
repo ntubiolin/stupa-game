@@ -40,6 +40,7 @@ export function createAudio(ctx) {
   let musicForced = null; // debug override: { id, vars }
   const bossMusic = { active: false, id: null, phase: 1 };
   let samyeSiege = false; // Ch.4 night-defense phase (`samye:nightStarted` → `samye:nightSurvived`)
+  let creditsOpen = false; // Finale credits overlay (`credits:opened` → `credits:closed`)
 
   if (ctx.save) {
     const settings = ctx.save.get('settings', { muted: false, volume: 0.75 });
@@ -1303,6 +1304,7 @@ export function createAudio(ctx) {
   /** Map game state → { id, vars } of the score track that should be playing. */
   function resolveMusicTrack() {
     if (musicForced) return musicForced;
+    if (creditsOpen) return { id: 'credits', vars: {} };
     if (bossMusic.active && bossMusic.id) {
       const id = MUSIC_TRACKS[`boss.${bossMusic.id}`] ? `boss.${bossMusic.id}` : 'boss.default';
       return { id, vars: { phase: bossMusic.phase } };
@@ -1320,6 +1322,10 @@ export function createAudio(ctx) {
       case 'samye':
         if (hasQuestFlag('ch4.pehar.done')) return { id: 'samye.complete', vars: {} };
         return { id: samyeSiege ? 'samye.night' : 'samye.day', vars: {} };
+      case 'chimphu':
+        return { id: 'chimphu', vars: {} };
+      case 'terma':
+        return { id: 'terma', vars: {} };
       default:
         return { id: 'wild', vars: {} };
     }
@@ -1607,6 +1613,10 @@ export function createAudio(ctx) {
   // Ch.4 Samye: "built by day, torn down by night"
   bus.on('samye:nightStarted', () => { samyeSiege = true; refreshMusic(MUSIC_CFG.bossCrossfade * 2); });
   bus.on('samye:nightSurvived', () => { samyeSiege = false; refreshMusic(); });
+
+  // Ch.5 Finale credits overlay
+  bus.on('credits:opened', () => { creditsOpen = true; refreshMusic(1.5); });
+  bus.on('credits:closed', () => { creditsOpen = false; refreshMusic(2.0); });
 
   function getAmbienceProfile(mapId = state.zone) {
     const mapDef = ctx.world?.getMap(mapId);

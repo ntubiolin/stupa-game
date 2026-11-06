@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>配樂試聽室 · Music Lab</title>
+  <style>
+    :root { color-scheme: dark; --gold: #eec36c; --bg: #17120d; --panel: #221a12; --text: #f3e8d4; --muted: #b8a789; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, "PingFang TC", "Noto Sans TC", sans-serif; background: var(--bg); color: var(--text); }
+    header { padding: 20px 24px 8px; }
+    h1 { margin: 0 0 4px; font-size: 1.4rem; color: var(--gold); }
+    header p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+    main { padding: 12px 24px 40px; display: grid; gap: 18px; }
+    section h2 { font-size: 1rem; color: var(--gold); margin: 8px 0; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+    .card { background: var(--panel); border: 1px solid #3a2c1c; border-radius: 10px; padding: 12px; cursor: pointer; transition: border-color .15s; }
+    .card:hover { border-color: var(--gold); }
+    .card.is-playing { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
+    .card h3 { margin: 0 0 6px; font-size: 0.95rem; }
+    .card small { color: var(--muted); font-size: 0.78rem; line-height: 1.45; display: block; }
+    .card .id { font-family: ui-monospace, monospace; color: #8f7f63; font-size: 0.72rem; }
+    .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    button { background: #3a2c1c; color: var(--text); border: 1px solid #5a4429; border-radius: 8px; padding: 6px 12px; cursor: pointer; font: inherit; }
+    button:hover { border-color: var(--gold); color: var(--gold); }
+    #status { color: var(--muted); font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>蓮師朝聖・配樂試聽室</h1>
+    <p>全部即時合成（Web Audio，A4 = 432 Hz）。點選卡片切換曲目（會交叉淡入淡出），頭目曲可切換階段，下方可觸發劇情短樂句。</p>
+  </header>
+  <main>
+    <div class="bar">
+      <button id="stop">■ 停止</button>
+      <label>音量 <input id="vol" type="range" min="0" max="1" step="0.01" value="0.7" /></label>
+      <span>頭目階段：</span>
+      <button data-phase="1">一</button><button data-phase="2">二</button><button data-phase="3">三</button>
+      <span>佛塔：</span>
+      <button data-night="0">白晝</button><button data-night="1">夜晚</button>
+      <span id="status">尚未啟動 —— 點任一曲目開始</span>
+    </div>
+    <section><h2>場景曲目</h2><div class="grid" id="tracks"></div></section>
+    <section><h2>頭目戰（羌姆金剛舞）</h2><div class="grid" id="bosses"></div></section>
+    <section><h2>劇情短樂句（Stingers）</h2><div class="bar" id="stingers"></div></section>
+  </main>
+  <script type="module">
+    import { createMusicEngine } from '/src/systems/music.js';
+    import { MUSIC_TRACKS, MUSIC_STINGERS, keyOffset } from '/src/data/music.js';
+    import { CONFIG } from '/src/config.js';
+
+    let ac = null;
+    let engine = null;
+    const vars = { phase: 1, night: false };
+    const statusEl = document.getElementById('status');
+
+    function ensure() {
+      if (engine) return engine;
+      ac = new (window.AudioContext || window.webkitAudioContext)();
+      engine = createMusicEngine({
+        ac, destination: ac.destination, tracks: MUSIC_TRACKS, stingers: MUSIC_STINGERS,
+        config: { ...CONFIG.MUSIC, volume: CONFIG.MUSIC.volume * Number(document.getElementById('vol').value) },
+      });
+      return engine;
+    }
+
+    function card(id, def, parent) {
+      const el = document.createElement('div');
+      el.className = 'card';
+      el.dataset.id = id;
+      el.innerHTML = `<h3>${def.title.zh}</h3><small>${def.desc || ''}</small><span class="id">${id} · ${def.title.en}</span>`;
+      el.addEventListener('click', () => {
+        ensure();
+        if (ac.state !== 'running') ac.resume();
+        engine.play(id, { ...vars }, { fade: 1.5 });
+        document.querySelectorAll('.card').forEach((c) => c.classList.toggle('is-playing', c.dataset.id === id));
+        statusEl.textContent = `播放中：${def.title.zh}`;
+      });
+      parent.appendChild(el);
+    }
+
+    for (const [id, def] of Object.entries(MUSIC_TRACKS)) {
+      if (id === 'boss.default') continue;
+      card(id, def, document.getElementById(id.startsWith('boss.') ? 'bosses' : 'tracks'));
+    }
+    for (const [id, def] of Object.entries(MUSIC_STINGERS)) {
+      const b = document.createElement('button');
+      b.textContent = def.title.zh;
+      b.title = id;
+      b.addEventListener('click', () => {
+        ensure();
+        if (ac.state !== 'running') ac.resume();
+        const cur = engine.getCurrent();
+        engine.stinger(id, { tr: cur?.root != null ? keyOffset(cur.root) : 0 });
+      });
+      document.getElementById('stingers').appendChild(b);
+    }
+
+    document.getElementById('stop').addEventListener('click', () => {
+      engine?.stop(1.5);
+      document.querySelectorAll('.card').forEach((c) => c.classList.remove('is-playing'));
+      statusEl.textContent = '已停止';
+    });
+    document.getElementById('vol').addEventListener('input', (e) => {
+      engine?.setVolume(CONFIG.MUSIC.volume * Number(e.target.value));
+    });
+    document.querySelectorAll('[data-phase]').forEach((b) => b.addEventListener('click', () => {
+      vars.phase = Number(b.dataset.phase);
+      const cur = engine?.getCurrent();
+      if (cur) engine.play(cur.id, { phase: vars.phase });
+      if (cur?.id.startsWith('boss.')) engine.stinger('phaseShift', { tr: keyOffset(cur.root) });
+    }));
+    document.querySelectorAll('[data-night]').forEach((b) => b.addEventListener('click', () => {
+      vars.night = b.dataset.night === '1';
+      const cur = engine?.getCurrent();
+      if (cur) engine.play(cur.id, { night: vars.night });
+    }));
+  </script>
+</body>
+</html>
