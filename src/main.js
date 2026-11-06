@@ -70,6 +70,7 @@ import { createStupaBuilderUi } from './ui/stupaBuilder.js';
 import { createCoop } from './systems/coop.js';
 import { createRemotePilgrims } from './gameplay/remotePilgrims.js';
 import { createCoopLobbyUi } from './ui/coopLobby.js';
+import { createAppearanceUi } from './ui/appearance.js';
 
 // ---------------------------------------------------------------- renderer
 const container = document.getElementById('app');
@@ -196,6 +197,7 @@ const stupaBuilderUi = createStupaBuilderUi(ctx);
 const coopLobbyUi = createCoopLobbyUi(ctx);
 const skillbar = createSkillbar(ctx);
 const inventoryUi = createInventoryUi(ctx);
+const appearanceUi = createAppearanceUi(ctx);
 const dialogue = createDialogue(ctx);
 const questUi = createQuestUi(ctx);
 const worldmap = createWorldMap(ctx);
@@ -215,7 +217,7 @@ const modules = [
   codex, waypoints, quests, npcs,
   coop, remotePilgrims,
   cameraRig,
-  merit, interaction, audio, hud, lampOfferingUi, stupaBuilderUi, coopLobbyUi, skillbar, inventoryUi, dialogue, questUi, minimap, credits,
+  merit, interaction, audio, hud, lampOfferingUi, stupaBuilderUi, coopLobbyUi, skillbar, inventoryUi, appearanceUi, dialogue, questUi, minimap, credits,
 ];
 
 // ---------------------------------------------------------------- post-processing

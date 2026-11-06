@@ -10,6 +10,7 @@
  */
 import '../i18n/coop.js';
 import { i18n } from '../i18n.js';
+import { resolveAppearanceColors } from '../data/appearance.js';
 
 const CHANNEL_NAME = 'stupa.coop.v1';
 const STORAGE_NAME_KEY = 'stupa.coop.pilgrimName';
@@ -131,16 +132,17 @@ export function createCoop(ctx) {
   function buildLocalMemberSnapshot() {
     const p = state.player || {};
     const pos = p.position || { x: 0, y: 0, z: 0 };
+    const resolvedLook = resolveAppearanceColors(p.appearance || {});
     return {
       id: peerId,
-      name: getPilgrimName(),
+      name: resolvedLook.name || getPilgrimName(),
       isHost,
       isAi: false,
       look: {
-        robeColor: 0x7a1c24,
-        shawlColor: 0xe08a1e,
-        hatType: 'none',
-        auraColor: 0xfbbf24,
+        robeColor: resolvedLook.robeHex || 0x7a1c24,
+        shawlColor: resolvedLook.shawlHex || 0xe08a1e,
+        hatType: resolvedLook.hatType || 'none',
+        auraColor: resolvedLook.auraHex || 0xfbbf24,
       },
       zone: state.zone || 'stupa',
       x: Number((pos.x || 0).toFixed(2)),
