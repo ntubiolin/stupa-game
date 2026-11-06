@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { createBus } from '../src/core/events.js';
 import { createSave, SAVE_STORAGE_KEY } from '../src/systems/save.js';
 import { createStoryDirector } from '../src/story/storyDirector.js';
+import { prologueRecordingReadFlag, readPrologueReplies } from '../src/data/story/phonePrologue.js';
 
 const freshState = {
   version: 1,
@@ -126,6 +127,76 @@ test('rejects out-of-order signals and reentrant transitions without changing th
   assert.deepEqual(director.getState().flags, { playedRecording: true });
   assert.deepEqual(director.getState().evidence, ['train-recording']);
   assert.deepEqual(director.getState().clipsSeen, []);
+});
+
+test('prologue saves each accepted reply and the opened transcript without emitting beat events', t => {
+  const load = harness(t, { settings: { lang: 'en', muted: true } });
+  const first = load();
+  const events = [];
+  for (const type of ['story:beat-start', 'story:beat-complete', 'story:evidence']) {
+    first.bus.on(type, payload => events.push([type, payload]));
+  }
+  assert.equal(first.director.recordPrologueReply('hello'), false);
+  first.director.start();
+  assert.equal(first.director.recordPrologueReply('voice'), false);
+  assert.equal(first.director.recordPrologueReply('hello'), true);
+  assert.equal(first.director.recordPrologueReply('hello'), false);
+  assert.equal(first.director.acknowledgePrologueRecording(), false);
+  assert.deepEqual(events, [['story:beat-start', { beat: 'prologue' }]]);
+  first.save.flush();
+
+  const second = load();
+  second.director.start();
+  assert.deepEqual(second.director.getState().choices, { 'prologue.opening': 'hello' });
+  for (const reply of ['how', 'private', 'now', 'task', 'why', 'voice']) {
+    assert.equal(second.director.recordPrologueReply(reply), true);
+  }
+  assert.equal(second.director.acknowledgePrologueRecording(), true);
+  assert.equal(second.director.acknowledgePrologueRecording(), false);
+  second.save.flush();
+
+  const third = load();
+  third.director.start();
+  const previous = third.director.getState();
+  assert.equal(previous.beat, 'prologue');
+  assert.deepEqual(previous.evidence, []);
+  assert.equal(previous.flags[prologueRecordingReadFlag], true);
+  assert.deepEqual(readPrologueReplies(previous.choices).map(reply => reply.id),
+    ['hello', 'how', 'private', 'now', 'task', 'why', 'voice']);
+  for (const [, signal] of flow.slice(0, -1)) {
+    assert.equal(third.director.signal(signal, { clipId: 'restoration' }), true);
+    assert.equal(third.director.recordPrologueReply('scam'), false);
+    assert.equal(third.director.acknowledgePrologueRecording(), false);
+    assert.deepEqual(third.director.getState().choices, previous.choices);
+    assert.deepEqual(third.director.getState().flags, previous.flags);
+  }
+  third.save.flush();
+
+  const completed = load();
+  completed.director.start();
+  assert.deepEqual(completed.director.getState().choices, previous.choices);
+  assert.deepEqual(completed.director.getState().flags, previous.flags);
+  assert.equal(completed.director.reset(), true);
+  completed.save.flush();
+  assert.deepEqual(load().save.dump().sections, {
+    story: freshState, settings: { lang: 'en', muted: true },
+  });
+});
+
+test('recovers a partial prologue with orphaned choices and preserves unrelated story fields', t => {
+  const { director } = harness(t, { story: {
+    ...freshState,
+    choices: { 'prologue.opening': 'hello', 'prologue.report': 'invalid', 'prologue.kyoto': 'private', other: 'kept' },
+    flags: { [prologueRecordingReadFlag]: true, other: true },
+  } })();
+  director.start();
+  assert.equal(director.recordPrologueReply('how'), true);
+  assert.equal(director.acknowledgePrologueRecording(), false);
+  assert.deepEqual(director.getState().choices, {
+    'prologue.opening': 'hello', 'prologue.report': 'how', other: 'kept',
+  });
+  assert.deepEqual(director.getState().flags, { other: true });
+  assert.equal(director.recordPrologueReply('stop'), true);
 });
 
 test('clips reject invalid ends, allow cancel and retry, and stay local to their beat run', t => {

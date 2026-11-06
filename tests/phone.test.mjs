@@ -1,31 +1,26 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  identityStep, prologueChoices, prologueTurns, selectPrologueReply,
+  identityStep, prologueTurns, readPrologueReplies, selectPrologueReply,
 } from '../src/data/story/phonePrologue.js';
 import { canReadReturnDiary, visiblePhoneRecords } from '../src/data/story/phoneRecords.js';
 import { i18n } from '../src/i18n.js';
 import '../src/i18n/storyPhone.js';
 
-test('the fixed conversation rejects out-of-sequence replies and exposes no completion early', () => {
-  let replies = [];
+test('a saved conversation resumes its first unanswered turn with the selected replies', () => {
+  const choices = { 'prologue.opening': 'hello', 'prologue.report': 'how' };
+  const replies = readPrologueReplies(choices);
+  assert.deepEqual(replies.map(reply => reply.id), ['hello', 'how']);
   assert.equal(selectPrologueReply(replies, 'voice'), replies);
-  assert.equal(prologueChoices(replies), null);
-  for (const turn of prologueTurns) {
-    assert.equal(prologueChoices(replies), null);
-    const selected = turn.replies.at(-1);
-    replies = selectPrologueReply(replies, selected.id);
-    assert.equal(replies.at(-1), selected);
-  }
-  assert.deepEqual(prologueChoices(replies), {
-    'prologue.opening': 'hello',
-    'prologue.report': 'how',
-    'prologue.kyoto': 'private',
-    'prologue.identity': 'now',
-    'prologue.handover': 'task',
-    'prologue.journey': 'why',
-    'prologue.recording': 'voice',
-  });
+  assert.deepEqual(selectPrologueReply(replies, 'private').map(reply => reply.id), ['hello', 'how', 'private']);
+});
+
+test('archival fallback preserves known replies and fills only missing lines for a legacy save', () => {
+  const choices = { 'prologue.report': 'how', 'prologue.kyoto': 'invalid' };
+  assert.deepEqual(readPrologueReplies(choices), []);
+  const archived = readPrologueReplies(choices, { fallbackToScript: true });
+  assert.deepEqual(archived.map(reply => reply.id), ['scam', 'how', 'stop', 'now', 'task', 'why', 'voice']);
+  assert.deepEqual(choices, { 'prologue.report': 'how', 'prologue.kyoto': 'invalid' });
 });
 
 test('the first exchange preserves the original sequence and separates the proxy from Yingzhen', () => {

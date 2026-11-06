@@ -1,4 +1,8 @@
 import { STORY_BEATS } from '../data/story/beats.js';
+import {
+  prologueChoiceKey, prologueRecordingReadFlag, prologueTurns,
+  readPrologueReplies, selectPrologueReply,
+} from '../data/story/phonePrologue.js';
 
 const SAVE_SECTION = 'story';
 const SAVE_VERSION = 1;
@@ -36,13 +40,21 @@ function evidenceBefore(beat) {
 
 function readState(saved) {
   if (saved?.version !== SAVE_VERSION || !BEAT_INDEX.has(saved.beat)) return freshState();
+  const choices = readRecord(saved.choices, 'string');
+  const flags = readRecord(saved.flags, 'boolean');
+  if (saved.beat === 'prologue') {
+    const replies = readPrologueReplies(choices);
+    // Drop orphaned replies so recording a missing turn cannot skip the following one.
+    for (const turn of prologueTurns.slice(replies.length)) delete choices[prologueChoiceKey(turn)];
+    if (replies.length < prologueTurns.length) delete flags[prologueRecordingReadFlag];
+  }
   return {
     version: SAVE_VERSION,
     beat: saved.beat,
     // A valid beat implies its earlier evidence is available, even in a partial save.
     evidence: [...new Set([...readIds(saved.evidence, EVIDENCE_IDS), ...evidenceBefore(saved.beat)])],
-    choices: readRecord(saved.choices, 'string'),
-    flags: readRecord(saved.flags, 'boolean'),
+    choices,
+    flags,
     clipsSeen: readIds(saved.clipsSeen, CLIP_IDS),
     elapsedSeconds: Number.isFinite(saved.elapsedSeconds) && saved.elapsedSeconds >= 0
       ? saved.elapsedSeconds
@@ -102,6 +114,23 @@ export function createStoryDirector(ctx) {
     started = true;
     persist();
     publishBeat();
+    return true;
+  }
+
+  function recordPrologueReply(replyId) {
+    if (!started || publishingBeat || state.beat !== 'prologue') return false;
+    const replies = readPrologueReplies(state.choices);
+    if (selectPrologueReply(replies, replyId) === replies) return false;
+    state.choices[prologueChoiceKey(prologueTurns[replies.length])] = replyId;
+    persist();
+    return true;
+  }
+
+  function acknowledgePrologueRecording() {
+    if (!started || publishingBeat || state.beat !== 'prologue' || state.flags[prologueRecordingReadFlag]) return false;
+    if (readPrologueReplies(state.choices).length !== prologueTurns.length) return false;
+    state.flags[prologueRecordingReadFlag] = true;
+    persist();
     return true;
   }
 
@@ -182,7 +211,10 @@ export function createStoryDirector(ctx) {
     if (Math.floor(elapsed) > Math.floor(previous)) persist();
   }
 
-  const api = { start, signal, getState, grantEvidence, reset, skipTo, playClip, update };
+  const api = {
+    start, signal, getState, recordPrologueReply, acknowledgePrologueRecording,
+    grantEvidence, reset, skipTo, playClip, update,
+  };
   ctx.story = api;
   ctx.debug?.register('story', { getState, grantEvidence, reset, skipTo, playClip });
   return api;

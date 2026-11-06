@@ -1,7 +1,8 @@
 import './phone.css';
 import '../../i18n/storyPhone.js';
 import {
-  identityStep, openingMessage, prologueChoices, prologueTurns, selectPrologueReply,
+  identityStep, openingMessage, prologueRecordingReadFlag, prologueTurns,
+  readPrologueReplies, selectPrologueReply,
 } from '../../data/story/phonePrologue.js';
 import { canReadReturnDiary, visiblePhoneRecords } from '../../data/story/phoneRecords.js';
 
@@ -115,9 +116,7 @@ export function createPhone(ctx) {
 
   let tab = 'messages';
   let selectedRecord = null;
-  let replies = [];
-  let replaying = false;
-  let recordingOpen = false;
+  let replay = null;
   let opener = null;
   let audio = null;
   let disposed = false;
@@ -152,10 +151,10 @@ export function createPhone(ctx) {
     return bubble;
   }
 
-  function transcript() {
+  function transcript(replies, dateKey = 'phone.today') {
     const thread = element('div', 'story-phone__thread');
     thread.append(
-      element('p', 'story-phone__date', t('phone.today')),
+      element('p', 'story-phone__date', t(dateKey)),
       message(openingMessage, 'phone.unknown', 'incoming'),
     );
     replies.forEach((reply, index) => {
@@ -233,67 +232,68 @@ export function createPhone(ctx) {
   }
 
   function advanceReply(id) {
-    const next = selectPrologueReply(replies, id);
-    if (next === replies) return;
-    replies = next;
+    if (replay) {
+      const next = selectPrologueReply(replay.replies, id);
+      if (next === replay.replies) return;
+      replay.replies = next;
+    } else if (!ctx.story.recordPrologueReply(id)) return;
+    render(true);
+  }
+
+  function openRecording() {
+    if (replay) replay.recordingRead = true;
+    else if (!ctx.story.acknowledgePrologueRecording()) return;
     render(true);
   }
 
   function finishPrologue() {
-    const choices = prologueChoices(replies);
-    if (!choices || !recordingOpen) return;
-    if (replaying) {
-      resetConversation();
-      render(true);
-    } else if (snapshot().beat === 'prologue') {
-      close();
-      ctx.story.signal('prologue:complete', { choices });
-    }
+    const story = snapshot();
+    if (story.beat !== 'prologue' || !story.flags[prologueRecordingReadFlag]) return;
+    close();
+    ctx.story.signal('prologue:complete');
   }
 
-  function resetConversation() {
-    replaying = false;
-    recordingOpen = false;
-    replies = [];
+  function endReplay() {
+    replay = null;
+    render(true);
   }
 
-  function renderConversation(moveFocus) {
-    const thread = transcript();
-    pane.append(intro(replaying, true), thread);
+  function renderConversation(replies, recordingRead, moveFocus) {
+    const thread = transcript(replies);
+    pane.append(intro(Boolean(replay), true), thread);
     const turn = prologueTurns[replies.length];
     if (turn) {
       actions.append(element('p', 'story-phone__reply-label', t('phone.reply')));
       for (const reply of turn.replies) actions.append(action(reply.textKey, () => advanceReply(reply.id)));
-    } else if (recordingOpen) {
+    } else if (recordingRead) {
       thread.append(trainTranscript());
-      const label = replaying ? 'phone.finishReplay' : 'phone.depart';
-      actions.append(action(label, finishPrologue, 'story-phone__action--primary', 'next'));
+      if (!replay) actions.append(action('phone.depart', finishPrologue, 'story-phone__action--primary', 'next'));
     } else {
-      actions.append(action('phone.openRecording', () => {
-        recordingOpen = true;
-        render(true);
-      }, 'story-phone__action--primary', 'next'));
+      actions.append(action('phone.openRecording', openRecording, 'story-phone__action--primary', 'next'));
     }
+    if (replay) actions.append(action('phone.finishReplay', endReplay, 'story-phone__action--full'));
     const latest = thread.lastElementChild;
     const newMessage = latest.querySelector('.story-phone__message--incoming') ?? latest;
     if (moveFocus) focusLatest(newMessage);
     else if (replies.length) pane.scrollTop = pane.scrollHeight;
   }
 
-  function renderArchive(moveFocus) {
+  function renderArchive(story, replies, moveFocus) {
     const archive = element('section', 'story-phone__archive');
     const heading = element('h3', 'story-phone__section-title', t('phone.archived'));
+    const fullHistory = replies.length === prologueTurns.length;
     archive.append(
-      element('p', 'story-phone__eyebrow', t('phone.proxy')),
       heading,
-      element('p', 'story-phone__context', t('phone.archiveBody')),
-      action('phone.replay', () => {
-        resetConversation();
-        replaying = true;
-        render(true);
-      }, '', 'next'),
+      element('p', 'story-phone__context', t(fullHistory ? 'phone.archiveBody' : 'phone.archiveLegacy')),
     );
-    pane.append(archive);
+    const savedReplies = fullHistory ? replies : readPrologueReplies(story.choices, { fallbackToScript: true });
+    const thread = transcript(savedReplies, 'phone.archivedDate');
+    if (story.evidence.includes('train-recording')) thread.append(trainTranscript());
+    pane.append(archive, thread);
+    actions.append(action('phone.replay', () => {
+      replay = { replies: [], recordingRead: false };
+      render(true);
+    }, '', 'next'));
     if (moveFocus) focusLatest(heading);
   }
 
@@ -367,11 +367,12 @@ export function createPhone(ctx) {
   function render(moveFocus = false) {
     stopAudio();
     const story = snapshot();
-    const conversation = story.beat === 'prologue' || replaying;
+    const replies = replay?.replies ?? readPrologueReplies(story.choices);
+    const conversation = story.beat === 'prologue' || replay;
     const showScene = conversation && tab === 'messages';
     stage.classList.toggle('story-phone__stage--prologue', showScene);
     scene.hidden = !showScene;
-    scene.replaceChildren(intro(replaying), element('p', 'story-phone__edition', t('phone.edition')));
+    scene.replaceChildren(intro(Boolean(replay)), element('p', 'story-phone__edition', t('phone.edition')));
     status.textContent = t(showScene && replies.length < identityStep ? 'phone.unknown'
       : tab === 'messages' ? 'phone.proxy' : 'phone.offline');
     title.textContent = t('phone.title');
@@ -388,8 +389,10 @@ export function createPhone(ctx) {
     pane.scrollTop = 0;
     actions.replaceChildren();
     if (tab !== 'messages') renderLibrary(story, moveFocus);
-    else if (conversation) renderConversation(moveFocus);
-    else renderArchive(moveFocus);
+    else if (conversation) {
+      const recordingRead = replay?.recordingRead ?? story.flags[prologueRecordingReadFlag];
+      renderConversation(replies, recordingRead, moveFocus);
+    } else renderArchive(story, replies, moveFocus);
   }
 
   function switchTab(requestedTab) {
@@ -401,20 +404,22 @@ export function createPhone(ctx) {
 
   function open(requestedTab = 'messages') {
     if (disposed || (!modal.open && state.uiOpen)) return;
-    switchTab(requestedTab);
-    if (!modal.open) {
+    const opening = !modal.open;
+    if (opening) {
       opener = document.activeElement;
+      title.textContent = t('phone.title');
+      closeButton.setAttribute('aria-label', t('phone.close'));
       modal.showModal();
       state.uiOpen = true;
-      closeButton.focus();
-      // The pane had no layout during the initial render.
-      if (tab === 'messages' && replies.length) pane.scrollTop = pane.scrollHeight;
     }
+    switchTab(requestedTab);
+    if (opening) closeButton.focus();
     bus.emit('story:phone-open', { tab });
   }
 
   function release() {
     stopAudio();
+    replay = null;
     state.uiOpen = Boolean(ctx.documentary?.isOpen() || ctx.memory?.isOpen());
     const target = opener;
     opener = null;
@@ -458,8 +463,8 @@ export function createPhone(ctx) {
 
   const unsubscribers = [
     bus.on('story:evidence', refresh),
-    bus.on('story:beat-start', ({ beat }) => {
-      if (beat === 'prologue') resetConversation();
+    bus.on('story:beat-start', () => {
+      replay = null;
       refresh();
     }),
     i18n.onChange(refresh),
