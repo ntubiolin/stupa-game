@@ -502,6 +502,101 @@ export function createMusicEngine({ ac, destination, noiseBuffer = null, tracks 
     route(bus, env, 0.55);
   }
 
+  /**
+   * 12-syllable Vajra Guru Mantra formant table:
+   * ཨོཾ (om) · ཨཱཿ (ah) · ཧཱུྃ (hum) · བཛྲ (ben-za) · གུ་རུ (gu-ru) · པདྨ (pe-ma) · སིདྡྷི (sid-dhi) · ཧཱུྃ (hum)
+   */
+  const MANTRA_SYLLABLES = {
+    om:  { f0: [420, 780, 2400], f1: [260, 520, 2150], split: 0.55, attack: 0.14 },
+    ah:  { f0: [730, 1180, 2600], f1: [690, 1140, 2550], split: 0.7, attack: 0.1, breath: 0.04 },
+    hum: { f0: [330, 690, 2300], f1: [255, 530, 2150], split: 0.58, attack: 0.11, onset: 'h' },
+    ben: { f0: [490, 1680, 2500], f1: [290, 1420, 2380], split: 0.65, attack: 0.045, scoop: 1.5 },
+    za:  { f0: [690, 1160, 2560], f1: [680, 1140, 2540], split: 0.7, attack: 0.04, onset: 'z' },
+    gu:  { f0: [330, 720, 2320], f1: [320, 700, 2300], split: 0.7, attack: 0.05, scoop: 1.2 },
+    ru:  { f0: [380, 1120, 1950], f1: [340, 750, 2320], split: 0.22, attack: 0.045 },
+    pe:  { f0: [510, 1740, 2520], f1: [490, 1680, 2500], split: 0.7, attack: 0.035, onset: 'p' },
+    ma:  { f0: [270, 560, 2180], f1: [720, 1180, 2600], split: 0.22, attack: 0.05 },
+    sid: { f0: [310, 2080, 2860], f1: [295, 1960, 2780], split: 0.7, attack: 0.04, onset: 's' },
+    dhi: { f0: [315, 2140, 2900], f1: [310, 2100, 2860], split: 0.7, attack: 0.045, onset: 'h' },
+  };
+
+  /**
+   * 蓮師心咒十二音節梵音合成 — Articulates a mantra syllable ('om'|'ah'|'hum'|'ben'|'za'|'gu'|'ru'|'pe'|'ma'|'sid'|'dhi')
+   * in one of three vocal styles (`o.voice`: 'umdze' | 'choir' | 'dakini').
+   */
+  function mantraVoice(bus, t, m, dur, vel = 0.65, o = {}) {
+    const syl = MANTRA_SYLLABLES[o.syllable || 'om'] || MANTRA_SYLLABLES.om;
+    const voice = o.voice || 'choir'; // 'umdze' (deep overtone) | 'choir' (monastic unison) | 'dakini' (female devotional)
+    const f = mtof(m);
+    const rel = o.release ?? (voice === 'dakini' ? 0.32 : 0.45);
+    const end = t + dur + rel + 0.2;
+    const env = gainNode();
+    const peakScale = voice === 'dakini' ? 0.34 : voice === 'umdze' ? 0.48 : 0.42;
+    susEnv(env, t, dur, vel * peakScale, o.attack ?? syl.attack ?? 0.08, rel, 0.86);
+
+    // Glottal oscillator bank tailored to vocal timbre
+    const src = gainNode(1);
+    const oscSpecs =
+      voice === 'dakini'
+        ? [[1, 'sawtooth', 0.36], [1.0025, 'triangle', 0.48], [2, 'sine', 0.22]]
+        : voice === 'umdze'
+          ? [[1, 'sawtooth', 0.52], [1.003, 'sawtooth', 0.38], [0.5, 'sawtooth', 0.42], [0.5, 'sine', 0.35]]
+          : [[1, 'sawtooth', 0.42], [0.9965, 'sawtooth', 0.34], [1.0035, 'sawtooth', 0.34], [0.5, 'triangle', 0.3]];
+
+    // Subtle vocal vibrato
+    const lfo = osc('sine', (voice === 'dakini' ? 5.4 : 4.6) + rand(-0.2, 0.2), t);
+    const vib = gainNode(0);
+    const vibDelay = Math.min(0.28, dur * 0.5);
+    vib.gain.setValueAtTime(0, t);
+    vib.gain.linearRampToValueAtTime(f * (voice === 'dakini' ? 0.011 : 0.006), t + vibDelay + 0.02);
+    lfo.connect(vib);
+    lfo.start(t); lfo.stop(end);
+
+    for (const [ratio, type, amp] of oscSpecs) {
+      const o1 = osc(type, f * ratio, t);
+      applyPitch(o1.frequency, t, f * ratio, { ...o, scoop: o.scoop ?? syl.scoop, m });
+      if (ratio === 1 || ratio === 1.0025) vib.connect(o1.frequency);
+      const g = gainNode(amp);
+      o1.connect(g); g.connect(src);
+      o1.start(t); o1.stop(end);
+    }
+
+    // Formant filter bank (scaled slightly higher for the female 'dakini' vocal tract)
+    const tractScale = voice === 'dakini' ? 1.13 : 1.0;
+    const qs = voice === 'dakini' ? [5.5, 7.5, 8.5] : [6.5, 8.5, 9.5];
+    const amps = voice === 'dakini' ? [1.0, 0.68, 0.26] : [1.0, 0.58, 0.2];
+    const tSplit = t + dur * (syl.split ?? 0.6);
+    const tGlideEnd = t + dur * Math.min(0.92, (syl.split ?? 0.6) + 0.24);
+
+    for (let i = 0; i < 3; i++) {
+      const fStart = syl.f0[i] * tractScale;
+      const fEnd = syl.f1[i] * tractScale;
+      const bp = biquad('bandpass', fStart, qs[i]);
+      bp.frequency.setValueAtTime(fStart, t);
+      if (Math.abs(fEnd - fStart) > 1) {
+        bp.frequency.setValueAtTime(fStart, tSplit);
+        bp.frequency.linearRampToValueAtTime(fEnd, Math.max(tSplit + 0.02, tGlideEnd));
+      }
+      const g = gainNode(amps[i]);
+      src.connect(bp); bp.connect(g); g.connect(env);
+    }
+
+    // Consonant / aspirate onset transient ('s', 'z', 'h', 'p')
+    const onset = syl.onset;
+    if (onset) {
+      const ns = noiseSrc(t, 0.09);
+      const freq = onset === 's' ? 5200 : onset === 'z' ? 3600 : onset === 'p' ? 900 : 1800;
+      const durOn = onset === 's' ? 0.042 : onset === 'z' ? 0.032 : onset === 'p' ? 0.018 : 0.05;
+      const ampOn = onset === 'p' ? 0.05 : 0.065;
+      const bp = biquad('bandpass', freq, 2.0);
+      const ng = gainNode();
+      percEnv(ng, t, vel * ampOn, 0.004, durOn);
+      ns.connect(bp); bp.connect(ng); ng.connect(env);
+    }
+
+    route(bus, env, o.send ?? 0.62);
+  }
+
   /** 雨滴 Rain drop blip. */
   function rainDrop(bus, t, vel = 0.3) {
     const f = rand(1500, 3400);
@@ -571,7 +666,7 @@ export function createMusicEngine({ ac, destination, noiseBuffer = null, tracks 
 
   const INSTRUMENTS = {
     flute, pluck, tanpura, bowl, tingsha, chime, yakBell, nga, damaru, tabla, cymbal,
-    dungchen, gyaling, chant, rainDrop, thunder,
+    dungchen, gyaling, chant, mantraVoice, rainDrop, thunder,
   };
 
   // ================================================================ SCHEDULER API
@@ -602,6 +697,7 @@ export function createMusicEngine({ ac, destination, noiseBuffer = null, tracks 
       dungchen: (b, m, d, v, o) => dungchen(bus, at(b), m, d * spb, v, o),
       gyaling: (b, m, d, v, o) => gyaling(bus, at(b), m, d * spb, v, o),
       chant: (b, m, d, v, vowel) => chant(bus, at(b), m, d * spb, v, vowel),
+      mantraVoice: (b, m, d, v, o) => mantraVoice(bus, at(b), m, d * spb, v, o),
       rainDrop: (b, v) => rainDrop(bus, at(b), v),
       thunder: (b, v) => thunder(bus, at(b), v),
       /**
@@ -629,6 +725,9 @@ export function createMusicEngine({ ac, destination, noiseBuffer = null, tracks 
           const opts = { ...o, ...(note.o || {}) };
           if (o.legato && !opts.grace && prev && prev.m != null && Math.abs(prev.b + prev.d - note.b) < 1e-6) {
             opts.glideFrom = prev.m + tr;
+          }
+          if (Array.isArray(o.syllables) && o.syllables.length > 0 && !opts.syllable) {
+            opts.syllable = o.syllables[k % o.syllables.length];
           }
           const d = note.d * scale * spb * (o.legato ? 1.0 : 0.94);
           const v = vel * (note.a ?? 1);

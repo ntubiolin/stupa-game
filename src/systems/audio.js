@@ -1269,6 +1269,9 @@ export function createAudio(ctx) {
       osc.start(now);
       osc.stop(now + dur + 0.05);
     }
+
+    // Intone the 12-syllable Vajra Guru Mantra chant over the harmonic ring
+    playMusicStinger('vajraGuruChant');
   }
 
   // ---------------------------------------------------------------- mobile / gesture audio unlock

@@ -41,6 +41,20 @@
       <button data-night="0">白晝</button><button data-night="1">夜晚</button>
       <span id="status">尚未啟動 —— 點任一曲目開始</span>
     </div>
+    <section>
+      <h2>🪷 蓮師心咒專區（十二音節母音合唱：ཨོཾ་ཨཱཿ་ཧཱུྃ་བཛྲ་གུ་རུ་པདྨ་སིདྡྷི་ཧཱུྃ）</h2>
+      <div class="grid" id="mantras"></div>
+      <div class="bar" style="margin-top:10px;">
+        <span>單音節試聽（聲部：</span>
+        <select id="voice-select" style="background:#3a2c1c;color:var(--text);border:1px solid #5a4429;border-radius:6px;padding:4px 8px;">
+          <option value="choir">僧眾齊誦 (Choir)</option>
+          <option value="umdze">翁則低音喉唱 (Umdze)</option>
+          <option value="dakini">空行女聲 (Dakini)</option>
+        </select>
+        <span>）：</span>
+        <span class="bar" id="syllable-pad"></span>
+      </div>
+    </section>
     <section><h2>場景曲目</h2><div class="grid" id="tracks"></div></section>
     <section><h2>頭目戰（羌姆金剛舞）</h2><div class="grid" id="bosses"></div></section>
     <section><h2>劇情短樂句（Stingers）</h2><div class="bar" id="stingers"></div></section>
@@ -82,7 +96,41 @@
 
     for (const [id, def] of Object.entries(MUSIC_TRACKS)) {
       if (id === 'boss.default') continue;
-      card(id, def, document.getElementById(id.startsWith('boss.') ? 'bosses' : 'tracks'));
+      const targetId = id.startsWith('mantra.') ? 'mantras' : id.startsWith('boss.') ? 'bosses' : 'tracks';
+      card(id, def, document.getElementById(targetId));
+    }
+
+    const SYLLABLES_UI = [
+      { syl: 'om', tib: 'ཨོཾ', zh: '嗡', m: 62 },
+      { syl: 'ah', tib: 'ཨཱཿ', zh: '啊', m: 64 },
+      { syl: 'hum', tib: 'ཧཱུྃ', zh: '吽', m: 66 },
+      { syl: 'ben', tib: 'བཛྲ', zh: '班', m: 69 },
+      { syl: 'za', tib: '་', zh: '雜', m: 69 },
+      { syl: 'gu', tib: 'གུ', zh: '咕', m: 71 },
+      { syl: 'ru', tib: 'རུ', zh: '嚕', m: 69 },
+      { syl: 'pe', tib: 'པད', zh: '貝', m: 66 },
+      { syl: 'ma', tib: 'མ', zh: '瑪', m: 64 },
+      { syl: 'sid', tib: 'སིད', zh: '悉', m: 66 },
+      { syl: 'dhi', tib: 'དྷི', zh: '地', m: 64 },
+      { syl: 'hum', tib: 'ཧཱུྃ', zh: '吽', m: 62 },
+    ];
+    const sylPad = document.getElementById('syllable-pad');
+    for (const item of SYLLABLES_UI) {
+      const btn = document.createElement('button');
+      btn.textContent = `${item.tib} ${item.zh}`;
+      btn.addEventListener('click', () => {
+        ensure();
+        if (ac.state !== 'running') ac.resume();
+        const voice = document.getElementById('voice-select').value;
+        const pitch = voice === 'umdze' ? item.m - 12 : voice === 'dakini' ? item.m + 12 : item.m;
+        const bus = { dry: ac.destination, wet: ac.destination };
+        engine.instruments.mantraVoice(bus, ac.currentTime + 0.02, pitch, 0.85, 0.7, {
+          syllable: item.syl,
+          voice,
+          send: 0,
+        });
+      });
+      sylPad.appendChild(btn);
     }
     for (const [id, def] of Object.entries(MUSIC_STINGERS)) {
       const b = document.createElement('button');

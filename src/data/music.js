@@ -53,6 +53,11 @@ export function keyOffset(root, home = 62) {
 }
 
 // ---------------------------------------------------------------- leitmotifs (in D)
+/** 12 syllables of ཨོཾ་ཨཱཿ་ཧཱུྃ་བཛྲ་གུ་རུ་པདྨ་སིདྡྷི་ཧཱུྃ (Om Ah Hum Benza Guru Pema Siddhi Hum). */
+export const VAJRA_GURU_SYLLABLES = [
+  'om', 'ah', 'hum', 'ben', 'za', 'gu', 'ru', 'pe', 'ma', 'sid', 'dhi', 'hum',
+];
+
 export const MOTIFS = {
   // Om(2) Ah(1) Hum(3) | Va-jra Gu-ru | Pe-ma Sid-dhi | Hum(1→1)
   vajraGuru: phrase('A4:2 B4:1 A4:3 F#4:0.5 A4:0.5 B4:0.5 A4:0.5 D5:0.5 B4:0.5 A4:0.5 F#4:0.5 E4:1 D4:1'),
@@ -61,6 +66,20 @@ export const MOTIFS = {
   // Four sons rising … the vow left open on E.
   vow: phrase('D4:1 E4:1 A4:1 B4:1 A4:3 F#4:1 E4:4'),
 };
+
+// 12-syllable Vajra Guru Mantra vocal melodies (each 12 notes = 16 beats = 4 bars in 4/4)
+// 1) Traditional Samye / Nyingma assembly melodies (in D major pentatonic)
+const VG_SAMYE_A = phrase('D4:2 E4:1 F#4:3 A4:1 A4:1 B4:1 A4:1 F#4:1 E4:1 F#4:1 E4:1 D4:4');
+const VG_SAMYE_B = phrase('A4:2 B4:1 D5:3 B4:1 A4:1 F#4:1 A4:1 F#4:1 E4:1 D4:1 E4:1 D4:4');
+const VG_SAMYE_C = phrase('D5:2 E5:1 F#5:3 E5:1 D5:1 B4:1 A4:1 B4:1 A4:1 F#4:1 E4:1 D4:4');
+// 2) Yeshe Tsogyal's Dakini devotional melodies (in A major / F# minor pentatonic)
+const VG_DAKINI_A = phrase('C#5:2 E5:1 F#5:3 A5:1 F#5:1 E5:1 C#5:1 E5:1 C#5:1 B4:1 A4:1 B4:4');
+const VG_DAKINI_B = phrase('E5:2 F#5:1 A5:3 F#5:1 E5:1 C#5:1 B4:1 C#5:1 B4:1 A4:1 F#4:1 A4:4');
+// 3) Wrathful Dorje Drolö / Vajrakīlaya obstacle-dispelling melodies (in D Dorian / minor)
+const VG_WRATH_A = phrase('D3:2 F3:1 A3:3 C4:1 A3:1 G3:1 F3:1 G3:1 A3:1 F3:1 E3:1 D3:4');
+const VG_WRATH_B = phrase('A3:2 C4:1 D4:3 F4:1 E4:1 D4:1 C4:1 A3:1 G3:1 A3:1 F3:1 D3:4');
+// 4) Rainbow-Body Dzogchen contemplation melody (in G Lydian-pentatonic)
+const VG_DZOGCHEN = phrase('D5:2 E5:1 G5:3 E5:1 D5:1 B4:1 A4:1 B4:1 D5:1 B4:1 A4:1 G4:4');
 
 const STUPA_ANSWER = phrase('B4:1.5 A4:0.5 F#4:1 E4:1 D4:2 E4:1 F#4:1 A4:3 B4:0.5 A4:0.5 F#4:2 E4:1 D4:1');
 const WILD_A = phrase('A4:2 C5:1 D5:3^2 C5:1 A4:1 G4:2 F4:2 D4:4');
@@ -487,6 +506,196 @@ export const MUSIC_TRACKS = {
       if (B >= 13 && B <= 15) a.line(MOTIFS.vajraGuru, 13, 'gyaling', 0.48, { legato: true });
     },
   },
+
+  // ============================================================ VAJRA GURU MANTRA SUITE
+  // 1) Traditional Samye Monastery Assembly Chant
+  'mantra.samye': {
+    title: { zh: '蓮師心咒・桑耶大法會傳統調', en: 'Vajra Guru · Samye Monastic Assembly' },
+    desc: 'D 大調五聲、十二音節真實母音合成（嗡・啊・吽・班・雜・咕・嚕・貝・瑪・悉・地・吽）：翁則領誦師低音喉唱起腔，僧眾齊誦、空行女聲與林布竹笛、札木聶琴層層應和。',
+    category: 'mantra',
+    root: 62,
+    beatsPerBar: 4,
+    loopBars: 16,
+    bpm: 60,
+    pads: [{ notes: [n('D2'), n('A2'), n('D3')], cutoff: 640, gain: 0.032, lfoRate: 0.05, sub: 0.28 }],
+    bar(a) {
+      const B = a.bar;
+      const syl = VAJRA_GURU_SYLLABLES;
+      tanpuraCycle(a, 62, 0.34);
+      if (B % 4 === 0) a.bowl(0, n('A3'), 0.48);
+      if (B % 4 === 3) a.tingsha(2, n('A6'), 0.28);
+      a.nga(0, 0.34, { pitch: 60 });
+      if (B >= 4) {
+        dranyenLilt(
+          a,
+          B % 2 === 0 ? [n('D3'), n('A3'), n('D4'), n('F#4')] : [n('G3'), n('D4'), n('G4'), n('B3')],
+          0.28
+        );
+      }
+      // Bars 0–3: Umdze chant + unison choir + gentle bamboo flute
+      if (B <= 3) {
+        a.line(VG_SAMYE_A, 0, 'mantraVoice', 0.56, { tr: -12, voice: 'umdze', syllables: syl, legato: true });
+        a.line(VG_SAMYE_A, 0, 'mantraVoice', 0.52, { voice: 'choir', syllables: syl, legato: true });
+        a.line(VG_SAMYE_A, 0, 'flute', 0.48, { tr: 12, legato: true, glideTime: 0.06 });
+      }
+      // Bars 4–7: Full monastic assembly + flute soaring to D5
+      if (B >= 4 && B <= 7) {
+        a.line(VG_SAMYE_B, 4, 'mantraVoice', 0.62, { tr: -12, voice: 'choir', syllables: syl, legato: true });
+        a.line(VG_SAMYE_B, 4, 'mantraVoice', 0.5, { voice: 'dakini', syllables: syl, legato: true });
+        a.line(VG_SAMYE_B, 4, 'flute', 0.56, { legato: true, glideTime: 0.06 });
+      }
+      // Bars 8–11: High devotional ascent (Dakini + Choir in octaves)
+      if (B >= 8 && B <= 11) {
+        if (B === 8) a.dungchen(0, n('D2'), 7, 0.45);
+        a.line(VG_SAMYE_C, 8, 'mantraVoice', 0.6, { voice: 'dakini', syllables: syl, legato: true });
+        a.line(VG_SAMYE_C, 8, 'mantraVoice', 0.54, { tr: -12, voice: 'choir', syllables: syl, legato: true });
+        a.line(VG_SAMYE_C, 8, 'flute', 0.54, { legato: true, glideTime: 0.06 });
+      }
+      // Bars 12–15: Benediction return to Phrase A with Umdze + Choir + Gyaling
+      if (B >= 12) {
+        if (B === 12) a.cymbal(0, 0.32, 'silnyen');
+        a.line(VG_SAMYE_A, 12, 'mantraVoice', 0.58, { tr: -12, voice: 'umdze', syllables: syl, legato: true });
+        a.line(VG_SAMYE_A, 12, 'mantraVoice', 0.55, { voice: 'choir', syllables: syl, legato: true });
+        a.line(VG_SAMYE_A, 12, 'gyaling', 0.36, { legato: true });
+      }
+    },
+  },
+
+  // 2) Yeshe Tsogyal's Dakini Devotional Song
+  'mantra.dakini': {
+    title: { zh: '蓮師心咒・青朴空行祈請調', en: 'Vajra Guru · Song of the Dakini' },
+    desc: 'A 大調／升 F 小調五聲、抒情虔敬的祈請曲調：空行女聲（Dakini）吟唱十二音節心咒，搭配札木聶琴分解和弦、青朴甘露水滴與竹笛對位。',
+    category: 'mantra',
+    root: 57,
+    beatsPerBar: 4,
+    loopBars: 16,
+    bpm: 66,
+    pads: [{ notes: [n('A2'), n('E3'), n('A3')], cutoff: 720, gain: 0.03, lfoRate: 0.06, sub: 0.25 }],
+    bar(a) {
+      const B = a.bar;
+      const syl = VAJRA_GURU_SYLLABLES;
+      tanpuraCycle(a, 57, 0.3);
+      dranyenLilt(
+        a,
+        B % 2 === 0 ? [n('A2'), n('E3'), n('A3'), n('C#4')] : [n('F#2'), n('C#3'), n('F#3'), n('A3')],
+        0.3
+      );
+      if (a.chance(0.7)) a.rainDrop(a.rand(0, 4), 0.32);
+      if (B % 4 === 0) a.bowl(0, n('A3'), 0.44);
+      if (B % 8 === 7) a.tingsha(2, n('E7'), 0.28);
+      if (B >= 4) a.tabla(0, 'dha', 0.34);
+      if (B >= 4) a.tabla(2, 'na', 0.24);
+      // Bars 0–3: Dakini voice solo prayer
+      if (B <= 3) {
+        a.line(VG_DAKINI_A, 0, 'mantraVoice', 0.64, { voice: 'dakini', syllables: syl, legato: true });
+        a.line(VG_DAKINI_A, 0, 'pluck', 0.3, { tr: -12 });
+      }
+      // Bars 4–7: Dakini + Bamboo flute answer
+      if (B >= 4 && B <= 7) {
+        a.line(VG_DAKINI_B, 4, 'mantraVoice', 0.64, { voice: 'dakini', syllables: syl, legato: true });
+        a.line(VG_DAKINI_B, 4, 'flute', 0.54, { legato: true, glideTime: 0.07 });
+      }
+      // Bars 8–11: Monastic choir joins a 5th/octave below while flute sings
+      if (B >= 8 && B <= 11) {
+        a.line(VG_DAKINI_A, 8, 'mantraVoice', 0.56, { tr: -12, voice: 'choir', syllables: syl, legato: true });
+        a.line(VG_DAKINI_A, 8, 'flute', 0.62, { legato: true, glideTime: 0.06 });
+      }
+      // Bars 12–15: Full duet (Dakini + Choir + Flute)
+      if (B >= 12) {
+        a.line(VG_DAKINI_B, 12, 'mantraVoice', 0.62, { voice: 'dakini', syllables: syl, legato: true });
+        a.line(VG_DAKINI_B, 12, 'mantraVoice', 0.52, { tr: -12, voice: 'choir', syllables: syl, legato: true });
+        a.line(VG_DAKINI_B, 12, 'flute', 0.5, { legato: true, glideTime: 0.07 });
+      }
+    },
+  },
+
+  // 3) Wrathful Dorje Drolö / Vajrakīlaya Subjugation Chant
+  'mantra.wrathful': {
+    title: { zh: '蓮師心咒・忿怒金剛除障調', en: 'Vajra Guru · Wrathful Dorje Drolö Chant' },
+    desc: 'D 多利安調式、88 BPM 威猛除障儀軌：翁則低音泛音喉唱誦出十二金剛句，伴隨急促的達瑪如手鼓、大鼓、羅爾莫鈸、銅欽長號與甲林嗩吶。',
+    category: 'mantra',
+    root: 62,
+    beatsPerBar: 4,
+    loopBars: 16,
+    bpm: 88,
+    pads: [{ notes: [n('D2'), n('A2')], cutoff: 360, gain: 0.038, lfoRate: 0.12, lfoDepth: 0.42, sub: 0.35 }],
+    bar(a) {
+      const B = a.bar;
+      const syl = VAJRA_GURU_SYLLABLES;
+      // Ritual drum & damaru pulse
+      for (const [beat, vel] of [[0, 0.72], [1.5, 0.4], [2, 0.55], [3, 0.45]]) a.nga(beat, vel, { pitch: 58 });
+      for (let k = 0; k < 4; k++) a.damaru(k + 0.5, 0.24);
+      if (B % 4 === 0) {
+        a.dungchen(0, n('D2'), 7, 0.55);
+        a.cymbal(0, 0.4, 'rolmo');
+      }
+      if (B % 4 === 2) a.cymbal(0, 0.28, 'silnyen');
+      // Bars 0–3: Deep Umdze throat chant on Wrathful Phrase A
+      if (B <= 3) {
+        a.line(VG_WRATH_A, 0, 'mantraVoice', 0.68, { voice: 'umdze', syllables: syl, legato: true });
+      }
+      // Bars 4–7: Umdze + Choir on Wrathful Phrase B
+      if (B >= 4 && B <= 7) {
+        a.line(VG_WRATH_B, 4, 'mantraVoice', 0.64, { voice: 'umdze', syllables: syl, legato: true });
+        a.line(VG_WRATH_B, 4, 'mantraVoice', 0.56, { voice: 'choir', syllables: syl, legato: true });
+      }
+      // Bars 8–11: Gyaling shawm + Umdze chant in octaves
+      if (B >= 8 && B <= 11) {
+        a.line(VG_WRATH_A, 8, 'mantraVoice', 0.66, { voice: 'umdze', syllables: syl, legato: true });
+        a.line(VG_WRATH_A, 8, 'gyaling', 0.54, { tr: 12, legato: true });
+      }
+      // Bars 12–15: Full ritual climax (Umdze + Choir + Gyaling + fast Damaru)
+      if (B >= 12) {
+        for (let k = 0; k < 4; k++) a.damaru(k, 0.22);
+        a.line(VG_WRATH_B, 12, 'mantraVoice', 0.66, { voice: 'umdze', syllables: syl, legato: true });
+        a.line(VG_WRATH_B, 12, 'mantraVoice', 0.58, { voice: 'choir', syllables: syl, legato: true });
+        a.line(VG_WRATH_B, 12, 'gyaling', 0.52, { tr: 12, legato: true });
+      }
+    },
+  },
+
+  // 4) Rainbow-Body Dzogchen Samadhi & Five Singing Bowls
+  'mantra.dzogchen': {
+    title: { zh: '蓮師心咒・虹光大圓滿禪觀', en: 'Vajra Guru · Rainbow Body Samadhi' },
+    desc: 'G 大調五聲、48 BPM 寂靜禪修曲：五口西藏頌缽泛音交織、水晶風鈴輕響，空行梵音與低音喉唱在深谷殘響中緩緩唱誦十二音節心咒。',
+    category: 'mantra',
+    root: 67,
+    beatsPerBar: 4,
+    loopBars: 16,
+    bpm: 48,
+    pads: [
+      { notes: [n('G2'), n('D3'), n('B3')], cutoff: 580, gain: 0.032, lfoRate: 0.04, lfoDepth: 0.35, sub: 0.28 },
+      { notes: [n('D6')], type: 'sine', detune: 4, cutoff: 3800, gain: 0.007, lfoDepth: 0.15 },
+    ],
+    bar(a) {
+      const B = a.bar;
+      const syl = VAJRA_GURU_SYLLABLES;
+      const bowls = [n('G3'), n('B3'), n('D4'), n('G4'), n('A4')];
+      a.bowl(0, bowls[B % bowls.length], 0.45);
+      if (B % 2 === 1) a.bowl(2, bowls[(B + 2) % bowls.length], 0.32);
+      scatterChimes(a, [n('G6'), n('A6'), n('B6'), n('D7'), n('E7')], 1, 0.32);
+      if (B % 8 === 0) a.tingsha(0, n('D7'), 0.26);
+      // Bars 0–3: Dakini + soft Umdze sub-octave chanting the contemplative 12 syllables
+      if (B <= 3) {
+        a.line(VG_DZOGCHEN, 0, 'mantraVoice', 0.58, { voice: 'dakini', syllables: syl, legato: true });
+        a.line(VG_DZOGCHEN, 0, 'mantraVoice', 0.38, { tr: -24, voice: 'umdze', syllables: syl, legato: true });
+      }
+      // Bars 4–7: Breathy bamboo flute echoes the mantra in the mountain mist
+      if (B >= 4 && B <= 7) {
+        a.line(VG_DZOGCHEN, 4, 'flute', 0.56, { legato: true, glideTime: 0.09, breath: 1.5 });
+      }
+      // Bars 8–11: Monastic choir + Dakini harmony
+      if (B >= 8 && B <= 11) {
+        a.line(VG_DZOGCHEN, 8, 'mantraVoice', 0.54, { voice: 'dakini', syllables: syl, legato: true });
+        a.line(VG_DZOGCHEN, 8, 'mantraVoice', 0.48, { tr: -12, voice: 'choir', syllables: syl, legato: true });
+      }
+      // Bars 12–15: Singing bowls + canonical Vajra Guru motif on flute & choir
+      if (B >= 12 && B <= 14) {
+        a.line(MOTIFS.vajraGuru, 12, 'flute', 0.58, { tr: 17, legato: true, glideTime: 0.07 });
+        a.line(MOTIFS.vajraGuru, 12, 'mantraVoice', 0.48, { tr: 5, voice: 'choir', syllables: syl, legato: true });
+      }
+    },
+  },
 };
 
 // ---------------------------------------------------------------- Boss cham-dance builder
@@ -642,6 +851,40 @@ export const MUSIC_STINGERS = {
       const tr = v.tr ?? 0;
       a.tingsha(0, n('A6') + tr, 0.3);
       a.line(MOTIFS.vajraGuru, 0, 'flute', 0.55, { tr: tr + 12, at: 0.5, legato: true, glideTime: 0.06 });
+      a.line(MOTIFS.vajraGuru, 0, 'mantraVoice', 0.46, {
+        tr,
+        at: 0.5,
+        voice: 'choir',
+        syllables: VAJRA_GURU_SYLLABLES,
+        legato: true,
+      });
+    },
+  },
+  /** 蓮師心咒十二音節唱誦 12-syllable Vajra Guru Mantra recitation (Ultimate T / shrine). */
+  vajraGuruChant: {
+    title: { zh: '蓮師心咒十二音節唱誦', en: 'Vajra Guru 12-Syllable Chant' },
+    bpm: 72,
+    duration: 14,
+    duckLevel: 0.22,
+    play(a, v) {
+      const tr = v.tr ?? 0;
+      a.bowl(0, n('A3') + tr, 0.58);
+      a.tingsha(0.04, n('A6') + tr, 0.34);
+      a.line(VG_SAMYE_A, 0, 'mantraVoice', 0.62, {
+        tr: tr - 12,
+        at: 0.3,
+        voice: 'umdze',
+        syllables: VAJRA_GURU_SYLLABLES,
+        legato: true,
+      });
+      a.line(VG_SAMYE_A, 0, 'mantraVoice', 0.58, {
+        tr,
+        at: 0.3,
+        voice: 'dakini',
+        syllables: VAJRA_GURU_SYLLABLES,
+        legato: true,
+      });
+      a.line(VG_SAMYE_A, 0, 'flute', 0.52, { tr: tr + 12, at: 0.3, legato: true, glideTime: 0.06 });
     },
   },
   /** 頭目轉階 Boss phase shift accent (no ducking). */
