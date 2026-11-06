@@ -27,7 +27,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [desktop, mobile, recovery, art, debug, media, pharping, mangyul, yarlung, samye, chimphu, finale, modes, adventure]
+        suite: [desktop, mobile, recovery, art, debug, media, journey, pharping, mangyul, yarlung, samye, chimphu, finale, modes, adventure]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
