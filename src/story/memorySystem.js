@@ -71,6 +71,10 @@ export function createMemorySystem(ctx) {
   const dialog = element('dialog', 'story-photography');
   dialog.setAttribute('aria-labelledby', 'story-photography-title');
   const viewfinder = element('div', 'story-photography-viewfinder');
+  const memoryImage = element('img', 'story-photography-memory');
+  memoryImage.alt = ''; memoryImage.hidden = true;
+  memoryImage.addEventListener('error', () => { memoryImage.hidden = true; });
+  viewfinder.append(memoryImage);
   const reference = document.createElementNS(SVG_NS, 'svg');
   reference.setAttribute('aria-hidden', 'true');
   for (const points of PHOTO_GUIDE_PATHS) {
@@ -95,14 +99,18 @@ export function createMemorySystem(ctx) {
   const actions = element('div', 'story-photography-actions');
   const assistButton = element('button');
   assistButton.dataset.action = 'assist';
+  const overlayButton = element('button');
+  overlayButton.dataset.action = 'overlay';
+  overlayButton.setAttribute('aria-pressed', 'false');
   const captureButton = element('button', 'story-photography-capture');
   captureButton.dataset.action = 'capture';
   const closeButton = element('button');
   const zoomInButton = element('button', 'story-photography-zoom');
   const zoomOutButton = element('button', 'story-photography-zoom');
+  zoomInButton.dataset.action = 'zoom-in';
   zoomInButton.textContent = '+';
   zoomOutButton.textContent = '−';
-  actions.append(assistButton, zoomInButton, zoomOutButton, captureButton, closeButton);
+  actions.append(assistButton, overlayButton, zoomInButton, zoomOutButton, captureButton, closeButton);
   panel.append(status, errors, keyboardHelp, touchHelp, actions);
   dialog.append(viewfinder, header, panel);
   document.body.append(dialog);
@@ -113,6 +121,7 @@ export function createMemorySystem(ctx) {
     keyboardHelp.textContent = t('keyboard');
     touchHelp.textContent = t('touch');
     assistButton.textContent = t('assist');
+    overlayButton.textContent = t('overlay');
     captureButton.textContent = t('capture');
     closeButton.textContent = t('close');
     zoomInButton.setAttribute('aria-label', t('zoomIn'));
@@ -188,6 +197,12 @@ export function createMemorySystem(ctx) {
     story.signal('photo:matched');
   }
 
+  overlayButton.addEventListener('click', () => {
+    const show = overlayButton.getAttribute('aria-pressed') !== 'true';
+    overlayButton.setAttribute('aria-pressed', String(show));
+    memoryImage.hidden = !show;
+    if (show && !memoryImage.src) memoryImage.src = '/story/restoration-memory.jpg';
+  });
   assistButton.addEventListener('click', () => applyPose({ ...PHOTO_TARGET }));
   captureButton.addEventListener('click', capture);
   closeButton.addEventListener('click', close);

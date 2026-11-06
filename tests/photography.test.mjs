@@ -60,6 +60,7 @@ class Element extends EventTarget {
   }
 
   setAttribute(key, value) { this.attributes[key] = value; }
+  getAttribute(key) { return this.attributes[key]; }
   showModal() { this.open = true; }
   close() { this.open = false; }
   setPointerCapture(id) { this.pointer = id; }
@@ -105,7 +106,8 @@ function harness(t, initialPose, cameraResponds = true) {
   assert.equal(ctx.memory, memory);
   const [dialog] = body.children;
   const [viewfinder, , panel] = dialog.children;
-  const [assist, zoomIn, , capture] = panel.children.at(-1).children;
+  const buttons = panel.children.at(-1).children;
+  const [assist, zoomIn, capture] = ['assist','zoom-in','capture'].map(action => buttons.find(button => button.dataset.action === action));
   return { body, state, signals, memory, dialog, viewfinder, assist, zoomIn, capture, storyCamera };
 }
 
@@ -126,7 +128,7 @@ test('keyboard and pointer controls change the camera, while wrong poses cannot 
   assert.deepEqual(signals, []);
   assert.equal(memory.isOpen(), true);
 
-  const [overlay] = viewfinder.children;
+  const overlay = viewfinder.children.find(child => child.tag === 'svg');
   assert.equal(overlay.attributes.viewBox, '-750 -500 1500 1000');
   assert.equal(overlay.children.length, 4);
   viewfinder.clientWidth = 360;

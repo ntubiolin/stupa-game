@@ -121,3 +121,8 @@
   .story-photography-keyboard { display: none; }
   .story-photography-touch { display: block; }
 }
+
+.story-photography-memory { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:.36; filter:sepia(.2); pointer-events:none; }
+.story-photography-viewfinder svg { position:relative; }
+.story-photography-header { max-width:min(560px,calc(100% - 1.5rem)); }
+@media(max-width:650px){.story-photography-header p{font-size:.68rem;max-width:300px}.story-photography-panel{width:calc(100% - 1.5rem)}.story-photography-actions{gap:.3rem}.story-photography-actions button{font-size:.77rem;padding:.4rem}}
