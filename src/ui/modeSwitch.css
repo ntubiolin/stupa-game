@@ -2,18 +2,14 @@
 
 /* Keep the floating entry clear of the Adventure toast and touch controls. */
 body:has(#play-hud:not(.is-hidden)) .mode-switch-floating {
-  top: max(72px, env(safe-area-inset-top));
-}
-
-body:has(#play-hud:not(.is-hidden).has-boss-bar) .mode-switch-floating {
-  top: max(140px, env(safe-area-inset-top));
+  top: auto;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  left: max(12px, env(safe-area-inset-left));
+  transform: none;
 }
 
 @media (max-width: 820px), (pointer: coarse) {
   body:has(#play-hud:not(.is-hidden)) .mode-switch-floating {
-    top: auto;
     bottom: calc(154px + env(safe-area-inset-bottom));
-    left: max(12px, env(safe-area-inset-left));
-    transform: none;
   }
 }
