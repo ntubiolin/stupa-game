@@ -409,10 +409,13 @@ export function createDialogue(ctx) {
           }
           break;
         }
-        case 'unlockCodex': {
-          if (action.id) {
-            ctx.codex?.unlock?.(action.id);
-            bus.emit('codex:unlock', { id: action.id });
+        case 'unlockCodex':
+        case 'codexUnlock':
+        case 'codex': {
+          const codexId = action.id || action.entryId || action.codexId;
+          if (codexId) {
+            ctx.codex?.unlock?.(codexId);
+            bus.emit('codex:unlock', { id: codexId });
           }
           break;
         }
@@ -537,12 +540,45 @@ export function createDialogue(ctx) {
     }
   }
 
-  function enterNode(nodeId) {
+  function matchesBranchCondition(when) {
+    if (!when) return true;
+    if (when.flag) {
+      const flags = Array.isArray(when.flag) ? when.flag : [when.flag];
+      for (const f of flags) {
+        if (!ctx.quests?.hasFlag(f)) return false;
+      }
+    }
+    if (when.notFlag) {
+      const flags = Array.isArray(when.notFlag) ? when.notFlag : [when.notFlag];
+      for (const f of flags) {
+        if (ctx.quests?.hasFlag(f)) return false;
+      }
+    }
+    if (when.quest) {
+      if (when.step !== undefined) {
+        if (!ctx.quests?.isAtStep(when.quest, when.step)) return false;
+      } else {
+        if (!ctx.quests?.isActive(when.quest)) return false;
+      }
+    }
+    return true;
+  }
+
+  function enterNode(nodeId, depth = 0) {
     if (!active) return;
     const node = active.def.nodes?.[nodeId];
     if (!node) {
       close();
       return;
+    }
+
+    if (depth < 8 && Array.isArray(node.branches)) {
+      for (const branch of node.branches) {
+        if (branch?.goto && matchesBranchCondition(branch.when) && active.def.nodes?.[branch.goto]) {
+          enterNode(branch.goto, depth + 1);
+          return;
+        }
+      }
     }
 
     active.nodeId = nodeId;
@@ -559,7 +595,7 @@ export function createDialogue(ctx) {
       executeActions(node.actions);
     }
 
-    const rawText = i18n.t(node.textKey || '');
+    const rawText = i18n.t(node.textKey || node.text || '');
     const tokens = parseDialogueTokens(rawText);
     const totalChars = tokens.reduce((sum, t) => sum + t.text.length, 0);
 
@@ -581,8 +617,11 @@ export function createDialogue(ctx) {
       return false;
     }
 
-    const startNodeId = opts.nodeId || 'start';
-    const firstNode = def.nodes?.[startNodeId] || Object.values(def.nodes || {})[0];
+    let startNodeId = opts.nodeId || def.start || 'start';
+    if (!def.nodes?.[startNodeId]) {
+      startNodeId = Object.keys(def.nodes || {})[0] || 'start';
+    }
+    const firstNode = def.nodes?.[startNodeId];
     if (!firstNode) return false;
 
     const rawSpeaker = opts.speaker || firstNode.speaker || 'npc.oldLama';
@@ -775,7 +814,7 @@ export function createDialogue(ctx) {
   // Re-localize if language is toggled while open
   i18n.onChange(() => {
     if (!active) return;
-    const rawText = i18n.t(active.node.textKey || '');
+    const rawText = i18n.t(active.node.textKey || active.node.text || '');
     active.tokens = parseDialogueTokens(rawText);
     active.totalChars = active.tokens.reduce((sum, t) => sum + t.text.length, 0);
     if (!active.typing) {

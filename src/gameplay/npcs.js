@@ -781,6 +781,9 @@ export function createNpcs(ctx) {
     if (def.debugOnly && !ctx.debug?.enabled && state.zone !== 'sandbox') {
       return false;
     }
+    if (def.visibleWhenFlag && !ctx.quests?.hasFlag(def.visibleWhenFlag)) {
+      return false;
+    }
     if (!def.showIf) return true;
     if (def.showIf.flag && !ctx.quests?.hasFlag(def.showIf.flag)) {
       return false;
@@ -794,9 +797,10 @@ export function createNpcs(ctx) {
   function spawnNpcFromDef(def) {
     if (instances.has(def.id)) return instances.get(def.id);
 
-    const model = buildNpc(def.look || 'lama', { prop: def.prop });
+    const resolvedLook = def.look === 'monk' ? 'lama' : (def.look || 'lama');
+    const model = buildNpc(resolvedLook, { prop: def.prop });
     const y = ctx.world?.getHeight(def.x, def.z, def.map) ?? 0;
-    const defaultHeading = def.heading ?? Math.PI;
+    const defaultHeading = def.heading ?? def.facing ?? Math.PI;
     model.group.position.set(def.x, y, def.z);
     model.group.rotation.y = defaultHeading;
 
@@ -840,7 +844,7 @@ export function createNpcs(ctx) {
       zone: def.map,
       action: 'interact',
       labelKey: 'prompt.talk',
-      radius: def.radius ?? 2.8,
+      radius: def.radius ?? def.interactRadius ?? 2.8,
       getPosition() {
         worldPos.set(def.x, ctx.world?.getHeight(def.x, def.z, def.map) ?? 0, def.z);
         return worldPos;
@@ -849,15 +853,15 @@ export function createNpcs(ctx) {
         return (state.zone || 'stupa') === def.map && !state.uiOpen && isNpcVisible(def);
       },
       onInteract() {
-        const dialogueId = resolveNpcDialogueId(ctx, def.dialogue);
-        bus.emit('npc:talk', { npcId: def.id, dialogueId });
+        const dialogueId = resolveNpcDialogueId(ctx, def.dialogue ?? def.dialogueId);
         if (dialogueId && ctx.dialogue) {
           ctx.dialogue.open(dialogueId, {
             npcId: def.id,
             speaker: def.nameKey,
-            look: def.look,
+            look: resolvedLook,
           });
         }
+        bus.emit('npc:talk', { npcId: def.id, dialogueId });
       },
     };
     ctx.interactables.push(interactable);
@@ -1027,6 +1031,12 @@ export function createNpcs(ctx) {
     clearShowcase,
     getNpc(id) {
       return instances.get(id)?.def || null;
+    },
+    getById(id) {
+      return instances.get(id)?.def || null;
+    },
+    get(id) {
+      return instances.get(id) || null;
     },
     getInstance(id) {
       return instances.get(id) || null;

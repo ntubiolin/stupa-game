@@ -409,6 +409,27 @@ export function createMap(ctx, mapDef = SAMYE_MAP) {
     ring.position.y = 0.06;
     g.add(ring);
     nodeBeacons.push(ring);
+
+    if (Array.isArray(ctx.interactables)) {
+      const nodePos = new THREE.Vector3(node.wx, ny, node.wz);
+      ctx.interactables.push({
+        id: `samye:${node.id}`,
+        kind: 'samyeResource',
+        zone: 'samye',
+        action: 'interact',
+        labelKey: node.promptKey,
+        radius: 3.6,
+        getPosition() {
+          return nodePos;
+        },
+        isAvailable() {
+          return state.zone === 'samye' && !state.uiOpen && !endingState.playing;
+        },
+        onInteract() {
+          // Handled in samye.update(dt) on `interact` press
+        },
+      });
+    }
   }
 
   // ---------------------------------------------------------------- 4. Samye Monastery 5 Construction Stages (0..4) at local (0, 0)
