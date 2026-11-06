@@ -8,6 +8,13 @@ function element(tag, className) {
   return node;
 }
 
+function controlButton(action) {
+  const button = element('button');
+  button.type = 'button';
+  button.dataset.action = action;
+  return button;
+}
+
 export function createDocumentary(ctx) {
   const { bus, i18n, state } = ctx;
   const t = (key, params) => i18n.t(`story.documentary.${key}`, params);
@@ -32,12 +39,13 @@ export function createDocumentary(ctx) {
   captions.append(source, caption);
   const progress = element('p', 'story-documentary-progress');
   const controls = element('div', 'story-documentary-controls');
-  const toggleButton = element('button');
+  const toggleButton = controlButton('toggle');
   toggleButton.autofocus = true;
-  const replayButton = element('button');
-  const skipButton = element('button');
-  const closeButton = element('button');
-  controls.append(toggleButton, replayButton, skipButton, closeButton);
+  const replayButton = controlButton('replay');
+  const skipButton = controlButton('skip');
+  const closeButton = controlButton('close');
+  const nextButton = controlButton('next');
+  controls.append(toggleButton, replayButton, skipButton, closeButton, nextButton);
   dialog.append(title, still, provenance, captions, progress, controls);
   document.body.append(dialog);
 
@@ -56,6 +64,7 @@ export function createDocumentary(ctx) {
     replayButton.textContent = t('replay');
     skipButton.textContent = t('skip');
     closeButton.textContent = t('close');
+    nextButton.textContent = t(index === clip.cues.length - 1 ? 'finish' : 'next');
   }
 
   function clearImage() {
@@ -131,26 +140,35 @@ export function createDocumentary(ctx) {
   const skip = () => finish('skip');
   const close = () => finish('cancel');
 
+  function advance(elapsed = 0) {
+    if (!session) return;
+    const { cues } = session.clip;
+    let index = session.index + 1;
+    while (index < cues.length && elapsed >= cues[index].duration) {
+      elapsed -= cues[index].duration;
+      index += 1;
+    }
+    if (index === cues.length) {
+      finish('complete');
+      return;
+    }
+    session.index = index;
+    session.elapsed = elapsed;
+    renderCue();
+  }
+
   function update(dt) {
     if (!session || session.paused || !Number.isFinite(dt) || dt <= 0) return;
     session.elapsed += dt;
-    const cues = session.clip.cues;
-    const previousIndex = session.index;
-    while (session.elapsed >= cues[session.index].duration) {
-      session.elapsed -= cues[session.index].duration;
-      session.index += 1;
-      if (session.index === cues.length) {
-        finish('complete');
-        return;
-      }
-    }
-    if (session.index !== previousIndex) renderCue();
+    const { duration } = session.clip.cues[session.index];
+    if (session.elapsed >= duration) advance(session.elapsed - duration);
   }
 
   toggleButton.addEventListener('click', () => (session?.paused ? resume() : pause()));
   replayButton.addEventListener('click', replay);
   skipButton.addEventListener('click', skip);
   closeButton.addEventListener('click', close);
+  nextButton.addEventListener('click', () => advance());
   dialog.addEventListener('cancel', event => {
     event.preventDefault();
     close();

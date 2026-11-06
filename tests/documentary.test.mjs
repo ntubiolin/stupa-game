@@ -54,14 +54,20 @@ function harness(t) {
   const bus = createBus();
   const events = [];
   bus.on('story:clip-end', event => events.push(event));
-  const ctx = { state, bus, i18n: { t: key => key, onChange: () => () => {} } };
+  const ctx = { state, bus, i18n: {
+    t: (key, params) => params ? `${key}:${params.current}/${params.total}` : key,
+    onChange: () => () => {},
+  } };
   const player = createDocumentary(ctx);
   assert.equal(ctx.documentary, player);
   const dialog = body.children[0];
-  const [, still, , captions, , controls] = dialog.children;
+  const [, still, , captions, progress, controls] = dialog.children;
   const [, caption] = captions.children;
-  const [, replay] = controls.children;
-  return { body, bus, state, player, events, dialog, still, caption, replay };
+  const findControl = action => controls.children.find(button => button.dataset.action === action);
+  return {
+    body, bus, state, player, events, dialog, still, caption, progress,
+    replay: findControl('replay'), next: findControl('next'),
+  };
 }
 
 test('cues distinguish historical context, fiction and the novel’s repair quote', () => {
@@ -75,7 +81,7 @@ test('cues distinguish historical context, fiction and the novel’s repair quot
 });
 
 test('lazy still failure leaves captions readable through pause, replay and completion', t => {
-  const { bus, player, state, events, dialog, still, caption, replay } = harness(t);
+  const { bus, player, state, events, dialog, still, caption, replay, next } = harness(t);
   assert.equal(still.children.some(node => node.tag === 'img'), false);
   bus.emit('story:clip-play', { id: 'restoration' });
   assert.equal(state.uiOpen, true);
@@ -101,8 +107,54 @@ test('lazy still failure leaves captions readable through pause, replay and comp
   assert.match(caption.textContent, /stone$/);
   assert.equal(still.children.some(node => node.tag === 'img'), false);
   player.update(13);
+  next.dispatchEvent(new Event('click'));
   player.update(10);
   assert.equal(player.isOpen(), false);
+  assert.equal(state.uiOpen, false);
+  assert.deepEqual(events, [{ id: 'restoration', reason: 'complete' }]);
+});
+
+test('manual advance resets the timer and autoplay still advances the next cue', t => {
+  const { player, caption, progress, still, next } = harness(t);
+  player.play('restoration');
+  player.update(8);
+  next.dispatchEvent(new Event('click'));
+  assert.equal(still.dataset.frame, 'work');
+  assert.match(caption.textContent, /volunteer$/);
+  assert.match(progress.textContent, /2\/4$/);
+  player.update(10);
+  assert.match(caption.textContent, /volunteer$/);
+  player.update(1);
+  assert.match(caption.textContent, /reply$/);
+  assert.match(progress.textContent, /3\/4$/);
+});
+
+test('paused manual advance works through missing images and finishes only once', t => {
+  const { player, state, events, dialog, still, caption, progress, next } = harness(t);
+  player.play('restoration');
+  player.pause();
+  const [image, fallback] = still.children;
+  image.dispatchEvent(new Event('error'));
+  assert.match(next.textContent, /\.next$/);
+  next.dispatchEvent(new Event('click'));
+  assert.equal(fallback.hidden, false);
+  assert.match(caption.textContent, /volunteer$/);
+  player.update(60);
+  assert.equal(dialog.dataset.paused, 'true');
+  assert.match(caption.textContent, /volunteer$/);
+  next.dispatchEvent(new Event('click'));
+  assert.match(caption.textContent, /reply$/);
+  next.dispatchEvent(new Event('click'));
+  assert.match(caption.textContent, /stone$/);
+  assert.match(progress.textContent, /4\/4$/);
+  assert.equal(still.dataset.frame, 'slate');
+  assert.equal(fallback.hidden, true);
+  assert.match(next.textContent, /\.finish$/);
+  assert.deepEqual(events, []);
+  next.dispatchEvent(new Event('click'));
+  next.dispatchEvent(new Event('click'));
+  player.update(60);
+  assert.equal(dialog.open, false);
   assert.equal(state.uiOpen, false);
   assert.deepEqual(events, [{ id: 'restoration', reason: 'complete' }]);
 });
