@@ -124,3 +124,11 @@
 .story-documentary[data-paused="true"] img { animation-play-state: paused; }
 @keyframes story-memory-drift { from { transform: scale(1); } to { transform: scale(1.065) translateY(-1%); } }
 @media (prefers-reduced-motion: reduce) { .story-documentary-still img { animation: none; } }
+
+/* Preserve the approved full-frame stills and keep captions outside the art. */
+.story-documentary-still[data-frame="full"] img {
+  object-fit: contain;
+  object-position: center;
+  animation: none;
+  transform: none;
+}
