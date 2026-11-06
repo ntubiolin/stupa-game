@@ -471,8 +471,14 @@ requires an explicit test choice. Signals and choices advance only the preview
 record. They do not unlock durable progress or write the story section.
 
 Exiting a preview publishes `story:chapter-exit` with `testing: true` and the
-runtime restores the canonical active chapter or Demo beat. Runtime should pause
-canonical elapsed time and hide progression actions for the underlying Demo
-during a chapter preview. The separately labeled original Demo jump is
+runtime restores the canonical active chapter or Demo beat. Runtime pauses
+canonical elapsed time while the test panel or preview is active and disables
+the underlying Demo phone, replay and reset actions during a preview. A failed
+preview leaves the currently displayed scene and checkpoint intact. The separately labeled original Demo jump is
 available only for an unfinished Demo without chapter progress. It requires
 confirmation and uses the existing persistent `story.skipTo` debug API.
+
+Run the GUI regression against a production preview with
+`BROWSER_CHANNEL=chrome node scripts/story-debug-browser-test.mjs`. It covers
+password rejection, desktop and touch previews, branch selection, load failure,
+and save preservation through exit and reload.
