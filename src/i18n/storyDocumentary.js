@@ -18,6 +18,8 @@ i18n.register({
     'story.documentary.replay': '從頭播放',
     'story.documentary.skip': '跳過影片',
     'story.documentary.close': '關閉',
+    'story.documentary.next': '下一張',
+    'story.documentary.finish': '完成閱讀',
   },
   en: {
     'story.documentary.restoration.title': 'The Fallen Stupa',
@@ -36,5 +38,7 @@ i18n.register({
     'story.documentary.replay': 'Replay from start',
     'story.documentary.skip': 'Skip clip',
     'story.documentary.close': 'Close',
+    'story.documentary.next': 'Next image',
+    'story.documentary.finish': 'Finish reading',
   },
 });

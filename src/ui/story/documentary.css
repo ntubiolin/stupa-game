@@ -93,6 +93,8 @@
 }
 
 .story-documentary-controls button {
+  min-width: 44px;
+  max-width: 100%;
   min-height: 44px;
   padding: .5rem .85rem;
   border: 1px solid #817563;
@@ -100,8 +102,16 @@
   background: #332f28;
   color: inherit;
   font: inherit;
+  overflow-wrap: anywhere;
   cursor: pointer;
   touch-action: manipulation;
+}
+
+.story-documentary-controls [data-action="next"] {
+  border-color: #c29758;
+  background: #5c4528;
+  color: #fff4df;
+  font-weight: 600;
 }
 
 .story-documentary-controls button:focus-visible {
