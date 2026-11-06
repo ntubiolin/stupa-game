@@ -14,6 +14,8 @@
  * the standalone `music-lab.html` audition page, or in an OfflineAudioContext.
  */
 
+import { getVocalAudioBuffers } from '../data/mantraVocalBank.js';
+
 const DEFAULTS = {
   tuningA4: 432,
   volume: 0.5,
@@ -31,8 +33,9 @@ export function createMusicEngine({ ac, destination, noiseBuffer = null, tracks 
   const mtof = (m) => cfg.tuningA4 * 2 ** ((m - 69) / 12);
   const rand = (a, b) => a + Math.random() * (b - a);
 
-  // ---------------------------------------------------------------- shared noise
+  // ---------------------------------------------------------------- shared noise & vocal bank
   const noise = noiseBuffer || makeNoiseBuffer(ac, 3);
+  const vocalBanks = getVocalAudioBuffers(ac);
 
   // ---------------------------------------------------------------- master chain
   const out = ac.createGain();
@@ -551,18 +554,57 @@ export function createMusicEngine({ ac, destination, noiseBuffer = null, tracks 
    * driven by a Rosenberg glottal pulse wave with consonant pre-onset & nasal closure.
    */
   function mantraVoice(bus, t, m, dur, vel = 0.75, o = {}) {
-    const syl = MANTRA_SYLLABLES[o.syllable || 'om'] || MANTRA_SYLLABLES.om;
+    const sylKey = o.syllable || 'om';
+    const syl = MANTRA_SYLLABLES[sylKey] || MANTRA_SYLLABLES.om;
     const voice = o.voice || 'choir'; // 'umdze' | 'choir' | 'dakini'
-    const f = mtof(m);
-    const vot = syl.vot ?? 0;
-    const tVoice = t + Math.min(vot, dur * 0.25);
-    // Leave a slight articulatory separation between syllables so each word is clearly heard
-    const vDur = Math.max(0.08, (dur - (tVoice - t)) * 0.9);
-    const rel = o.release ?? (voice === 'dakini' ? 0.16 : 0.22);
-    const end = tVoice + vDur + rel + 0.15;
 
+    // Keep each vocal part in its natural human vocal tract octave (male: D3..B3, female: D4..B4)
+    let effM = m;
+    if (voice === 'dakini') {
+      while (effM < 60) effM += 12;
+      while (effM > 73) effM -= 12;
+    } else {
+      while (effM > 60) effM -= 12;
+      while (effM < 48) effM += 12;
+    }
+
+    const f = mtof(effM);
+    const vot = syl.vot ?? 0;
+    const tVoice = t + Math.min(vot, dur * 0.2);
+    const vDur = Math.max(0.12, dur * 0.92);
+    const rel = o.release ?? (voice === 'dakini' ? 0.14 : 0.18);
+    const end = t + vDur + rel + 0.15;
+
+    // 1) Real human TD-PSOLA vocal syllable playback (within +-2 semitones of reference bank)
+    const bank =
+      voice === 'dakini'
+        ? (effM <= 66 ? vocalBanks?.f64 : vocalBanks?.f69)
+        : (effM <= 54 ? vocalBanks?.m52 : vocalBanks?.m57);
+    const vBuf = bank?.syls?.[sylKey];
+    if (vBuf) {
+      const sampleEnv = gainNode();
+      const sampleGain = (voice === 'dakini' ? 0.78 : voice === 'umdze' ? 0.82 : 0.80) * vocalBoost;
+      susEnv(sampleEnv, t, vDur, vel * sampleGain, 0.015, rel, 0.92);
+      const bodyLp = biquad('lowpass', voice === 'umdze' ? 3600 : 5400, 0.7);
+      const layers = voice === 'dakini' ? [[0, 0.75], [5, 0.45]] : [[-5, 0.65], [5, 0.60]];
+      for (const [cents, w] of layers) {
+        const sNode = ac.createBufferSource();
+        sNode.buffer = vBuf;
+        const rate = 2 ** ((effM - bank.midi + cents / 100) / 12);
+        sNode.playbackRate.setValueAtTime(rate, t);
+        const lg = gainNode(w);
+        sNode.connect(lg);
+        lg.connect(bodyLp);
+        sNode.start(t);
+        sNode.stop(Math.min(t + vBuf.duration / rate + 0.05, end));
+      }
+      bodyLp.connect(sampleEnv);
+      route(bus, sampleEnv, o.send ?? 0.48);
+    }
+
+    // 2) Warm harmonic choir & throat-singing sub-octave support cushion
     const env = gainNode();
-    const peakScale = (voice === 'dakini' ? 0.38 : voice === 'umdze' ? 0.46 : 0.42) * vocalBoost;
+    const peakScale = (vBuf ? 0.14 : 0.42) * (voice === 'umdze' ? 1.35 : 1.0) * vocalBoost;
     susEnv(env, tVoice, vDur, vel * peakScale, o.attack ?? syl.attack ?? 0.045, rel, 0.88);
 
     // Multi-singer glottal source with natural human vibrato (5.2–5.8 Hz)
@@ -592,7 +634,7 @@ export function createMusicEngine({ ac, destination, noiseBuffer = null, tracks 
         grace: o.grace,
         scoop: o.scoop ?? syl.scoop ?? 0.6,
         scoopTime: 0.055,
-        m,
+        m: effM,
       });
       if (ratio === 1) vib.connect(o1.frequency);
       const g = gainNode(amp);
