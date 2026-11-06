@@ -7,6 +7,7 @@
  */
 export const SAVE_STORAGE_KEY = 'stupa.save.v2';
 const SAVE_VERSION = 2;
+export const STORY_SAVE_VERSION = 2;
 const THROTTLE_SEC = 1.0;
 
 const LEGACY_KEYS = {
@@ -229,8 +230,6 @@ function validateSectionValue(sectionName, val, fallback) {
 }
 
 export function createSave(ctx, { writableSections = null } = {}) {
-  // Narrative sessions may only persist their own section. Refresh unrelated
-  // sections at flush time so another open adventure tab is not rolled back.
   const allowedSections = writableSections ? new Set(writableSections) : null;
   let store = {
     version: SAVE_VERSION,
@@ -238,104 +237,117 @@ export function createSave(ctx, { writableSections = null } = {}) {
     sections: {},
   };
 
-  let isDirty = false;
+  const pendingSections = new Map();
+  const registeredSections = new Map();
+  let sampleRegistered = false;
   let dirtyTimer = 0;
   let writeCount = 0;
-  const registeredSections = new Map();
+  let status = { ok: true };
+  let unsupportedRoot = false;
 
-  function syncRegisteredToStore() {
-    for (const [sec, { serializer }] of registeredSections.entries()) {
-      if (typeof serializer === 'function') {
-        try {
-          store.sections[sec] = deepClone(serializer());
-        } catch (err) {
-          console.warn(`[save] Failed to serialize registered section "${sec}":`, err);
-        }
-      }
-    }
+  function canWrite(section) {
+    return typeof section === 'string' && section !== ''
+      && !Object.hasOwn(Object.prototype, section)
+      && (!allowedSections || allowedSections.has(section));
   }
 
-  function writeToStorage() {
-    syncRegisteredToStore();
-    store.version = SAVE_VERSION;
-    store.savedAt = Date.now();
+  function isReadOnly() {
+    return unsupportedRoot;
+  }
+
+  function fail(error) {
+    status = { ok: false, error };
+    return { ...status };
+  }
+
+  function parseDocument(raw) {
+    if (raw === null) return null;
+    const parsed = safeParseJson(raw, SAVE_STORAGE_KEY);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    return parsed;
+  }
+
+  function migrateDocument(parsed) {
+    const version = typeof parsed?.version === 'number' ? parsed.version : 1;
+    return parsed && version < SAVE_VERSION ? runMigrations(parsed, version) : parsed;
+  }
+
+  function hasSections(doc) {
+    return doc?.sections && typeof doc.sections === 'object' && !Array.isArray(doc.sections);
+  }
+
+  function writeToStorage(updates, replacement = null) {
+    if (isReadOnly()) return fail('unsupported-version');
     try {
-      if (allowedSections) {
-        const latestRaw = localStorage.getItem(SAVE_STORAGE_KEY);
-        const latest = latestRaw ? safeParseJson(latestRaw, 'scoped flush') : null;
-        if (latest?.version > SAVE_VERSION) return;
-        if (latest?.version === SAVE_VERSION && latest.sections && !Array.isArray(latest.sections) && typeof latest.sections === 'object') {
-          const merged = deepClone(latest.sections);
-          for (const section of allowedSections) {
-            if (Object.hasOwn(store.sections, section)) merged[section] = deepClone(store.sections[section]);
-            else delete merged[section];
-          }
-          store.sections = merged;
-        }
+      const raw = localStorage.getItem(SAVE_STORAGE_KEY);
+      const latest = migrateDocument(parseDocument(raw));
+      if (latest?.version > SAVE_VERSION) {
+        unsupportedRoot = true;
+        return fail('unsupported-version');
       }
-      localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(store));
+      // An explicitly removed root stays empty. A damaged root can be repaired
+      // from our last known good snapshot.
+      const base = hasSections(latest) ? latest : raw === null ? { sections: {} } : store;
+      const sections = replacement === null ? { ...base.sections } : replacement(base.sections);
+      for (const [section, data] of updates) {
+        if (section === 'story' && data !== undefined) {
+          if (base.sections.story?.version > STORY_SAVE_VERSION || data?.version > STORY_SAVE_VERSION) {
+            return fail('unsupported-story-version');
+          }
+          // This mode owns a complete story snapshot. Refuse to roll back
+          // progress if another story session changed it after we loaded it.
+          if (JSON.stringify(base.sections.story) !== JSON.stringify(store.sections.story)) {
+            return fail('story-conflict');
+          }
+        }
+        if (data === undefined) delete sections[section];
+        else sections[section] = data;
+      }
+      const next = { ...base, version: SAVE_VERSION, savedAt: Date.now(), sections };
+      localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(next));
+      store = deepClone(next);
       writeCount += 1;
+      status = { ok: true };
+      return { ...status };
     } catch (err) {
       console.warn('[save] Failed to write save to localStorage:', err);
+      return fail('storage-unavailable');
     }
-    isDirty = false;
-    dirtyTimer = 0;
   }
 
   function loadInitialStore() {
-    let rawV2 = null;
+    let raw = null;
     try {
-      rawV2 = localStorage.getItem(SAVE_STORAGE_KEY);
-    } catch { /* ignore */ }
-
-    if (rawV2 !== null) {
-      const parsed = safeParseJson(rawV2, SAVE_STORAGE_KEY);
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        console.warn('[save] Corrupted v2 save root JSON; resetting to default store.');
-        store = { version: SAVE_VERSION, savedAt: Date.now(), sections: {} };
-        writeToStorage();
-        return;
-      }
-
-      const ver = typeof parsed.version === 'number' ? parsed.version : 1;
-      if (ver < SAVE_VERSION) {
-        store = runMigrations(parsed, ver);
-        writeToStorage();
-        return;
-      }
-
-      if (!parsed.sections || typeof parsed.sections !== 'object' || Array.isArray(parsed.sections)) {
-        console.warn('[save] Corrupted "sections" in v2 save; resetting sections to empty.');
-        store = { version: SAVE_VERSION, savedAt: Date.now(), sections: {} };
-        writeToStorage();
-        return;
-      }
-
-      // Sanitize each section entry: if any section is not an object, log warning and drop it so get() uses fallback
-      const cleanSections = {};
-      for (const [secKey, secVal] of Object.entries(parsed.sections)) {
-        if (!secVal || typeof secVal !== 'object' || Array.isArray(secVal)) {
-          console.warn(`[save] Corrupted section "${secKey}" in stored v2 save (expected object, got ${typeof secVal}); resetting section to default.`);
-          continue;
-        }
-        cleanSections[secKey] = secVal;
-      }
-
-      store = {
-        version: SAVE_VERSION,
-        savedAt: typeof parsed.savedAt === 'number' ? parsed.savedAt : Date.now(),
-        sections: cleanSections,
-      };
+      raw = localStorage.getItem(SAVE_STORAGE_KEY);
+    } catch {
+      fail('storage-unavailable');
       return;
     }
 
-    // No v2 save found — check legacy v1 keys and migrate once
-    const legacyV1 = readLegacyV1FromStorage();
-    if (legacyV1) {
-      store = runMigrations(legacyV1, 1);
-      writeToStorage();
-    } else {
-      store = { version: SAVE_VERSION, savedAt: Date.now(), sections: {} };
+    const parsed = parseDocument(raw);
+    if (parsed?.version > SAVE_VERSION) {
+      store = parsed;
+      unsupportedRoot = true;
+      fail('unsupported-version');
+      return;
+    }
+    const migrated = migrateDocument(parsed);
+    if (hasSections(migrated)) {
+      store = migrated;
+      if (parsed !== migrated) writeToStorage(new Map());
+      return;
+    }
+    if (raw !== null) {
+      console.warn('[save] Corrupted v2 save root; resetting to default store.');
+      writeToStorage(new Map());
+      return;
+    }
+
+    const legacy = readLegacyV1FromStorage();
+    if (legacy) {
+      const migrated = runMigrations(legacy, 1);
+      store = migrated;
+      writeToStorage(new Map(), () => migrated.sections);
     }
   }
 
@@ -343,44 +355,80 @@ export function createSave(ctx, { writableSections = null } = {}) {
 
   function get(section, fallback = {}) {
     if (!section) return deepClone(fallback);
-    const existing = store.sections[section];
-    if (existing === undefined) {
-      return deepClone(fallback);
-    }
-    const validated = validateSectionValue(section, existing, fallback);
-    store.sections[section] = deepClone(validated);
-    return deepClone(validated);
+    const existing = pendingSections.has(section) ? pendingSections.get(section) : store.sections?.[section];
+    return validateSectionValue(section, existing, fallback);
   }
 
   function set(section, data) {
-    if (!section || (allowedSections && !allowedSections.has(section))) return;
-    store.sections[section] = deepClone(data);
-    isDirty = true;
+    if (!canWrite(section) || isReadOnly()) return;
+    pendingSections.set(section, deepClone(data));
   }
 
   function markDirty(section) {
-    isDirty = true;
+    if (isReadOnly()) return;
+    if (section === undefined || canWrite(section)) sampleRegistered = true;
+  }
+
+  function collectRegisteredChanges(updates) {
+    const sampled = new Map();
+    for (const [section, entry] of registeredSections) {
+      if (typeof entry.serializer !== 'function') continue;
+      try {
+        const data = deepClone(entry.serializer());
+        const snapshot = JSON.stringify(data);
+        if (snapshot !== entry.snapshot && !updates.has(section)) updates.set(section, data);
+        sampled.set(section, snapshot);
+      } catch (err) {
+        console.warn(`[save] Failed to serialize registered section "${section}":`, err);
+        return null;
+      }
+    }
+    return sampled;
   }
 
   function flush() {
-    if (!isDirty) return;
-    writeToStorage();
+    if (!pendingSections.size && !sampleRegistered) return status.ok;
+    const updates = new Map(pendingSections);
+    const sampled = collectRegisteredChanges(updates);
+    if (sampled === null) return fail('serialization-failed').ok;
+    const result = updates.size ? writeToStorage(updates) : status;
+    if (result.ok) {
+      for (const [section, snapshot] of sampled) registeredSections.get(section).snapshot = snapshot;
+      pendingSections.clear();
+      sampleRegistered = false;
+      dirtyTimer = 0;
+    }
+    return result.ok;
+  }
+
+  function commitSection(section, data) {
+    if (!canWrite(section) || data === undefined) return fail('invalid-section');
+    const result = writeToStorage(new Map([[section, deepClone(data)]]));
+    if (result.ok) pendingSections.delete(section);
+    return result;
+  }
+
+  function replaceSections(replacement) {
+    const result = writeToStorage(new Map(), replacement);
+    if (!result.ok) return false;
+    const sampled = collectRegisteredChanges(new Map());
+    if (sampled) {
+      for (const [section, snapshot] of sampled) registeredSections.get(section).snapshot = snapshot;
+    }
+    pendingSections.clear();
+    sampleRegistered = false;
+    dirtyTimer = 0;
+    return true;
   }
 
   function reset() {
-    if (allowedSections) {
-      for (const section of allowedSections) delete store.sections[section];
-      writeToStorage();
-      return;
-    }
-    const preservedSettings = store.sections.settings
-      ? deepClone(store.sections.settings)
-      : undefined;
-    store.sections = {};
-    if (preservedSettings !== undefined) {
-      store.sections.settings = preservedSettings;
-    }
-    writeToStorage();
+    return replaceSections(latest => {
+      if (allowedSections) {
+        return Object.fromEntries(Object.entries(latest).filter(([section]) => !allowedSections.has(section)));
+      }
+      const settings = pendingSections.has('settings') ? pendingSections.get('settings') : latest.settings;
+      return settings === undefined ? {} : { settings };
+    });
   }
 
   function exportString() {
@@ -389,51 +437,50 @@ export function createSave(ctx, { writableSections = null } = {}) {
   }
 
   function importString(str, options = {}) {
-    if (typeof str !== 'string' || !str.trim()) {
-      console.warn('[save] importString: empty or non-string input');
-      return false;
-    }
-    const parsed = safeParseJson(str, 'importString');
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      console.warn('[save] importString: invalid JSON root');
-      return false;
-    }
-    const ver = typeof parsed.version === 'number' ? parsed.version : 1;
-    const migrated = ver < SAVE_VERSION ? runMigrations(parsed, ver) : parsed;
-    if (!migrated.sections || typeof migrated.sections !== 'object' || Array.isArray(migrated.sections)) {
-      console.warn('[save] importString: missing sections object');
-      return false;
-    }
-    store = {
-      version: SAVE_VERSION,
-      savedAt: Date.now(),
-      sections: deepClone(migrated.sections),
-    };
-    writeToStorage();
-    if (options.reload !== false && typeof window !== 'undefined' && window.location?.reload) {
+    if (typeof str !== 'string' || !str.trim()) return false;
+    const imported = migrateDocument(parseDocument(str));
+    if (!hasSections(imported) || imported.version > SAVE_VERSION) return false;
+    const ok = replaceSections(latest => {
+      if (!allowedSections) return imported.sections;
+      const sections = { ...latest };
+      for (const section of allowedSections) {
+        if (Object.hasOwn(imported.sections, section)) sections[section] = imported.sections[section];
+        else delete sections[section];
+      }
+      return sections;
+    });
+    if (ok && options.reload !== false && typeof window !== 'undefined' && window.location?.reload) {
       window.location.reload();
     }
-    return true;
+    return ok;
   }
 
   function register(section, serializer, deserializer) {
-    if (!section) return;
-    registeredSections.set(section, { serializer, deserializer });
-    if (typeof deserializer === 'function') {
-      const existing = store.sections[section];
-      if (existing !== undefined) {
-        try {
-          deserializer(deepClone(existing));
-        } catch (err) {
-          console.warn(`[save] Failed to deserialize registered section "${section}":`, err);
-        }
+    if (!canWrite(section)) return;
+    const existing = pendingSections.has(section) ? pendingSections.get(section) : store.sections?.[section];
+    if (typeof deserializer === 'function' && existing !== undefined) {
+      try {
+        deserializer(deepClone(existing));
+      } catch (err) {
+        console.warn(`[save] Failed to deserialize registered section "${section}":`, err);
       }
+    }
+    const entry = { serializer, snapshot: undefined };
+    registeredSections.set(section, entry);
+    try {
+      if (typeof serializer === 'function') entry.snapshot = JSON.stringify(serializer());
+    } catch (err) {
+      console.warn(`[save] Failed to serialize registered section "${section}":`, err);
     }
   }
 
   function dump() {
-    syncRegisteredToStore();
-    return deepClone(store);
+    if (isReadOnly()) return deepClone(store);
+    const updates = new Map(pendingSections);
+    collectRegisteredChanges(updates);
+    const sections = { ...store.sections };
+    for (const [section, data] of updates) sections[section] = data;
+    return deepClone({ ...store, sections });
   }
 
   // Flush immediately when tab hides or page unloads
@@ -451,10 +498,11 @@ export function createSave(ctx, { writableSections = null } = {}) {
   }
 
   function update(dt) {
-    if (!isDirty) return;
+    if (!pendingSections.size && !sampleRegistered) return;
     dirtyTimer += dt;
     if (dirtyTimer >= THROTTLE_SEC) {
-      writeToStorage();
+      dirtyTimer = 0;
+      flush();
     }
   }
 
@@ -465,6 +513,9 @@ export function createSave(ctx, { writableSections = null } = {}) {
     register,
     markDirty,
     flush,
+    commitSection,
+    getStatus: () => ({ ...status }),
+    isReadOnly,
     reset,
     exportString,
     importString,

@@ -6,13 +6,14 @@ import { createStoryDirector } from '../src/story/storyDirector.js';
 import { prologueRecordingReadFlag, readPrologueReplies } from '../src/data/story/phonePrologue.js';
 
 const freshState = {
-  version: 1,
+  version: 2,
   beat: 'prologue',
   evidence: [],
   choices: {},
   flags: {},
   clipsSeen: [],
   elapsedSeconds: 0,
+  journey: { activeChapterId: null, chapters: {} },
 };
 
 function harness(t, sections = {}) {
@@ -287,16 +288,16 @@ test('an unrecognized beat falls back to a fresh prologue', t => {
   assert.deepEqual(save.get('story'), freshState);
 });
 
-test('a future save stays intact while playing until an explicit story reset', t => {
-  const future = { ...freshState, version: 2, beat: 'future-beat', futureField: { detail: 4 } };
+test('a future save stays intact while playing and rejects story reset', t => {
+  const future = { ...freshState, version: 3, beat: 'future-beat', futureField: { detail: 4 } };
   const { director, save } = harness(t, { story: future })();
   director.start();
   assert.deepEqual(director.getState(), freshState);
   director.signal('prologue:complete');
   director.update(1.25);
   assert.deepEqual(save.get('story'), future);
-  director.reset();
-  assert.deepEqual(save.get('story'), freshState);
+  assert.equal(director.reset(), false);
+  assert.deepEqual(save.get('story'), future);
 });
 
 test('elapsed time, debug evidence and reset preserve pre-story adventure sections', t => {

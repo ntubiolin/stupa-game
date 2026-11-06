@@ -1,11 +1,13 @@
 import { STORY_BEATS } from '../data/story/beats.js';
+import { CHAPTERS } from '../data/story/chapters.js';
+import { STORY_SAVE_VERSION } from '../systems/save.js';
 import {
   prologueChoiceKey, prologueRecordingReadFlag, prologueTurns,
   readPrologueReplies, selectPrologueReply,
 } from '../data/story/phonePrologue.js';
 
 const SAVE_SECTION = 'story';
-const SAVE_VERSION = 1;
+const SAVE_VERSION = STORY_SAVE_VERSION;
 const BEAT_INDEX = new Map(STORY_BEATS.map((beat, index) => [beat.id, index]));
 const EVIDENCE_IDS = new Set(STORY_BEATS.flatMap(beat => beat.evidence ?? []));
 const CLIP_IDS = new Set(STORY_BEATS.flatMap(beat => beat.clipId ? [beat.clipId] : []));
@@ -19,6 +21,7 @@ function freshState() {
     flags: {},
     clipsSeen: [],
     elapsedSeconds: 0,
+    journey: { activeChapterId: null, chapters: {} },
   };
 }
 
@@ -38,8 +41,32 @@ function evidenceBefore(beat) {
   return STORY_BEATS.slice(0, BEAT_INDEX.get(beat)).flatMap(entry => entry.evidence ?? []);
 }
 
+function readChapterValues(value, type) {
+  return Object.fromEntries(Object.entries(readRecord(value, type))
+    .filter(([key, entry]) => key.length <= 64 && (type !== 'string' || entry.length <= 128))
+    .slice(0, 64));
+}
+
+function readJourney(value) {
+  const chapters = {};
+  for (const chapter of CHAPTERS) {
+    const record = value?.chapters?.[chapter.id];
+    const checkpoint = chapter.checkpoints.find(entry => entry.id === record?.checkpointId);
+    if (!checkpoint || record.completed !== (checkpoint.signal === null)) continue;
+    chapters[chapter.id] = {
+      checkpointId: checkpoint.id,
+      completed: record.completed,
+      choices: readChapterValues(record.choices, 'string'),
+      flags: readChapterValues(record.flags, 'boolean'),
+    };
+  }
+  const active = value?.activeChapterId;
+  const activeChapterId = typeof active === 'string' && Object.hasOwn(chapters, active) ? active : null;
+  return { activeChapterId, chapters };
+}
+
 function readState(saved) {
-  if (saved?.version !== SAVE_VERSION || !BEAT_INDEX.has(saved.beat)) return freshState();
+  if ((saved?.version !== 1 && saved?.version !== SAVE_VERSION) || !BEAT_INDEX.has(saved.beat)) return freshState();
   const choices = readRecord(saved.choices, 'string');
   const flags = readRecord(saved.flags, 'boolean');
   if (saved.beat === 'prologue') {
@@ -59,14 +86,15 @@ function readState(saved) {
     elapsedSeconds: Number.isFinite(saved.elapsedSeconds) && saved.elapsedSeconds >= 0
       ? saved.elapsedSeconds
       : 0,
+    journey: saved.version === SAVE_VERSION && saved.beat === 'complete'
+      ? readJourney(saved.journey) : freshState().journey,
   };
 }
 
 export function createStoryDirector(ctx) {
   const { bus, save } = ctx;
   const saved = save.get(SAVE_SECTION, null);
-  // A newer save can be reset explicitly. Playing an older build preserves it by default.
-  let preserveNewerSave = Number.isInteger(saved?.version) && saved.version > SAVE_VERSION;
+  const preserveNewerSave = saved?.version > SAVE_VERSION;
   let state = readState(saved);
   let started = false;
   let publishingBeat = false;
@@ -80,11 +108,29 @@ export function createStoryDirector(ctx) {
       choices: { ...state.choices },
       flags: { ...state.flags },
       clipsSeen: [...state.clipsSeen],
+      journey: getJourney(),
     };
   }
 
+  function isReadOnly() {
+    return preserveNewerSave || save.isReadOnly?.() === true
+      || save.getStatus?.().error === 'unsupported-story-version';
+  }
+
+  function getJourney() {
+    return readJourney(state.journey);
+  }
+
+  function commitJourney(journey) {
+    if (isReadOnly() || publishingBeat || state.beat !== 'complete') return false;
+    const next = { ...getState(), journey: readJourney(journey) };
+    if (!save.commitSection(SAVE_SECTION, next).ok) return false;
+    state = next;
+    return true;
+  }
+
   function persist() {
-    if (!preserveNewerSave) save.set(SAVE_SECTION, getState());
+    if (!isReadOnly()) save.set(SAVE_SECTION, getState());
   }
 
   function addEvidence(ids) {
@@ -112,7 +158,7 @@ export function createStoryDirector(ctx) {
   function start() {
     if (started) return false;
     started = true;
-    persist();
+    if (JSON.stringify(saved) !== JSON.stringify(getState())) persist();
     publishBeat();
     return true;
   }
@@ -161,11 +207,11 @@ export function createStoryDirector(ctx) {
   }
 
   function reset() {
-    if (publishingBeat) return false;
-    preserveNewerSave = false;
-    state = freshState();
+    if (publishingBeat || isReadOnly()) return false;
+    const next = freshState();
+    if (!save.commitSection(SAVE_SECTION, next).ok) return false;
+    state = next;
     beatRun += 1;
-    persist();
     if (started) publishBeat();
     return true;
   }
@@ -213,7 +259,7 @@ export function createStoryDirector(ctx) {
 
   const api = {
     start, signal, getState, recordPrologueReply, acknowledgePrologueRecording,
-    grantEvidence, reset, skipTo, playClip, update,
+    grantEvidence, reset, skipTo, playClip, update, getJourney, commitJourney, isReadOnly,
   };
   ctx.story = api;
   ctx.debug?.register('story', { getState, grantEvidence, reset, skipTo, playClip });
