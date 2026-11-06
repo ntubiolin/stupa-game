@@ -340,6 +340,13 @@ Public narrative APIs and ordered beat/event schemas are specified in
 Only `ctx.save.set('story', ...)` persists narrative state in `stupa.save.v2`.
 `story.version=1` contains beat, evidence, choices, flags, clipsSeen,
 elapsedSeconds. Director sanitizes fields and reconstructs necessary evidence.
+`ctx.story.recordPrologueReply(replyId)` validates/persists one sequential reply
+in `choices["prologue.<turnId>"]`; `acknowledgePrologueRecording()` persists
+`flags["prologue.recordingRead"]` only after all replies. These guarded APIs return
+booleans, work only in the started prologue, and do not emit progression/evidence.
+Phone resumes partial conversations and shows later read-only history; replay
+uses separate transient state. Missing choices in older post-prologue saves are
+shown as a labeled original-script reconstruction, without inventing saved choices.
 Future story schemas remain untouched until explicit reset. Reset sets only the
 story section and reloads scene state. Existing v1 migration remains in the shared
 save service. Story mode never registers adventure serializers. Language uses

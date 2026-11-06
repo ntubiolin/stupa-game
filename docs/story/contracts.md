@@ -9,7 +9,7 @@ Scope: Epic #68, Stories #69–#74. Human review and merge only. Sources read in
 ## Shared APIs (frozen before parallel implementation)
 
 - ctx: THREE, scene, camera, renderer, config, bus, i18n, save, debug, state, colliders, interactables, zoneGroups, stupaGroup, world. state has mode='story', zone, uiOpen, elapsed, time, wind, player.position/heading. Runtime owns initialization/world switching.
-- `createStoryDirector(ctx)` -> ctx.story: `start()`, `signal(name,payload={})`, `getState()` (snapshot), `grantEvidence(id)`, `reset()`, `skipTo(beatId)` (debug), `playClip(id)`, `update(dt)`. No DOM/world dependencies.
+- `createStoryDirector(ctx)` -> ctx.story: `start()`, `signal(name,payload={})`, `getState()` (snapshot), `recordPrologueReply(replyId)`, `acknowledgePrologueRecording()`, `grantEvidence(id)`, `reset()`, `skipTo(beatId)` (debug), `playClip(id)`, `update(dt)`. No DOM/world dependencies.
 - Canonical ordered beats: `prologue`, `arrival`, `photography`, `restoration`, `losang`, `map`, `vision`, `return`, `complete`. Signals: `prologue:complete`, `arrival:explored`, `photo:matched`, `documentary:complete` (clipId=restoration), `losang:complete`, `map:opened`, `vision:restored`, `return:read`. Validate against current beat; duplicates harmless. Beat events: `story:beat-start` {beat}, `story:beat-complete` {beat}, `story:evidence` {id}, `story:clip-play` {id}, `story:clip-end` {id,reason}. Bridge clip-end in director; replay cannot skip unrelated beat.
 - Save `story`: version=1, beat, evidence[], choices{}, flags{}, clipsSeen[], elapsedSeconds. Evidence IDs: `train-recording`, `restoration-record`, `stone-record`, `old-map`, `new-diary`. No writes to other sections. Safe resume restarts beat, never restores an in-flight modal.
 - `createNarrativeCamera(ctx)` -> ctx.storyCamera: `update(dt)`, `getPose()` -> {x,y,z,yaw,pitch,fov}, `setPose(pose)`, `setEnabled(bool)`, `dispose()`. Position is eye position; yaw=0 looks -Z, pitch positive looks up. Runtime sets zone and player ground position. UI sets state.uiOpen; camera blocks motion when true. Keyboard WASD/arrows, mouse drag, touch move/look. Own input listeners (no adventure input).
@@ -50,3 +50,14 @@ the document to reset one-way shared-map effects such as Pharping rain.
 Optional photo memory overlay is a labeled AI reconstruction, not historical
 geometric evidence. The line guide uses game-world coordinates; acceptance is
 based on actual camera pose, not the generated illustration.
+
+### Phone progress refinement (#82)
+
+`recordPrologueReply(replyId)` accepts only the next valid fixed reply while the
+started director is in prologue. `acknowledgePrologueRecording()` accepts once
+after all replies. Both return a boolean and persist without advancing beats or
+emitting evidence. Existing v1 `choices["prologue.<turnId>"]` values now persist
+after each reply; `flags["prologue.recordingRead"]` stores transcript acknowledgment.
+Invalid orphaned reply keys are removed on prologue resume. Later beats expose
+read-only history; old saves missing choices display an explicitly labeled script
+reconstruction. Replay is transient and never calls these persistence APIs.
