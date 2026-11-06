@@ -71,10 +71,12 @@ export function createNarrativeCamera(ctx) {
   }
 
   function onKeyDown(event) {
-    if (inputBlocked() || event.altKey || event.ctrlKey || event.metaKey ||
-        event.target?.closest?.('button, input, select, textarea, [contenteditable]')) return;
-    if (!Object.hasOwn(MOVE_KEYS, event.code) && !Object.hasOwn(LOOK_KEYS, event.code)) return;
-    keys.add(event.code);
+    const { code, target } = event;
+    if (inputBlocked() || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (!Object.hasOwn(MOVE_KEYS, code) && !Object.hasOwn(LOOK_KEYS, code)) return;
+    if (target?.closest?.('input, select, textarea, [contenteditable]')) return;
+    if (code.startsWith('Arrow') && target?.closest?.('button, a')) return;
+    keys.add(code);
     event.preventDefault();
   }
 

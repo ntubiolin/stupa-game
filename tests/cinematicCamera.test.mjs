@@ -38,12 +38,17 @@ function setup() {
   };
   const camera = createNarrativeCamera(ctx);
 
-  function fire(target, type, properties) {
-    target.dispatchEvent(Object.assign(new Event(type, { cancelable: true }), properties));
+  function fire(target, type, properties, origin) {
+    const event = Object.assign(new Event(type, { cancelable: true }), properties);
+    if (origin) Object.defineProperty(event, 'target', { value: origin });
+    return target.dispatchEvent(event);
   }
   return {
     ctx, camera, canvas, indicator, captures,
-    key: (type, code) => fire(document.defaultView, type, { code }),
+    key: (type, code, tag, modifiers) => {
+      const origin = tag && { closest: selector => selector.split(', ').includes(tag) };
+      return fire(document.defaultView, type, { code, ...modifiers }, origin);
+    },
     pointer: (type, pointerId, clientX, clientY, pointerType = 'mouse') => {
       fire(canvas, type, { pointerId, clientX, clientY, pointerType, button: 0 });
     },
@@ -134,4 +139,31 @@ test('mouse drag and keyboard look use the same yaw and pitch convention', () =>
   camera.update(0.02);
   const keyboard = camera.getPose();
   assert.ok(keyboard.yaw > dragged.yaw && keyboard.pitch < dragged.pitch);
+});
+
+test('letters control the camera from HUD links and buttons while arrows stay native', () => {
+  const { camera, key } = setup();
+  assert.equal(key('keydown', 'KeyW', 'button'), false);
+  assert.equal(key('keydown', 'KeyI', 'a'), false);
+  assert.equal(key('keydown', 'ArrowRight', 'button'), true);
+  assert.equal(key('keydown', 'ArrowLeft', 'a'), true);
+  camera.update(0.1);
+  const pose = camera.getPose();
+  assert.equal(pose.x, 0);
+  assert.ok(pose.z < 31 && pose.pitch > 0);
+});
+
+test('editable controls and browser key modifiers retain their native shortcuts', () => {
+  const { camera, key } = setup();
+  const pose = camera.getPose();
+  for (const tag of ['input', 'select', 'textarea', '[contenteditable]']) {
+    assert.equal(key('keydown', 'KeyW', tag), true);
+    assert.equal(key('keydown', 'ArrowDown', tag), true);
+    assert.equal(key('keydown', 'KeyI', tag), true);
+  }
+  for (const modifier of ['altKey', 'ctrlKey', 'metaKey']) {
+    assert.equal(key('keydown', 'KeyW', 'button', { [modifier]: true }), true);
+  }
+  camera.update(0.1);
+  assert.deepEqual(camera.getPose(), pose);
 });
