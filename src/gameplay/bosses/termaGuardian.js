@@ -407,8 +407,13 @@ export const TERMA_GUARDIAN_DEF = {
           const dz = bossState.pos.z - pPos.z;
           const d = Math.hypot(dx, dz);
           if (d > 2.2 && d < 12.0) {
-            pPos.x += (dx / d) * 1.8;
-            pPos.z += (dz / d) * 1.8;
+            if (typeof ctx.player?.moveWithCollisions === 'function') {
+              ctx.player.moveWithCollisions((dx / d) * 1.8, (dz / d) * 1.8);
+            } else {
+              pPos.x += (dx / d) * 1.8;
+              pPos.z += (dz / d) * 1.8;
+              ctx.player?.resolveCollisions?.(pPos, pPos.x, pPos.z);
+            }
           }
         }
       }

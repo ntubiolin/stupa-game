@@ -147,19 +147,37 @@ export function createPatternRunner(ctx, parentGroup) {
     if (!pPos || state.bossSubdued) return;
     const bossLevel = Math.max(1, Number(ctx.bosses?.getState?.()?.level || state.boss?.level) || 6);
     const scaledAmount = Math.max(1, Math.round(Number(amount || 10) * (1 + 0.12 * (bossLevel - 1)) * 1.8));
+    const hurtKb = knockback > 0 ? Math.min(1.2, knockback * 0.18) : 0;
     if (ctx.vitals?.damage) {
-      ctx.vitals.damage(scaledAmount, 'physical', { sourcePos, source: 'boss', slow: slowSec });
+      ctx.vitals.damage(scaledAmount, 'physical', {
+        sourcePos,
+        source: 'boss',
+        slow: slowSec,
+        knockback: hurtKb,
+      });
     } else if (ctx.player?.damage) {
       ctx.player.damage(scaledAmount, sourcePos);
     } else {
-      bus.emit('vitals:damage', { amount: scaledAmount, type: 'physical', sourcePos, source: 'boss', slow: slowSec });
+      bus.emit('vitals:damage', {
+        amount: scaledAmount,
+        type: 'physical',
+        sourcePos,
+        source: 'boss',
+        slow: slowSec,
+        knockback: hurtKb,
+      });
     }
     if (knockback > 0 && sourcePos && state.player?.velocity) {
       const dx = pPos.x - sourcePos.x;
       const dz = pPos.z - sourcePos.z;
       const d = Math.hypot(dx, dz) || 1;
-      state.player.velocity.x += (dx / d) * knockback;
-      state.player.velocity.z += (dz / d) * knockback;
+      state.player.velocity.x += (dx / d) * knockback * 0.65;
+      state.player.velocity.z += (dz / d) * knockback * 0.65;
+      const vMag = Math.hypot(state.player.velocity.x, state.player.velocity.z);
+      if (vMag > 8.5) {
+        state.player.velocity.x = (state.player.velocity.x / vMag) * 8.5;
+        state.player.velocity.z = (state.player.velocity.z / vMag) * 8.5;
+      }
     }
     if (slowSec > 0 && state.player) {
       state.player.slowUntil = Math.max(state.player.slowUntil || 0, state.elapsed + slowSec);
@@ -905,8 +923,57 @@ export function createPatternRunner(ctx, parentGroup) {
     }
   });
 
+  function coneSlam(boss, spec = {}) {
+    return radialAoe(boss, {
+      ...spec,
+      radius: spec.radius ?? 4.8,
+    });
+  }
+
+  function groundHazard(boss, spec = {}) {
+    const radius = spec.radius ?? 2.8;
+    const duration = spec.duration ?? 6.0;
+    const tickDamage = spec.tickDamage ?? 8;
+    const tickInterval = spec.tickInterval ?? 0.85;
+    const cx = spec.x ?? boss.pos.x;
+    const cz = spec.z ?? boss.pos.z;
+    const cy = getGroundY(cx, cz);
+
+    const disc = makeTelegraphDisc(radius, spec.color || 0xdc2626);
+    disc.group.position.set(cx, cy + 0.03, cz);
+    disc.setProgress(1);
+
+    activeTasks.push({
+      kind: 'groundHazard',
+      age: 0,
+      duration,
+      tickAccum: 0,
+      update(dt) {
+        this.age += dt;
+        this.tickAccum += dt;
+        disc.fillMat.opacity = 0.25 + 0.12 * Math.sin(this.age * 5.0);
+        if (this.tickAccum >= tickInterval) {
+          this.tickAccum -= tickInterval;
+          const pPos = state.player?.position;
+          if (pPos) {
+            const dist = Math.hypot(pPos.x - cx, pPos.z - cz);
+            if (dist <= radius + (ctx.config.PLAYER?.radius || 0.4)) {
+              dealPlayerDamage(tickDamage, { x: cx, z: cz }, 0);
+            }
+          }
+        }
+        return this.age >= this.duration;
+      },
+      cleanup() {
+        disc.dispose();
+      },
+    });
+  }
+
   const patternMap = {
     radialAoe,
+    coneSlam,
+    groundHazard,
     lineCharge,
     targetedAoe,
     projectileVolley,

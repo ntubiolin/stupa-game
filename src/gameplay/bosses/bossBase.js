@@ -337,6 +337,11 @@ export function createBoss(ctx, def) {
         nx = arena.x + (dx / dist) * maxR;
         nz = arena.z + (dz / dist) * maxR;
       }
+      if (arena.map === 'terma') {
+        const roomHalf = Math.max(1.5, 7.45 - bossState.radius - 0.15);
+        nx = Math.max(arena.x - roomHalf, Math.min(arena.x + roomHalf, nx));
+        nz = Math.max(arena.z - roomHalf, Math.min(arena.z + roomHalf, nz));
+      }
       bossState.pos.x = nx;
       bossState.pos.z = nz;
       bossState.pos.y = getGroundY(nx, nz);
@@ -443,7 +448,8 @@ export function createBoss(ctx, def) {
     def.onBeforeStart?.(bossState, ctx, opts);
     // Ensure player is in the right map; if triggered via debug API from another zone, teleport
     const curStartY = getGroundY(arena.x, arena.z);
-    const spawnPos = { x: arena.x, y: curStartY, z: arena.z + arena.r * 0.65 };
+    const spawnOffsetZ = arena.map === 'terma' ? Math.min(arena.r * 0.65, 5.2) : arena.r * 0.65;
+    const spawnPos = { x: arena.x, y: curStartY, z: arena.z + spawnOffsetZ };
     if (state.zone !== arena.map) {
       state.zone = arena.map;
       if (ctx.zones?.teleport) {
@@ -462,8 +468,9 @@ export function createBoss(ctx, def) {
       }
     } else if (state.player?.position) {
       const dist = Math.hypot(state.player.position.x - arena.x, state.player.position.z - arena.z);
-      if (dist > arena.r - 1.2) {
-        state.player.position.set(arena.x, curStartY, arena.z + arena.r * 0.68);
+      const maxCheckR = arena.map === 'terma' ? Math.min(arena.r - 1.2, 6.8) : arena.r - 1.2;
+      if (dist > maxCheckR) {
+        state.player.position.set(arena.x, curStartY, arena.z + spawnOffsetZ);
         state.player.velocity?.set(0, 0, 0);
       }
     }
@@ -1132,6 +1139,18 @@ export function createBoss(ctx, def) {
     // 4. Update active pattern telegraphs, projectiles, and hazards
     patternRunner.update(dt);
     def.onUpdate?.(dt, bossState, ctx, patternRunner, built);
+
+    if (pPos && bossState.active) {
+      const dx = pPos.x - arena.x;
+      const dz = pPos.z - arena.z;
+      const dist = Math.hypot(dx, dz);
+      const maxPlayerR = arena.r - (ctx.config.PLAYER?.radius || 0.4) - 0.25;
+      if (dist > maxPlayerR && dist > 0.001) {
+        pPos.x = arena.x + (dx / dist) * maxPlayerR;
+        pPos.z = arena.z + (dz / dist) * maxPlayerR;
+      }
+      ctx.player?.resolveCollisions?.(pPos, pPos.x, pPos.z);
+    }
 
     // 5. Update procedural model animation
     built.anim?.(dt, bossState);

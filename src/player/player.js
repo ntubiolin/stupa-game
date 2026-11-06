@@ -995,11 +995,14 @@ export function createPlayer(ctx) {
 
   bus.on('player:hurt', (payload) => {
     if (state.player.action === 'faint') return;
-    if (payload?.sourcePos && state.player.position) {
+    const kb =
+      payload?.knockback !== undefined
+        ? Number(payload.knockback)
+        : (config.ENEMIES?.playerKnockback ?? 1.5);
+    if (kb > 0 && payload?.sourcePos && state.player.position) {
       const dx = state.player.position.x - payload.sourcePos.x;
       const dz = state.player.position.z - payload.sourcePos.z;
       const d = Math.hypot(dx, dz);
-      const kb = config.ENEMIES?.playerKnockback ?? 1.5;
       if (d > 1e-4) {
         movePlayerWithCollisions((dx / d) * kb, (dz / d) * kb);
         root.position.copy(state.player.position);
