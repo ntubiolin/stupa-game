@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
+import { adventureCIOptions, startAdventureWithInput } from './adventure-browser-start.mjs';
 
 const base = process.env.STORY_BASE_URL || 'http://127.0.0.1:4173';
 const output = process.env.ADVENTURE_ARTIFACTS || process.env.STORY_ARTIFACTS || 'artifacts/adventure-compat';
@@ -35,7 +36,7 @@ const report = { browser: browser.version(), suite, scenarios: [], errors: [] };
 async function contextWith(save) {
   const context = await browser.newContext({
     viewport: process.env.CI ? { width: 800, height: 600 } : { width: 1000, height: 720 },
-    deviceScaleFactor: process.env.CI ? 0.5 : 1,
+    ...adventureCIOptions,
     reducedMotion: 'reduce',
   });
   await context.addInitScript(({ save, saveKey }) => {
@@ -60,8 +61,7 @@ async function saved(page) {
 }
 
 async function startAdventure(page) {
-  await page.locator('#btn-begin').click();
-  await page.waitForFunction(() => window.__stupa?.state?.mode === 'play', null, polling);
+  await startAdventureWithInput(page);
   assert.equal(await page.evaluate(() => Boolean(window.__stupa.story)), false);
 }
 

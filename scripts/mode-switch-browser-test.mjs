@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
+import { adventureCIOptions, startAdventureWithInput } from './adventure-browser-start.mjs';
 
 const base = process.env.STORY_BASE_URL || 'http://127.0.0.1:4173';
 const output = process.env.MODE_SWITCH_ARTIFACTS || 'artifacts/mode-switch';
 const saveKey = 'stupa.save.v2';
+const polling = { polling: 100, timeout: 60000 };
 const fixture = {
   version: 2,
   sections: {
@@ -36,7 +38,7 @@ async function readSave(page) {
 }
 
 async function waitForCheckpoint(page, checkpoint) {
-  await page.waitForFunction(id => window.__stupa?.chapterScene?.getCheckpoint() === id, checkpoint);
+  await page.waitForFunction(id => window.__stupa?.chapterScene?.getCheckpoint() === id, checkpoint, polling);
   assert.equal(await page.evaluate(() => window.__stupa.storyRuntime.getMetrics().zone), 'pharping');
 }
 
@@ -44,7 +46,7 @@ async function runModeSwitch(mobile) {
   const name = mobile ? 'mobile' : 'desktop';
   const context = await browser.newContext({
     viewport: mobile ? { width: 390, height: 844 } : { width: 1000, height: 720 },
-    deviceScaleFactor: 1,
+    ...adventureCIOptions,
     hasTouch: mobile,
     isMobile: mobile,
     reducedMotion: 'reduce',
@@ -80,7 +82,7 @@ async function runModeSwitch(mobile) {
       page.waitForURL(url => url.pathname === destination.pathname && url.search === destination.search),
       activate(target(mode)),
     ]);
-    await page.waitForFunction(previous => window.modeTestDocument && window.modeTestDocument !== previous, previous);
+    await page.waitForFunction(previous => window.modeTestDocument && window.modeTestDocument !== previous, previous, polling);
   }
 
   await page.goto(`${base}/?mode=story`);
@@ -113,8 +115,7 @@ async function runModeSwitch(mobile) {
   await page.evaluate(() => window.restoreModeTestStorage());
   await navigateWithMenu('adventure');
 
-  await activate(page.locator('#btn-begin'));
-  await page.waitForFunction(() => window.__stupa?.state?.mode === 'play');
+  await startAdventureWithInput(page, { mobile });
   const gear = await page.evaluate(() => {
     const { inventory, codex } = window.__stupa;
     const item = inventory.give({ rarity: 'normal', baseId: 'bronzeVajra', ilvl: 8 });
@@ -180,8 +181,7 @@ async function runModeSwitch(mobile) {
   const launcherDocument = await documentId();
   await activate(page.locator('a[href="?mode=adventure"]'));
   await page.waitForURL(url => url.search === '?mode=adventure');
-  await activate(page.locator('#btn-begin'));
-  await page.waitForFunction(() => window.__stupa?.state?.mode === 'play');
+  await startAdventureWithInput(page, { mobile });
   assert.notEqual(await documentId(), launcherDocument);
   const adventure = await page.evaluate(() => ({
     equipped: window.__stupa.inventory.getEquipped().mainhand?.uid,

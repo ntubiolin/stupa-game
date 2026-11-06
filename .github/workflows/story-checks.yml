@@ -27,7 +27,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [desktop, mobile, recovery, art, pharping, mangyul, yarlung, samye, chimphu, finale, modes, adventure]
+        suite: [desktop, mobile, recovery, art, debug, media, pharping, mangyul, yarlung, samye, chimphu, finale, modes, adventure]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -47,6 +47,8 @@ jobs:
             pharping) node scripts/pharping-browser-test.mjs ;;
             mangyul|yarlung|samye|chimphu|finale) CHAPTER_SUITE="$STORY_SUITE" node scripts/chapter-browser-test.mjs ;;
             modes) node scripts/mode-switch-browser-test.mjs ;;
+            debug) node scripts/story-debug-browser-test.mjs ;;
+            media) node scripts/story-media-browser-test.mjs ;;
             adventure) node scripts/adventure-compat-test.mjs ;;
             *) npm run test:browser ;;
           esac
