@@ -6,6 +6,105 @@ import { createWorldMap, renderZoneRadarCanvas } from './worldmap.js';
 const ZOOM_LEVELS = [45, 85]; // meters radius
 const REDRAW_INTERVAL = 0.1;  // seconds (10 Hz)
 
+function drawNorthGateHighlight(canvas, { state }, viewRadiusM) {
+  if ((state.zone || 'stupa') !== 'stupa') return;
+  const g = canvas.getContext('2d');
+  if (!g) return;
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  const radiusPx = Math.min(cx, cy) - 4;
+  const scale = radiusPx / viewRadiusM;
+  const refX = state.player?.position?.x ?? 0;
+  const refZ = state.player?.position?.z ?? 0;
+  const gateX = cx + (0 - refX) * scale;
+  const gateY = cy + (-37 - refZ) * scale;
+  const pathY = cy + (-21.5 - refZ) * scale;
+  const dx = gateX - cx;
+  const dy = gateY - cy;
+  const distance = Math.hypot(dx, dy);
+  // Preserve the bearing when outside the view, leaving space for the pulse.
+  const insetRadius = radiusPx - 13;
+  const clampScale = distance > insetRadius ? insetRadius / distance : 1;
+  const markerX = cx + dx * clampScale;
+  const markerY = cy + dy * clampScale;
+  const pulse = (Math.sin(performance.now() / 380) + 1) / 2;
+
+  g.save();
+  g.beginPath();
+  g.arc(cx, cy, radiusPx - 1, 0, Math.PI * 2);
+  g.clip();
+
+  // Match the world radar's north-up, player-centred projection exactly.
+  g.beginPath();
+  g.moveTo(gateX, pathY);
+  g.lineTo(gateX, gateY);
+  g.lineWidth = 5;
+  g.strokeStyle = 'rgba(135, 30, 43, 0.75)';
+  g.shadowColor = '#e8ad42';
+  g.shadowBlur = 5;
+  g.stroke();
+  g.setLineDash([3, 3]);
+  g.lineWidth = 1.5;
+  g.strokeStyle = '#f5cd72';
+  g.stroke();
+  g.setLineDash([]);
+
+  g.beginPath();
+  g.arc(markerX, markerY, 8 + pulse * 3, 0, Math.PI * 2);
+  g.strokeStyle = `rgba(255, 214, 112, ${0.85 - pulse * 0.35})`;
+  g.lineWidth = 1.8;
+  g.shadowBlur = 6 + pulse * 4;
+  g.stroke();
+  g.beginPath();
+  g.arc(markerX, markerY, 7, 0, Math.PI * 2);
+  g.fillStyle = '#511b23';
+  g.fill();
+
+  // Draw the torana ourselves so the landmark remains clear without emoji fonts.
+  g.beginPath();
+  g.moveTo(markerX - 4, markerY + 5);
+  g.lineTo(markerX - 4, markerY - 3);
+  g.moveTo(markerX + 4, markerY + 5);
+  g.lineTo(markerX + 4, markerY - 3);
+  g.moveTo(markerX - 6, markerY - 4);
+  g.quadraticCurveTo(markerX, markerY - 1, markerX + 6, markerY - 4);
+  g.moveTo(markerX - 5, markerY);
+  g.lineTo(markerX + 5, markerY);
+  g.strokeStyle = '#ffe6a1';
+  g.lineWidth = 2;
+  g.stroke();
+  g.shadowBlur = 0;
+
+  // Keep the whole bilingual pill inside the circle, including at diagonal edges.
+  const lang = i18n.getLang?.() || i18n.lang || 'zh';
+  const label = lang.startsWith('zh') ? '⛩️ 北門' : '⛩️ North Gate';
+  g.font = 'bold 10px system-ui, sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  const halfW = g.measureText(label).width / 2 + 7;
+  const halfH = 9;
+  const safeRadius = radiusPx - 3;
+  const maxY = Math.sqrt(Math.max(0, safeRadius ** 2 - (halfW + 3) ** 2)) - halfH;
+  const desiredY = markerY + (markerY <= cy ? 23 : -23);
+  const labelY = Math.max(cy - maxY, Math.min(cy + maxY, desiredY));
+  const chord = Math.sqrt(Math.max(0, safeRadius ** 2 - (Math.abs(labelY - cy) + halfH) ** 2));
+  const labelX = Math.max(cx - chord + halfW, Math.min(cx + chord - halfW, markerX));
+  g.beginPath();
+  g.moveTo(markerX, markerY + (labelY > markerY ? 10 : -10));
+  g.lineTo(labelX, labelY);
+  g.strokeStyle = '#f5cd72';
+  g.lineWidth = 1;
+  g.stroke();
+  g.beginPath();
+  g.roundRect(labelX - halfW, labelY - halfH, halfW * 2, halfH * 2, 8);
+  g.fillStyle = '#36161f';
+  g.fill();
+  g.stroke();
+  g.fillStyle = '#fff1c5';
+  g.fillText(label, labelX, labelY);
+  g.restore();
+}
+
 export function createMinimap(ctx) {
   if (ctx.minimap) return ctx.minimap;
 
@@ -245,6 +344,7 @@ export function createMinimap(ctx) {
       centerOnOrigin: false,
       debugAll: debugMode,
     });
+    drawNorthGateHighlight(canvasEl, ctx, getZoomRadius());
   }
 
   bus.on('zone:change', () => {
