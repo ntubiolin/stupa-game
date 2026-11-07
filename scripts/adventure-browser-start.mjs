@@ -38,6 +38,11 @@ export async function startAdventureWithInput(page, { mobile = false } = {}) {
   const start = page.locator('#btn-begin');
   if (mobile) await start.tap();
   else await start.click();
+  const studioStart = page.locator('#appearance-studio:not(.is-hidden) .app-footer__btn--primary');
+  if (await studioStart.isVisible()) {
+    if (mobile) await studioStart.tap();
+    else await studioStart.click();
+  }
   await waitForBrowserStartup(page, () => {
     const mode = window.__stupa?.state?.mode;
     return { ready: mode === 'play', mode };
