@@ -14,6 +14,7 @@ export function createInteraction(ctx) {
   let currentTarget = null;
   let lastEmittedId = null;
   let lastEmittedLabel = null;
+  let lastEmittedParamsSig = null;
 
   function getKindPenalty(item) {
     // Lower score is better: NPC and gate have priority over normal props, which have priority over ground loot
@@ -56,11 +57,24 @@ export function createInteraction(ctx) {
 
   function emitPromptIfChanged(target) {
     const nextId = target ? target.id : null;
-    const nextLabel = target ? (target.labelKey || target.promptKey) : null;
-    if (nextId === lastEmittedId && nextLabel === lastEmittedLabel) return;
+    const customLabel =
+      target && typeof target.getLabel === 'function' ? target.getLabel() : null;
+    const nextLabel = target
+      ? customLabel || target.labelKey || target.promptKey
+      : null;
+    const nextParams = target ? target.labelParams || target.promptParams : undefined;
+    const nextParamsSig = nextParams ? JSON.stringify(nextParams) : '';
+    if (
+      nextId === lastEmittedId &&
+      nextLabel === lastEmittedLabel &&
+      nextParamsSig === lastEmittedParamsSig
+    ) {
+      return;
+    }
 
     lastEmittedId = nextId;
     lastEmittedLabel = nextLabel;
+    lastEmittedParamsSig = nextParamsSig;
 
     if (!target) {
       bus.emit('prompt', null);
@@ -70,7 +84,10 @@ export function createInteraction(ctx) {
         id: target.id,
         action: act,
         labelKey: target.labelKey || target.promptKey || 'prompt.interact',
-        params: target.labelParams || target.promptParams,
+        params: nextParams,
+        text: customLabel,
+        getLabel:
+          typeof target.getLabel === 'function' ? () => target.getLabel() : null,
         keyHint: ACTION_KEY_HINT[act] || 'E',
       });
     }

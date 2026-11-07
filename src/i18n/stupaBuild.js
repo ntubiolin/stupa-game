@@ -153,6 +153,7 @@ const ZH_HANT = {
   'toast.samyeContributed': '☸ 隨喜讚嘆！為桑耶寺圍牆助建了 +{n} 座佛塔（目前 {total}/1,008 座）',
   'toast.samyeNoMerit': '可奉獻功德不足 108 點，已為您隨喜供養一磚一瓦助建 +1 座佛塔！',
   'stupaBuild.buffName': '桑耶千塔共修加持',
+  'item.samyeCoopBlessing': '桑耶寺萬眾願力加持',
 };
 
 const EN = {
@@ -302,6 +303,7 @@ const EN = {
   'toast.samyeContributed': '☸ Sadhu! Consecrated +{n} perimeter stupa(s) at Samye ({total}/1,008)',
   'toast.samyeNoMerit': 'Offered a devotional stone to consecrate +1 perimeter stupa at Samye!',
   'stupaBuild.buffName': 'Samye 1,008 Stupas Blessing',
+  'item.samyeCoopBlessing': 'Samye Collective Consecration Blessing',
 };
 
 i18n.register({

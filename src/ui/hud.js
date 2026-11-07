@@ -13,6 +13,7 @@
 import { Vector3 } from 'three';
 import { ACHIEVEMENTS } from '../systems/merit.js';
 import '../i18n/elites.js';
+import '../i18n/stupaBuild.js';
 
 const RING_RADIUS = 24;
 const RING_CIRC = 2 * Math.PI * RING_RADIUS;
@@ -733,6 +734,16 @@ export function createHud(ctx) {
     btnMusicToggle.classList.toggle('is-off', !on);
   }
 
+  function resolvePromptLabel(payload) {
+    if (!payload) return '';
+    if (typeof payload.getLabel === 'function') {
+      const dynamicText = payload.getLabel();
+      if (dynamicText) return dynamicText;
+    }
+    if (payload.text) return payload.text;
+    return i18n.t(payload.labelKey, payload.params);
+  }
+
   function applyTranslations() {
     const nodes = root.querySelectorAll('[data-i18n]');
     for (let i = 0; i < nodes.length; i++) {
@@ -757,13 +768,15 @@ export function createHud(ctx) {
     lastPhase = '';
     displayedStats.koraPct = -1;
     if (currentPrompt) {
-      promptLabel.textContent = i18n.t(currentPrompt.labelKey, currentPrompt.params);
+      promptLabel.textContent = resolvePromptLabel(currentPrompt);
     }
 
     // Re-localize active toasts
     for (let i = 0; i < activeToasts.length; i++) {
       const item = activeToasts[i];
-      item.textEl.textContent = i18n.t(item.key, item.params);
+      if (item.key) {
+        item.textEl.textContent = i18n.t(item.key, item.params);
+      }
     }
 
     renderMuteButton();
@@ -788,7 +801,7 @@ export function createHud(ctx) {
 
   // ---------------------------------------------------------------- toasts
   function showToast(payload) {
-    if (!payload || !payload.key) return;
+    if (!payload || (!payload.key && !payload.text)) return;
     const el = document.createElement('div');
     const kind = payload.kind || 'info';
     el.className = `toast-item glass-panel toast-item--${kind}`;
@@ -800,7 +813,9 @@ export function createHud(ctx) {
 
     const textEl = document.createElement('span');
     textEl.className = 'toast-item__text';
-    textEl.textContent = i18n.t(payload.key, payload.params);
+    textEl.textContent = payload.key
+      ? i18n.t(payload.key, payload.params)
+      : String(payload.text || '');
 
     el.append(iconSpan, textEl);
     toastStack.appendChild(el);
@@ -835,7 +850,7 @@ export function createHud(ctx) {
       promptBtn.classList.add('is-hidden');
     } else {
       promptKey.textContent = payload.keyHint || 'E';
-      promptLabel.textContent = i18n.t(payload.labelKey, payload.params);
+      promptLabel.textContent = resolvePromptLabel(payload);
       promptBtn.classList.remove('is-hidden');
     }
   });
@@ -1553,6 +1568,7 @@ export function createHud(ctx) {
     guruBlessing: '☸',
     vajraGuruChannel: '✨',
     protectorOath: '🛡️',
+    samyeCoopBlessing: '☸',
   };
   let lastBuffKey = '';
 
@@ -1578,7 +1594,15 @@ export function createHud(ctx) {
     vitalsBuffs.innerHTML = buffs
       .map((b) => {
         const icon = BUFF_ICONS[b.id] || '✦';
-        const name = i18n.t('item.' + b.id);
+        const itemKey = 'item.' + b.id;
+        const fallbackKey =
+          b.nameKey ||
+          (b.id === 'samyeCoopBlessing' ? state.samyeCoopBlessing?.nameKey : '');
+        const name = i18n.has(itemKey)
+          ? i18n.t(itemKey)
+          : fallbackKey && i18n.has(fallbackKey)
+            ? i18n.t(fallbackKey)
+            : i18n.t(itemKey);
         const secs = Math.ceil(Math.max(0, b.remaining || 0)) + 's';
         return `
           <div class="vitals-buff-chip" title="${name}">

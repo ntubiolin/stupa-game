@@ -248,7 +248,12 @@ export function createQuestUi(ctx) {
     trackerBodyEl.innerHTML = trackedList
       .map((q) => {
         const title = escapeHtml(i18n.t(q.def.titleKey));
-        const stepText = q.step ? escapeHtml(i18n.t(q.step.textKey)) : '';
+        const stepParams = {
+          progress: q.progress ?? 0,
+          goal: q.goal ?? 1,
+          count: q.goal ?? 1,
+        };
+        const stepText = q.step ? escapeHtml(i18n.t(q.step.textKey, stepParams)) : '';
         const progStr = `${q.progress}/${q.goal}`;
         const pct = q.goal > 0 ? Math.min(100, Math.round((q.progress / q.goal) * 100)) : 0;
         return `
@@ -353,11 +358,21 @@ export function createQuestUi(ctx) {
         if (Array.isArray(def.steps)) {
           stepsHtml = def.steps
             .map((st, idx) => {
-              const stLabel = escapeHtml(i18n.t(st.textKey));
+              const stGoal = Math.max(1, Number(st.count) || 1);
               if (status === 'done' || (activeInfo && idx < activeInfo.stepIndex)) {
+                const stLabel = escapeHtml(
+                  i18n.t(st.textKey, { progress: stGoal, goal: stGoal, count: stGoal })
+                );
                 return `<div class="quest-step-row is-done"><span class="quest-step-check">✓</span><span>${stLabel}</span></div>`;
               }
               if (activeInfo && idx === activeInfo.stepIndex) {
+                const stLabel = escapeHtml(
+                  i18n.t(st.textKey, {
+                    progress: activeInfo.progress ?? 0,
+                    goal: activeInfo.goal ?? stGoal,
+                    count: activeInfo.goal ?? stGoal,
+                  })
+                );
                 return `
                   <div class="quest-step-row is-current">
                     <span class="quest-step-check">◆</span>
@@ -366,6 +381,9 @@ export function createQuestUi(ctx) {
                   </div>
                 `;
               }
+              const stLabel = escapeHtml(
+                i18n.t(st.textKey, { progress: 0, goal: stGoal, count: stGoal })
+              );
               return `<div class="quest-step-row is-upcoming"><span class="quest-step-check">·</span><span>${stLabel}</span></div>`;
             })
             .join('');
