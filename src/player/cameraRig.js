@@ -194,6 +194,10 @@ export function createCameraRig(ctx) {
     }
     const terrainY = ctx.world ? ctx.world.getHeight(pos.x, pos.z) : 0;
     pos.y = Math.max(terrainY + 0.55, pos.y);
+    if (state.caveCeilingY != null && (state.caveFactor || 0) > 0.1) {
+      const maxCaveY = Math.max(terrainY + 2.2, state.caveCeilingY);
+      pos.y = Math.min(pos.y, maxCaveY);
+    }
   }
 
   function setFrontCam(active, silent = false) {
@@ -487,6 +491,10 @@ export function createCameraRig(ctx) {
       else {
         const curTerrainY = ctx.world ? ctx.world.getHeight(currentPos.x, currentPos.z) : 0;
         if (currentPos.y < curTerrainY + 0.55) currentPos.y = curTerrainY + 0.55;
+        if (state.caveCeilingY != null && (state.caveFactor || 0) > 0.1) {
+          const maxCaveY = Math.max(curTerrainY + 2.2, state.caveCeilingY);
+          if (currentPos.y > maxCaveY) currentPos.y = maxCaveY;
+        }
       }
     }
 

@@ -25,6 +25,29 @@ import {
 
 const TWO_PI = Math.PI * 2;
 
+let _pharpingGlowTex = null;
+function getPharpingGlowTexture() {
+  if (_pharpingGlowTex) return _pharpingGlowTex;
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const c = canvas.getContext('2d');
+  if (c) {
+    const grad = c.createRadialGradient(32, 32, 2, 32, 32, 32);
+    grad.addColorStop(0.0, 'rgba(255, 255, 255, 1.0)');
+    grad.addColorStop(0.32, 'rgba(255, 232, 175, 0.68)');
+    grad.addColorStop(0.68, 'rgba(255, 185, 95, 0.22)');
+    grad.addColorStop(1.0, 'rgba(255, 160, 60, 0.0)');
+    c.fillStyle = grad;
+    c.fillRect(0, 0, 64, 64);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  _pharpingGlowTex = tex;
+  return tex;
+}
+
 export function createMap(ctx) {
   const mapDef = ctx.world?.getMap?.('pharping') || {
     id: 'pharping',
@@ -432,21 +455,125 @@ export function createMap(ctx) {
   caveGroup.position.set(caveX, caveY, caveZ);
   group.add(caveGroup);
 
-  const cliffMat = new THREE.MeshStandardMaterial({ color: 0x52463c, roughness: 0.92 });
-  // Open rock overhang arch & cliffside walls so camera & player move freely inside
-  const backWall = new THREE.Mesh(new THREE.DodecahedronGeometry(5.5, 1), cliffMat);
-  backWall.position.set(2.2, 2.8, -5.8);
-  backWall.scale.set(1.7, 1.15, 0.75);
-  const leftPillar = new THREE.Mesh(new THREE.DodecahedronGeometry(3.4, 1), cliffMat);
-  leftPillar.position.set(-5.8, 2.4, -2.5);
-  leftPillar.scale.set(0.9, 1.25, 1.1);
-  const rightPillar = new THREE.Mesh(new THREE.DodecahedronGeometry(3.6, 1), cliffMat);
-  rightPillar.position.set(6.4, 2.5, -2.0);
-  rightPillar.scale.set(0.95, 1.25, 1.1);
-  const overhangRoof = new THREE.Mesh(new THREE.DodecahedronGeometry(6.2, 1), cliffMat);
-  overhangRoof.position.set(0.5, 5.6, -2.6);
-  overhangRoof.scale.set(1.45, 0.42, 1.15);
-  caveGroup.add(backWall, leftPillar, rightPillar, overhangRoof);
+  const glowTex = getPharpingGlowTexture();
+  const cliffMat = new THREE.MeshStandardMaterial({
+    color: 0x4b3f36,
+    roughness: 0.92,
+    metalness: 0.06,
+  });
+  const innerVaultMat = new THREE.MeshStandardMaterial({
+    color: 0x1e1814,
+    roughness: 0.96,
+    metalness: 0.04,
+    emissive: 0x140d07,
+    emissiveIntensity: 0.35,
+    side: THREE.DoubleSide,
+  });
+  const caveFloorMat = new THREE.MeshStandardMaterial({
+    color: 0x261f1a,
+    roughness: 0.9,
+    metalness: 0.08,
+  });
+
+  // 6a. Dark stone cavern floor & sacred mandala altar ring
+  const caveFloor = new THREE.Mesh(new THREE.CircleGeometry(7.6, 28), caveFloorMat);
+  caveFloor.rotation.x = -Math.PI / 2;
+  caveFloor.position.set(0, 0.02, -1.6);
+  caveFloor.receiveShadow = true;
+  caveGroup.add(caveFloor);
+
+  const altarRingGeo = new THREE.RingGeometry(1.42, 1.68, 28);
+  altarRingGeo.rotateX(-Math.PI / 2);
+  const altarRing = new THREE.Mesh(
+    altarRingGeo,
+    new THREE.MeshBasicMaterial({
+      color: 0xf59e0b,
+      transparent: true,
+      opacity: 0.42,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }),
+  );
+  altarRing.position.set(0, 0.035, -1.2);
+  caveGroup.add(altarRing);
+
+  // 6b. Seamless inner dark rock vault dome (open to the south entrance so zero sky leaks overhead or behind)
+  const innerDomeGeo = new THREE.SphereGeometry(
+    7.4,
+    24,
+    16,
+    Math.PI * 0.92,
+    Math.PI * 1.16,
+    0,
+    Math.PI * 0.62,
+  );
+  const innerDome = new THREE.Mesh(innerDomeGeo, innerVaultMat);
+  innerDome.position.set(0, 0.2, -1.5);
+  innerDome.scale.set(1.12, 0.96, 1.15);
+  caveGroup.add(innerDome);
+
+  // Overhead solid rock ceiling liner covering the entire cave interior
+  const ceilingCap = new THREE.Mesh(new THREE.CylinderGeometry(7.2, 8.2, 1.8, 18), innerVaultMat);
+  ceilingCap.position.set(0, 6.8, -1.8);
+  ceilingCap.scale.set(1.12, 1.0, 1.12);
+  caveGroup.add(ceilingCap);
+
+  // 6c. Continuous 9-segment horseshoe cliff walls around north, west, and east perimeter (r = 8.4)
+  for (let i = 0; i < 9; i++) {
+    const t = i / 8;
+    const ang = -0.06 * Math.PI + t * 1.12 * Math.PI; // East-Southeast -> North -> West-Southwest
+    const r = 8.3;
+    const wx = Math.cos(ang) * r;
+    const wz = -1.4 - Math.sin(ang) * r;
+    const wallCrag = new THREE.Mesh(new THREE.DodecahedronGeometry(3.4, 1), cliffMat);
+    wallCrag.position.set(wx, 3.4 + (i % 2) * 0.45, wz);
+    wallCrag.scale.set(1.28, 1.48, 1.22);
+    wallCrag.rotation.set(i * 0.35, ang, i * 0.2);
+    wallCrag.castShadow = true;
+    wallCrag.receiveShadow = true;
+    caveGroup.add(wallCrag);
+  }
+
+  // Southern entrance archway pillars & sculpted cliff brow lintel
+  const leftArchPillar = new THREE.Mesh(new THREE.DodecahedronGeometry(3.2, 1), cliffMat);
+  leftArchPillar.position.set(-6.4, 3.2, 2.1);
+  leftArchPillar.scale.set(1.05, 1.45, 1.15);
+  const rightArchPillar = new THREE.Mesh(new THREE.DodecahedronGeometry(3.2, 1), cliffMat);
+  rightArchPillar.position.set(6.4, 3.2, 2.1);
+  rightArchPillar.scale.set(1.05, 1.45, 1.15);
+  const entranceBrow = new THREE.Mesh(new THREE.DodecahedronGeometry(5.6, 1), cliffMat);
+  entranceBrow.position.set(0, 6.9, 1.8);
+  entranceBrow.scale.set(1.55, 0.45, 0.72);
+  caveGroup.add(leftArchPillar, rightArchPillar, entranceBrow);
+
+  // Multi-layered vaulted cave roof & upper Himalayan cliff peak
+  const roofMain = new THREE.Mesh(new THREE.DodecahedronGeometry(7.2, 1), cliffMat);
+  roofMain.position.set(0, 7.8, -2.4);
+  roofMain.scale.set(1.48, 0.48, 1.38);
+  const roofRear = new THREE.Mesh(new THREE.DodecahedronGeometry(6.8, 1), cliffMat);
+  roofRear.position.set(0, 8.6, -6.2);
+  roofRear.scale.set(1.42, 0.68, 1.15);
+  const upperPeak = new THREE.Mesh(new THREE.DodecahedronGeometry(6.2, 1), cliffMat);
+  upperPeak.position.set(-0.6, 11.8, -5.2);
+  upperPeak.scale.set(1.35, 0.95, 1.1);
+  caveGroup.add(roofMain, roofRear, upperPeak);
+
+  // 6d. Hanging limestone stalactites along ceiling & cave brow
+  const stalactiteGeo = new THREE.ConeGeometry(0.32, 1.55, 6);
+  for (let i = 0; i < 14; i++) {
+    const isBrow = i < 5;
+    const ang = isBrow
+      ? -0.28 * Math.PI + (i / 4) * 0.56 * Math.PI
+      : (i / 9) * Math.PI * 1.65;
+    const sr = isBrow ? 5.6 : 2.2 + (i % 3) * 1.65;
+    const sx = isBrow ? Math.sin(ang) * sr : Math.cos(ang) * sr;
+    const sz = isBrow ? 1.6 - Math.cos(ang) * 0.6 : -1.8 - Math.abs(Math.sin(ang)) * sr;
+    const stal = new THREE.Mesh(stalactiteGeo, cliffMat);
+    stal.position.set(sx, isBrow ? 5.55 : 5.85, sz);
+    stal.rotation.x = Math.PI;
+    stal.scale.set(0.75 + (i % 3) * 0.25, 0.8 + (i % 4) * 0.28, 0.75 + (i % 3) * 0.25);
+    caveGroup.add(stal);
+  }
 
   // Meditation seat stone inside Yangleshö Cave
   const seatMesh = new THREE.Mesh(
@@ -456,23 +583,117 @@ export function createMap(ctx) {
   seatMesh.position.set(0, 0.19, -1.2);
   caveGroup.add(seatMesh);
 
+  // 6e. Cave Interior Lighting — Altar Glow, Slanted Entrance Shaft & Dynamic Sanctuary Radiance (0 PointLights)
+  const poolGeo = new THREE.PlaneGeometry(1, 1);
+  poolGeo.rotateX(-Math.PI / 2);
+
+  const altarGlowMat = new THREE.MeshBasicMaterial({
+    map: glowTex,
+    color: 0xffb84d,
+    transparent: true,
+    opacity: 0.52,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const altarGlowPool = new THREE.Mesh(poolGeo, altarGlowMat);
+  altarGlowPool.position.set(0, 0.04, -1.2);
+  altarGlowPool.scale.set(4.8, 1, 4.8);
+  caveGroup.add(altarGlowPool);
+
+  const sanctuaryGlowMat = new THREE.MeshBasicMaterial({
+    map: glowTex,
+    color: 0xffaa33,
+    transparent: true,
+    opacity: 0.18,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const sanctuaryGlowPool = new THREE.Mesh(poolGeo, sanctuaryGlowMat);
+  sanctuaryGlowPool.position.set(0, 0.035, -2.2);
+  sanctuaryGlowPool.scale.set(11.5, 1, 11.5);
+  caveGroup.add(sanctuaryGlowPool);
+
+  // Overhead warm bounce light on the cave vault ceiling
+  const vaultBounceMat = new THREE.MeshBasicMaterial({
+    map: glowTex,
+    color: 0xff9d2e,
+    transparent: true,
+    opacity: 0.14,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    toneMapped: false,
+  });
+  const vaultBounceDisc = new THREE.Mesh(poolGeo, vaultBounceMat);
+  vaultBounceDisc.position.set(0, 5.75, -2.0);
+  vaultBounceDisc.scale.set(10.0, 1, 10.0);
+  caveGroup.add(vaultBounceDisc);
+
+  // Slanted crepuscular light shaft entering from the southern cave mouth
+  const shaftMat = new THREE.MeshBasicMaterial({
+    color: 0xffe4a0,
+    transparent: true,
+    opacity: 0.11,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const entranceShaft = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.35, 2.75, 6.8, 16, 1, true),
+    shaftMat,
+  );
+  entranceShaft.position.set(0, 3.1, 1.35);
+  entranceShaft.rotation.x = -0.34;
+  caveGroup.add(entranceShaft);
+
+  // Floating golden cave dust motes inside Yangleshö Cave
+  const caveDustCount = 46;
+  const caveDustGeo = new THREE.BufferGeometry();
+  const caveDustPos = new Float32Array(caveDustCount * 3);
+  for (let i = 0; i < caveDustCount; i++) {
+    const a = (i / caveDustCount) * TWO_PI * 2.7;
+    const r = 0.8 + ((i * 17) % 10) * 0.48;
+    caveDustPos[i * 3 + 0] = Math.cos(a) * r;
+    caveDustPos[i * 3 + 1] = 0.45 + ((i * 13) % 11) * 0.42;
+    caveDustPos[i * 3 + 2] = -1.6 + Math.sin(a) * r * 0.85;
+  }
+  caveDustGeo.setAttribute('position', new THREE.BufferAttribute(caveDustPos, 3));
+  const caveDustMat = new THREE.PointsMaterial({
+    color: 0xffd584,
+    size: 0.14,
+    transparent: true,
+    opacity: 0.68,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const caveDustPoints = new THREE.Points(caveDustGeo, caveDustMat);
+  caveDustPoints.name = 'YangleshoCaveDust';
+  caveGroup.add(caveDustPoints);
+
   // 7 Butter Lamp Niches arranged in a sacred semicircle around Yangleshö Cave
   const lampNiches = [];
   const lampBrassMat = new THREE.MeshStandardMaterial({
     color: 0xd4a238,
-    roughness: 0.35,
-    metalness: 0.72,
+    roughness: 0.32,
+    metalness: 0.76,
+    emissive: 0x5c3808,
+    emissiveIntensity: 0.35,
   });
   const lampFlameMat = new THREE.MeshBasicMaterial({
-    color: 0xffd15c,
+    color: new THREE.Color(2.2, 1.65, 0.55),
     toneMapped: false,
   });
   const lampHaloMat = new THREE.MeshBasicMaterial({
     color: 0xff9e2c,
     transparent: true,
-    opacity: 0.45,
+    opacity: 0.55,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
+    toneMapped: false,
   });
 
   const triggeredLampWaves = new Set();
@@ -487,22 +708,45 @@ export function createMap(ctx) {
     const nGrp = new THREE.Group();
     nGrp.position.set(lx, ly, lz);
 
+    // Carved stone shrine niche backing behind each butter lamp
+    const nicheBack = new THREE.Mesh(
+      new THREE.BoxGeometry(0.76, 1.32, 0.28),
+      cliffMat,
+    );
+    const outAngle = angle - Math.PI;
+    nicheBack.position.set(Math.cos(outAngle) * 0.38, 0.66, Math.sin(outAngle) * 0.38);
+    nicheBack.rotation.y = -outAngle + Math.PI / 2;
+
     const pedestal = new THREE.Mesh(
       new THREE.CylinderGeometry(0.28, 0.36, 0.68, 8),
       springStoneMat,
     );
     pedestal.position.y = 0.34;
-    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.12, 0.16, 10), lampBrassMat);
+    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.13, 0.17, 10), lampBrassMat);
     bowl.position.y = 0.76;
 
     const flameGrp = new THREE.Group();
-    flameGrp.position.y = 0.92;
+    flameGrp.position.y = 0.94;
     flameGrp.visible = false;
-    const flameCone = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.24, 8), lampFlameMat);
-    const haloSphere = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), lampHaloMat);
+    const flameCone = new THREE.Mesh(new THREE.ConeGeometry(0.095, 0.28, 8), lampFlameMat);
+    const haloSphere = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 10), lampHaloMat);
     flameGrp.add(flameCone, haloSphere);
 
-    nGrp.add(pedestal, bowl, flameGrp);
+    // Radial floor light pool under each butter lamp (brightens when lit)
+    const lampPoolMat = new THREE.MeshBasicMaterial({
+      map: glowTex,
+      color: 0xffaa33,
+      transparent: true,
+      opacity: 0.08,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const lampPool = new THREE.Mesh(poolGeo, lampPoolMat);
+    lampPool.position.y = 0.03;
+    lampPool.scale.set(3.2, 1, 3.2);
+
+    nGrp.add(nicheBack, pedestal, bowl, flameGrp, lampPool);
     group.add(nGrp);
 
     const lampObj = {
@@ -514,6 +758,8 @@ export function createMap(ctx) {
       posVec: new THREE.Vector3(lx, ly, lz),
       lit: false,
       flameGrp,
+      lampPool,
+      lampPoolMat,
     };
     lampNiches.push(lampObj);
 
@@ -532,6 +778,7 @@ export function createMap(ctx) {
       onInteract: () => {
         lampObj.lit = true;
         lampObj.flameGrp.visible = true;
+        lampObj.lampPoolMat.opacity = 0.62;
         ctx.bus.emit('sfx', { name: 'lamp' });
         ctx.bus.emit('quest:interact', { target: 'yangleshoLamp', count: 1 });
 
@@ -595,6 +842,14 @@ export function createMap(ctx) {
     emissive: 0x3b1206,
     emissiveIntensity: 0.25,
   });
+  const asuraVeinMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(2.0, 0.65, 0.15),
+    transparent: true,
+    opacity: 0.78,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
   const arenaRingGeo = new THREE.RingGeometry(15.2, 16.0, 48);
   arenaRingGeo.rotateX(-Math.PI / 2);
   const arenaRing = new THREE.Mesh(
@@ -610,14 +865,57 @@ export function createMap(ctx) {
   arenaRing.position.y = 0.04;
   asuraGroup.add(arenaRing);
 
-  // Upper Asura Cave mouth on the north rim of the arena
-  for (let i = 0; i < 5; i++) {
-    const a = Math.PI * 0.22 + (i / 4) * Math.PI * 0.56;
-    const crag = new THREE.Mesh(new THREE.DodecahedronGeometry(3.2, 0), charredMat);
-    crag.position.set(Math.cos(a + Math.PI) * 16.5, 2.6 + Math.sin(a) * 2.2, Math.sin(a + Math.PI) * 16.5);
-    crag.scale.set(1.2, 1.4, 0.9);
+  // Deep Asura Volcanic Cavern Grotto on the north rim of the arena
+  const asuraInnerDome = new THREE.Mesh(
+    new THREE.SphereGeometry(9.2, 18, 12, Math.PI * 0.95, Math.PI * 1.1, 0, Math.PI * 0.58),
+    innerVaultMat,
+  );
+  asuraInnerDome.position.set(0, 0.2, -16.2);
+  asuraInnerDome.scale.set(1.25, 0.95, 0.95);
+  asuraGroup.add(asuraInnerDome);
+
+  for (let i = 0; i < 7; i++) {
+    const a = Math.PI * 0.16 + (i / 6) * Math.PI * 0.68;
+    const crag = new THREE.Mesh(new THREE.DodecahedronGeometry(3.8, 1), charredMat);
+    crag.position.set(
+      Math.cos(a + Math.PI) * 17.2,
+      3.2 + Math.sin(a) * 2.6,
+      Math.sin(a + Math.PI) * 17.2,
+    );
+    crag.scale.set(1.35, 1.55, 1.15);
     asuraGroup.add(crag);
   }
+  const asuraRoofVault = new THREE.Mesh(new THREE.DodecahedronGeometry(7.8, 1), charredMat);
+  asuraRoofVault.position.set(0, 8.2, -16.8);
+  asuraRoofVault.scale.set(1.65, 0.52, 1.15);
+  const asuraUpperPeak = new THREE.Mesh(new THREE.DodecahedronGeometry(6.8, 1), charredMat);
+  asuraUpperPeak.position.set(0, 12.2, -19.5);
+  asuraUpperPeak.scale.set(1.45, 0.95, 1.05);
+  asuraGroup.add(asuraRoofVault, asuraUpperPeak);
+
+  // Glowing crimson-amber fissure veins & floor glow pool at Asura Cave mouth
+  for (let i = -2; i <= 2; i++) {
+    const vein = new THREE.Mesh(new THREE.OctahedronGeometry(0.32, 0), asuraVeinMat);
+    vein.position.set(i * 3.1, 1.8 + (Math.abs(i) % 2) * 1.1, -15.6 - Math.abs(i) * 0.4);
+    vein.scale.set(0.6, 2.8, 0.6);
+    vein.rotation.z = i * 0.22;
+    asuraGroup.add(vein);
+  }
+  const asuraMouthPool = new THREE.Mesh(
+    poolGeo,
+    new THREE.MeshBasicMaterial({
+      map: glowTex,
+      color: 0xea580c,
+      transparent: true,
+      opacity: 0.45,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    }),
+  );
+  asuraMouthPool.position.set(0, 0.05, -13.5);
+  asuraMouthPool.scale.set(11.0, 1, 8.5);
+  asuraGroup.add(asuraMouthPool);
 
   // ---------------------------------------------------------------- 8. Scatter Valley Rocks
   const rng = seededRandom(3201);
@@ -822,6 +1120,7 @@ export function createMap(ctx) {
       for (const l of lampNiches) {
         l.lit = true;
         l.flameGrp.visible = true;
+        if (l.lampPoolMat) l.lampPoolMat.opacity = 0.62;
       }
     }
     if (ctx.quests?.hasFlag?.('ch1.drought.done')) {
@@ -842,14 +1141,44 @@ export function createMap(ctx) {
     animTime += dt;
     syncPersistedState();
 
-    // Animate lit cave butter lamps & check lamp attackers
+    // Animate lit cave butter lamps, floor light pools & check lamp attackers
     const activeEnemies = ctx.enemies?.getActiveEnemies?.() || [];
+    let litLampCount = 0;
     for (const l of lampNiches) {
       if (l.lit) {
-        const s = 0.92 + Math.sin(animTime * 9.0 + l.index) * 0.14;
+        litLampCount++;
+        const flicker = Math.sin(animTime * 9.0 + l.index * 1.4);
+        const s = 0.92 + flicker * 0.14;
         l.flameGrp.scale.set(s, s, s);
+        if (l.lampPoolMat) {
+          l.lampPoolMat.opacity = 0.56 + flicker * 0.08;
+        }
+      } else if (l.lampPoolMat) {
+        l.lampPoolMat.opacity = 0.08;
       }
     }
+
+    // Scale central cave sanctuary & ceiling bounce glow with lit butter lamps
+    const lampProgress = litLampCount / 7;
+    sanctuaryGlowMat.opacity =
+      0.16 + lampProgress * 0.42 + Math.sin(animTime * 3.2) * 0.03;
+    vaultBounceMat.opacity =
+      0.12 + lampProgress * 0.28 + Math.cos(animTime * 2.8) * 0.025;
+    altarGlowMat.opacity =
+      0.44 + lampProgress * 0.24 + Math.sin(animTime * 4.0) * 0.04;
+    shaftMat.opacity = 0.09 + Math.sin(animTime * 1.9) * 0.025;
+
+    // Gentle upward drift for Yangleshö Cave dust motes
+    const dustArr = caveDustGeo.attributes.position.array;
+    for (let i = 0; i < caveDustCount; i++) {
+      const idx = i * 3;
+      dustArr[idx + 1] += dt * (0.14 + (i % 3) * 0.04);
+      dustArr[idx + 0] += Math.sin(animTime * 1.1 + i) * dt * 0.05;
+      if (dustArr[idx + 1] > 5.2) {
+        dustArr[idx + 1] = 0.45;
+      }
+    }
+    caveDustGeo.attributes.position.needsUpdate = true;
 
     // Check if any lamp-attacker enemy reached a lit lamp to blow it out
     if (!ctx.quests?.hasFlag?.('ch1.lamps.lit')) {
@@ -861,6 +1190,7 @@ export function createMap(ctx) {
           if (d <= 1.85) {
             l.lit = false;
             l.flameGrp.visible = false;
+            if (l.lampPoolMat) l.lampPoolMat.opacity = 0.08;
             e.isLampAttacker = false;
             ctx.bus.emit('quest:interact', { target: 'yangleshoLamp', count: -1 });
             const extMsg =

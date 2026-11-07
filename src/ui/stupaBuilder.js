@@ -59,8 +59,10 @@ function injectStupaBuilderStyles() {
       justify-content: center;
       background: rgba(8, 12, 22, 0.78);
       backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
       padding: 18px;
       opacity: 1;
+      pointer-events: auto;
       transition: opacity 0.22s ease;
     }
     .stupa-builder-modal.is-hidden {
@@ -79,6 +81,7 @@ function injectStupaBuilderStyles() {
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.72), 0 0 28px rgba(251, 191, 36, 0.14);
       color: #f8fafc;
       overflow: hidden;
+      pointer-events: auto;
     }
     .stupa-builder-header {
       display: flex;
@@ -522,7 +525,9 @@ export function createStupaBuilderUi(ctx) {
     utilBtn.setAttribute('aria-label', 'Votive Stupa Builder');
     utilBtn.title = i18n?.t ? i18n.t('stupaBuild.btn.openTooltip') : '建造個人發願塔 ＆ 全服共建桑耶';
     utilBtn.innerHTML = '<span>🏛️</span>';
-    utilBtn.addEventListener('click', () => {
+    utilBtn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
       toggle();
     });
 
@@ -1216,16 +1221,36 @@ export function createStupaBuilderUi(ctx) {
     renderAll();
   }
 
+  const dialogEl = overlay?.querySelector('.stupa-builder-dialog');
+
   if (overlay) {
-    tabBuildBtn?.addEventListener('click', () => {
+    // Prevent pointer/mouse/wheel events inside the modal from bubbling to 3D canvas camera controls
+    for (const evtName of ['pointerdown', 'mousedown', 'wheel']) {
+      dialogEl?.addEventListener(evtName, (ev) => {
+        ev.stopPropagation();
+      });
+      overlay.addEventListener(evtName, (ev) => {
+        ev.stopPropagation();
+      });
+    }
+
+    tabBuildBtn?.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
       activeTab = 'build';
       renderAll();
     });
-    tabSamyeBtn?.addEventListener('click', () => {
+    tabSamyeBtn?.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
       activeTab = 'samye';
       renderAll();
     });
-    closeBtn?.addEventListener('click', () => close());
+    closeBtn?.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      close();
+    });
     overlay.addEventListener('click', (ev) => {
       if (ev.target === overlay) close();
     });
@@ -1238,6 +1263,8 @@ export function createStupaBuilderUi(ctx) {
     partSelectorsWrap?.addEventListener('click', (ev) => {
       const card = ev.target.closest('[data-part-cat]');
       if (!card) return;
+      ev.preventDefault();
+      ev.stopPropagation();
       const cat = card.getAttribute('data-part-cat');
       const partId = card.getAttribute('data-part-id');
       if (!cat || !partId) return;
@@ -1256,16 +1283,38 @@ export function createStupaBuilderUi(ctx) {
     presetsRow?.addEventListener('click', (ev) => {
       const chip = ev.target.closest('[data-preset-msg]');
       if (!chip || !inputMessage) return;
+      ev.preventDefault();
+      ev.stopPropagation();
       inputMessage.value = chip.getAttribute('data-preset-msg') || '';
       drawStupaPreviewCanvas();
     });
 
+    for (const inputEl of [inputPilgrim, inputTitle, inputMessage, samyeInputNote]) {
+      inputEl?.addEventListener('keydown', (ev) => {
+        if (ev.key !== 'Escape') {
+          ev.stopPropagation();
+        }
+      });
+    }
+
     inputPilgrim?.addEventListener('input', () => drawStupaPreviewCanvas());
     inputTitle?.addEventListener('input', () => drawStupaPreviewCanvas());
 
-    btnBuildSubmit?.addEventListener('click', () => handleBuildStupa());
-    samyeBtnContribute1?.addEventListener('click', () => handleContributeSamye(false));
-    samyeBtnContributeAll?.addEventListener('click', () => handleContributeSamye(true));
+    btnBuildSubmit?.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      handleBuildStupa();
+    });
+    samyeBtnContribute1?.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      handleContributeSamye(false);
+    });
+    samyeBtnContributeAll?.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      handleContributeSamye(true);
+    });
   }
 
   if (typeof window !== 'undefined') {
@@ -1278,6 +1327,12 @@ export function createStupaBuilderUi(ctx) {
 
   // ------------------------------------------------ 6. Open / Close / Toggle API
   function open(tab = 'build') {
+    if (ctx.dialogue?.isOpen?.()) return false;
+    ctx.inventoryUi?.close?.();
+    ctx.lampOfferingUi?.close?.();
+    ctx.coopLobbyUi?.close?.();
+    ctx.appearanceUi?.close?.();
+
     if (tab === 'build' || tab === 'samye') {
       activeTab = tab;
     }
@@ -1289,13 +1344,23 @@ export function createStupaBuilderUi(ctx) {
     state.uiOpen = true;
     overlay?.classList.remove('is-hidden');
     renderAll();
+    return true;
   }
 
   function close() {
-    if (!modalOpen) return;
+    if (!modalOpen) return false;
     modalOpen = false;
-    state.uiOpen = false;
     overlay?.classList.add('is-hidden');
+    state.uiOpen = Boolean(
+      ctx.dialogue?.isOpen?.() ||
+        ctx.inventoryUi?.isOpen?.() ||
+        ctx.lampOfferingUi?.isOpen?.() ||
+        ctx.coopLobbyUi?.isOpen?.() ||
+        ctx.appearanceUi?.isOpen?.() ||
+        ctx.questUi?.isOpen?.() ||
+        ctx.worldmap?.isOpen?.()
+    );
+    return true;
   }
 
   function toggle(tab) {
