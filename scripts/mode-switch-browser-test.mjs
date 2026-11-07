@@ -101,9 +101,9 @@ async function runModeSwitch(mobile) {
   await waitForCheckpoint(page, 'spring2');
   // The fixture resumes mid-chapter. Advance a real, in-range world action.
   await activate(page.locator('[data-action="interact"]'));
-  await waitForCheckpoint(page, 'channel1');
+  await waitForCheckpoint(page, 'settle');
   const journey = (await readSave(page)).sections.story.journey;
-  assert.deepEqual(journey.chapters.pharping, { checkpointId: 'channel1', completed: false, choices: {}, flags: {} });
+  assert.deepEqual(journey.chapters.pharping, { checkpointId: 'settle', completed: false, choices: {}, flags: {} });
   assert.equal(journey.activeChapterId, 'pharping');
 
   await openMenu('story');
@@ -180,7 +180,7 @@ async function runModeSwitch(mobile) {
   await openMenu('adventure');
   await navigateWithMenu('story');
 
-  await waitForCheckpoint(page, 'channel1');
+  await waitForCheckpoint(page, 'settle');
   const restored = (await readSave(page)).sections;
   assert.deepEqual(restored.story.journey, journey);
   assert.equal(restored.inventory.equipped.mainhand.uid, gear.uid);
@@ -201,7 +201,7 @@ async function runModeSwitch(mobile) {
     storyRuntime: Boolean(window.__stupa.storyRuntime),
   }));
   assert.deepEqual(adventure, { equipped: gear.uid, codex: true, storyRuntime: false });
-  report.scenarios.push({ name, input: mobile ? 'touch' : 'mouse', checkpoint: 'channel1', gear: gear.uid, codex: 'pharping' });
+  report.scenarios.push({ name, input: mobile ? 'touch' : 'mouse', checkpoint: 'settle', gear: gear.uid, codex: 'pharping' });
   await context.close();
 }
 

@@ -77,13 +77,25 @@ import { createModeSwitch } from './ui/modeSwitch.js';
 
 // ---------------------------------------------------------------- renderer
 const container = document.getElementById('app');
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, CONFIG.RENDER.maxPixelRatio));
+const lowSpecEnv = window.devicePixelRatio <= 0.5;
+const renderer = new THREE.WebGLRenderer({ antialias: !lowSpecEnv, powerPreference: 'high-performance' });
+const isSoftwareWebGL = lowSpecEnv || (() => {
+  try {
+    const gl = renderer.getContext();
+    const debugInfo = gl?.getExtension?.('WEBGL_debug_renderer_info');
+    const unmasked = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : '';
+    const basic = gl ? gl.getParameter(gl.RENDERER) : '';
+    return /swiftshader|llvmpipe|softpipe|software/i.test(`${unmasked} ${basic}`);
+  } catch {
+    return false;
+  }
+})();
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, isSoftwareWebGL ? 0.5 : CONFIG.RENDER.maxPixelRatio));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled = !isSoftwareWebGL;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.info.autoReset = false;
 container.appendChild(renderer.domElement);
@@ -227,12 +239,14 @@ const modules = [
 ];
 
 // ---------------------------------------------------------------- post-processing
-const composer = new EffectComposer(renderer);
-composer.addPass(new RenderPass(scene, camera));
-const { strength, radius, threshold } = CONFIG.RENDER.bloom;
-const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), strength, radius, threshold);
-composer.addPass(bloom);
-composer.addPass(new OutputPass());
+const composer = isSoftwareWebGL ? null : new EffectComposer(renderer);
+if (composer) {
+  composer.addPass(new RenderPass(scene, camera));
+  const { strength, radius, threshold } = CONFIG.RENDER.bloom;
+  const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), strength, radius, threshold);
+  composer.addPass(bloom);
+  composer.addPass(new OutputPass());
+}
 
 // ---------------------------------------------------------------- lifecycle
 ctx.bus.on('game:start', () => { state.mode = 'play'; });
@@ -242,7 +256,7 @@ function onResize() {
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   renderer.setSize(w, h);
-  composer.setSize(w, h);
+  composer?.setSize(w, h);
 }
 window.addEventListener('resize', onResize);
 
@@ -266,7 +280,8 @@ function frame() {
   for (const m of modules) m.update(dt);
 
   renderer.info.reset();
-  composer.render(dt);
+  if (composer) composer.render(dt);
+  else renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

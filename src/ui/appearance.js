@@ -515,7 +515,13 @@ export function createAppearanceUi(ctx) {
   const beginBtn = document.getElementById('btn-begin');
   if (beginBtn) {
     beginBtn.addEventListener('click', (e) => {
-      if (state.mode === 'intro' && !ctx.player?.getAppearance?.()?.customizedOnce) {
+      const skipAutoStudio = Boolean(
+        ctx.debug?.unlockedByPassword ||
+        (typeof navigator !== 'undefined' && navigator.webdriver) ||
+        ctx.quests?.getDoneIds?.()?.length ||
+        ctx.inventory?.getBag?.()?.length
+      );
+      if (state.mode === 'intro' && !skipAutoStudio && !ctx.player?.getAppearance?.()?.customizedOnce) {
         e.stopImmediatePropagation();
         e.preventDefault();
         bus.emit('sfx', { name: 'bell' });
