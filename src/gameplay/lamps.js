@@ -339,6 +339,7 @@ export function createLamps(ctx) {
     const light = new THREE.PointLight(0xff9c38, 0, 7.5, 1.7);
     light.position.set(0, 1.28, 0);
     light.castShadow = false;
+    light.visible = !ctx.isSoftwareWebGL;
     stationGroup.add(light);
 
     // 3D Floating Prayer Plaque Sprite above station (y = 2.35, 0 PointLights)
@@ -553,7 +554,7 @@ export function createLamps(ctx) {
 
   // ---------------------------------------------------------------- zone visibility
   bus.on('zone:change', ({ to }) => {
-    const isStupa = (to === 'stupa');
+    const isStupa = (to === 'stupa') && !ctx.isSoftwareWebGL;
     for (let s = 0; s < stations.length; s++) {
       if (stations[s].light) {
         stations[s].light.visible = isStupa;
@@ -584,9 +585,11 @@ export function createLamps(ctx) {
       return;
     }
 
-    for (let s = 0; s < stations.length; s++) {
-      if (stations[s].light && !stations[s].light.visible) {
-        stations[s].light.visible = true;
+    if (!ctx.isSoftwareWebGL) {
+      for (let s = 0; s < stations.length; s++) {
+        if (stations[s].light && !stations[s].light.visible) {
+          stations[s].light.visible = true;
+        }
       }
     }
 

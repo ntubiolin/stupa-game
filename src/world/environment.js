@@ -6,12 +6,13 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
  * Uses polar concentric courses of weathered Kathmandu stone, radial joints,
  * and warm brick-stone kora path inlays.
  */
-function createPlazaPavingTexture() {
+function createPlazaPavingTexture(texSize = 1024) {
   const size = 1024;
   const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = texSize;
+  canvas.height = texSize;
   const g = canvas.getContext('2d');
+  if (texSize !== size) g.scale(texSize / size, texSize / size);
   const cx = size / 2;
   const cy = size / 2;
   const maxR = size * 0.49;
@@ -21,7 +22,8 @@ function createPlazaPavingTexture() {
   g.fillRect(0, 0, size, size);
 
   // Subtle organic dirt/patina mottling
-  for (let i = 0; i < 1200; i++) {
+  const speckleCount = texSize < 512 ? 150 : texSize < 1024 ? 400 : 900;
+  for (let i = 0; i < speckleCount; i++) {
     const x = Math.random() * size;
     const y = Math.random() * size;
     const r = 6 + Math.random() * 28;
@@ -142,7 +144,7 @@ export function createEnvironment(ctx) {
   plazaGeo.rotateX(-Math.PI / 2);
   plazaGeo.translate(0, 0.015, 0);
   const plazaMat = new THREE.MeshStandardMaterial({
-    map: createPlazaPavingTexture(),
+    map: createPlazaPavingTexture(ctx.isSoftwareWebGL ? 256 : ctx.isMobile ? 512 : 1024),
     roughness: 0.86,
     metalness: 0.04,
   });

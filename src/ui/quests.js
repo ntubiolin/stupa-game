@@ -114,7 +114,7 @@ export function createQuestUi(ctx) {
     </div>
 
     <!-- 3c. Pure Vision Chapter Intro Scroll (章節開場壁畫畫卷) -->
-    <div id="chapter-intro-overlay" class="chapter-intro-overlay is-hidden" role="dialog" aria-modal="true" style="position:fixed;inset:0;z-index:930;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 45%, rgba(255, 224, 112, 0.28) 0%, rgba(24, 15, 9, 0.94) 68%, rgba(10, 7, 5, 0.98) 100%);backdrop-filter:blur(6px);transition:opacity 0.55s ease;">
+    <div id="chapter-intro-overlay" class="chapter-intro-overlay is-hidden" role="dialog" aria-modal="true" style="position:fixed;inset:0;z-index:930;display:none;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 45%, rgba(255, 224, 112, 0.28) 0%, rgba(24, 15, 9, 0.94) 68%, rgba(10, 7, 5, 0.98) 100%);backdrop-filter:blur(6px);transition:opacity 0.55s ease;">
       <div class="chapter-intro-card mural-scroll-modal glass-panel">
         <header class="mural-scroll-header">
           <div class="mural-scroll-header__titles">

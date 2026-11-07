@@ -6,12 +6,13 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
  * saffron/turmeric lotus-petal paint arcs poured from the harmika base.
  * Mapped with top-down polar UVs: center (0.5, 0.5) = top of dome.
  */
-function createDomeTexture() {
+function createDomeTexture(texSize = 1024) {
   const size = 1024;
   const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = texSize;
+  canvas.height = texSize;
   const g = canvas.getContext('2d');
+  if (texSize !== size) g.scale(texSize / size, texSize / size);
   const cx = size / 2;
   const cy = size / 2;
   const maxR = size * 0.48;
@@ -21,7 +22,8 @@ function createDomeTexture() {
   g.fillRect(0, 0, size, size);
 
   // Subtle lime-wash concentric & mottled texture
-  for (let i = 0; i < 1600; i++) {
+  const speckleCount = texSize < 512 ? 180 : texSize < 1024 ? 500 : 1200;
+  for (let i = 0; i < speckleCount; i++) {
     const x = Math.random() * size;
     const y = Math.random() * size;
     const r = 4 + Math.random() * 26;
@@ -116,12 +118,13 @@ function createDomeTexture() {
  * Procedural CanvasTexture for the gilded Harmika face featuring the famous
  * wisdom eyes of the Buddha, the third eye (urna), and the Nepali numeral '1' nose.
  */
-function createHarmikaEyesTexture() {
+function createHarmikaEyesTexture(texSize = 1024) {
   const size = 1024;
   const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = texSize;
+  canvas.height = texSize;
   const g = canvas.getContext('2d');
+  if (texSize !== size) g.scale(texSize / size, texSize / size);
 
   // Rich hammered gold-leaf background
   const bgGrad = g.createLinearGradient(0, 0, 0, size);
@@ -487,15 +490,16 @@ export function createStupa(ctx) {
     metalness: 0.88,
   });
 
+  const texSize = ctx.isSoftwareWebGL ? 256 : ctx.isMobile ? 512 : 1024;
   const domeMat = new THREE.MeshStandardMaterial({
-    map: createDomeTexture(),
+    map: createDomeTexture(texSize),
     color: 0xe2dbd0,
     roughness: 0.90,
     metalness: 0.01,
   });
 
   const harmikaEyeMat = new THREE.MeshStandardMaterial({
-    map: createHarmikaEyesTexture(),
+    map: createHarmikaEyesTexture(texSize),
     roughness: 0.32,
     metalness: 0.68,
   });

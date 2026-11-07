@@ -794,15 +794,22 @@ export function createNpcs(ctx) {
     return true;
   }
 
-  function spawnNpcFromDef(def) {
-    if (instances.has(def.id)) return instances.get(def.id);
+  function ensureNpcModel(inst) {
+    if (!inst) return null;
+    if (inst.model) {
+      const zg = ctx.zoneGroups?.[inst.def.map];
+      if (zg && inst.group.parent !== zg) {
+        zg.add(inst.group);
+      }
+      return inst.model;
+    }
 
+    const { def } = inst;
     const resolvedLook = def.look === 'monk' ? 'lama' : (def.look || 'lama');
     const model = buildNpc(resolvedLook, { prop: def.prop });
     const y = ctx.world?.getHeight(def.x, def.z, def.map) ?? 0;
-    const defaultHeading = def.heading ?? def.facing ?? Math.PI;
     model.group.position.set(def.x, y, def.z);
-    model.group.rotation.y = defaultHeading;
+    model.group.rotation.y = inst.currentHeading;
 
     // Overhead quest marker (! or ?)
     const textures = getMarkerTextures();
@@ -818,9 +825,22 @@ export function createNpcs(ctx) {
     markerSprite.visible = false;
     model.group.add(markerSprite);
 
-    // Attach to map's zoneGroup if available, else scene
     const parentGroup = ctx.zoneGroups?.[def.map] || scene;
     parentGroup.add(model.group);
+
+    inst.model = model;
+    inst.group = model.group;
+    inst.markerSprite = markerSprite;
+    inst.markerMat = markerMat;
+    return model;
+  }
+
+  function spawnNpcFromDef(def) {
+    if (instances.has(def.id)) return instances.get(def.id);
+
+    const resolvedLook = def.look === 'monk' ? 'lama' : (def.look || 'lama');
+    const y = ctx.world?.getHeight(def.x, def.z, def.map) ?? 0;
+    const defaultHeading = def.heading ?? def.facing ?? Math.PI;
 
     // Push collider ONLY for non-vision NPCs
     let collider = null;
@@ -869,10 +889,10 @@ export function createNpcs(ctx) {
     const inst = {
       id: def.id,
       def,
-      model,
-      group: model.group,
-      markerSprite,
-      markerMat,
+      model: null,
+      group: null,
+      markerSprite: null,
+      markerMat: null,
       markerState: null,
       collider,
       interactable,
@@ -882,6 +902,9 @@ export function createNpcs(ctx) {
     };
 
     instances.set(def.id, inst);
+    if ((state.zone || 'stupa') === def.map) {
+      ensureNpcModel(inst);
+    }
     return inst;
   }
 
@@ -894,6 +917,7 @@ export function createNpcs(ctx) {
   bus.on('map:loaded', ({ mapId }) => {
     for (const inst of instances.values()) {
       if (inst.def.map === mapId) {
+        ensureNpcModel(inst);
         const y = ctx.world?.getHeight(inst.def.x, inst.def.z, mapId) ?? 0;
         inst.group.position.set(inst.def.x, y, inst.def.z);
         const zg = ctx.zoneGroups?.[mapId];
@@ -958,15 +982,21 @@ export function createNpcs(ctx) {
     const textures = getMarkerTextures();
 
     for (const inst of instances.values()) {
-      const { def, model, group, collider, markerSprite, markerMat } = inst;
+      const { def, collider } = inst;
       const visible = isNpcVisible(def);
       const inZone = def.map === activeZone;
 
-      group.visible = visible && inZone;
       if (collider) {
         collider.zone = visible ? def.map : '__hidden__';
       }
-      if (!visible || !inZone) continue;
+      if (!visible || !inZone) {
+        if (inst.group) inst.group.visible = false;
+        continue;
+      }
+
+      ensureNpcModel(inst);
+      const { model, group, markerSprite, markerMat } = inst;
+      group.visible = true;
 
       // Position & ground height sync (supports moving escort NPCs)
       const groundY = ctx.world?.getHeight(def.x, def.z, def.map) ?? 0;
@@ -1036,10 +1066,14 @@ export function createNpcs(ctx) {
       return instances.get(id)?.def || null;
     },
     get(id) {
-      return instances.get(id) || null;
+      const inst = instances.get(id) || null;
+      if (inst) ensureNpcModel(inst);
+      return inst;
     },
     getInstance(id) {
-      return instances.get(id) || null;
+      const inst = instances.get(id) || null;
+      if (inst) ensureNpcModel(inst);
+      return inst;
     },
     list() {
       return Array.from(instances.values()).map((inst) => {

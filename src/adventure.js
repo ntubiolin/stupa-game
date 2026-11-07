@@ -76,27 +76,46 @@ import { createAppearanceUi } from './ui/appearance.js';
 import { createModeSwitch } from './ui/modeSwitch.js';
 
 // ---------------------------------------------------------------- renderer
+if (typeof HTMLCanvasElement !== 'undefined' && !HTMLCanvasElement.prototype.__stupaPatched2D) {
+  HTMLCanvasElement.prototype.__stupaPatched2D = true;
+  const origGetContext = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function (type, attrs) {
+    if (type === '2d') {
+      return origGetContext.call(this, type, { willReadFrequently: true, ...attrs });
+    }
+    return origGetContext.call(this, type, attrs);
+  };
+}
 const container = document.getElementById('app');
 const lowSpecEnv = window.devicePixelRatio <= 0.5;
-const renderer = new THREE.WebGLRenderer({ antialias: !lowSpecEnv, powerPreference: 'high-performance' });
+const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') ||
+  Boolean(window.matchMedia?.('(pointer: coarse)')?.matches && window.innerWidth < 1024);
+const renderer = new THREE.WebGLRenderer({ antialias: !lowSpecEnv && !isMobile, powerPreference: 'high-performance' });
 const isSoftwareWebGL = lowSpecEnv || (() => {
   try {
     const gl = renderer.getContext();
     const debugInfo = gl?.getExtension?.('WEBGL_debug_renderer_info');
     const unmasked = debugInfo ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) : '';
     const basic = gl ? gl.getParameter(gl.RENDERER) : '';
-    return /swiftshader|llvmpipe|softpipe|software/i.test(`${unmasked} ${basic}`);
+    return /swiftshader|llvmpipe|softpipe|software|lavapipe/i.test(`${unmasked} ${basic}`);
   } catch {
     return false;
   }
 })();
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, isSoftwareWebGL ? 0.5 : CONFIG.RENDER.maxPixelRatio));
+if (typeof document !== 'undefined') {
+  document.body?.classList.toggle('low-spec-env', isSoftwareWebGL);
+  document.body?.classList.toggle('is-mobile-device', isMobile);
+}
+const maxPixelRatio = isSoftwareWebGL ? 0.5 : isMobile ? 1.25 : Math.min(CONFIG.RENDER.maxPixelRatio, 1.5);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxPixelRatio));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
-renderer.shadowMap.enabled = !isSoftwareWebGL;
+renderer.shadowMap.enabled = !isSoftwareWebGL && !isMobile;
 renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.shadowMap.autoUpdate = false;
+renderer.shadowMap.needsUpdate = true;
 renderer.info.autoReset = false;
 container.appendChild(renderer.domElement);
 
@@ -145,6 +164,9 @@ const ctx = {
   scene,
   camera,
   renderer,
+  isSoftwareWebGL,
+  isMobile,
+  lowSpec: isSoftwareWebGL || isMobile,
   stupaGroup,
   wildGroup,
   zoneGroups,
@@ -239,11 +261,11 @@ const modules = [
 ];
 
 // ---------------------------------------------------------------- post-processing
-const composer = isSoftwareWebGL ? null : new EffectComposer(renderer);
+const composer = (isSoftwareWebGL || isMobile) ? null : new EffectComposer(renderer);
 if (composer) {
   composer.addPass(new RenderPass(scene, camera));
   const { strength, radius, threshold } = CONFIG.RENDER.bloom;
-  const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), strength, radius, threshold);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(Math.floor(window.innerWidth * 0.5), Math.floor(window.innerHeight * 0.5)), strength, radius, threshold);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 }
@@ -269,7 +291,18 @@ function updateWind(t) {
 }
 
 let lastFrameTime = performance.now();
+let lastRenderTime = 0;
+let renderCount = 0;
+let pageDisposed = false;
+window.addEventListener('pagehide', (event) => {
+  if (!event.persisted) {
+    pageDisposed = true;
+    composer?.dispose?.();
+    renderer.dispose();
+  }
+});
 function frame() {
+  if (pageDisposed) return;
   const now = performance.now();
   const dt = Math.min((now - lastFrameTime) / 1000, 0.05);
   lastFrameTime = now;
@@ -279,9 +312,24 @@ function frame() {
 
   for (const m of modules) m.update(dt);
 
-  renderer.info.reset();
-  if (composer) composer.render(dt);
-  else renderer.render(scene, camera);
+  const isIdleView = state.mode === 'intro' || state.uiOpen;
+  // Under software WebGL (e.g. Linux CI SwiftShader), yield the initial 250ms while on the
+  // title screen so the DOM (#btn-begin) paints and processes click events without shader-compile stalls.
+  const deferInitialSoftwareRender = isSoftwareWebGL && state.mode === 'intro' && state.elapsed < 0.25;
+  const minRenderIntervalMs = isSoftwareWebGL
+    ? (isIdleView ? 120 : 50)
+    : (isIdleView ? 32 : 0);
+
+  if (!deferInitialSoftwareRender && (now - lastRenderTime >= minRenderIntervalMs)) {
+    lastRenderTime = now;
+    renderCount++;
+    if (renderer.shadowMap.enabled && (renderCount % 3 === 1 || state.player.isMoving)) {
+      renderer.shadowMap.needsUpdate = true;
+    }
+    renderer.info.reset();
+    if (composer && !isIdleView) composer.render(dt);
+    else renderer.render(scene, camera);
+  }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

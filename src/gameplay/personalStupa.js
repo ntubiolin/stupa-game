@@ -893,6 +893,9 @@ export function createPersonalStupa(ctx) {
 
   function updateSamyeConsecrationCrowns(contributedCount) {
     const lit = Math.max(0, Math.min(SAMYE_CROWN_COUNT, Math.floor(Number(contributedCount) || 0)));
+    consecrationCrownsInst.userData.contributedStupas = lit;
+    const samyeReady = Boolean(ctx.zoneGroups?.samye) || state.zone === 'samye';
+    if (!samyeReady) return;
     if (lit === lastLitCrowns) return;
     lastLitCrowns = lit;
 
@@ -911,7 +914,6 @@ export function createPersonalStupa(ctx) {
       consecrationCrownsInst.setMatrixAt(i, crownDummy.matrix);
     }
     consecrationCrownsInst.instanceMatrix.needsUpdate = true;
-    consecrationCrownsInst.userData.contributedStupas = lit;
   }
 
   // ------------------------------------------------ 3. Colliders & Monument Interactables
@@ -975,32 +977,42 @@ export function createPersonalStupa(ctx) {
   function rebuildMonumentMeshes() {
     if (boudhaMonumentMesh && boudhaMonumentMesh.parent) {
       boudhaMonumentMesh.parent.remove(boudhaMonumentMesh);
+      boudhaMonumentMesh = null;
     }
     if (samyeMonumentMesh && samyeMonumentMesh.parent) {
       samyeMonumentMesh.parent.remove(samyeMonumentMesh);
+      samyeMonumentMesh = null;
     }
+
+    const groveReady = Boolean(ctx.zoneGroups?.grove) || state.zone === 'grove';
+    const samyeReady = Boolean(ctx.zoneGroups?.samye) || state.zone === 'samye';
+    if (!groveReady && !samyeReady) return;
 
     const t = (k, p) => (i18n?.t ? i18n.t(k, p) : k);
     const prog = ctx.community?.getSamyeProgress?.() || { contributedStupas: 324 };
 
-    boudhaMonumentMesh = buildMonumentAltarMesh(THREE_NS, {
-      title: t('stupaBuild.monument.boudhaTitle'),
-      subtitle: t('stupaBuild.monument.boudhaSub'),
-      i18n,
-    });
-    boudhaMonumentMesh.position.set(BOUDHA_ALTAR_LOCAL.x, 0, BOUDHA_ALTAR_LOCAL.z);
-    boudhaMonumentMesh.rotation.y = 0;
-    boudhaRoot.add(boudhaMonumentMesh);
+    if (groveReady) {
+      boudhaMonumentMesh = buildMonumentAltarMesh(THREE_NS, {
+        title: t('stupaBuild.monument.boudhaTitle'),
+        subtitle: t('stupaBuild.monument.boudhaSub'),
+        i18n,
+      });
+      boudhaMonumentMesh.position.set(BOUDHA_ALTAR_LOCAL.x, 0, BOUDHA_ALTAR_LOCAL.z);
+      boudhaMonumentMesh.rotation.y = 0;
+      boudhaRoot.add(boudhaMonumentMesh);
+    }
 
-    const samyeY = ctx.world?.getHeight ? ctx.world.getHeight(SAMYE_MONUMENT_WORLD.x, SAMYE_MONUMENT_WORLD.z, 'samye') : 0;
-    samyeMonumentMesh = buildMonumentAltarMesh(THREE_NS, {
-      title: t('stupaBuild.monument.samyeTitle'),
-      subtitle: t('stupaBuild.monument.samyeSub', { n: prog.contributedStupas }),
-      i18n,
-    });
-    samyeMonumentMesh.position.set(SAMYE_MONUMENT_LOCAL.x, samyeY, SAMYE_MONUMENT_LOCAL.z);
-    samyeMonumentMesh.rotation.y = 0;
-    samyeRoot.add(samyeMonumentMesh);
+    if (samyeReady) {
+      const samyeY = ctx.world?.getHeight ? ctx.world.getHeight(SAMYE_MONUMENT_WORLD.x, SAMYE_MONUMENT_WORLD.z, 'samye') : 0;
+      samyeMonumentMesh = buildMonumentAltarMesh(THREE_NS, {
+        title: t('stupaBuild.monument.samyeTitle'),
+        subtitle: t('stupaBuild.monument.samyeSub', { n: prog.contributedStupas }),
+        i18n,
+      });
+      samyeMonumentMesh.position.set(SAMYE_MONUMENT_LOCAL.x, samyeY, SAMYE_MONUMENT_LOCAL.z);
+      samyeMonumentMesh.rotation.y = 0;
+      samyeRoot.add(samyeMonumentMesh);
+    }
   }
 
   // ------------------------------------------------ 4. Samye Global Blessing Hook
@@ -1144,6 +1156,9 @@ export function createPersonalStupa(ctx) {
     ];
   }
 
+  let groveMeshesBuilt = false;
+  let samyeMeshesBuilt = false;
+
   function rebuildGrove() {
     ensureGroveAttached();
     ensureSamyeAttached();
@@ -1153,30 +1168,36 @@ export function createPersonalStupa(ctx) {
     refreshSamyeGlobalBlessing(true);
 
     const list = getSourceStupaList();
+    const groveReady = Boolean(ctx.zoneGroups?.grove) || state.zone === 'grove';
+    const samyeReady = Boolean(ctx.zoneGroups?.samye) || state.zone === 'samye';
+    groveMeshesBuilt = groveReady;
+    samyeMeshesBuilt = samyeReady;
 
     // 1. Populate up to 8 Pilgrim Votive Stupas in `grove` zone (Pilgrim Stupa Grove outside South Gate)
     const boudhaCount = Math.min(BOUDHA_SLOTS.length, list.length);
     for (let i = 0; i < boudhaCount; i++) {
       const entry = list[i];
       const slot = BOUDHA_SLOTS[i];
-      const mesh = buildVotiveStupaMesh(THREE_NS, entry.spec, {
-        id: `${entry.id}_boudha`,
-        title: entry.title,
-        pilgrimName: entry.pilgrimName,
-        kora: entry.kora,
-        prostrations: entry.prostrations,
-        message: entry.message,
-        rejoiceCount: entry.rejoiceCount,
-        isOwn: entry.isOwn,
-        i18n,
-      });
-      mesh.position.set(slot.lx, 0, slot.lz);
-      mesh.rotation.y = slot.heading;
-      boudhaRoot.add(mesh);
-      activeGroveMeshes.push(mesh);
+      if (groveReady) {
+        const mesh = buildVotiveStupaMesh(THREE_NS, entry.spec, {
+          id: `${entry.id}_boudha`,
+          title: entry.title,
+          pilgrimName: entry.pilgrimName,
+          kora: entry.kora,
+          prostrations: entry.prostrations,
+          message: entry.message,
+          rejoiceCount: entry.rejoiceCount,
+          isOwn: entry.isOwn,
+          i18n,
+        });
+        mesh.position.set(slot.lx, 0, slot.lz);
+        mesh.rotation.y = slot.heading;
+        boudhaRoot.add(mesh);
+        activeGroveMeshes.push(mesh);
 
-      if (mesh.userData.mantraHalo || mesh.userData.crystalCore) {
-        animatedOrnaments.push(mesh);
+        if (mesh.userData.mantraHalo || mesh.userData.crystalCore) {
+          animatedOrnaments.push(mesh);
+        }
       }
 
       const col = { type: 'circle', zone: 'grove', x: slot.wx, z: slot.wz, r: 0.95 };
@@ -1216,24 +1237,26 @@ export function createPersonalStupa(ctx) {
       const entry = list[i % list.length];
       const slot = SAMYE_SLOTS[i];
       const groundY = ctx.world?.getHeight ? ctx.world.getHeight(slot.wx, slot.wz, 'samye') : 0;
-      const mesh = buildVotiveStupaMesh(THREE_NS, entry.spec, {
-        id: `${entry.id}_samye_${i}`,
-        title: entry.title,
-        pilgrimName: entry.pilgrimName,
-        kora: entry.kora,
-        prostrations: entry.prostrations,
-        message: entry.message,
-        rejoiceCount: entry.rejoiceCount,
-        isOwn: entry.isOwn,
-        i18n,
-      });
-      mesh.position.set(slot.lx, groundY, slot.lz);
-      mesh.rotation.y = slot.heading;
-      samyeRoot.add(mesh);
-      activeGroveMeshes.push(mesh);
+      if (samyeReady) {
+        const mesh = buildVotiveStupaMesh(THREE_NS, entry.spec, {
+          id: `${entry.id}_samye_${i}`,
+          title: entry.title,
+          pilgrimName: entry.pilgrimName,
+          kora: entry.kora,
+          prostrations: entry.prostrations,
+          message: entry.message,
+          rejoiceCount: entry.rejoiceCount,
+          isOwn: entry.isOwn,
+          i18n,
+        });
+        mesh.position.set(slot.lx, groundY, slot.lz);
+        mesh.rotation.y = slot.heading;
+        samyeRoot.add(mesh);
+        activeGroveMeshes.push(mesh);
 
-      if (mesh.userData.mantraHalo || mesh.userData.crystalCore) {
-        animatedOrnaments.push(mesh);
+        if (mesh.userData.mantraHalo || mesh.userData.crystalCore) {
+          animatedOrnaments.push(mesh);
+        }
       }
 
       const col = { type: 'circle', zone: 'samye', x: slot.wx, z: slot.wz, r: 0.95 };
@@ -1296,7 +1319,11 @@ export function createPersonalStupa(ctx) {
     if (payload?.to === 'samye' || payload?.to === 'stupa' || payload?.to === 'grove') {
       ensureGroveAttached();
       ensureSamyeAttached();
-      refreshSamyeGlobalBlessing(true);
+      if ((payload?.to === 'grove' && !groveMeshesBuilt) || (payload?.to === 'samye' && !samyeMeshesBuilt)) {
+        rebuildGrove();
+      } else {
+        refreshSamyeGlobalBlessing(true);
+      }
     }
   });
   i18n?.onChange?.(() => {
@@ -1307,23 +1334,25 @@ export function createPersonalStupa(ctx) {
   let blessingRefreshTimer = 0;
 
   function update(dt) {
-    // Rotate golden mantra halos & crystal mandala cores smoothly
-    for (let i = 0; i < animatedOrnaments.length; i++) {
-      const m = animatedOrnaments[i];
-      if (m.userData.mantraHalo) {
-        m.userData.mantraHalo.rotation.y += dt * 0.65;
+    if (state.zone === 'grove' || state.zone === 'samye') {
+      // Rotate golden mantra halos & crystal mandala cores smoothly
+      for (let i = 0; i < animatedOrnaments.length; i++) {
+        const m = animatedOrnaments[i];
+        if (m.userData.mantraHalo) {
+          m.userData.mantraHalo.rotation.y += dt * 0.65;
+        }
+        if (m.userData.crystalCore) {
+          m.userData.crystalCore.rotation.y -= dt * 0.9;
+        }
       }
-      if (m.userData.crystalCore) {
-        m.userData.crystalCore.rotation.y -= dt * 0.9;
-      }
-    }
 
-    // Rotate monument Dharma Wheels
-    if (boudhaMonumentMesh?.userData?.dharmaWheel) {
-      boudhaMonumentMesh.userData.dharmaWheel.rotation.z += dt * 0.4;
-    }
-    if (samyeMonumentMesh?.userData?.dharmaWheel) {
-      samyeMonumentMesh.userData.dharmaWheel.rotation.z += dt * 0.4;
+      // Rotate monument Dharma Wheels
+      if (boudhaMonumentMesh?.userData?.dharmaWheel) {
+        boudhaMonumentMesh.userData.dharmaWheel.rotation.z += dt * 0.4;
+      }
+      if (samyeMonumentMesh?.userData?.dharmaWheel) {
+        samyeMonumentMesh.userData.dharmaWheel.rotation.z += dt * 0.4;
+      }
     }
 
     // Periodically keep the Samye Global Co-op Blessing buff refreshed

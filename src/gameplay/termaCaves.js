@@ -257,7 +257,7 @@ export function createTermaCaves(ctx) {
   }
 
   const caveRuntime = new Map(); // id -> runtime object
-  const sealTex = makeTermaSealTexture();
+  let sealTex = null;
 
   function syncState() {
     const cavesSnap = {};
@@ -459,6 +459,7 @@ export function createTermaCaves(ctx) {
     root.add(relicCore);
 
     // Tibetan Seed Syllable Seal Plaque above casket
+    if (!sealTex) sealTex = makeTermaSealTexture();
     const sealMat = new THREE.MeshBasicMaterial({
       map: sealTex || null,
       color: 0xfde047,
@@ -561,11 +562,27 @@ export function createTermaCaves(ctx) {
     }
   }
 
+  function ensureCaveMesh(rt) {
+    if (!rt) return null;
+    if (!rt.meshes) {
+      rt.meshes = buildCaveMesh(rt.def);
+      updateCaveVisuals(rt);
+    }
+    const parentGroup = ctx.zoneGroups?.[rt.def.map] || scene;
+    if (parentGroup && rt.meshes.root.parent !== parentGroup) {
+      parentGroup.add(rt.meshes.root);
+    }
+    rt.meshes.root.visible = (state.zone || 'stupa') === rt.def.map;
+    return rt.meshes;
+  }
+
   function refreshCaveElevation(rt) {
     if (!rt) return;
     const y = ctx.world?.getHeight?.(rt.def.x, rt.def.z, rt.def.map) ?? 0;
     rt.y = y;
-    rt.meshes.root.position.set(rt.def.x, y, rt.def.z);
+    if (rt.meshes?.root) {
+      rt.meshes.root.position.set(rt.def.x, y, rt.def.z);
+    }
     rt.posVec.set(rt.def.x, y, rt.def.z);
   }
 
@@ -660,9 +677,12 @@ export function createTermaCaves(ctx) {
 
     rt.status = 'EXTRACTED';
     rt.burstTimer = 2.6;
-    rt.meshes.beamMesh.visible = true;
-    rt.meshes.beamMat.color.setHex(0xfde047);
-    rt.meshes.beamMat.opacity = 0.92;
+    ensureCaveMesh(rt);
+    if (rt.meshes) {
+      rt.meshes.beamMesh.visible = true;
+      rt.meshes.beamMat.color.setHex(0xfde047);
+      rt.meshes.beamMat.opacity = 0.92;
+    }
     updateCaveVisuals(rt);
 
     const dropPos = {
@@ -798,14 +818,8 @@ export function createTermaCaves(ctx) {
     return null;
   }
 
-  // Initialize all 5 Chapter Terma Caves and attach to zoneGroups
+  // Initialize all 5 Chapter Terma Caves (meshes constructed lazily when zone loads/enters)
   for (const def of TERMA_CAVE_DEFS) {
-    const meshes = buildCaveMesh(def);
-    const parentGroup = ctx.zoneGroups?.[def.map] || scene;
-    if (parentGroup) {
-      parentGroup.add(meshes.root);
-    }
-
     const posVec = new THREE.Vector3(def.x, 0, def.z);
     const rt = {
       def,
@@ -814,11 +828,13 @@ export function createTermaCaves(ctx) {
       status: savedState.extracted[def.id] ? 'EXTRACTED' : 'DORMANT',
       guardIds: new Set(),
       burstTimer: 0,
-      meshes,
+      meshes: null,
     };
     caveRuntime.set(def.id, rt);
+    if ((state.zone || 'stupa') === def.map) {
+      ensureCaveMesh(rt);
+    }
     refreshCaveElevation(rt);
-    updateCaveVisuals(rt);
 
     if (Array.isArray(ctx.interactables)) {
       ctx.interactables.push({
@@ -958,6 +974,7 @@ export function createTermaCaves(ctx) {
   bus?.on('map:loaded', ({ mapId } = {}) => {
     for (const rt of caveRuntime.values()) {
       if (!mapId || rt.def.map === mapId) {
+        if (mapId === rt.def.map) ensureCaveMesh(rt);
         refreshCaveElevation(rt);
       }
     }
@@ -966,12 +983,16 @@ export function createTermaCaves(ctx) {
   bus?.on('zone:change', ({ to } = {}) => {
     for (const rt of caveRuntime.values()) {
       if (rt.def.map === to) {
+        ensureCaveMesh(rt);
         refreshCaveElevation(rt);
-      } else if (rt.status === 'GUARDED') {
-        // Reset mid-fight guard state if player leaves the map before finishing
-        rt.guardIds.clear();
-        rt.status = savedState.extracted[rt.def.id] ? 'EXTRACTED' : 'DORMANT';
-        updateCaveVisuals(rt);
+      } else {
+        if (rt.meshes?.root) rt.meshes.root.visible = false;
+        if (rt.status === 'GUARDED') {
+          // Reset mid-fight guard state if player leaves the map before finishing
+          rt.guardIds.clear();
+          rt.status = savedState.extracted[rt.def.id] ? 'EXTRACTED' : 'DORMANT';
+          updateCaveVisuals(rt);
+        }
       }
     }
     syncState();
@@ -1005,6 +1026,7 @@ export function createTermaCaves(ctx) {
     const rt = findCaveRuntime(curZone);
     if (!rt) return;
 
+    ensureCaveMesh(rt);
     refreshCaveElevation(rt);
 
     // Animate seal ring, floating relic core, and extraction rainbow beam
