@@ -64,6 +64,7 @@ import { createWorldMap } from './ui/worldmap.js';
 import { createMinimap } from './ui/minimap.js';
 import { createCredits } from './ui/credits.js';
 import { createDungeon } from './gameplay/dungeon.js';
+import { createTermaCaves } from './gameplay/termaCaves.js';
 import { createCommunity } from './systems/community.js';
 import { createLampOfferingUi } from './ui/lampOffering.js';
 import { createPersonalStupa } from './gameplay/personalStupa.js';
@@ -206,6 +207,7 @@ const worldmap = createWorldMap(ctx);
 const minimap = createMinimap(ctx);
 const bosses = createBosses(ctx);
 const dungeon = createDungeon(ctx);
+const termaCaves = createTermaCaves(ctx);
 const credits = createCredits(ctx);
 
 const modules = [
@@ -213,7 +215,7 @@ const modules = [
   ctx.save,
   sky, stupa, flags, environment,
   zones,
-  player, mantra, enemies, bosses, dungeon, projectiles, targeting, loot, inventory, groundLoot, items,
+  player, mantra, enemies, bosses, dungeon, termaCaves, projectiles, targeting, loot, inventory, groundLoot, items,
   community, lamps, personalStupa, monkeys,
   vitals, skills, potions, shrines,
   codex, waypoints, quests, npcs,

@@ -21,6 +21,7 @@
 import * as THREE from 'three';
 import '../i18n/ch5.js';
 import '../i18n/coop.js';
+import '../i18n/termaCaves.js';
 import { i18n } from '../i18n.js';
 
 export const GRID_W = 6;
@@ -223,11 +224,21 @@ export function generateFloorLayout(floorSeed, floorNum = 1) {
   startRoom.template = 'hall';
 
   // Assign templates to intermediate rooms
+  const midRooms = [];
   let tIdx = Math.floor(rng() * ROOM_TEMPLATES.length);
   for (const room of visitedList) {
     if (room === startRoom || room === farthestRoom) continue;
     room.template = ROOM_TEMPLATES[(tIdx + Math.floor(rng() * 2)) % ROOM_TEMPLATES.length];
     tIdx += 1;
+    midRooms.push(room);
+  }
+
+  // Designate 1 intermediate room as a Terma Cave Vault Room (`伏藏密室`) on each floor
+  let vaultRoom = null;
+  if (midRooms.length > 0) {
+    vaultRoom = midRooms[Math.floor(rng() * midRooms.length)];
+    vaultRoom.role = 'vault';
+    vaultRoom.template = 'vein';
   }
 
   // Pick 3–4 rooms for Terma Crystal Nodes (`伏藏晶石`)
@@ -262,11 +273,13 @@ export function generateFloorLayout(floorSeed, floorNum = 1) {
     connections: Array.from(connections),
     startRoom,
     exitRoom: farthestRoom,
+    vaultRoom,
     crystals,
   };
 }
 
 function makeWallSyllableTexture() {
+  if (typeof document === 'undefined') return null;
   const canvas = document.createElement('canvas');
   canvas.width = 256;
   canvas.height = 256;
@@ -326,6 +339,10 @@ export function createDungeon(ctx) {
   let gateUnlocked = false;
   let bossSubduedOnFloor = false;
   let chestOpened = false;
+  let pendingTimeBonus = false;
+  const vaultGuardIds = new Set();
+  let vaultUnsealed = false;
+  let vaultExtracted = false;
 
   loadSaved();
   if (ctx.save?.register) {
@@ -351,7 +368,14 @@ export function createDungeon(ctx) {
   let gatePortalMat = null;
   let gateRingMat = null;
   let chestMeshGroup = null;
+  let chestLidMesh = null;
+  let chestBeamMesh = null;
   let returnGateGroup = null;
+  let vaultMeshGroup = null;
+  let vaultLidMesh = null;
+  let vaultCoreMesh = null;
+  let vaultRingMat = null;
+  let vaultBeamMesh = null;
 
   // Shared Geometries & Materials for InstancedMeshes (Zero PointLights)
   const floorTileGeo = new THREE.BoxGeometry(15.2, 0.4, 15.2);
@@ -447,6 +471,12 @@ export function createDungeon(ctx) {
       gateUnlocked,
       bossSubdued: bossSubduedOnFloor,
       chestOpened,
+      vaultGuardsRemaining: vaultGuardIds.size,
+      vaultUnsealed,
+      vaultExtracted,
+      vaultRoomWorld: floorLayout?.vaultRoom
+        ? { x: floorLayout.vaultRoom.wx, z: floorLayout.vaultRoom.wz }
+        : null,
       roomCount: floorLayout?.rooms?.length || 0,
       rooms:
         floorLayout?.rooms?.map((r) => ({
@@ -488,7 +518,14 @@ export function createDungeon(ctx) {
     crystalMeshes.clear();
     gateMeshGroup = null;
     chestMeshGroup = null;
+    chestLidMesh = null;
+    chestBeamMesh = null;
     returnGateGroup = null;
+    vaultMeshGroup = null;
+    vaultLidMesh = null;
+    vaultCoreMesh = null;
+    vaultRingMat = null;
+    vaultBeamMesh = null;
 
     // Remove registered colliders from ctx.colliders
     if (Array.isArray(ctx.colliders) && floorColliders.length > 0) {
@@ -914,6 +951,154 @@ export function createDungeon(ctx) {
         },
       });
     }
+
+    // 7. Terma Cave Vault Room Reliquary (`古巖伏藏龕`)
+    if (layout.vaultRoom) {
+      const vr = layout.vaultRoom;
+      vaultMeshGroup = new THREE.Group();
+      vaultMeshGroup.name = 'AncientTermaVaultReliquary';
+      vaultMeshGroup.position.set(vr.wx, 0, vr.wz);
+
+      const ped = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.9, 1.15, 0.45, 10),
+        pillarMat,
+      );
+      ped.position.y = 0.225;
+
+      const casketBody = new THREE.Mesh(
+        new THREE.BoxGeometry(1.15, 0.56, 0.85),
+        crystalBaseMat,
+      );
+      casketBody.position.y = 0.72;
+
+      vaultLidMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(1.22, 0.2, 0.92),
+        pillarMat,
+      );
+      vaultLidMesh.position.set(0, 1.08, 0);
+
+      vaultCoreMesh = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.3, 0),
+        crystalShardMat,
+      );
+      vaultCoreMesh.position.set(0, 1.5, 0);
+      vaultCoreMesh.visible = false;
+
+      vaultRingMat = new THREE.MeshBasicMaterial({
+        color: 0xef4444,
+        transparent: true,
+        opacity: 0.75,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      const vRing = new THREE.Mesh(new THREE.RingGeometry(1.35, 2.0, 32), vaultRingMat);
+      vRing.rotation.x = -Math.PI * 0.5;
+      vRing.position.y = 0.05;
+
+      const vBeamGeo = new THREE.CylinderGeometry(0.35, 0.65, 5.5, 16, 1, true);
+      vBeamGeo.translate(0, 2.75, 0);
+      vaultBeamMesh = new THREE.Mesh(
+        vBeamGeo,
+        new THREE.MeshBasicMaterial({
+          color: 0x2dd4bf,
+          transparent: true,
+          opacity: 0.45,
+          blending: THREE.AdditiveBlending,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        }),
+      );
+      vaultBeamMesh.visible = false;
+
+      vaultMeshGroup.add(ped, casketBody, vaultLidMesh, vaultCoreMesh, vRing, vaultBeamMesh);
+      dungeonGroup.add(vaultMeshGroup);
+
+      const vaultPosVec = new THREE.Vector3(vr.wx, 0, vr.wz);
+      addDungeonInteractable({
+        id: `terma-vault-reliquary-f${layout.floor}`,
+        kind: 'termaVaultReliquary',
+        zone: 'terma',
+        action: 'interact',
+        labelKey: 'prompt.dungeonVault.extract',
+        getLabel() {
+          if (!vaultUnsealed && vaultGuardIds.size > 0) {
+            return i18n.t('prompt.dungeonVault.sealed', { remaining: vaultGuardIds.size });
+          }
+          return i18n.t('prompt.dungeonVault.extract');
+        },
+        radius: 3.4,
+        getPosition: () => vaultPosVec,
+        isAvailable: () => state.zone === 'terma' && !state.uiOpen && !vaultExtracted,
+        onInteract() {
+          if (!vaultUnsealed && vaultGuardIds.size > 0) {
+            bus.emit('toast', {
+              text: i18n.t('toast.termaCave.stillGuarded', { remaining: vaultGuardIds.size }),
+              kind: 'warning',
+            });
+            return false;
+          }
+          extractVaultReliquary();
+          return true;
+        },
+      });
+    }
+  }
+
+  function setVaultUnsealedVisual(unsealed) {
+    vaultUnsealed = Boolean(unsealed);
+    if (vaultRingMat) {
+      vaultRingMat.color.setHex(vaultUnsealed ? 0xfbbf24 : 0xef4444);
+    }
+    if (vaultCoreMesh) {
+      vaultCoreMesh.visible = vaultUnsealed && !vaultExtracted;
+    }
+    if (vaultBeamMesh) {
+      vaultBeamMesh.visible = vaultUnsealed && !vaultExtracted;
+    }
+    syncState();
+  }
+
+  function extractVaultReliquary() {
+    if (vaultExtracted || !floorLayout?.vaultRoom) return null;
+    vaultExtracted = true;
+    if (vaultLidMesh) {
+      vaultLidMesh.rotation.x = -1.0;
+      vaultLidMesh.position.set(0, 1.2, -0.3);
+    }
+    if (vaultCoreMesh) vaultCoreMesh.visible = false;
+    if (vaultBeamMesh) vaultBeamMesh.visible = false;
+    if (vaultRingMat) vaultRingMat.color.setHex(0x38bdf8);
+
+    const vr = floorLayout.vaultRoom;
+    const ilvl = 30 + currentTier;
+    const rarity = Math.random() < 0.35 ? 'terma' : 'rare';
+    const item = ctx.loot?.drop?.({
+      ilvl,
+      tier: currentTier,
+      rarity,
+      inDungeon: true,
+      pos: { x: vr.wx, y: 0, z: vr.wz + 1.4 },
+    });
+    const essence = 1 + Math.floor(currentTier / 4);
+    const turq = 28 + currentTier * 10;
+    ctx.inventory?.addMaterial?.('termaEssence', essence);
+    ctx.loot?.addTurquoise?.(turq);
+
+    bus.emit('sfx', { name: 'levelup' });
+    bus.emit('toast', {
+      text: i18n.t('toast.dungeonVault.extracted', { essence, turquoise: turq }),
+      kind: 'merit',
+    });
+    bus.emit('dungeon:vaultExtracted', {
+      tier: currentTier,
+      floor: currentFloor,
+      item,
+      essence,
+      turquoise: turq,
+    });
+    syncState();
+    return { item, essence, turquoise: turq };
   }
 
   function setGateUnlockedVisual(unlocked) {
@@ -942,6 +1127,9 @@ export function createDungeon(ctx) {
     totalEnemies = 0;
     liberatedCount = 0;
     gateUnlocked = false;
+    vaultGuardIds.clear();
+    vaultUnsealed = false;
+    vaultExtracted = false;
 
     const monsterLevel = 30 + currentTier;
     const tierHpMult = Number((1 + 0.1 * currentTier).toFixed(2));
@@ -988,9 +1176,13 @@ export function createDungeon(ctx) {
           z: sz,
           level: monsterLevel,
           rank: 'normal',
+          tags: room.role === 'vault' ? ['termaVaultGuard'] : undefined,
         });
         if (applyTierScalingToEnemyId(id)) {
           totalEnemies += 1;
+          if (room.role === 'vault') {
+            vaultGuardIds.add(id);
+          }
         }
       }
     }
@@ -1000,7 +1192,10 @@ export function createDungeon(ctx) {
     const affixCount = Math.min(3, 1 + Math.floor(currentTier / 3));
 
     for (let eIdx = 0; eIdx < elitePackCount; eIdx++) {
-      const targetRoom = combatRooms[(eIdx * 2 + 1) % combatRooms.length];
+      const targetRoom =
+        eIdx === 0 && layout.vaultRoom
+          ? layout.vaultRoom
+          : combatRooms[(eIdx * 2 + 1) % combatRooms.length];
       const kind = runMonsters[(eIdx + 1) % runMonsters.length];
       const rank = eIdx % 2 === 0 ? 'rare' : 'champion';
 
@@ -1022,11 +1217,17 @@ export function createDungeon(ctx) {
         level: monsterLevel,
         rank,
         affixes,
+        tags: targetRoom.role === 'vault' ? ['termaVaultGuard'] : undefined,
       });
       if (applyTierScalingToEnemyId(id)) {
         totalEnemies += 1;
+        if (targetRoom.role === 'vault') {
+          vaultGuardIds.add(id);
+        }
       }
     }
+
+    setVaultUnsealedVisual(vaultGuardIds.size === 0);
 
     if (totalEnemies === 0) {
       setGateUnlockedVisual(true);
@@ -1282,17 +1483,21 @@ export function createDungeon(ctx) {
     return loadFloor(currentFloor + 1);
   }
 
+  let lastBossSubduedTier = 1;
+  let lastBossTimeBonus = true;
+
   /**
    * Called when `termaGuardian` is subdued on Floor 3:
-   * Spawns the Terma Chest (`伏藏匣`), drops 4–6 tier-scaled items + `termaEssence`
-   * + 2 speed-bonus items if cleared within 10 minutes (`600s`), updates `highestClearedTier`,
-   * emits `terma:cleared`, and spawns the Return Gate to `chimphu`.
+   * Spawns the interactive Terma Chest (`伏藏匣`) & Return Gate to `chimphu`,
+   * updates `highestClearedTier`, and emits `terma:cleared`.
    */
   function onBossSubdued(bossState) {
     bossSubduedOnFloor = true;
     const tier = Math.max(currentTier, bossState?.tier || 1);
     const elapsedSec = Math.max(0, Math.round((state.elapsed || 0) - runStartElapsed));
     const timeBonus = elapsedSec <= 600;
+    lastBossSubduedTier = tier;
+    lastBossTimeBonus = timeBonus;
 
     if (tier > highestClearedTier) {
       highestClearedTier = tier;
@@ -1305,9 +1510,6 @@ export function createDungeon(ctx) {
 
     // Spawn 3D Terma Chest (`伏藏匣`) & Return Gate (`回返之門`)
     spawnTermaChestAndReturnGate(center.x, center.z);
-
-    // Open chest & drop rewards immediately so player & E2E tests receive full rewards
-    openTermaChest(tier, timeBonus);
 
     bus.emit('terma:cleared', {
       tier,
@@ -1330,14 +1532,45 @@ export function createDungeon(ctx) {
       chestMeshGroup.name = 'TermaTreasureChest';
       chestMeshGroup.position.set(cx, 0, cz + 2.4);
 
-      const box = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.85, 0.95), pillarMat);
-      box.position.y = 0.425;
-      const trim = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.22, 1.02), crystalBaseMat);
-      trim.position.y = 0.78;
+      const box = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.72, 0.95), pillarMat);
+      box.position.y = 0.36;
+      chestLidMesh = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.24, 1.02), crystalBaseMat);
+      chestLidMesh.position.set(0, 0.82, 0);
       const coreGem = new THREE.Mesh(new THREE.OctahedronGeometry(0.28, 0), crystalShardMat);
-      coreGem.position.set(0, 1.05, 0);
-      chestMeshGroup.add(box, trim, coreGem);
+      coreGem.position.set(0, 1.25, 0);
+
+      const beamGeo = new THREE.CylinderGeometry(0.4, 0.75, 6.0, 16, 1, true);
+      beamGeo.translate(0, 3.0, 0);
+      chestBeamMesh = new THREE.Mesh(
+        beamGeo,
+        new THREE.MeshBasicMaterial({
+          color: 0xfbbf24,
+          transparent: true,
+          opacity: 0.5,
+          blending: THREE.AdditiveBlending,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        }),
+      );
+
+      chestMeshGroup.add(box, chestLidMesh, coreGem, chestBeamMesh);
       dungeonGroup.add(chestMeshGroup);
+
+      const chestPos = new THREE.Vector3(cx, 0, cz + 2.4);
+      addDungeonInteractable({
+        id: 'terma-boss-chest',
+        kind: 'termaBossChest',
+        zone: 'terma',
+        action: 'interact',
+        labelKey: 'prompt.termaBossChest',
+        radius: 3.5,
+        getPosition: () => chestPos,
+        isAvailable: () => state.zone === 'terma' && !state.uiOpen && !chestOpened,
+        onInteract() {
+          openTermaChest(lastBossSubduedTier, lastBossTimeBonus);
+          return true;
+        },
+      });
     }
 
     if (!returnGateGroup) {
@@ -1368,9 +1601,21 @@ export function createDungeon(ctx) {
     }
   }
 
-  function openTermaChest(tier = currentTier, timeBonus = true) {
-    if (chestOpened) return;
+  function openTermaChest(tier = lastBossSubduedTier || currentTier, timeBonus = lastBossTimeBonus) {
+    if (chestOpened) return null;
     chestOpened = true;
+
+    if (chestLidMesh) {
+      chestLidMesh.rotation.x = -1.05;
+      chestLidMesh.position.set(0, 0.96, -0.35);
+    }
+    if (chestBeamMesh) {
+      chestBeamMesh.visible = false;
+    }
+
+    const dropPos = chestMeshGroup
+      ? { x: chestMeshGroup.position.x, y: 0, z: chestMeshGroup.position.z + 1.2 }
+      : undefined;
 
     const ilvl = 30 + tier;
     const rng = mulberry32(baseSeed + tier * 97 + 999);
@@ -1379,21 +1624,25 @@ export function createDungeon(ctx) {
     const extraPartyDrops = partySize > 1 ? Math.floor(partyFindChance + rng()) : 0;
     const dropCount = 4 + Math.floor(rng() * 3) + extraPartyDrops; // 4..6 items (+ party find bonus)
 
+    const items = [];
     for (let i = 0; i < dropCount; i++) {
-      const forcedRarity = i === 0 ? (rng() < 0.35 ? 'terma' : 'rare') : undefined;
-      ctx.loot?.drop?.({
+      const forcedRarity = i === 0 ? (rng() < 0.45 ? 'terma' : 'rare') : undefined;
+      const it = ctx.loot?.drop?.({
         ilvl,
         tier,
         rarity: forcedRarity,
         rank: 'boss',
         inDungeon: true,
+        pos: dropPos,
       });
+      if (it) items.push(it);
     }
 
     // Grant Terma Essence (`伏藏精華`) & Turquoise (+ party find bonus)
     const essenceCount = 1 + Math.floor(tier / 3);
     ctx.inventory?.addMaterial?.('termaEssence', essenceCount);
     ctx.loot?.addTurquoise?.(Math.round((60 + tier * 25) * (1 + partyFindChance)));
+    bus.emit('sfx', { name: 'levelup' });
     bus.emit('toast', {
       text: i18n.t('toast.termaEssenceGained', { count: essenceCount }),
       kind: 'merit',
@@ -1401,29 +1650,38 @@ export function createDungeon(ctx) {
 
     // 10-minute Speed Bonus: 2 extra items (at least 1 rare/terma) + bonus Turquoise
     if (timeBonus) {
-      ctx.loot?.drop?.({
+      const s1 = ctx.loot?.drop?.({
         ilvl,
         tier,
         rarity: 'rare',
         rank: 'boss',
         inDungeon: true,
+        pos: dropPos,
       });
-      ctx.loot?.drop?.({
+      const s2 = ctx.loot?.drop?.({
         ilvl,
         tier,
         rank: 'boss',
         inDungeon: true,
+        pos: dropPos,
       });
+      if (s1) items.push(s1);
+      if (s2) items.push(s2);
       ctx.loot?.addTurquoise?.(40 + tier * 15);
       bus.emit('toast', {
         text: i18n.t('toast.termaSpeedBonus'),
         kind: 'merit',
       });
     }
+    bus.emit('dungeon:chestOpened', { tier, essenceCount, items });
     syncState();
+    return { tier, essenceCount, items };
   }
 
   function exitToChimphu() {
+    if (bossSubduedOnFloor && !chestOpened) {
+      openTermaChest(lastBossSubduedTier, lastBossTimeBonus);
+    }
     active = false;
     clearFloorEntities();
     ctx.enemies?.clear?.();
@@ -1463,9 +1721,22 @@ export function createDungeon(ctx) {
   }
 
   // ---------------------------------------------------------------- Event Listeners
-  bus.on('enemy:liberated', () => {
+  bus.on('enemy:liberated', (payload) => {
     if (state.zone !== 'terma' || !active) return;
     liberatedCount += 1;
+
+    if (payload?.id && vaultGuardIds.has(payload.id)) {
+      vaultGuardIds.delete(payload.id);
+      if (vaultGuardIds.size === 0 && !vaultUnsealed) {
+        setVaultUnsealedVisual(true);
+        bus.emit('sfx', { name: 'bell' });
+        bus.emit('toast', {
+          text: i18n.t('toast.dungeonVault.unsealed'),
+          kind: 'merit',
+        });
+      }
+    }
+
     const ratio = totalEnemies > 0 ? liberatedCount / totalEnemies : 1;
     if (!gateUnlocked && ratio >= 0.70) {
       setGateUnlockedVisual(true);
@@ -1944,6 +2215,24 @@ export function createDungeon(ctx) {
         ? 0.72 + Math.sin(elapsed * 3.5) * 0.2
         : 0.45 + Math.sin(elapsed * 1.8) * 0.1;
     }
+    if (vaultCoreMesh && vaultCoreMesh.visible) {
+      vaultCoreMesh.rotation.y = elapsed * 1.8;
+      vaultCoreMesh.position.y = 1.5 + Math.sin(elapsed * 3.0) * 0.1;
+    }
+    if (!vaultUnsealed && vaultGuardIds.size > 0 && ctx.enemies?.getActiveEnemies) {
+      const aliveIds = new Set(ctx.enemies.getActiveEnemies().map((e) => e.id));
+      for (const gid of [...vaultGuardIds]) {
+        if (!aliveIds.has(gid)) vaultGuardIds.delete(gid);
+      }
+      if (vaultGuardIds.size === 0) {
+        setVaultUnsealedVisual(true);
+        bus.emit('sfx', { name: 'bell' });
+        bus.emit('toast', {
+          text: i18n.t('toast.dungeonVault.unsealed'),
+          kind: 'merit',
+        });
+      }
+    }
   }
 
   syncState();
@@ -1960,6 +2249,8 @@ export function createDungeon(ctx) {
     isTierSelectOpen: () => tierSelectOpen,
     breakCrystal,
     breakAllCrystals,
+    extractVaultReliquary,
+    openChest: openTermaChest,
     unlockGate,
     onBossSubdued,
     onPlayerFaint,
