@@ -43,7 +43,7 @@ function buildSketchCanvas(img) {
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
-  const g = c.getContext('2d');
+  const g = c.getContext('2d', { willReadFrequently: true });
   g.drawImage(img, 0, 0);
 
   const imgData = g.getImageData(0, 0, w, h);
@@ -109,11 +109,6 @@ export function ensureMuralSprite(id, onLoad) {
     img.decoding = 'async';
     img.onload = () => {
       entry.img = img;
-      try {
-        entry.sketch = buildSketchCanvas(img);
-      } catch {
-        entry.sketch = img;
-      }
       entry.ready = true;
       for (const fn of entry.waiters.splice(0)) fn(entry);
     };
@@ -550,6 +545,13 @@ function drawEpisodeSprites(g, sprites, mode, time, onAssetLoaded) {
     const entry = ensureMuralSprite(s.id, onAssetLoaded);
     if (!entry.ready || !entry.img) continue;
 
+    if (isSketch && !s.isVision && !entry.sketch) {
+      try {
+        entry.sketch = buildSketchCanvas(entry.img);
+      } catch {
+        entry.sketch = entry.img;
+      }
+    }
     const source = isSketch && !s.isVision ? (entry.sketch || entry.img) : entry.img;
     const nw = entry.img.naturalWidth || entry.img.width || 1;
     const nh = entry.img.naturalHeight || entry.img.height || 1;
@@ -678,14 +680,14 @@ export class MuralScrollCanvas {
     this._lastTs = 0;
     this._running = false;
     this._overrideStates = null; // optional Map/object questId -> 'sketch' | 'painted' | 'active'
-
-    this._preloadChapterSprites();
   }
 
   setChapter(chapterOrMap) {
     this.mural = getChapterMural(chapterOrMap);
     this.chapterId = this.mural.id;
-    this._preloadChapterSprites();
+    if (this._running) {
+      this._preloadChapterSprites();
+    }
   }
 
   _preloadChapterSprites() {
@@ -787,6 +789,7 @@ export class MuralScrollCanvas {
   start() {
     if (this._running) return;
     this._running = true;
+    this._preloadChapterSprites();
     this._lastTs = performance.now();
     const tick = (now) => {
       if (!this._running) return;
@@ -808,7 +811,10 @@ export class MuralScrollCanvas {
   }
 
   renderOnce() {
-    if (!this._running) this.draw();
+    if (!this._running) {
+      if (!this.canvas || (this.canvas.isConnected && !this.canvas.offsetParent)) return;
+      this.draw();
+    }
   }
 
   update(dt) {

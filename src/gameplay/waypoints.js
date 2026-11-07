@@ -172,6 +172,16 @@ function buildWaypointMesh(unlocked = false) {
     color: 0x5c4028,
     roughness: 0.85,
   });
+  const poleGeo = new THREE.CylinderGeometry(0.035, 0.045, 2.55, 6);
+  const tipGeo = new THREE.ConeGeometry(0.055, 0.14, 6);
+  const flagGeo = new THREE.PlaneGeometry(0.24, 0.19, 2, 1);
+  const sharedFlagMats = FLAG_COLORS.map((colorHex) => new THREE.MeshStandardMaterial({
+    color: colorHex,
+    emissive: colorHex,
+    emissiveIntensity: unlocked ? 0.35 : 0.08,
+    roughness: 0.65,
+    side: THREE.DoubleSide,
+  }));
   const flags = [];
   const numPoles = 5;
   const poleRadius = 1.62;
@@ -182,13 +192,13 @@ function buildWaypointMesh(unlocked = false) {
     const pz = Math.sin(angle) * poleRadius;
 
     // Outer wooden pole
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 2.55, 6), poleMat);
+    const pole = new THREE.Mesh(poleGeo, poleMat);
     pole.position.set(px, 1.27, pz);
     pole.castShadow = true;
     root.add(pole);
 
     // Small brass pole tip
-    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.14, 6), capMat);
+    const tip = new THREE.Mesh(tipGeo, capMat);
     tip.position.set(px, 2.6, pz);
     root.add(tip);
 
@@ -200,16 +210,7 @@ function buildWaypointMesh(unlocked = false) {
       const sag = Math.sin(t * Math.PI) * 0.14;
       const fy = 2.88 * (1 - t) + 2.45 * t - sag;
 
-      const colorHex = FLAG_COLORS[(i + f) % FLAG_COLORS.length];
-      const flagMat = new THREE.MeshStandardMaterial({
-        color: colorHex,
-        emissive: colorHex,
-        emissiveIntensity: unlocked ? 0.35 : 0.08,
-        roughness: 0.65,
-        side: THREE.DoubleSide,
-      });
-
-      const flagGeo = new THREE.PlaneGeometry(0.24, 0.19, 2, 1);
+      const flagMat = sharedFlagMats[(i + f) % sharedFlagMats.length];
       const flagMesh = new THREE.Mesh(flagGeo, flagMat);
       flagMesh.position.set(fx, fy - 0.09, fz);
       flagMesh.rotation.y = -angle;
@@ -415,11 +416,18 @@ export function createWaypoints(ctx) {
     );
   }
 
-  // Create 3D meshes & interactables for all maps that define a waypoint
-  function ensureWaypointForMap(mapId) {
+  const registeredWaypointMaps = new Set();
+
+  function ensureWaypointMeshForMap(mapId) {
     const mapDef = MAPS[mapId];
     if (!mapDef || !mapDef.waypoint) return null;
-    if (waypointMeshes.has(mapId)) return waypointMeshes.get(mapId);
+    if (waypointMeshes.has(mapId)) {
+      const existing = waypointMeshes.get(mapId);
+      const zg = ctx.zoneGroups?.[mapId];
+      if (zg && existing.parent !== zg) zg.add(existing);
+      existing.visible = (state.zone || 'stupa') === mapId;
+      return existing;
+    }
 
     const coords = resolveWaypointCoords(mapDef);
     if (!coords) return null;
@@ -428,6 +436,7 @@ export function createWaypoints(ctx) {
     const isUnl = unlockedSet.has(mapId);
     const mesh = buildWaypointMesh(isUnl);
     mesh.position.set(coords.x, y, coords.z);
+    mesh.visible = (state.zone || 'stupa') === mapId;
 
     const zoneGrp = ctx.zoneGroups?.[mapId];
     if (zoneGrp) {
@@ -436,45 +445,64 @@ export function createWaypoints(ctx) {
       scene.add(mesh);
     }
 
-    // Small pillar collider so player doesn't walk inside the stone shaft
-    if (Array.isArray(ctx.colliders)) {
-      ctx.colliders.push({
-        type: 'circle',
-        x: coords.x,
-        z: coords.z,
-        r: 0.72,
-        zone: mapId,
-      });
-    }
-
-    const posVec = new THREE.Vector3(coords.x, y, coords.z);
-    if (Array.isArray(ctx.interactables)) {
-      ctx.interactables.push({
-        id: `waypoint-${mapId}`,
-        kind: 'waypoint',
-        zone: mapId,
-        action: 'interact',
-        labelKey: 'prompt.waypoint',
-        radius: WAYPOINT_INTERACT_RADIUS,
-        getPosition: () => {
-          const curY = ctx.world?.getHeight?.(coords.x, coords.z, mapId) ?? 0;
-          posVec.set(coords.x, curY, coords.z);
-          return posVec;
-        },
-        isAvailable: () => (state.zone || 'stupa') === mapId && !state.uiOpen,
-        onInteract: () => {
-          if (!unlockedSet.has(mapId)) {
-            unlock(mapId);
-          }
-          ctx.audio?.chime?.();
-          bus.emit('waypoint:interact', { mapId });
-          bus.emit('worldmap:open', { tab: 'world', waypointMode: true, fromWaypoint: mapId });
-        },
-      });
-    }
-
     waypointMeshes.set(mapId, mesh);
     return mesh;
+  }
+
+  // Register colliders & interactables for all maps that define a waypoint; build 3D mesh lazily per active zone
+  function ensureWaypointForMap(mapId) {
+    const mapDef = MAPS[mapId];
+    if (!mapDef || !mapDef.waypoint) return null;
+
+    const coords = resolveWaypointCoords(mapDef);
+    if (!coords) return null;
+
+    if (!registeredWaypointMaps.has(mapId)) {
+      registeredWaypointMaps.add(mapId);
+      const y = ctx.world?.getHeight?.(coords.x, coords.z, mapId) ?? 0;
+
+      // Small pillar collider so player doesn't walk inside the stone shaft
+      if (Array.isArray(ctx.colliders)) {
+        ctx.colliders.push({
+          type: 'circle',
+          x: coords.x,
+          z: coords.z,
+          r: 0.72,
+          zone: mapId,
+        });
+      }
+
+      const posVec = new THREE.Vector3(coords.x, y, coords.z);
+      if (Array.isArray(ctx.interactables)) {
+        ctx.interactables.push({
+          id: `waypoint-${mapId}`,
+          kind: 'waypoint',
+          zone: mapId,
+          action: 'interact',
+          labelKey: 'prompt.waypoint',
+          radius: WAYPOINT_INTERACT_RADIUS,
+          getPosition: () => {
+            const curY = ctx.world?.getHeight?.(coords.x, coords.z, mapId) ?? 0;
+            posVec.set(coords.x, curY, coords.z);
+            return posVec;
+          },
+          isAvailable: () => (state.zone || 'stupa') === mapId && !state.uiOpen,
+          onInteract: () => {
+            if (!unlockedSet.has(mapId)) {
+              unlock(mapId);
+            }
+            ctx.audio?.chime?.();
+            bus.emit('waypoint:interact', { mapId });
+            bus.emit('worldmap:open', { tab: 'world', waypointMode: true, fromWaypoint: mapId });
+          },
+        });
+      }
+    }
+
+    if ((state.zone || 'stupa') === mapId) {
+      return ensureWaypointMeshForMap(mapId);
+    }
+    return waypointMeshes.get(mapId) || null;
   }
 
   for (const mapId of Object.keys(MAPS)) {
@@ -484,7 +512,7 @@ export function createWaypoints(ctx) {
   }
 
   bus.on('map:loaded', ({ mapId }) => {
-    const mesh = ensureWaypointForMap(mapId);
+    const mesh = ensureWaypointMeshForMap(mapId);
     if (mesh) {
       const mapDef = MAPS[mapId];
       const coords = resolveWaypointCoords(mapDef);
@@ -496,6 +524,13 @@ export function createWaypoints(ctx) {
       if (zg && mesh.parent !== zg) {
         zg.add(mesh);
       }
+    }
+  });
+
+  bus.on('zone:change', ({ to }) => {
+    if (to) ensureWaypointMeshForMap(to);
+    for (const [mId, mesh] of waypointMeshes.entries()) {
+      mesh.visible = mId === to;
     }
   });
 

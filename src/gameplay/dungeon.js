@@ -435,23 +435,15 @@ export function createDungeon(ctx) {
   let vaultRingMat = null;
   let vaultBeamMesh = null;
 
-  // Shared Geometries & Materials for InstancedMeshes (Zero PointLights)
-  const stoneTex = makeCavernStoneTexture();
-  const warmGlowTex = makeRadialGlowTexture(
-    'rgba(255, 198, 92, 0.85)',
-    'rgba(217, 119, 6, 0.34)',
-    'rgba(120, 53, 15, 0.0)',
-  );
-  const coolGlowTex = makeRadialGlowTexture(
-    'rgba(94, 234, 212, 0.82)',
-    'rgba(13, 148, 136, 0.32)',
-    'rgba(15, 118, 110, 0.0)',
-  );
+  // Shared Geometries & Materials for InstancedMeshes (Zero PointLights; textures built lazily on dungeon entry)
+  let stoneTex = null;
+  let warmGlowTex = null;
+  let coolGlowTex = null;
+  let syllableTex = null;
 
   const floorTileGeo = new THREE.BoxGeometry(15.4, 0.45, 15.4);
   const floorTileMat = new THREE.MeshStandardMaterial({
     color: 0x38334c,
-    map: stoneTex || null,
     roughness: 0.84,
     metalness: 0.14,
   });
@@ -459,7 +451,6 @@ export function createDungeon(ctx) {
   const wallSegGeo = new THREE.BoxGeometry(1.0, 1.0, 1.0);
   const wallSegMat = new THREE.MeshStandardMaterial({
     color: 0x463f5e,
-    map: stoneTex || null,
     roughness: 0.82,
     metalness: 0.16,
   });
@@ -467,7 +458,6 @@ export function createDungeon(ctx) {
   const pillarGeo = new THREE.CylinderGeometry(0.54, 0.66, 7.6, 8);
   const pillarMat = new THREE.MeshStandardMaterial({
     color: 0x584f78,
-    map: stoneTex || null,
     roughness: 0.74,
     metalness: 0.24,
   });
@@ -476,7 +466,6 @@ export function createDungeon(ctx) {
   const rockCragGeo = new THREE.DodecahedronGeometry(1.25, 1);
   const rockCragMat = new THREE.MeshStandardMaterial({
     color: 0x2e2942,
-    map: stoneTex || null,
     roughness: 0.90,
     metalness: 0.10,
   });
@@ -485,7 +474,6 @@ export function createDungeon(ctx) {
   const ceilingArchGeo = new THREE.CylinderGeometry(6.4, 8.6, 1.9, 8);
   const ceilingVaultMat = new THREE.MeshStandardMaterial({
     color: 0x211d30,
-    map: stoneTex || null,
     roughness: 0.92,
     metalness: 0.08,
   });
@@ -517,7 +505,6 @@ export function createDungeon(ctx) {
   const lightPoolGeo = new THREE.PlaneGeometry(1.0, 1.0);
   lightPoolGeo.rotateX(-Math.PI / 2);
   const warmPoolMat = new THREE.MeshBasicMaterial({
-    map: warmGlowTex || null,
     color: 0xffb74d,
     transparent: true,
     opacity: 0.78,
@@ -525,7 +512,6 @@ export function createDungeon(ctx) {
     depthWrite: false,
   });
   const coolPoolMat = new THREE.MeshBasicMaterial({
-    map: coolGlowTex || null,
     color: 0x5eead4,
     transparent: true,
     opacity: 0.72,
@@ -543,15 +529,39 @@ export function createDungeon(ctx) {
     depthWrite: false,
   });
 
-  const syllableTex = makeWallSyllableTexture();
   const plaqueGeo = new THREE.PlaneGeometry(2.1, 2.1);
   const plaqueMat = new THREE.MeshBasicMaterial({
-    map: syllableTex,
     transparent: true,
     blending: THREE.AdditiveBlending,
     side: THREE.DoubleSide,
     depthWrite: false,
   });
+
+  function ensureDungeonTextures() {
+    if (stoneTex) return;
+    stoneTex = makeCavernStoneTexture();
+    warmGlowTex = makeRadialGlowTexture(
+      'rgba(255, 198, 92, 0.85)',
+      'rgba(217, 119, 6, 0.34)',
+      'rgba(120, 53, 15, 0.0)',
+    );
+    coolGlowTex = makeRadialGlowTexture(
+      'rgba(94, 234, 212, 0.82)',
+      'rgba(13, 148, 136, 0.32)',
+      'rgba(15, 118, 110, 0.0)',
+    );
+    syllableTex = makeWallSyllableTexture();
+    for (const mat of [floorTileMat, wallSegMat, pillarMat, rockCragMat, ceilingVaultMat]) {
+      mat.map = stoneTex || null;
+      mat.needsUpdate = true;
+    }
+    warmPoolMat.map = warmGlowTex || null;
+    warmPoolMat.needsUpdate = true;
+    coolPoolMat.map = coolGlowTex || null;
+    coolPoolMat.needsUpdate = true;
+    plaqueMat.map = syllableTex || null;
+    plaqueMat.needsUpdate = true;
+  }
 
   const veinGeo = new THREE.OctahedronGeometry(0.45, 0);
   const veinMat = new THREE.MeshStandardMaterial({
@@ -726,6 +736,7 @@ export function createDungeon(ctx) {
    * Builds the current floor's 3D scene using THREE.InstancedMesh (< 300 draw calls, 0 PointLights).
    */
   function buildFloorScene(layout) {
+    ensureDungeonTextures();
     clearFloorEntities();
 
     // 0. Outer Subterranean Cavern Shell & Abyssal Floor (100% sky-proof enclosure)

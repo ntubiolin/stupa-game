@@ -363,7 +363,7 @@ export function createMinimap(ctx) {
   });
 
   updateLabels();
-  redraw();
+  if (state.mode === 'play') redraw();
 
   function update(dt) {
     // Handle Tab zoom toggle
@@ -380,11 +380,13 @@ export function createMinimap(ctx) {
       wrapEl.classList.toggle('is-hidden', !show);
     }
 
-    // Throttle canvas redraw to every 0.1s
+    // Throttle canvas redraw to every 0.1s (skip while on title screen or covered by fullscreen UI)
     redrawAccum += dt;
     if (redrawAccum >= REDRAW_INTERVAL) {
       redrawAccum = 0;
-      redraw();
+      if (state.mode === 'play' && !state.hudHidden && !state.uiOpen) {
+        redraw();
+      }
     }
   }
 

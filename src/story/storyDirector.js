@@ -182,7 +182,11 @@ export function createStoryDirector(ctx) {
   function start() {
     if (started) return false;
     started = true;
-    if (JSON.stringify(saved) !== JSON.stringify(getState())) persist();
+    const current = getState();
+    const isUnchanged = saved && typeof saved === 'object'
+      && Object.keys(current).length === Object.keys(saved).length
+      && Object.keys(current).every(k => JSON.stringify(saved[k]) === JSON.stringify(current[k]));
+    if (!isUnchanged) persist();
     publishBeat();
     return true;
   }

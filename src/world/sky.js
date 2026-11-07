@@ -11,7 +11,7 @@ export function createSky(ctx) {
   const { scene, camera, renderer, state, config } = ctx;
 
   // ---------------------------------------------------------------- PMREM environment for metallic gold
-  if (renderer && typeof renderer.compile === 'function') {
+  if (renderer && typeof renderer.compile === 'function' && !ctx.isSoftwareWebGL) {
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     pmremGenerator.compileEquirectangularShader();
     const roomEnv = new RoomEnvironment();
@@ -28,8 +28,8 @@ export function createSky(ctx) {
 
   // ---------------------------------------------------------------- Lights
   const sunLight = new THREE.DirectionalLight(0xfff4dd, 1.55);
-  sunLight.castShadow = true;
-  const shadowSize = config.RENDER.shadowMapSize || 2048;
+  sunLight.castShadow = !ctx.lowSpec;
+  const shadowSize = ctx.lowSpec ? 512 : Math.min(config.RENDER.shadowMapSize || 1024, 1024);
   sunLight.shadow.mapSize.set(shadowSize, shadowSize);
   const d = 46;
   sunLight.shadow.camera.left = -d;
@@ -68,7 +68,7 @@ export function createSky(ctx) {
     uTime: { value: 0.0 },
   };
 
-  const skyGeo = new THREE.SphereGeometry(490, 48, 32);
+  const skyGeo = new THREE.SphereGeometry(490, ctx.lowSpec ? 24 : 36, ctx.lowSpec ? 16 : 24);
   const skyMat = new THREE.ShaderMaterial({
     uniforms,
     side: THREE.BackSide,
@@ -126,7 +126,7 @@ export function createSky(ctx) {
       float fbm(vec3 p) {
         float v = 0.0;
         float a = 0.5;
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 2; i++) {
           v += a * noise3(p);
           p = p * 2.07 + vec3(13.1, 7.7, 19.3);
           a *= 0.5;
@@ -184,7 +184,7 @@ export function createSky(ctx) {
           cloudCoord.x += uTime * 0.008;
           cloudCoord.y += uTime * 0.003;
           float c = fbm(cloudCoord);
-          float cloudMask = smoothstep(0.52, 0.78, c) * smoothstep(0.02, 0.22, y) * smoothstep(0.95, 0.35, y);
+          float cloudMask = smoothstep(0.38, 0.62, c) * smoothstep(0.02, 0.22, y) * smoothstep(0.95, 0.35, y);
           vec3 cloudLit = mix(vec3(0.96, 0.95, 0.94), uSunColor * 1.05, uTwilightFactor * 0.75);
           cloudLit = mix(cloudLit, vec3(0.16, 0.22, 0.36), uNightFactor * 0.85);
           skyCol = mix(skyCol, cloudLit, cloudMask * 0.28 * outdoorVis);
@@ -198,7 +198,7 @@ export function createSky(ctx) {
           float stars = (s1 * 0.9 + s2 * 0.65) * horizonFade * uNightFactor;
           // Subtle Milky Way band
           float mwCoord = abs( dir.x * 0.65 + dir.z * 0.55 - dir.y * 0.35 );
-          float mw = smoothstep(0.38, 0.0, mwCoord) * fbm(dir * 6.0) * 0.12 * horizonFade * uNightFactor;
+          float mw = smoothstep(0.38, 0.0, mwCoord) * noise3(dir * 6.0) * 0.12 * horizonFade * uNightFactor;
           vec3 starCol = mix(vec3(0.82, 0.90, 1.0), vec3(1.0, 0.92, 0.80), hash31(floor(dir * 95.0)));
           skyCol += (starCol * stars + vec3(0.35, 0.48, 0.78) * mw) * outdoorVis;
         }
@@ -206,7 +206,7 @@ export function createSky(ctx) {
         // Sun disc and corona
         float sunCos = dot(dir, uSunDir);
         float sunVis = smoothstep(-0.08, 0.04, uSunDir.y) * outdoorVis;
-        if (sunVis > 0.0) {
+        if (sunVis > 0.0 && sunCos > 0.2) {
           float sunHalo = pow(max(0.0, sunCos), 10.0) * 0.28 + pow(max(0.0, sunCos), 64.0) * 0.42;
           float sunDisc = smoothstep(0.9982, 0.9991, sunCos);
           vec3 discCol = mix(uSunColor * 1.15, vec3(1.15, 1.08, 0.95), smoothstep(0.0, 0.35, uSunDir.y));
@@ -216,10 +216,10 @@ export function createSky(ctx) {
         // Moon disc and cool lunar glow
         float moonCos = dot(dir, uMoonDir);
         float moonVis = smoothstep(-0.06, 0.08, uMoonDir.y) * (0.25 + 0.75 * uNightFactor) * outdoorVis;
-        if (moonVis > 0.0) {
+        if (moonVis > 0.0 && moonCos > 0.4) {
           float moonHalo = pow(max(0.0, moonCos), 28.0) * 0.22 + pow(max(0.0, moonCos), 140.0) * 0.25;
           float moonDisc = smoothstep(0.9987, 0.9993, moonCos);
-          float craters = 0.84 + 0.16 * fbm(dir * 70.0);
+          float craters = moonDisc > 0.0 ? (0.84 + 0.16 * noise3(dir * 70.0)) : 1.0;
           vec3 moonCol = vec3(0.78, 0.87, 1.0) * craters;
           skyCol += (vec3(0.40, 0.56, 0.88) * moonHalo + moonCol * moonDisc * 0.95) * moonVis * smoothstep(-0.03, 0.02, y);
         }

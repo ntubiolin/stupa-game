@@ -33,8 +33,19 @@ import '../i18n/storyChapters.js';
 import './runtime.css';
 
 const t = (key, args) => i18n.t(`mirror.${key}`, args);
+if (typeof HTMLCanvasElement !== 'undefined' && !HTMLCanvasElement.prototype.__stupaPatched2D) {
+  HTMLCanvasElement.prototype.__stupaPatched2D = true;
+  const origGetContext = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function (type, attrs) {
+    if (type === '2d') {
+      return origGetContext.call(this, type, { willReadFrequently: true, ...attrs });
+    }
+    return origGetContext.call(this, type, attrs);
+  };
+}
 const root = document.getElementById('ui');
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+const isSoftwareWebGL = window.devicePixelRatio <= 0.5;
+const renderer = new THREE.WebGLRenderer({ antialias: !isSoftwareWebGL, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -51,7 +62,7 @@ const state = { mode: 'story', zone: 'stupa', zoneType: 'hub', uiOpen: false, el
   time: { t: .45, speed: 0, sunDir: new THREE.Vector3(0, 1, 0), nightFactor: 0 },
   wind: { dir: new THREE.Vector2(1, .3).normalize(), strength: .4 },
   player: { position: new THREE.Vector3(12, 0, 30), heading: 0, velocity: new THREE.Vector3(), isMoving: false, action: 'idle' } };
-const ctx = { THREE, scene, camera, renderer, config: CONFIG, state, bus: createBus(), i18n, stupaGroup,
+const ctx = { THREE, scene, camera, renderer, isSoftwareWebGL, config: CONFIG, state, bus: createBus(), i18n, stupaGroup,
   zoneGroups: { stupa: stupaGroup }, colliders: [], interactables: [] };
 createDebug(ctx); createSave(ctx, { writableSections: ['story'] }); // Deliberately no i18n.bindSave: narrative writes only story.
 const mapInstances = {};
@@ -141,9 +152,14 @@ const losang = losangCharacter.group;
 losang.position.set(-27, 0, 10); losang.rotation.y = .16; stupaGroup.add(losang);
 const losangCollider = { type: 'circle', x: -27, z: 10, r: .35, zone: 'stupa' };
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+let pageDisposed = false;
 window.addEventListener('pagehide', event => {
   // A bfcache page may return with its existing scene, so keep those resources.
-  if (!event.persisted) losangCharacter.dispose();
+  if (!event.persisted) {
+    pageDisposed = true;
+    losangCharacter.dispose();
+    renderer.dispose();
+  }
 });
 const mark = new THREE.Mesh(new THREE.TorusGeometry(.65, .025, 6, 40), new THREE.MeshBasicMaterial({ color: 0xd3ba84, transparent: true, opacity: .7 })); mark.rotation.x = -Math.PI / 2; scene.add(mark);
 
@@ -524,6 +540,7 @@ ctx.debug?.register('storyArt', art); ctx.debug?.register('storyCamera', storyCa
 window.addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 let last = performance.now();
 function frame(now) {
+  if (pageDisposed) return;
   const raw = (now - last) / 1000; last = now; const dt = Math.min(raw, .05); state.elapsed += dt;
   if (raw > 0 && raw < .5) { samples.push(raw); if (samples.length > 240) samples.shift(); }
   state.uiOpen = isAnyModalOpen();
