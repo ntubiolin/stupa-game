@@ -191,6 +191,7 @@ export const CONFIG = {
   MERIT: {
     weights: {
       kora: 108,
+      koraCommunion: 27,
       prostration: 27,
       lamp: 18,
       monkey: 12,

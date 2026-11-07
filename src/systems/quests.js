@@ -187,7 +187,7 @@ export function createQuests(ctx) {
           ring,
         };
 
-        ctx.interactables.push({
+        ctx.interactables?.push({
           id: nodeId,
           kind: 'questItem',
           zone: mapId,
@@ -781,8 +781,9 @@ export function createQuests(ctx) {
 
   // 6. `kora` & 7. `light` via `merit` (and direct `kora:lap` / `lamp:lit` aliases)
   bus.on('merit', (payload = {}) => {
+    if (payload.source === 'sharedKoraCommunion' || payload.type === 'koraCommunion') return;
     const kind = payload.type || payload.source;
-    if (kind === 'kora') {
+    if (kind === 'kora' && payload.source !== 'sharedKoraCommunion') {
       forEachActiveStepOfType('kora', (qId) => {
         advanceStepProgress(qId, 1);
       });
