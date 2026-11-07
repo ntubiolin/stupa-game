@@ -14,6 +14,31 @@ const CHANNEL_NAME = 'stupa.community.v1';
 const SHARE_PREFIX = 'STUPA-V1:';
 const SYNC_INTERVAL_SEC = 10.0;
 const SAMYE_TARGET_STUPAS = 1008;
+const MAX_PENDING_ACTIONS = 50;
+
+export function resolveApiBase(explicitBase = '') {
+  const fromArg = typeof explicitBase === 'string' ? explicitBase.trim() : '';
+  if (fromArg) return fromArg.replace(/\/+$/, '');
+  const fromGlobal =
+    typeof globalThis !== 'undefined' && typeof globalThis.__STUPA_BACKEND_URL__ === 'string'
+      ? globalThis.__STUPA_BACKEND_URL__.trim()
+      : '';
+  if (fromGlobal) return fromGlobal.replace(/\/+$/, '');
+  const fromEnv =
+    typeof import.meta !== 'undefined' && typeof import.meta.env?.VITE_BACKEND_URL === 'string'
+      ? import.meta.env.VITE_BACKEND_URL.trim()
+      : '';
+  if (fromEnv) return fromEnv.replace(/\/+$/, '');
+  return '';
+}
+
+export function resolveApiUrl(path = '/api/community', explicitBase = '') {
+  const base = resolveApiBase(explicitBase);
+  const cleanPath = String(path || '/api/community').startsWith('/')
+    ? String(path || '/api/community')
+    : `/${path}`;
+  return base ? `${base}${cleanPath}` : cleanPath;
+}
 
 const VALID_TAGS = new Set(['peace', 'wisdom', 'obstacle', 'beings', 'bodhicitta']);
 
@@ -361,8 +386,17 @@ function sanitizeText(str, maxLen = 120, fallback = '') {
   return cleaned ? cleaned.slice(0, maxLen) : fallback;
 }
 
-export function createCommunity(ctx) {
+export function createCommunity(ctx, options = {}) {
   const { bus, state, i18n } = ctx;
+
+  function getEndpointUrl(path = '/api/community') {
+    return resolveApiUrl(path, options?.apiBase);
+  }
+
+  let backendOnline = false;
+  let lastSyncAt = 0;
+  const inFlightPromises = new Set();
+  let flushPromise = null;
 
   let pilgrimName = '';
   let lamps = [];
@@ -391,6 +425,7 @@ export function createCommunity(ctx) {
       rejoicedStupaIds: [],
       lampRejoiceDeltas: {},
       stupaRejoiceDeltas: {},
+      pendingActions: [],
       samye: {
         contributedStupas: 324,
         totalKora: 1080,
@@ -409,6 +444,9 @@ export function createCommunity(ctx) {
     pilgrimName = sanitizeText(savedSection.pilgrimName, 24, '');
     rejoicedLampIds = new Set(Array.isArray(savedSection.rejoicedLampIds) ? savedSection.rejoicedLampIds : []);
     rejoicedStupaIds = new Set(Array.isArray(savedSection.rejoicedStupaIds) ? savedSection.rejoicedStupaIds : []);
+    if (!Array.isArray(savedSection.pendingActions)) {
+      savedSection.pendingActions = [];
+    }
 
     const lampDeltas = savedSection.lampRejoiceDeltas || {};
     const stupaDeltas = savedSection.stupaRejoiceDeltas || {};
@@ -529,6 +567,9 @@ export function createCommunity(ctx) {
     savedSection.rejoicedStupaIds = Array.from(rejoicedStupaIds);
     savedSection.ownLamps = lamps.filter((l) => l.isOwn).slice(0, 24);
     savedSection.ownStupa = stupas.find((s) => s.isOwn) || null;
+    savedSection.pendingActions = Array.isArray(savedSection.pendingActions)
+      ? savedSection.pendingActions.slice(-MAX_PENDING_ACTIONS)
+      : [];
     savedSection.samye = {
       contributedStupas: samye.contributedStupas,
       totalKora: samye.totalKora,
@@ -551,7 +592,7 @@ export function createCommunity(ctx) {
     bus.emit('community:changed', { type: 'reset' });
   });
 
-  // ---------------------------------------------------------------- BroadcastChannel & Server Relay
+  // ---------------------------------------------------------------- BroadcastChannel, WebSocket & Server Relay
   let channel = null;
   if (typeof BroadcastChannel !== 'undefined') {
     try {
@@ -565,45 +606,145 @@ export function createCommunity(ctx) {
     } catch { /* ignore in restricted environments */ }
   }
 
+  bus.on('ws:community', (msg) => {
+    if (!msg || typeof msg !== 'object') return;
+    handleIncomingAction(msg.action, msg.payload, { fromWs: true });
+  });
+
+  function enqueuePendingAction(action, payload) {
+    if (!Array.isArray(savedSection.pendingActions)) {
+      savedSection.pendingActions = [];
+    }
+    if (action === 'stupa' && payload?.id) {
+      savedSection.pendingActions = savedSection.pendingActions.filter(
+        (item) => !(item && item.action === 'stupa' && item.payload?.id === payload.id)
+      );
+    }
+    const item = {
+      id: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      action,
+      payload: payload && typeof payload === 'object' ? JSON.parse(JSON.stringify(payload)) : payload,
+      ts: Date.now(),
+    };
+    savedSection.pendingActions.push(item);
+    if (savedSection.pendingActions.length > MAX_PENDING_ACTIONS) {
+      savedSection.pendingActions = savedSection.pendingActions.slice(-MAX_PENDING_ACTIONS);
+    }
+    persistToSave();
+    return item;
+  }
+
+  function removePendingActionById(queueId) {
+    if (!Array.isArray(savedSection.pendingActions)) return;
+    const before = savedSection.pendingActions.length;
+    savedSection.pendingActions = savedSection.pendingActions.filter((item) => item && item.id !== queueId);
+    if (savedSection.pendingActions.length !== before) {
+      persistToSave();
+    }
+  }
+
   function broadcastAndPost(action, payload) {
     try {
       channel?.postMessage({ action, payload });
     } catch { /* ignore */ }
-    if (typeof fetch === 'function') {
-      fetch('/api/community', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, payload }),
-      }).catch(() => {});
+    bus.emit('community:outbound', { action, payload });
+
+    const queuedItem = enqueuePendingAction(action, payload);
+    if (typeof fetch !== 'function') {
+      backendOnline = false;
+      return Promise.resolve(false);
     }
+
+    const reqPromise = (async () => {
+      try {
+        const res = await fetch(getEndpointUrl('/api/community'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ action, payload }),
+        });
+        if (!res || !res.ok) {
+          backendOnline = false;
+          return false;
+        }
+        backendOnline = true;
+        lastSyncAt = Date.now();
+        removePendingActionById(queuedItem.id);
+
+        const contentType = res.headers?.get?.('content-type') || '';
+        if ((!contentType || contentType.includes('application/json')) && typeof res.json === 'function') {
+          try {
+            const raw = await res.json();
+            mergeServerSnapshot(raw);
+          } catch { /* ignore non-json */ }
+        }
+        return true;
+      } catch {
+        backendOnline = false;
+        return false;
+      }
+    })();
+
+    inFlightPromises.add(reqPromise);
+    reqPromise.finally(() => {
+      inFlightPromises.delete(reqPromise);
+    });
+    return reqPromise;
   }
 
   function mergeIncomingLamp(entry, isOwnOverride = null) {
     if (!entry || !entry.id) return null;
     const existingIdx = lamps.findIndex((l) => l.id === entry.id);
+    const prev = existingIdx >= 0 ? lamps[existingIdx] : null;
+    const incomingRejoice = Math.max(0, Number(entry.rejoiceCount) || 0);
+    const incomingBonus = entry.burnBonusSec !== undefined
+      ? Math.max(0, Number(entry.burnBonusSec) || 0)
+      : (prev && incomingRejoice > prev.rejoiceCount
+        ? prev.burnBonusSec + (incomingRejoice - prev.rejoiceCount) * 120
+        : incomingRejoice * 120);
+
     const normalized = {
       id: String(entry.id),
-      stationIdx: Math.max(0, Math.min(2, Number(entry.stationIdx) || 0)),
-      lampIdx: Math.max(0, Math.min(11, Number(entry.lampIdx) || 0)),
-      pilgrimName: sanitizeText(entry.pilgrimName, 24, getPilgrimName()),
-      tag: VALID_TAGS.has(entry.tag) ? entry.tag : 'peace',
-      message: sanitizeText(entry.message, 120, ''),
-      createdAt: Number(entry.createdAt) || Date.now(),
-      rejoiceCount: Math.max(0, Number(entry.rejoiceCount) || 0),
-      burnBonusSec: Math.max(0, Number(entry.burnBonusSec) || 0),
+      stationIdx: entry.stationIdx !== undefined
+        ? Math.max(0, Math.min(2, Number(entry.stationIdx) || 0))
+        : (prev ? prev.stationIdx : 0),
+      lampIdx: entry.lampIdx !== undefined
+        ? Math.max(0, Math.min(11, Number(entry.lampIdx) || 0))
+        : (prev ? prev.lampIdx : 0),
+      pilgrimName: sanitizeText(entry.pilgrimName, 24, prev ? prev.pilgrimName : getPilgrimName()),
+      tag: VALID_TAGS.has(entry.tag) ? entry.tag : (prev ? prev.tag : 'peace'),
+      message: sanitizeText(entry.message, 120, prev ? prev.message : ''),
+      createdAt: Number(entry.createdAt) || (prev ? prev.createdAt : Date.now()),
+      rejoiceCount: incomingRejoice,
+      burnBonusSec: incomingBonus,
       isOwn: isOwnOverride !== null ? isOwnOverride : Boolean(entry.isOwn),
     };
 
     if (existingIdx >= 0) {
-      const prev = lamps[existingIdx];
-      lamps[existingIdx] = {
+      const updated = {
         ...prev,
         ...normalized,
         isOwn: prev.isOwn || normalized.isOwn,
         rejoiceCount: Math.max(prev.rejoiceCount, normalized.rejoiceCount),
         burnBonusSec: Math.max(prev.burnBonusSec, normalized.burnBonusSec),
       };
-      return lamps[existingIdx];
+      lamps[existingIdx] = updated;
+      if (updated.id.startsWith('seed-lamp-')) {
+        const seedBase = SEEDED_LAMPS.find((s) => s.id === updated.id);
+        if (seedBase && updated.rejoiceCount > seedBase.rejoiceCount) {
+          if (!savedSection.lampRejoiceDeltas) savedSection.lampRejoiceDeltas = {};
+          savedSection.lampRejoiceDeltas[updated.id] = Math.max(
+            Number(savedSection.lampRejoiceDeltas[updated.id]) || 0,
+            updated.rejoiceCount - seedBase.rejoiceCount
+          );
+        }
+      } else if (!updated.isOwn) {
+        if (!Array.isArray(savedSection.importedLamps)) savedSection.importedLamps = [];
+        savedSection.importedLamps = [
+          updated,
+          ...savedSection.importedLamps.filter((l) => l.id !== updated.id),
+        ].slice(0, 30);
+      }
+      return updated;
     }
 
     lamps.unshift(normalized);
@@ -620,34 +761,53 @@ export function createCommunity(ctx) {
   function mergeIncomingStupa(entry, isOwnOverride = null) {
     if (!entry || !entry.id) return null;
     const existingIdx = stupas.findIndex((s) => s.id === entry.id);
+    const prev = existingIdx >= 0 ? stupas[existingIdx] : null;
     const spec = entry.spec && typeof entry.spec === 'object' ? entry.spec : {};
     const normalized = {
       id: String(entry.id),
       isOwn: isOwnOverride !== null ? isOwnOverride : Boolean(entry.isOwn),
-      pilgrimName: sanitizeText(entry.pilgrimName, 24, getPilgrimName()),
-      title: sanitizeText(entry.title, 28, '祈願功德塔'),
-      message: sanitizeText(entry.message, 120, ''),
-      kora: Math.max(0, Number(entry.kora) || 0),
-      prostrations: Math.max(0, Number(entry.prostrations) || 0),
+      pilgrimName: sanitizeText(entry.pilgrimName, 24, prev ? prev.pilgrimName : getPilgrimName()),
+      title: sanitizeText(entry.title, 28, prev ? prev.title : '祈願功德塔'),
+      message: sanitizeText(entry.message, 120, prev ? prev.message : ''),
+      kora: entry.kora !== undefined ? Math.max(0, Number(entry.kora) || 0) : (prev ? prev.kora : 0),
+      prostrations: entry.prostrations !== undefined
+        ? Math.max(0, Number(entry.prostrations) || 0)
+        : (prev ? prev.prostrations : 0),
       spec: {
-        plinth: spec.plinth || 'lotus',
-        dome: spec.dome || 'white',
-        spire: spec.spire || 'gold13',
-        ornament: spec.ornament || 'moonSun',
+        plinth: spec.plinth || prev?.spec?.plinth || 'lotus',
+        dome: spec.dome || prev?.spec?.dome || 'white',
+        spire: spec.spire || prev?.spec?.spire || 'gold13',
+        ornament: spec.ornament || prev?.spec?.ornament || 'moonSun',
       },
       rejoiceCount: Math.max(0, Number(entry.rejoiceCount) || 0),
-      createdAt: Number(entry.createdAt) || Date.now(),
+      createdAt: Number(entry.createdAt) || (prev ? prev.createdAt : Date.now()),
     };
 
     if (existingIdx >= 0) {
-      const prev = stupas[existingIdx];
-      stupas[existingIdx] = {
+      const updated = {
         ...prev,
         ...normalized,
         isOwn: prev.isOwn || normalized.isOwn,
         rejoiceCount: Math.max(prev.rejoiceCount, normalized.rejoiceCount),
       };
-      return stupas[existingIdx];
+      stupas[existingIdx] = updated;
+      if (updated.id.startsWith('seed-stupa-')) {
+        const seedBase = SEEDED_STUPAS.find((s) => s.id === updated.id);
+        if (seedBase && updated.rejoiceCount > seedBase.rejoiceCount) {
+          if (!savedSection.stupaRejoiceDeltas) savedSection.stupaRejoiceDeltas = {};
+          savedSection.stupaRejoiceDeltas[updated.id] = Math.max(
+            Number(savedSection.stupaRejoiceDeltas[updated.id]) || 0,
+            updated.rejoiceCount - seedBase.rejoiceCount
+          );
+        }
+      } else if (!updated.isOwn) {
+        if (!Array.isArray(savedSection.importedStupas)) savedSection.importedStupas = [];
+        savedSection.importedStupas = [
+          updated,
+          ...savedSection.importedStupas.filter((s) => s.id !== updated.id),
+        ].slice(0, 30);
+      }
+      return updated;
     }
 
     stupas.unshift(normalized);
@@ -664,7 +824,15 @@ export function createCommunity(ctx) {
   function handleIncomingAction(action, payload, _meta = {}) {
     if (!action || !payload) return;
     if (action === 'lamp') {
-      const merged = mergeIncomingLamp(payload, false);
+      const existing = payload.id ? lamps.find((l) => l.id === payload.id) : null;
+      if (
+        existing &&
+        existing.rejoiceCount >= (Number(payload.rejoiceCount) || 0) &&
+        existing.burnBonusSec >= (Number(payload.burnBonusSec) || 0)
+      ) {
+        return;
+      }
+      const merged = mergeIncomingLamp(payload, existing ? existing.isOwn : false);
       if (merged) {
         persistToSave();
         bus.emit('community:lampOffered', merged);
@@ -673,14 +841,34 @@ export function createCommunity(ctx) {
     } else if (action === 'rejoiceLamp') {
       const target = lamps.find((l) => l.id === payload.id);
       if (target) {
-        target.rejoiceCount += 1;
+        if (typeof payload.rejoiceCount === 'number' && payload.rejoiceCount <= target.rejoiceCount) {
+          return;
+        }
+        target.rejoiceCount = typeof payload.rejoiceCount === 'number'
+          ? Math.max(target.rejoiceCount + 1, payload.rejoiceCount)
+          : target.rejoiceCount + 1;
         target.burnBonusSec += 120;
         persistToSave();
         bus.emit('community:lampRejoiced', { id: target.id, lamp: target });
         bus.emit('community:changed', { type: 'rejoiceLamp', id: target.id });
       }
     } else if (action === 'stupa') {
-      const merged = mergeIncomingStupa(payload, false);
+      const existing = payload.id ? stupas.find((s) => s.id === payload.id) : null;
+      if (
+        existing &&
+        existing.rejoiceCount >= (Number(payload.rejoiceCount) || 0) &&
+        existing.title === sanitizeText(payload.title, 28, existing.title) &&
+        existing.message === sanitizeText(payload.message, 120, existing.message) &&
+        JSON.stringify(existing.spec) === JSON.stringify({
+          plinth: payload.spec?.plinth || existing.spec?.plinth || 'lotus',
+          dome: payload.spec?.dome || existing.spec?.dome || 'white',
+          spire: payload.spec?.spire || existing.spec?.spire || 'gold13',
+          ornament: payload.spec?.ornament || existing.spec?.ornament || 'moonSun',
+        })
+      ) {
+        return;
+      }
+      const merged = mergeIncomingStupa(payload, existing ? existing.isOwn : false);
       if (merged) {
         persistToSave();
         bus.emit('community:stupaBuilt', merged);
@@ -689,30 +877,37 @@ export function createCommunity(ctx) {
     } else if (action === 'rejoiceStupa') {
       const target = stupas.find((s) => s.id === payload.id);
       if (target) {
-        target.rejoiceCount += 1;
+        if (typeof payload.rejoiceCount === 'number' && payload.rejoiceCount <= target.rejoiceCount) {
+          return;
+        }
+        target.rejoiceCount = typeof payload.rejoiceCount === 'number'
+          ? Math.max(target.rejoiceCount + 1, payload.rejoiceCount)
+          : target.rejoiceCount + 1;
         persistToSave();
         bus.emit('community:changed', { type: 'rejoiceStupa', id: target.id });
       }
-    } else if (action === 'samyeContribute') {
+    } else if (action === 'samyeContribute' || action === 'samye') {
+      if (payload.id && samye.contributors.some((c) => c.id === payload.id)) {
+        return;
+      }
       const addStupas = Math.max(1, Number(payload.stupas) || 1);
       const addKora = Math.max(0, Number(payload.kora) || 0);
       const addPros = Math.max(0, Number(payload.prostrations) || 0);
       samye.contributedStupas = Math.min(SAMYE_TARGET_STUPAS, samye.contributedStupas + addStupas);
       samye.totalKora += addKora;
       samye.totalProstrations += addPros;
-      if (payload.id && !samye.contributors.some((c) => c.id === payload.id)) {
-        samye.contributors.unshift({
-          id: payload.id,
-          pilgrimName: sanitizeText(payload.pilgrimName, 24, '朝聖行者'),
-          stupas: addStupas,
-          kora: addKora,
-          prostrations: addPros,
-          message: sanitizeText(payload.message, 120, ''),
-          createdAt: Number(payload.createdAt) || Date.now(),
-        });
-      }
+      const contribRecord = {
+        id: payload.id || `samye-ws-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        pilgrimName: sanitizeText(payload.pilgrimName, 24, '朝聖行者'),
+        stupas: addStupas,
+        kora: addKora,
+        prostrations: addPros,
+        message: sanitizeText(payload.message, 120, ''),
+        createdAt: Number(payload.createdAt) || Date.now(),
+      };
+      samye.contributors.unshift(contribRecord);
       persistToSave();
-      bus.emit('community:samyeContributed', payload);
+      bus.emit('community:samyeContributed', contribRecord);
       bus.emit('community:changed', { type: 'samye' });
     }
   }
@@ -999,71 +1194,196 @@ export function createCommunity(ctx) {
     return importedAny;
   }
 
-  async function syncFromServer() {
-    if (typeof fetch !== 'function') return;
-    try {
-      const res = await fetch('/api/community', { method: 'GET', headers: { Accept: 'application/json' } });
-      if (!res || !res.ok) return;
-      const contentType = res.headers?.get?.('content-type') || '';
-      if (!contentType.includes('application/json')) return;
-      const data = await res.json();
-      if (!data || typeof data !== 'object') return;
+  function mergeServerSnapshot(raw) {
+    if (!raw || typeof raw !== 'object') return false;
+    const payload = raw.data && typeof raw.data === 'object' ? raw.data : raw;
+    if (!payload || typeof payload !== 'object') return false;
 
-      let changed = false;
-      if (Array.isArray(data.lamps)) {
-        for (const item of data.lamps) {
-          if (!item || !item.id) continue;
-          const existed = lamps.some((l) => l.id === item.id);
-          const merged = mergeIncomingLamp(item, null);
-          if (!existed && merged) {
+    let changed = false;
+    if (Array.isArray(payload.lamps)) {
+      for (const item of payload.lamps) {
+        if (!item || !item.id) continue;
+        const existing = lamps.find((l) => l.id === item.id);
+        const prevRejoice = existing ? existing.rejoiceCount : -1;
+        const prevBonus = existing ? existing.burnBonusSec : -1;
+        const merged = mergeIncomingLamp(item, null);
+        if (merged) {
+          if (!existing) {
             changed = true;
             bus.emit('community:lampOffered', merged);
+          } else if (merged.rejoiceCount > prevRejoice || merged.burnBonusSec > prevBonus) {
+            changed = true;
           }
         }
       }
-      if (Array.isArray(data.stupas)) {
-        for (const item of data.stupas) {
-          if (!item || !item.id) continue;
-          const existed = stupas.some((s) => s.id === item.id);
-          const merged = mergeIncomingStupa(item, null);
-          if (!existed && merged) {
+    }
+    if (Array.isArray(payload.stupas)) {
+      for (const item of payload.stupas) {
+        if (!item || !item.id) continue;
+        const existing = stupas.find((s) => s.id === item.id);
+        const prevRejoice = existing ? existing.rejoiceCount : -1;
+        const prevSpec = existing ? JSON.stringify(existing.spec) : '';
+        const prevTitle = existing ? existing.title : '';
+        const prevMsg = existing ? existing.message : '';
+        const merged = mergeIncomingStupa(item, null);
+        if (merged) {
+          if (!existing) {
             changed = true;
             bus.emit('community:stupaBuilt', merged);
+          } else if (
+            merged.rejoiceCount > prevRejoice ||
+            JSON.stringify(merged.spec) !== prevSpec ||
+            merged.title !== prevTitle ||
+            merged.message !== prevMsg
+          ) {
+            changed = true;
           }
         }
       }
-      if (data.samye && typeof data.samye === 'object') {
-        const srvStupas = Number(data.samye.contributedStupas) || 0;
-        if (srvStupas > samye.contributedStupas) {
-          samye.contributedStupas = Math.min(SAMYE_TARGET_STUPAS, srvStupas);
-          changed = true;
-        }
-        const srvKora = Number(data.samye.totalKora) || 0;
-        if (srvKora > samye.totalKora) {
-          samye.totalKora = srvKora;
-          changed = true;
-        }
-        const srvPros = Number(data.samye.totalProstrations) || 0;
-        if (srvPros > samye.totalProstrations) {
-          samye.totalProstrations = srvPros;
-          changed = true;
-        }
-        if (Array.isArray(data.samye.contributors)) {
-          for (const c of data.samye.contributors) {
-            if (c && c.id && !samye.contributors.some((ex) => ex.id === c.id)) {
-              samye.contributors.unshift(c);
-              changed = true;
-            }
+    }
+    if (payload.samye && typeof payload.samye === 'object') {
+      const srvStupas = Number(payload.samye.contributedStupas) || 0;
+      if (srvStupas > samye.contributedStupas) {
+        samye.contributedStupas = Math.min(SAMYE_TARGET_STUPAS, srvStupas);
+        changed = true;
+      }
+      const srvKora = Number(payload.samye.totalKora) || 0;
+      if (srvKora > samye.totalKora) {
+        samye.totalKora = srvKora;
+        changed = true;
+      }
+      const srvPros = Number(payload.samye.totalProstrations) || 0;
+      if (srvPros > samye.totalProstrations) {
+        samye.totalProstrations = srvPros;
+        changed = true;
+      }
+      if (Array.isArray(payload.samye.contributors)) {
+        for (const c of payload.samye.contributors) {
+          if (c && c.id && !samye.contributors.some((ex) => ex.id === c.id)) {
+            samye.contributors.unshift({
+              id: String(c.id),
+              pilgrimName: sanitizeText(c.pilgrimName, 24, '朝聖行者'),
+              stupas: Math.max(1, Number(c.stupas) || 1),
+              kora: Math.max(0, Number(c.kora) || 0),
+              prostrations: Math.max(0, Number(c.prostrations) || 0),
+              message: sanitizeText(c.message, 120, ''),
+              createdAt: Number(c.createdAt) || Date.now(),
+            });
+            changed = true;
           }
         }
       }
-      if (changed) {
-        persistToSave();
-        bus.emit('community:changed', { type: 'sync' });
+    }
+    if (changed) {
+      persistToSave();
+      bus.emit('community:changed', { type: 'sync' });
+    }
+    return changed;
+  }
+
+  async function flushPendingActions() {
+    if (inFlightPromises.size > 0) {
+      await Promise.allSettled(Array.from(inFlightPromises));
+    }
+    if (flushPromise) {
+      try {
+        await flushPromise;
+      } catch { /* ignore */ }
+    }
+    if (!Array.isArray(savedSection.pendingActions) || savedSection.pendingActions.length === 0) {
+      return 0;
+    }
+    if (typeof fetch !== 'function') {
+      backendOnline = false;
+      return 0;
+    }
+
+    flushPromise = (async () => {
+      let flushedCount = 0;
+      const snapshot = [...savedSection.pendingActions];
+      for (const item of snapshot) {
+        if (!item || !item.action) continue;
+        try {
+          const res = await fetch(getEndpointUrl('/api/community'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({ action: item.action, payload: item.payload }),
+          });
+          if (!res || !res.ok) {
+            backendOnline = false;
+            break;
+          }
+          backendOnline = true;
+          lastSyncAt = Date.now();
+          flushedCount += 1;
+          removePendingActionById(item.id);
+
+          const contentType = res.headers?.get?.('content-type') || '';
+          if ((!contentType || contentType.includes('application/json')) && typeof res.json === 'function') {
+            try {
+              const raw = await res.json();
+              mergeServerSnapshot(raw);
+            } catch { /* ignore non-json */ }
+          }
+        } catch {
+          backendOnline = false;
+          break;
+        }
       }
+      return flushedCount;
+    })();
+
+    try {
+      return await flushPromise;
+    } finally {
+      flushPromise = null;
+    }
+  }
+
+  async function syncFromServer() {
+    if (typeof fetch !== 'function') {
+      backendOnline = false;
+      return false;
+    }
+    if (
+      inFlightPromises.size > 0 ||
+      (Array.isArray(savedSection.pendingActions) && savedSection.pendingActions.length > 0)
+    ) {
+      await flushPendingActions();
+    }
+    try {
+      const res = await fetch(getEndpointUrl('/api/community'), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+      if (!res || !res.ok) {
+        backendOnline = false;
+        return false;
+      }
+      const contentType = res.headers?.get?.('content-type') || '';
+      if (contentType && !contentType.includes('application/json')) {
+        return false;
+      }
+      const raw = await res.json();
+      if (!raw || typeof raw !== 'object') return false;
+
+      backendOnline = true;
+      lastSyncAt = Date.now();
+      return mergeServerSnapshot(raw);
     } catch {
       // Static deployment or offline — silently ignore
+      backendOnline = false;
+      return false;
     }
+  }
+
+  function getBackendStatus() {
+    return {
+      online: Boolean(backendOnline),
+      lastSyncAt,
+      pendingCount: Array.isArray(savedSection.pendingActions) ? savedSection.pendingActions.length : 0,
+      apiBase: resolveApiBase(options?.apiBase),
+    };
   }
 
   let syncTimer = 0;
@@ -1077,7 +1397,9 @@ export function createCommunity(ctx) {
   }
 
   // Trigger an initial background sync
-  syncFromServer();
+  if (options?.autoSync !== false) {
+    syncFromServer();
+  }
 
   const api = {
     update,
@@ -1097,6 +1419,9 @@ export function createCommunity(ctx) {
     exportShareCode,
     importShareCode,
     syncFromServer,
+    flushPendingActions,
+    getBackendStatus,
+    getEndpointUrl,
   };
 
   ctx.community = api;
@@ -1112,6 +1437,9 @@ export function createCommunity(ctx) {
     contributeSamye: (opts) => api.contributeSamye(opts),
     exportShareCode: (kind) => api.exportShareCode(kind),
     importShareCode: (code) => api.importShareCode(code),
+    syncFromServer: () => api.syncFromServer(),
+    flushPendingActions: () => api.flushPendingActions(),
+    getBackendStatus: () => api.getBackendStatus(),
   });
 
   return api;

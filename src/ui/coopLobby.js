@@ -1,18 +1,21 @@
 /**
- * Vajra Sangha Co-op Lobby Modal & Top-Left Party HUD Frame (`src/ui/coopLobby.js`) — Issue #61
+ * Vajra Sangha Co-op Lobby Modal & Top-Left Party/Presence HUD Frame (`src/ui/coopLobby.js`) — Issue #61 / #176
  *
  * Features:
  *   - Scoped styles (`#coop-lobby-styles`) injected into `document.head`
  *   - Utility bar button `#btn-coop-lobby-toggle` (`🤝`)
- *   - Top-Left Party HUD Frame `#coop-party-hud` inside `.hud-left-stack`:
- *       - Room code badge (click to copy)
- *       - Party bonus badge (`+XX% 尋寶 · ☸ 真言共鳴`)
- *       - Compact member cards (Name, Lv, HP/MP bars, Zone badge, Revive / Teleport to Leader buttons)
+ *   - Top-Left Party & Zone Presence HUD Frame `#coop-party-hud` inside `.hud-left-stack`:
+ *       - Shown when in a party (`active`) OR when other online pilgrims are in the same zone (`zonePilgrims.length > 0`)
+ *       - Room code badge (click to copy) or Zone Shard badge (`stupa#1`)
+ *       - Party bonus badge (`+XX% 尋寶 · ☸ 真言共鳴`) or Shared Kora Communion hint
+ *       - Compact member/pilgrim cards (Name, Lv, HP bars, Zone badge, Revive / Teleport buttons)
+ *       - Quick Dharma Emote bar (`🙏`, `☸`, `🪔`, `⚔️`)
  *   - Co-op Lobby Modal `#coop-lobby-modal`:
- *       - Pilgrim Dharma Name input
- *       - Create Room / Join Room Code input + button / Copy Room Code / Leave Party
- *       - "➕ 召喚同行道友幻身 (Summon Dharma Companion)" buttons (up to 4 party members)
- *       - 4-Slot Party Roster & "⚔️ 全隊進入伏藏秘境 (Launch Co-op Terma Run)" shortcut button
+ *       - 🌐 Live Zone Presence banner, zone counts (`博達哈大佛塔` / `祈願塔林` / `北郊原野`), and `#coop-ambient-toggle`
+ *       - Pilgrim Dharma Name input, Create/Join/Copy/Leave Room, and `#coop-public-room-toggle`
+ *       - 🔓 Public Room Browser (`#coop-public-rooms-list`) with 1-click join & refresh
+ *       - 🙏 Dharma Emote Bar (`#coop-emote-bar`) with 4 prayer bubble buttons
+ *       - "➕ 召喚同行道友幻身 (Summon Dharma Companion)" buttons & 4-Slot Party Roster
  */
 import '../i18n/coop.js';
 import { i18n } from '../i18n.js';
@@ -39,8 +42,8 @@ export function createCoopLobbyUi(ctx) {
         color: #f8fafc;
         font-family: "Noto Serif TC", system-ui, sans-serif;
         font-size: 12px;
-        min-width: 220px;
-        max-width: 268px;
+        min-width: 224px;
+        max-width: 274px;
         pointer-events: auto;
       }
       #coop-party-hud.is-hidden {
@@ -89,6 +92,10 @@ export function createCoopLobbyUi(ctx) {
         background: rgba(30, 41, 59, 0.78);
         border: 1px solid rgba(148, 163, 184, 0.25);
       }
+      .coop-hud__card.is-ambient {
+        border-color: rgba(56, 189, 248, 0.45);
+        background: rgba(12, 26, 46, 0.72);
+      }
       .coop-hud__card.is-fainted {
         border-color: rgba(248, 113, 113, 0.75);
         background: rgba(69, 10, 10, 0.65);
@@ -128,6 +135,9 @@ export function createCoopLobbyUi(ctx) {
         background: linear-gradient(90deg, #10b981, #34d399);
         transition: width 0.2s ease;
       }
+      .coop-hud__bar-fill.is-ambient {
+        background: linear-gradient(90deg, #0284c7, #38bdf8);
+      }
       .coop-hud__bar-fill.is-fainted {
         background: #ef4444;
       }
@@ -151,6 +161,29 @@ export function createCoopLobbyUi(ctx) {
       .coop-hud__mini-btn:hover {
         background: rgba(217, 119, 6, 0.45);
       }
+      .coop-hud__emote-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 4px;
+        margin-top: 7px;
+        padding-top: 6px;
+        border-top: 1px solid rgba(148, 163, 184, 0.18);
+      }
+      .coop-hud__emote-btn {
+        flex: 1;
+        padding: 3px 4px;
+        border-radius: 6px;
+        border: 1px solid rgba(251, 191, 36, 0.35);
+        background: rgba(30, 41, 59, 0.85);
+        color: #fef08a;
+        font-size: 11px;
+        cursor: pointer;
+        text-align: center;
+      }
+      .coop-hud__emote-btn:hover {
+        background: rgba(217, 119, 6, 0.32);
+      }
 
       /* Co-op Lobby Modal */
       #coop-lobby-modal {
@@ -169,10 +202,10 @@ export function createCoopLobbyUi(ctx) {
         display: none !important;
       }
       .coop-modal__dialog {
-        width: min(580px, 94vw);
-        max-height: 90vh;
+        width: min(620px, 95vw);
+        max-height: 92vh;
         overflow-y: auto;
-        padding: 22px 26px;
+        padding: 20px 24px;
         border-radius: 16px;
         background: linear-gradient(165deg, rgba(17, 24, 39, 0.97), rgba(13, 18, 32, 0.99));
         border: 1px solid rgba(251, 191, 36, 0.55);
@@ -186,20 +219,20 @@ export function createCoopLobbyUi(ctx) {
       .coop-modal__title {
         margin: 4px 0 6px;
         color: #fde68a;
-        font-size: 21px;
+        font-size: 20px;
       }
       .coop-modal__sub {
-        margin: 0 0 14px;
+        margin: 0 0 12px;
         color: #cbd5e1;
-        font-size: 12.5px;
+        font-size: 12px;
         line-height: 1.5;
       }
       .coop-modal__section {
-        padding: 12px 14px;
+        padding: 11px 14px;
         border-radius: 10px;
         background: rgba(15, 23, 42, 0.78);
         border: 1px solid rgba(148, 163, 184, 0.22);
-        margin-bottom: 12px;
+        margin-bottom: 10px;
       }
       .coop-modal__row {
         display: flex;
@@ -209,7 +242,7 @@ export function createCoopLobbyUi(ctx) {
       }
       .coop-modal__input {
         flex: 1;
-        min-width: 150px;
+        min-width: 140px;
         padding: 7px 10px;
         border-radius: 7px;
         border: 1px solid rgba(148, 163, 184, 0.4);
@@ -218,12 +251,12 @@ export function createCoopLobbyUi(ctx) {
         font-size: 13px;
       }
       .coop-modal__btn {
-        padding: 8px 13px;
+        padding: 7px 12px;
         border-radius: 8px;
         border: 1px solid rgba(251, 191, 36, 0.48);
         background: rgba(30, 41, 59, 0.9);
         color: #fef08a;
-        font-size: 12.5px;
+        font-size: 12px;
         font-weight: 600;
         cursor: pointer;
       }
@@ -243,7 +276,7 @@ export function createCoopLobbyUi(ctx) {
       .coop-modal__slot-list {
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: 7px;
         margin-top: 8px;
       }
       .coop-modal__slot {
@@ -251,11 +284,11 @@ export function createCoopLobbyUi(ctx) {
         align-items: center;
         justify-content: space-between;
         gap: 10px;
-        padding: 9px 12px;
+        padding: 8px 11px;
         border-radius: 9px;
         background: rgba(30, 41, 59, 0.72);
         border: 1px solid rgba(148, 163, 184, 0.25);
-        font-size: 13px;
+        font-size: 12.5px;
       }
       .coop-modal__slot--empty {
         color: #64748b;
@@ -278,6 +311,15 @@ export function createCoopLobbyUi(ctx) {
         background: rgba(45, 212, 191, 0.18);
         color: #5eead4;
         border: 1px solid rgba(45, 212, 191, 0.45);
+      }
+      .coop-modal__check-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12px;
+        color: #cbd5e1;
+        cursor: pointer;
+        user-select: none;
       }
     `;
     document.head.appendChild(style);
@@ -307,7 +349,7 @@ export function createCoopLobbyUi(ctx) {
     utilityBar.insertBefore(toggleBtn, utilityBar.firstChild);
   }
 
-  // 2. Top-Left Party HUD Frame (`#coop-party-hud`)
+  // 2. Top-Left Party & Zone Presence HUD Frame (`#coop-party-hud`)
   let partyHudEl = null;
   function ensurePartyHud() {
     if (typeof document === 'undefined') return;
@@ -358,7 +400,11 @@ export function createCoopLobbyUi(ctx) {
     if (!partyHudEl) return;
 
     const st = ctx.coop?.getState?.();
-    if (!st || (!st.active && st.partySize <= 1)) {
+    const zonePilgrims = st?.zonePilgrims || [];
+    const hasParty = Boolean(st && (st.active || st.partySize > 1));
+    const hasAmbient = zonePilgrims.length > 0;
+
+    if (!st || (!hasParty && !hasAmbient)) {
       partyHudEl.classList.add('is-hidden');
       lastHudSignature = 'hidden';
       return;
@@ -366,9 +412,11 @@ export function createCoopLobbyUi(ctx) {
 
     const sig = JSON.stringify({
       lang: i18n.lang,
+      active: st.active,
       room: st.roomCode,
       size: st.partySize,
       res: st.resonanceCount,
+      kora: st.koraCommunionCount,
       zone: state.zone,
       leaderTerma: st.leaderDungeonState?.active,
       members: st.members.map((m) => ({
@@ -381,37 +429,58 @@ export function createCoopLobbyUi(ctx) {
         fainted: m.fainted,
         isHost: m.isHost,
       })),
+      ambient: zonePilgrims.slice(0, 3).map((m) => ({
+        id: m.id,
+        name: m.name,
+        lv: m.level,
+        hp: Math.round(m.hp),
+        maxHp: Math.round(m.maxHp),
+        emote: m.emote?.text || '',
+      })),
+      ambientCount: zonePilgrims.length,
     });
     if (sig === lastHudSignature) return;
     lastHudSignature = sig;
 
     partyHudEl.classList.remove('is-hidden');
 
-    const memberCards = st.members.map((m) => {
-      const hpPct = Math.max(0, Math.min(100, Math.round(((m.hp || 0) / Math.max(1, m.maxHp || 100)) * 100)));
+    const visibleCards = hasParty ? st.members : zonePilgrims.slice(0, 3);
+    const memberCards = visibleCards.map((m) => {
+      const hpPct = Math.max(
+        0,
+        Math.min(100, Math.round(((m.hp || 0) / Math.max(1, m.maxHp || 100)) * 100)),
+      );
       const diffZone = m.zone && m.zone !== state.zone;
-      const roleIcon = m.isHost ? '👑' : m.isAi ? '☸' : '🤝';
+      const isAmb = Boolean(m.isAmbient);
+      const roleIcon = isAmb ? '🌐' : m.isHost ? '👑' : m.isAi ? '☸' : '🤝';
       return `
-        <div class="coop-hud__card ${m.fainted ? 'is-fainted' : ''}" data-member-id="${m.id}">
+        <div class="coop-hud__card ${m.fainted ? 'is-fainted' : ''} ${isAmb ? 'is-ambient' : ''}" data-member-id="${m.id}">
           <div class="coop-hud__card-top">
             <span class="coop-hud__name">${roleIcon} Lv.${m.level || 1} ${m.name}</span>
-            <span class="coop-hud__zone">${formatZoneLabel(m.zone)}</span>
+            <span class="coop-hud__zone">${isAmb ? i18n.t('coop.presence.ambientTag') : formatZoneLabel(m.zone)}</span>
           </div>
           <div class="coop-hud__bar-track">
-            <div class="coop-hud__bar-fill ${m.fainted ? 'is-fainted' : ''}" style="width:${hpPct}%;"></div>
+            <div class="coop-hud__bar-fill ${m.fainted ? 'is-fainted' : ''} ${isAmb ? 'is-ambient' : ''}" style="width:${hpPct}%;"></div>
           </div>
           <div class="coop-hud__actions">
             <span style="font-size:10px;color:${m.fainted ? '#fca5a5' : '#94a3b8'};">
-              ${m.fainted ? i18n.t('coop.hud.fainted') : `${Math.round(m.hp || 0)}/${Math.round(m.maxHp || 100)} HP`}
+              ${
+                m.emote?.text
+                  ? m.emote.text
+                  : m.fainted
+                    ? i18n.t('coop.hud.fainted')
+                    : `${Math.round(m.hp || 0)}/${Math.round(m.maxHp || 100)} HP`
+              }
             </span>
             <div style="display:flex;gap:4px;">
               ${
-                m.fainted
+                !isAmb && m.fainted
                   ? `<button type="button" class="coop-hud__mini-btn" data-revive-id="${m.id}">${i18n.t('coop.party.reviveBtn')}</button>`
                   : ''
               }
               ${
-                (m.isHost && diffZone) || (m.isHost && m.zone === 'terma' && state.zone !== 'terma')
+                !isAmb &&
+                ((m.isHost && diffZone) || (m.isHost && m.zone === 'terma' && state.zone !== 'terma'))
                   ? `<button type="button" class="coop-hud__mini-btn" data-hud-teleport="1">${
                       m.zone === 'terma' ? i18n.t('coop.hud.joinTerma') : i18n.t('coop.hud.meetup')
                     }</button>`
@@ -423,22 +492,45 @@ export function createCoopLobbyUi(ctx) {
       `;
     });
 
+    const headerTitle = hasParty
+      ? `🤝 ${i18n.t('coop.hud.title')} (${st.partySize}/4)`
+      : i18n.t('coop.presence.hudTitle', { count: zonePilgrims.length });
+
+    const bonusText = hasParty
+      ? `${i18n.t('coop.hud.bonus', { bonus: st.findBonusPct || 0, count: st.resonanceCount || 0 })}${
+          hasAmbient ? ` · 🌐 +${zonePilgrims.length}` : ''
+        }`
+      : i18n.t('coop.presence.hudSub');
+
     partyHudEl.innerHTML = `
       <div class="coop-hud__header">
-        <span class="coop-hud__title" id="coop-hud-open-lobby">🤝 ${i18n.t('coop.hud.title')} (${st.partySize}/4)</span>
-        <button type="button" class="coop-hud__room-pill" id="coop-hud-copy-code" title="${i18n.t('coop.room.copyBtn')}">
-          ${st.roomCode || 'SANGHA'} 📋
-        </button>
+        <span class="coop-hud__title" id="coop-hud-open-lobby">${headerTitle}</span>
+        ${
+          hasParty
+            ? `<button type="button" class="coop-hud__room-pill" id="coop-hud-copy-code" title="${i18n.t('coop.room.copyBtn')}">
+                ${st.roomCode || 'SANGHA'} 📋
+              </button>`
+            : `<button type="button" class="coop-hud__room-pill" id="coop-hud-shard-pill">
+                ${st.shardId || 'stupa#1'}
+              </button>`
+        }
       </div>
       <div class="coop-hud__bonus">
-        ${i18n.t('coop.hud.bonus', { bonus: st.findBonusPct || 0, count: st.resonanceCount || 0 })}
+        ${bonusText}
       </div>
       <div class="coop-hud__members">
         ${memberCards.join('')}
       </div>
+      <div class="coop-hud__emote-row">
+        <button type="button" class="coop-hud__emote-btn" data-hud-emote="prostrate" title="${i18n.t('coop.emote.prostrate')}">🙏</button>
+        <button type="button" class="coop-hud__emote-btn" data-hud-emote="mantra" title="${i18n.t('coop.emote.mantra')}">☸</button>
+        <button type="button" class="coop-hud__emote-btn" data-hud-emote="lamp" title="${i18n.t('coop.emote.lamp')}">🪔</button>
+        <button type="button" class="coop-hud__emote-btn" data-hud-emote="protect" title="${i18n.t('coop.emote.protect')}">⚔️</button>
+      </div>
     `;
 
     partyHudEl.querySelector('#coop-hud-open-lobby')?.addEventListener('click', () => open());
+    partyHudEl.querySelector('#coop-hud-shard-pill')?.addEventListener('click', () => open());
     partyHudEl.querySelector('#coop-hud-copy-code')?.addEventListener('click', () => {
       copyRoomCode(st.roomCode);
     });
@@ -451,6 +543,12 @@ export function createCoopLobbyUi(ctx) {
     partyHudEl.querySelectorAll('[data-hud-teleport]').forEach((btn) => {
       btn.addEventListener('click', () => {
         ctx.coop?.teleportToLeader?.();
+      });
+    });
+    partyHudEl.querySelectorAll('[data-hud-emote]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const emoteId = btn.getAttribute('data-hud-emote');
+        ctx.coop?.sendEmote?.(emoteId);
       });
     });
   }
@@ -478,14 +576,49 @@ export function createCoopLobbyUi(ctx) {
       active: false,
       roomCode: '',
       isHost: false,
+      isRoomPublic: true,
       pilgrimName: i18n.t('coop.pilgrimName.default'),
       members: [],
       partySize: 1,
       resonanceCount: 0,
       findBonusPct: 0,
+      showAmbientPilgrims: true,
+      zonePilgrims: [],
+      zoneCounts: { stupa: 1, grove: 0, wild: 0 },
+      totalOnline: 1,
+      shardId: 'stupa#1',
+      publicRooms: [],
     };
 
     const p = state.player || {};
+    const zCounts = st.zoneCounts || {};
+    const hereCount = 1 + (st.zonePilgrims?.length || 0) + (st.members?.filter((m) => m.zone === state.zone).length || 0);
+    const publicRooms = st.publicRooms || [];
+
+    const publicRoomsHtml =
+      publicRooms.length > 0
+        ? publicRooms
+            .map(
+              (r) => `
+          <div class="coop-modal__slot" data-public-room="${r.code}">
+            <span>
+              ${i18n.t('coop.publicRooms.roomItem', {
+                code: r.code,
+                host: r.hostName || 'Pilgrim',
+                zone: formatZoneLabel(r.zone),
+                size: r.partySize || 1,
+                max: r.maxSize || 4,
+              })}
+            </span>
+            <button type="button" class="coop-modal__btn coop-modal__btn--primary" data-join-public-room="${r.code}">
+              ${i18n.t('coop.publicRooms.joinBtn')}
+            </button>
+          </div>
+        `,
+            )
+            .join('')
+        : `<div class="coop-modal__slot coop-modal__slot--empty">${i18n.t('coop.publicRooms.empty')}</div>`;
+
     const slotsHtml = [];
 
     // Slot 1: Local Player
@@ -555,7 +688,36 @@ export function createCoopLobbyUi(ctx) {
         <h2 id="coop-modal-title" class="coop-modal__title">${i18n.t('coop.title')}</h2>
         <p class="coop-modal__sub">${i18n.t('coop.subtitle')}</p>
 
-        <!-- Pilgrim Name & Room Code -->
+        <!-- 1. Live Zone Presence & Shard Status -->
+        <div class="coop-modal__section" id="coop-zone-presence-section">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:4px;">
+            <strong style="color:#7dd3fc;font-size:13.5px;">${i18n.t('coop.presence.title')}</strong>
+            <span style="font-size:12px;color:#38bdf8;">
+              ${i18n.t('coop.presence.banner', {
+                total: st.totalOnline || 1,
+                shard: st.shardId || 'stupa#1',
+                here: hereCount,
+              })}
+            </span>
+          </div>
+          <div style="font-size:11.5px;color:#94a3b8;margin-bottom:8px;">
+            ${i18n.t('coop.presence.zoneCount', {
+              stupa: zCounts.stupa || 0,
+              grove: zCounts.grove || 0,
+              wild: zCounts.wild || 0,
+            })}
+          </div>
+          <label class="coop-modal__check-label" for="coop-ambient-toggle">
+            <input
+              type="checkbox"
+              id="coop-ambient-toggle"
+              ${st.showAmbientPilgrims !== false ? 'checked' : ''}
+            />
+            <span>${i18n.t('coop.presence.toggle')}</span>
+          </label>
+        </div>
+
+        <!-- 2. Pilgrim Name & Room Code -->
         <div class="coop-modal__section">
           <div class="coop-modal__row" style="margin-bottom:10px;">
             <label for="coop-pilgrim-name-input" style="font-size:12px;color:#cbd5e1;min-width:120px;">
@@ -571,11 +733,21 @@ export function createCoopLobbyUi(ctx) {
             />
           </div>
 
-          <div style="font-size:12px;color:#94a3b8;margin-bottom:6px;">
-            ${i18n.t('coop.room.label')}：
-            <strong id="coop-current-room-code" style="color:#5eead4;font-size:14px;">
-              ${st.active && st.roomCode ? st.roomCode : i18n.t('coop.room.none')}
-            </strong>
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+            <div style="font-size:12px;color:#94a3b8;">
+              ${i18n.t('coop.room.label')}：
+              <strong id="coop-current-room-code" style="color:#5eead4;font-size:14px;">
+                ${st.active && st.roomCode ? st.roomCode : i18n.t('coop.room.none')}
+              </strong>
+            </div>
+            <label class="coop-modal__check-label" for="coop-public-room-toggle">
+              <input
+                type="checkbox"
+                id="coop-public-room-toggle"
+                ${st.isRoomPublic !== false ? 'checked' : ''}
+              />
+              <span>${i18n.t('coop.publicRooms.publicToggle')}</span>
+            </label>
           </div>
 
           <div class="coop-modal__row">
@@ -608,7 +780,41 @@ export function createCoopLobbyUi(ctx) {
           </div>
         </div>
 
-        <!-- AI Dharma Companions -->
+        <!-- 3. Public Rooms Matchmaking Browser -->
+        <div class="coop-modal__section">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
+            <strong style="color:#fde68a;font-size:13px;">${i18n.t('coop.publicRooms.title')}</strong>
+            <button type="button" id="btn-coop-refresh-rooms" class="coop-modal__btn" style="padding:4px 10px;font-size:11.5px;">
+              ${i18n.t('coop.publicRooms.refreshBtn')}
+            </button>
+          </div>
+          <div id="coop-public-rooms-list" class="coop-modal__slot-list">
+            ${publicRoomsHtml}
+          </div>
+        </div>
+
+        <!-- 4. Dharma Emote / Prayer Bubble Bar -->
+        <div class="coop-modal__section">
+          <div style="font-weight:700;color:#fde68a;font-size:13px;margin-bottom:8px;">
+            ${i18n.t('coop.emote.title')}
+          </div>
+          <div id="coop-emote-bar" class="coop-modal__row">
+            <button type="button" class="coop-modal__btn" data-coop-emote="prostrate">
+              ${i18n.t('coop.emote.prostrate')}
+            </button>
+            <button type="button" class="coop-modal__btn" data-coop-emote="mantra">
+              ${i18n.t('coop.emote.mantra')}
+            </button>
+            <button type="button" class="coop-modal__btn" data-coop-emote="lamp">
+              ${i18n.t('coop.emote.lamp')}
+            </button>
+            <button type="button" class="coop-modal__btn" data-coop-emote="protect">
+              ${i18n.t('coop.emote.protect')}
+            </button>
+          </div>
+        </div>
+
+        <!-- 5. AI Dharma Companions -->
         <div class="coop-modal__section">
           <div style="font-weight:700;color:#fde68a;font-size:13.5px;margin-bottom:4px;">
             ${i18n.t('coop.ai.sectionTitle')}
@@ -637,7 +843,7 @@ export function createCoopLobbyUi(ctx) {
           </div>
         </div>
 
-        <!-- Party Roster (4 Slots) -->
+        <!-- 6. Party Roster (4 Slots) -->
         <div class="coop-modal__section">
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
             <strong style="color:#fde68a;font-size:13.5px;">
@@ -677,6 +883,19 @@ export function createCoopLobbyUi(ctx) {
     `;
 
     // Wire events
+    const ambientToggle = modalEl.querySelector('#coop-ambient-toggle');
+    ambientToggle?.addEventListener('change', () => {
+      ctx.coop?.setShowAmbientPilgrims?.(ambientToggle.checked);
+      renderModal();
+      renderPartyHud();
+    });
+
+    const publicToggle = modalEl.querySelector('#coop-public-room-toggle');
+    publicToggle?.addEventListener('change', () => {
+      ctx.coop?.setRoomPublic?.(publicToggle.checked);
+      renderModal();
+    });
+
     const nameInput = modalEl.querySelector('#coop-pilgrim-name-input');
     nameInput?.addEventListener('change', () => {
       ctx.coop?.setPilgrimName?.(nameInput.value);
@@ -685,7 +904,9 @@ export function createCoopLobbyUi(ctx) {
     modalEl.querySelector('#btn-coop-create-room')?.addEventListener('click', () => {
       if (nameInput?.value) ctx.coop?.setPilgrimName?.(nameInput.value);
       const rawCode = modalEl.querySelector('#coop-room-code-input')?.value?.trim();
-      ctx.coop?.createRoom?.(rawCode || undefined);
+      ctx.coop?.createRoom?.(rawCode || undefined, {
+        isPublic: publicToggle ? publicToggle.checked : true,
+      });
       renderModal();
       renderPartyHud();
     });
@@ -698,6 +919,28 @@ export function createCoopLobbyUi(ctx) {
         renderModal();
         renderPartyHud();
       }
+    });
+
+    modalEl.querySelector('#btn-coop-refresh-rooms')?.addEventListener('click', () => {
+      ctx.coop?.refreshPublicRooms?.();
+    });
+
+    modalEl.querySelectorAll('[data-join-public-room]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const code = btn.getAttribute('data-join-public-room');
+        if (code) {
+          ctx.coop?.joinRoom?.(code);
+          renderModal();
+          renderPartyHud();
+        }
+      });
+    });
+
+    modalEl.querySelectorAll('[data-coop-emote]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const emoteId = btn.getAttribute('data-coop-emote');
+        ctx.coop?.sendEmote?.(emoteId);
+      });
     });
 
     modalEl.querySelector('#btn-coop-copy-code')?.addEventListener('click', () => {
@@ -764,6 +1007,7 @@ export function createCoopLobbyUi(ctx) {
     modalOpen = true;
     state.uiOpen = true;
     modalEl.classList.remove('is-hidden');
+    ctx.coop?.refreshPublicRooms?.();
     renderModal();
     bus?.emit('coop:lobbyOpened');
     return true;
