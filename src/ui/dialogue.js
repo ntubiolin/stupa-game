@@ -313,7 +313,8 @@ export function createDialogue(ctx) {
   // Register debug & prologue dialogues + auto-discover chapter dialogues (`src/data/dialogues/*.js`)
   register(DEBUG_DIALOGUES);
   register(PROLOGUE_DIALOGUES);
-  const chapterDialogueModules = import.meta.glob('../data/dialogues/*.js', { eager: true });
+  const chapterDialogueModules =
+    (typeof import.meta.glob === 'function' && import.meta.glob('../data/dialogues/*.js', { eager: true })) || {};
   for (const mod of Object.values(chapterDialogueModules)) {
     if (!mod || typeof mod !== 'object') continue;
     for (const val of Object.values(mod)) {
