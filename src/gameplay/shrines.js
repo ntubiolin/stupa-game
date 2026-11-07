@@ -13,6 +13,10 @@
  */
 import * as THREE from 'three';
 import '../i18n/elites.js';
+import { getDifficulty } from '../data/combatSettings.js';
+
+export const SANCTUARY_RADIUS = 5.5;
+export const MANI_SANCTUARY_RADIUS = 4.5;
 
 export const SHRINE_DEFS = {
   diligence: {
@@ -118,7 +122,7 @@ export function createShrines(ctx) {
   const finialConeGeo = new THREE.ConeGeometry(0.14, 0.32, 8);
   const finialOrbGeo = new THREE.SphereGeometry(0.15, 12, 10);
   const finialHaloGeo = new THREE.SphereGeometry(0.32, 12, 10);
-  const groundRingGeo = new THREE.RingGeometry(1.15, 1.35, 32);
+  const groundRingGeo = new THREE.RingGeometry(SANCTUARY_RADIUS - 0.16, SANCTUARY_RADIUS, 64);
   groundRingGeo.rotateX(-Math.PI / 2);
 
   const stoneMat = new THREE.MeshStandardMaterial({
@@ -207,7 +211,7 @@ export function createShrines(ctx) {
     group.add(glowHalo);
 
     const ringMat = new THREE.MeshBasicMaterial({
-      color: def.color,
+      color: 0xffd47a,
       transparent: true,
       opacity: 0.48,
       blending: THREE.AdditiveBlending,
@@ -215,7 +219,7 @@ export function createShrines(ctx) {
       depthWrite: false,
       toneMapped: false,
     });
-    const groundRing = new THREE.Mesh(groundRingGeo, ringMat);
+    const groundRing = new THREE.Mesh(groundRingGeo.clone(), ringMat);
     groundRing.position.y = 0.04;
     group.add(groundRing);
 
@@ -233,14 +237,48 @@ export function createShrines(ctx) {
   // ---------------------------------------------------------------- Active Shrines
   const activeShrines = [];
   let shrineIdCounter = 1;
+  const maniWards = [];
+  let restoreTime = 0;
+  let wasInside = false;
+  let entryCooldown = 0;
+
+  // Keep ground rings visible over uneven terrain without any lights.
+  function fitWardRing(ring, x, z, y, zone) {
+    const positions = ring.geometry.attributes.position;
+    for (let i = 0; i < positions.count; i++) {
+      const wx = x + positions.getX(i) * ring.scale.x;
+      const wz = z + positions.getZ(i) * ring.scale.z;
+      positions.setY(i, (ctx.world?.getHeight(wx, wz, zone) ?? y) - y);
+    }
+    positions.needsUpdate = true;
+    ring.geometry.computeBoundingSphere();
+  }
+
+  function isInSanctuary(x, z, zone = state.zone) {
+    return activeShrines.some(s => s.zone === zone && Math.hypot(x - s.x, z - s.z) <= SANCTUARY_RADIUS) ||
+      (zone === 'wild' && (ctx.config.WILD?.maniStones || []).some(s =>
+        Math.hypot(x - s.x, z - s.z) <= MANI_SANCTUARY_RADIUS)) ||
+      (ctx.world?.getMap(zone)?.safeZones || []).some(s => s.sanctuary &&
+        Math.hypot(x - s.x, z - s.z) <= s.r);
+  }
 
   function clearShrines() {
+    if (state.player) state.player.inSanctuary = false;
+    wasInside = false;
+    restoreTime = 0;
+    for (const ward of maniWards) {
+      shrineGroup.remove(ward.ring);
+      ward.ring.geometry.dispose();
+      ward.ring.material.dispose();
+    }
+    maniWards.length = 0;
     for (let i = activeShrines.length - 1; i >= 0; i--) {
       const s = activeShrines[i];
       shrineGroup.remove(s.visual.group);
       s.visual.coreMat.dispose();
       s.visual.glowMat.dispose();
       s.visual.ringMat.dispose();
+      s.visual.groundRing.geometry.dispose();
       if (s.interactable) {
         const idx = interactables.indexOf(s.interactable);
         if (idx !== -1) interactables.splice(idx, 1);
@@ -253,11 +291,9 @@ export function createShrines(ctx) {
     if (!shrine || shrine.used) return false;
     shrine.used = true;
 
-    // Dim top glow and ground ring
+    // The blessing is single-use; the golden sanctuary remains active.
     shrine.visual.coreMat.color.setHex(0x57534e);
     shrine.visual.glowMat.opacity = 0.06;
-    shrine.visual.ringMat.opacity = 0.05;
-    shrine.visual.groundRing.visible = false;
 
     // Remove from interactables
     if (shrine.interactable) {
@@ -293,6 +329,7 @@ export function createShrines(ctx) {
     const id = `shrine_${shrineIdCounter++}`;
     const visual = buildShrineVisual(def);
     visual.group.position.set(x, y, z);
+    fitWardRing(visual.groundRing, x, z, y, zone);
     shrineGroup.add(visual.group);
 
     const posVec = new THREE.Vector3(x, y, z);
@@ -355,7 +392,8 @@ export function createShrines(ctx) {
     const count = Math.min(2, pool.length);
 
     for (let i = 0; i < count; i++) {
-      const idx = Math.floor(Math.random() * pool.length);
+      const guaranteed = pool.findIndex(spot => spot.guaranteed);
+      const idx = guaranteed >= 0 ? guaranteed : Math.floor(Math.random() * pool.length);
       const spot = pool.splice(idx, 1)[0];
       // Support spots defined relative to mapDef.origin or in world coordinates
       const isRelative = Math.hypot(spot.x, spot.z) < 200 && Math.hypot(origin.x, origin.z) >= 200;
@@ -363,6 +401,28 @@ export function createShrines(ctx) {
       const wz = isRelative ? origin.z + spot.z : spot.z + (origin.z === 0 ? 0 : 0);
       const randKind = SHRINE_KINDS[Math.floor(Math.random() * SHRINE_KINDS.length)];
       spawnShrineAt(randKind, wx, wz, mapDef.id);
+    }
+
+    const wards = mapId === 'wild'
+      ? (ctx.config.WILD?.maniStones || []).map(s => ({ ...s, r: MANI_SANCTUARY_RADIUS }))
+      : [];
+    for (const safe of mapDef.safeZones || []) {
+      if (safe.sanctuary && !activeShrines.some(s => Math.hypot(s.x - safe.x, s.z - safe.z) < 0.1)) {
+        wards.push(safe);
+      }
+    }
+    for (const ward of wards) {
+      const ring = new THREE.Mesh(groundRingGeo.clone(), new THREE.MeshBasicMaterial({
+        color: 0xffd47a, transparent: true, opacity: 0.48,
+        side: THREE.DoubleSide, depthWrite: false, toneMapped: false,
+        blending: THREE.AdditiveBlending,
+      }));
+      ring.scale.set(ward.r / SANCTUARY_RADIUS, 1, ward.r / SANCTUARY_RADIUS);
+      const y = ctx.world.getHeight(ward.x, ward.z, mapId);
+      ring.position.set(ward.x, y + 0.04, ward.z);
+      fitWardRing(ring, ward.x, ward.z, y, mapId);
+      shrineGroup.add(ring);
+      maniWards.push({ ...ward, ring, zone: mapId, y });
     }
   }
 
@@ -385,6 +445,38 @@ export function createShrines(ctx) {
   function update(dt) {
     const currentZone = state.zone || 'stupa';
     const windStr = state.wind?.strength ?? 0.5;
+    entryCooldown = Math.max(0, entryCooldown - dt);
+    const p = state.player;
+    const inside = Boolean(p?.position && ctx.world?.isCombatZone(currentZone) &&
+      isInSanctuary(p.position.x, p.position.z, currentZone));
+    if (p) p.inSanctuary = inside;
+    if (inside && state.mode === 'play' && p.hp > 0) {
+      if (!wasInside && entryCooldown <= 0) {
+        entryCooldown = 45;
+        bus.emit('toast', { key: getDifficulty(ctx).sanctuarySafe !== false
+          ? 'toast.shrineSanctuaryEnter' : 'toast.shrineSanctuaryRest', kind: 'merit' });
+      }
+      restoreTime += dt;
+      const ticks = Math.floor(restoreTime);
+      if (ticks > 0) {
+        restoreTime -= ticks;
+        if (ctx.vitals?.heal) ctx.vitals.heal(6 * ticks);
+        else bus.emit('vitals:restore', { hp: 6 * ticks, source: 'sanctuary' });
+        if (ctx.vitals?.restoreMp) ctx.vitals.restoreMp(5 * ticks);
+        else bus.emit('vitals:restore', { mp: 5 * ticks, source: 'sanctuary' });
+      }
+    } else restoreTime = 0;
+    wasInside = inside;
+
+    for (const ward of maniWards) {
+      ward.ring.visible = ward.zone === currentZone;
+      const y = ctx.world.getHeight(ward.x, ward.z, ward.zone);
+      if (Math.abs(y - ward.y) > 0.01) {
+        ward.y = y;
+        ward.ring.position.y = y + 0.04;
+        fitWardRing(ward.ring, ward.x, ward.z, y, ward.zone);
+      }
+    }
 
     for (let i = 0; i < activeShrines.length; i++) {
       const s = activeShrines[i];
@@ -398,6 +490,7 @@ export function createShrines(ctx) {
         s.y = groundY;
         s.position.y = groundY;
         s.visual.group.position.y = groundY;
+        fitWardRing(s.visual.groundRing, s.x, s.z, groundY, s.zone);
       }
 
       // Gentle flag flutter
@@ -409,12 +502,14 @@ export function createShrines(ctx) {
           windStr;
       }
 
+      s.visual.ringMat.opacity = 0.42 + 0.08 * Math.sin(state.elapsed * 1.6 + s.phase);
+
       // Finial pulse when unused
       if (!s.used) {
         const pulse = 0.85 + 0.25 * Math.sin(state.elapsed * 3.2 + s.phase);
         s.visual.glowHalo.scale.setScalar(pulse);
         s.visual.glowMat.opacity = 0.45 + 0.2 * Math.sin(state.elapsed * 3.2 + s.phase);
-        s.visual.groundRing.rotation.z += dt * 0.6;
+
       }
     }
   }
@@ -468,6 +563,7 @@ export function createShrines(ctx) {
     update,
     spawn,
     activateNearest,
+    isInSanctuary,
     list,
     clear: clearShrines,
   };

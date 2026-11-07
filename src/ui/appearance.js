@@ -512,6 +512,17 @@ export function createAppearanceUi(ctx) {
   // 1. Title Screen button (#btn-title-customize) & Front-Cam control chip
   let titleCustomizeBtn = null;
   let titleNameBadge = null;
+  const beginBtn = document.getElementById('btn-begin');
+  if (beginBtn) {
+    beginBtn.addEventListener('click', (e) => {
+      if (state.mode === 'intro' && !ctx.player?.getAppearance?.()?.customizedOnce) {
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        bus.emit('sfx', { name: 'bell' });
+        open('face');
+      }
+    }, true);
+  }
   const titleActions = document.querySelector('#title-screen .title-actions');
   if (titleActions && !document.getElementById('btn-title-customize')) {
     titleCustomizeBtn = document.createElement('button');
@@ -522,7 +533,6 @@ export function createAppearanceUi(ctx) {
       <span id="btn-title-customize-label" data-i18n="appearance.btn.titleCustomize">${i18n.t('appearance.btn.titleCustomize')}</span>
       <span id="btn-title-customize-badge" class="btn-title-customize__badge"></span>
     `;
-    const beginBtn = document.getElementById('btn-begin');
     if (beginBtn && beginBtn.nextSibling) {
       titleActions.insertBefore(titleCustomizeBtn, beginBtn.nextSibling);
     } else {
@@ -727,6 +737,7 @@ export function createAppearanceUi(ctx) {
     ctx.player?.setAppearance?.({
       ...DEFAULT_APPEARANCE,
       name: cur.name,
+      customizedOnce: Boolean(cur.customizedOnce),
     });
     state.customizePreviewYaw = 0;
     renderOptions();
@@ -841,6 +852,15 @@ export function createAppearanceUi(ctx) {
         renderSectionSwatches('appearance.sec.skinTone', 'skinTone', SKIN_TONES, spec.skinTone, () => setZoomMode('face'))
       );
       optionsBody.appendChild(
+        renderSectionPills('appearance.sec.hairStyle', 'hairStyle', HAIR_STYLES, spec.hairStyle, () => setZoomMode('face'))
+      );
+      optionsBody.appendChild(
+        renderSectionSwatches('appearance.sec.hairColor', 'hairColor', HAIR_COLORS, spec.hairColor, () => setZoomMode('face'))
+      );
+      optionsBody.appendChild(
+        renderSectionPills('appearance.sec.browStyle', 'browStyle', BROW_STYLES, spec.browStyle, () => setZoomMode('face'))
+      );
+      optionsBody.appendChild(
         renderSectionPills('appearance.sec.eyeStyle', 'eyeStyle', EYE_STYLES, spec.eyeStyle, () => {
           setZoomMode('face');
           setPreviewPose('idle');
@@ -854,19 +874,10 @@ export function createAppearanceUi(ctx) {
         })
       );
       optionsBody.appendChild(
-        renderSectionPills('appearance.sec.browStyle', 'browStyle', BROW_STYLES, spec.browStyle, () => setZoomMode('face'))
-      );
-      optionsBody.appendChild(
         renderSectionPills('appearance.sec.mouthStyle', 'mouthStyle', MOUTH_STYLES, spec.mouthStyle, () => setZoomMode('face'))
       );
       optionsBody.appendChild(
         renderSectionPills('appearance.sec.markType', 'markType', MARK_TYPES, spec.markType, () => setZoomMode('face'))
-      );
-      optionsBody.appendChild(
-        renderSectionPills('appearance.sec.hairStyle', 'hairStyle', HAIR_STYLES, spec.hairStyle, () => setZoomMode('face'))
-      );
-      optionsBody.appendChild(
-        renderSectionSwatches('appearance.sec.hairColor', 'hairColor', HAIR_COLORS, spec.hairColor, () => setZoomMode('face'))
       );
     } else if (activeTab === 'outfit') {
       optionsBody.appendChild(
@@ -995,9 +1006,7 @@ export function createAppearanceUi(ctx) {
   function close(showToast = false) {
     if (!studioOpen) return;
     const rawInput = nameInput.value.trim().slice(0, 20);
-    if (rawInput) {
-      ctx.player?.setAppearance?.({ name: rawInput });
-    }
+    ctx.player?.setAppearance?.({ ...(rawInput ? { name: rawInput } : {}), customizedOnce: true });
     studioOpen = false;
     state.customizing = false;
     state.uiOpen = false;

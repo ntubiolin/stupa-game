@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSave } from '../src/systems/save.js';
+import { createSave, formatBackupFilename } from '../src/systems/save.js';
 import { createStoryDirector } from '../src/story/storyDirector.js';
 import { createBus } from '../src/core/events.js';
 
@@ -198,4 +198,49 @@ test('explicit reset and import replace their own sections without reviving remo
   assert.equal(read().sections.story.beat, 'arrival');
   assert.equal(story.reset(), true);
   assert.deepEqual(read().sections, { settings: { lang: 'en' }, vitals: { level: 1 } });
+});
+
+test('downloadBackup flushes live registered sections and importBackupFile restores sections and invokes deserializers', async t => {
+  const { read } = mockSaveStorage(t, {
+    version: 2,
+    sections: { vitals: { level: 3, exp: 40 }, merit: { points: 108, kora: 2 } },
+  });
+  const bus = createBus();
+  const save = createSave({ bus });
+
+  let liveInventory = { turquoise: 25, bag: ['butter_lamp'] };
+  let restoredInventory = null;
+  save.register(
+    'inventory',
+    () => liveInventory,
+    (data) => { restoredInventory = data; }
+  );
+
+  // Mutate live inventory without calling markDirty; downloadBackup should still flush it
+  liveInventory = { turquoise: 88, bag: ['butter_lamp', 'khatag'] };
+  const fixedDate = new Date(2026, 10, 7, 14, 35, 0);
+  const backup = save.downloadBackup({ now: fixedDate });
+
+  assert.equal(backup.ok, true);
+  assert.equal(backup.filename, formatBackupFilename(fixedDate));
+  const parsedBackup = JSON.parse(backup.json);
+  assert.equal(parsedBackup.version, 2);
+  assert.deepEqual(parsedBackup.sections.inventory, { turquoise: 88, bag: ['butter_lamp', 'khatag'] });
+  assert.equal(read().sections.inventory.turquoise, 88);
+
+  // Reset save, then restore from backup file object
+  assert.equal(save.reset(), true);
+  const fakeFile = {
+    text: async () => backup.json,
+  };
+  const importRes = await save.importBackupFile(fakeFile, { reload: false });
+  assert.equal(importRes.ok, true);
+  assert.equal(read().sections.vitals.level, 3);
+  assert.equal(read().sections.merit.points, 108);
+  assert.deepEqual(restoredInventory, { turquoise: 88, bag: ['butter_lamp', 'khatag'] });
+
+  // Invalid backup file should fail gracefully without corrupting storage
+  const badRes = await save.importBackupFile({ text: async () => '{not-valid-json' }, { reload: false });
+  assert.equal(badRes.ok, false);
+  assert.equal(read().sections.vitals.level, 3);
 });

@@ -143,6 +143,7 @@ export const DHARMA_NAME_POOL = {
 
 export const DEFAULT_APPEARANCE = {
   name: '',
+  customizedOnce: false,
   showNameplate: true,
   skinTone: 'warm',
   eyeStyle: 'bright',
@@ -175,6 +176,7 @@ export function normalizeAppearance(raw = {}) {
   const src = raw && typeof raw === 'object' ? raw : {};
   return {
     name: typeof src.name === 'string' ? src.name.trim().slice(0, 20) : '',
+    customizedOnce: Boolean(src.customizedOnce),
     showNameplate: typeof src.showNameplate === 'boolean' ? src.showNameplate : true,
     skinTone: pickValidId(SKIN_TONES, src.skinTone, DEFAULT_APPEARANCE.skinTone),
     eyeStyle: pickValidId(EYE_STYLES, src.eyeStyle, DEFAULT_APPEARANCE.eyeStyle),

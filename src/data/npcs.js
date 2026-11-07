@@ -1,5 +1,6 @@
 import '../i18n/quests.js';
 import '../i18n/prologue.js';
+import '../i18n/npcs.js';
 
 export const NPC_LOOKS = [
   'lama',

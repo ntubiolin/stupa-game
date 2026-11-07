@@ -6,12 +6,12 @@
 
 ## 🔄 標準開發流程（Mandatory Feature & Fix Workflow）
 
-任何新功能（Feature）或重要修改**嚴禁直接在 `master` 主線提交或累積未追蹤變更**，必須嚴格依照以下 4 個步驟執行：
+任何新功能（Feature）或重要修改**嚴禁直接在 `master` 主線提交或累積未追蹤變更**，必須嚴格依照以下 4 個步驟執行，並**最大化利用獨立 Worktree 與平行 Subagents**：
 
 ```mermaid
 flowchart LR
-    A["1. 開立 GitHub Issue Ticket<br/>(gh issue create)"] --> B["2. Local 切出獨立 Branch<br/>實作並 Commit 程式碼"]
-    B --> C["3. 本地測試與驗證通過<br/>(build / check:i18n)"]
+    A["1. 開立 GitHub Issue Ticket<br/>(gh issue create)"] --> B["2. 開立獨立 Git Worktree<br/>(無相依任務以多 Subagent 平行處理)"]
+    B --> C["3. Worktree 內本地測試驗證<br/>(build / check:i18n)"]
     C --> D["4. 發起 Pull Request<br/>測試通過後 Merge 回 master"]
 ```
 
@@ -20,15 +20,17 @@ flowchart LR
   ```bash
   gh issue create --title "feat(<scope>): <簡明標題>" --body "<目標、範圍規格與驗收條件>"
   ```
-- 若為大型 Epic，應先建立 Epic Issue，再拆分為可獨立交付的子 Issue Tickets，逐一對應獨立的 Branch 與 PR。
+- 若為大型 Epic，應先建立 Epic Issue，再拆分為可獨立交付、無相依性的子 Issue Tickets，逐一對應獨立的 Worktree、Branch 與 PR。
 
-### Step 2：本地建立分支並提交程式碼 (`local create branch and commit code`)
-- 確保本地 `master` 為最新狀態，並根據 Issue 編號建立語意化分支（例如 `feat/<issue-id>-<short-slug>` 或 `fix/<issue-id>-<short-slug>`）：
+### Step 2：建立獨立 Git Worktree 並平行派發 Subagents (`new worktree & parallel subagents`)
+- **統一使用 New Worktree 隔離實作**：每個新的 Issue Task 都必須從最新 `master` 建立專屬的 `git worktree` 與語意化分支（例如 `feat/<issue-id>-<short-slug>` 或 `fix/<issue-id>-<short-slug>`），避免汙染主工作區或互相干擾：
   ```bash
-  git checkout master && git pull origin master
-  git checkout -b feat/<issue-id>-<slug>
+  git fetch origin master
+  git worktree add -b feat/<issue-id>-<slug> /Users/linyusheng/.gemini/antigravity/worktrees/stupa_game/feat-<issue-id>-<slug> origin/master
+  ln -s /Users/linyusheng/projects/stupa_game/node_modules /Users/linyusheng/.gemini/antigravity/worktrees/stupa_game/feat-<issue-id>-<slug>/node_modules
   ```
-- 在該分支完成功能實作，保持單一職責（Single Responsibility），使用 Conventional Commits 格式提交並附帶 Issue 編號：
+- **平行化處理無相依性任務（Parallel Subagents）**：當有多個彼此無 dependency 的子任務或 Issues 時，應**盡可能多開 Subagent (`invoke_subagent`) 平行處理**，每個 Subagent 負責各自的獨立 Worktree 實作與自測。
+- 在該 Worktree 完成功能實作，保持單一職責（Single Responsibility），使用 Conventional Commits 格式提交並附帶 Issue 編號：
   ```bash
   git add <files>
   git commit -m "feat(<scope>): <description> (#<issue-id>)"

@@ -10,6 +10,7 @@
  * are allocated ONCE at module init and reused forever.
  */
 import * as THREE from 'three';
+import { getDifficulty } from '../data/combatSettings.js';
 
 function createSyllableTexture(syllable) {
   const canvas = document.createElement('canvas');
@@ -254,6 +255,15 @@ export function createMantra(ctx) {
 
     bus.emit('player:chant', { duration: M.duration ?? 0.5 });
     bus.emit('sfx', { name: 'chant' });
+
+    if (!isPeaceful || state.zone === 'wild') {
+      const diff = getDifficulty(ctx);
+      const ratio = diff.mantraHealRatio ?? (diff.id === 'easy' ? 0.16 : 0.12);
+      const healAmount = Math.max(8, Math.round((state.player?.maxHp || 100) * ratio *
+        (!state.player?.isMoving ? 1.25 : 1)));
+      if (ctx.vitals?.heal) ctx.vitals.heal(healAmount);
+      else bus.emit('vitals:restore', { hp: healAmount, source: 'mantraMeditation' });
+    }
 
     if (!isPeaceful) {
       const originPos = state.player.position.clone();

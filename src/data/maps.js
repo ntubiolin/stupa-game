@@ -66,8 +66,10 @@ export const MAPS = {
       {
         x: W.wildGate.x,
         z: W.wildGate.z,
-        r: CONFIG.ENEMIES?.gateSafeRadius ?? W.safeZoneRadius ?? 10,
+        r: 15,
       },
+      { x: 1018, z: 22, r: 5.5, sanctuary: true },
+      { x: 1006, z: 36, r: 4.5, sanctuary: true },
     ],
     gates: [
       {
@@ -108,21 +110,31 @@ export const MAPS = {
       },
     },
     spawnTable: [
-      { kind: 'preta', area: 'near', count: 5, clusters: [3, 2] },
-      { kind: 'tsen', area: 'mid', count: 4 },
-      { kind: 'migoi', area: 'deep', count: 3 },
+      { kind: 'preta', area: 'near', count: 5, clusters: [2, 2, 1] },
+      { kind: 'tsen', area: 'mid', count: 3 },
+      { kind: 'migoi', area: 'deep', count: 2 },
     ],
     elitePacks: { champion: 1, rare: 1 },
     shrineSpots: [
+      { x: 18, z: 22, guaranteed: true },
       { x: -24, z: -18 },
       { x: 26, z: -22 },
       { x: -20, z: 28 },
       { x: 28, z: 24 },
     ],
     spawnAreas: {
-      near: { minR: 8, maxR: 26 },
-      mid: { minR: 26, maxR: 46 },
-      deep: { minR: 46, maxR: 65 },
+      near: {
+        minR: 8, maxR: 26,
+        polygon: [{ x: 962, z: 16 }, { x: 1038, z: 16 }, { x: 1038, z: 46 }, { x: 962, z: 46 }],
+      },
+      mid: {
+        minR: 26, maxR: 46,
+        polygon: [{ x: 952, z: -16 }, { x: 1048, z: -16 }, { x: 1048, z: 16 }, { x: 952, z: 16 }],
+      },
+      deep: {
+        minR: 46, maxR: 65,
+        polygon: [{ x: 952, z: -52 }, { x: 1048, z: -52 }, { x: 1048, z: -18 }, { x: 952, z: -18 }],
+      },
     },
     ambience: 'wild',
     enterToastKey: 'toast.enterWild',

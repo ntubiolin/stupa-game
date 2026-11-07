@@ -10,6 +10,17 @@ const SAVE_VERSION = 2;
 export const STORY_SAVE_VERSION = 2;
 const THROTTLE_SEC = 1.0;
 
+export function formatBackupFilename(now = new Date(), prefix = 'stupa-save-backup') {
+  const d = now instanceof Date && !Number.isNaN(now.getTime()) ? now : new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const mm = pad(d.getMonth() + 1);
+  const dd = pad(d.getDate());
+  const hh = pad(d.getHours());
+  const min = pad(d.getMinutes());
+  return `${prefix}-${yyyy}-${mm}-${dd}-${hh}${min}.json`;
+}
+
 const LEGACY_KEYS = {
   merit: 'stupa.merit.v1',
   vitals: 'stupa.vitals.v1',
@@ -437,9 +448,9 @@ export function createSave(ctx, { writableSections = null } = {}) {
     });
   }
 
-  function exportString() {
+  function exportString(options = {}) {
     flush();
-    return JSON.stringify(store);
+    return options?.pretty ? JSON.stringify(store, null, 2) : JSON.stringify(store);
   }
 
   function importString(str, options = {}) {
@@ -455,10 +466,97 @@ export function createSave(ctx, { writableSections = null } = {}) {
       }
       return sections;
     });
+    if (ok) {
+      for (const [section, entry] of registeredSections) {
+        if (typeof entry.deserializer === 'function' && store.sections?.[section] !== undefined) {
+          try {
+            entry.deserializer(deepClone(store.sections[section]));
+          } catch (err) {
+            console.warn(`[save] Failed to deserialize registered section "${section}" after import:`, err);
+          }
+        }
+      }
+      ctx?.bus?.emit?.('save:imported', {
+        savedAt: store.savedAt,
+        sections: Object.keys(store.sections || {}),
+      });
+    }
     if (ok && options.reload !== false && typeof window !== 'undefined' && window.location?.reload) {
       window.location.reload();
     }
     return ok;
+  }
+
+  function downloadBackup(options = {}) {
+    if (!isReadOnly()) {
+      sampleRegistered = true;
+      flush();
+    }
+    const snapshot = dump();
+    const json = JSON.stringify(snapshot, null, 2);
+    const filename = options?.filename || formatBackupFilename(options?.now ? new Date(options.now) : new Date());
+
+    let triggeredDownload = false;
+    if (
+      typeof document !== 'undefined'
+      && typeof Blob !== 'undefined'
+      && typeof URL !== 'undefined'
+      && typeof URL.createObjectURL === 'function'
+    ) {
+      const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.rel = 'noopener';
+      anchor.style.display = 'none';
+      document.body?.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => {
+        try { URL.revokeObjectURL(url); } catch { /* ignore */ }
+      }, 1000);
+      triggeredDownload = true;
+    }
+
+    const payload = {
+      ok: true,
+      filename,
+      json,
+      size: json.length,
+      savedAt: snapshot.savedAt || Date.now(),
+      triggeredDownload,
+    };
+    ctx?.bus?.emit?.('save:backupDownloaded', payload);
+    return payload;
+  }
+
+  async function importBackupFile(file, options = {}) {
+    if (!file) {
+      return { ok: false, error: 'empty-file' };
+    }
+    try {
+      let rawText = '';
+      if (typeof file === 'string') {
+        rawText = file;
+      } else if (typeof file.text === 'function') {
+        rawText = await file.text();
+      } else {
+        return { ok: false, error: 'invalid-file' };
+      }
+      const ok = importString(rawText, options);
+      if (!ok) {
+        return { ok: false, error: status.ok ? 'invalid-backup-format' : status.error };
+      }
+      return {
+        ok: true,
+        savedAt: store.savedAt,
+        sections: Object.keys(store.sections || {}),
+      };
+    } catch (err) {
+      console.warn('[save] Failed to import backup file:', err);
+      return { ok: false, error: 'read-failed' };
+    }
   }
 
   function register(section, serializer, deserializer) {
@@ -471,7 +569,7 @@ export function createSave(ctx, { writableSections = null } = {}) {
         console.warn(`[save] Failed to deserialize registered section "${section}":`, err);
       }
     }
-    const entry = { serializer, snapshot: undefined };
+    const entry = { serializer, deserializer, snapshot: undefined };
     registeredSections.set(section, entry);
     try {
       if (typeof serializer === 'function') entry.snapshot = JSON.stringify(serializer());
@@ -525,6 +623,9 @@ export function createSave(ctx, { writableSections = null } = {}) {
     reset,
     exportString,
     importString,
+    downloadBackup,
+    importBackupFile,
+    getBackupFilename: (now) => formatBackupFilename(now),
     dump,
     update,
     getWriteCount() { return writeCount; },
@@ -534,8 +635,10 @@ export function createSave(ctx, { writableSections = null } = {}) {
     ctx.save = api;
     ctx.debug?.register('save', {
       dump: () => api.dump(),
-      export: () => api.exportString(),
+      export: (opts) => api.exportString(opts),
       import: (str, opts) => api.importString(str, opts),
+      downloadBackup: (opts) => api.downloadBackup(opts),
+      importBackupFile: (file, opts) => api.importBackupFile(file, opts),
       reset: () => api.reset(),
       flush: () => api.flush(),
       writeCount: () => api.getWriteCount(),

@@ -388,135 +388,268 @@ export function createEnvironment(ctx) {
   const maroonTrimMat = new THREE.MeshStandardMaterial({ color: 0x7c1e19, roughness: 0.72 });
   const gateWoodMat = new THREE.MeshStandardMaterial({ color: 0x3d2417, roughness: 0.80 });
   const gateTileMat = new THREE.MeshStandardMaterial({ color: 0x48413b, roughness: 0.76 });
-  const gateGoldMat = new THREE.MeshStandardMaterial({ color: 0xf5bf42, roughness: 0.28, metalness: 0.84 });
-
+  const gateGoldMat = new THREE.MeshStandardMaterial({
+    color: 0xf5bf42, roughness: 0.32, metalness: 0.68,
+    emissive: 0xc47816, emissiveIntensity: 0.28,
+  });
+  const gateFlameMat = new THREE.MeshBasicMaterial({ color: 0xffd480, toneMapped: false });
+  const gateGlowMat = new THREE.MeshBasicMaterial({
+    color: 0xffbd59, toneMapped: false, transparent: true, opacity: 0.12,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  });
   const gatePlasterGeos = [];
   const gateMaroonGeos = [];
   const gateWoodGeos = [];
   const gateTileGeos = [];
   const gateGoldGeos = [];
+  const gateFlameGeos = [];
+  const gateGlowGeos = [];
 
-  const pillarX = 2.2;
-  const pillarH = 3.4;
+  // Bake static ornament into material batches: no extra lights or per-frame work.
+  function gateBox(bucket, w, h, d, x, y, z = 0, tilt = 0) {
+    const geo = new THREE.BoxGeometry(w, h, d);
+    geo.rotateX(tilt);
+    geo.translate(x, y, z);
+    bucket.push(geo);
+  }
+  function gateOrb(bucket, x, y, z, sx, sy = sx, sz = sx) {
+    const geo = new THREE.SphereGeometry(1, 12, 8);
+    geo.scale(sx, sy, sz);
+    geo.translate(x, y, z);
+    bucket.push(geo);
+  }
+  function gateRod(bucket, from, to, radius = 0.035) {
+    const a = new THREE.Vector3(...from);
+    const b = new THREE.Vector3(...to);
+    const direction = b.clone().sub(a);
+    const geo = new THREE.CylinderGeometry(radius, radius, direction.length(), 8);
+    geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0), direction.normalize()
+    ));
+    geo.translate(...a.add(b).multiplyScalar(0.5).toArray());
+    bucket.push(geo);
+  }
 
-  // Twin pillars (left & right)
+  const pillarX = 2.6;
+  const pillarH = 4.8;
   for (const s of [-1, 1]) {
-    const px = s * pillarX;
-    // Base stone plinth
-    const base = new THREE.BoxGeometry(0.88, 0.45, 0.88);
-    base.translate(px, 0.225, 0);
-    gatePlasterGeos.push(base);
-
-    // Maroon base band
-    const baseBand = new THREE.BoxGeometry(0.82, 0.12, 0.82);
-    baseBand.translate(px, 0.51, 0);
-    gateMaroonGeos.push(baseBand);
-
-    // Whitewashed pillar shaft
-    const shaft = new THREE.BoxGeometry(0.68, pillarH - 0.7, 0.68);
-    shaft.translate(px, 0.57 + (pillarH - 0.7) * 0.5, 0);
-    gatePlasterGeos.push(shaft);
-
-    // Maroon capital necking
-    const capBand = new THREE.BoxGeometry(0.78, 0.14, 0.78);
-    capBand.translate(px, pillarH - 0.07, 0);
-    gateMaroonGeos.push(capBand);
-
-    // Golden lotus capital
-    const cap = new THREE.BoxGeometry(0.86, 0.12, 0.86);
-    cap.translate(px, pillarH + 0.06, 0);
-    gateGoldGeos.push(cap);
-
-    // Colliders for the two archway pillars
-    if (colliders) {
-      colliders.push({
-        type: 'circle',
-        x: px,
-        z: -37.2,
-        r: 0.55,
-        zone: 'stupa',
-      });
+    for (const [x, h, width, radius] of [[pillarX, pillarH, 0.92, 0.58], [4.1, 3.8, 0.76, 0.48]]) {
+      const px = s * x;
+      gateBox(gatePlasterGeos, width, 0.42, width, px, 0.21);
+      gateBox(gateMaroonGeos, width * 0.94, 0.16, width * 0.94, px, 0.50);
+      gateBox(gatePlasterGeos, width * 0.73, h - 0.78, width * 0.73, px, (0.58 + h - 0.20) / 2);
+      gateBox(gateMaroonGeos, width * 0.9, 0.20, width * 0.9, px, h - 0.10);
+      gateBox(gateGoldGeos, width, 0.14, width, px, h + 0.07);
+      colliders?.push({ type: 'circle', x: px, z: -37.2, r: radius, zone: 'stupa' });
     }
   }
 
-  // Heavy carved timber lintel spanning both pillars
-  const lintel = new THREE.BoxGeometry(5.6, 0.36, 0.76);
-  lintel.translate(0, pillarH + 0.30, 0);
-  gateWoodGeos.push(lintel);
+  // Three bays, with lower side roofs and stacked projecting Tibetan brackets.
+  function gateRoof(cx, y, width, depth) {
+    gateBox(gateMaroonGeos, width, 0.16, depth, cx, y);
+    for (const side of [-1, 1]) {
+      gateBox(gateTileGeos, width, 0.16, depth * 0.56, cx, y + 0.28, side * depth * 0.23, side * 0.27);
+      gateBox(gateGoldGeos, width + 0.08, 0.08, 0.09, cx, y + 0.10, side * depth * 0.50);
+      for (const end of [-1, 1]) {
+        const curve = new THREE.CatmullRomCurve3([
+          new THREE.Vector3(cx + end * (width / 2 - 0.42), y + 0.12, side * depth / 2),
+          new THREE.Vector3(cx + end * width / 2, y + 0.23, side * (depth / 2 + 0.08)),
+          new THREE.Vector3(cx + end * (width / 2 + 0.16), y + 0.52, side * (depth / 2 + 0.13)),
+        ]);
+        gateGoldGeos.push(new THREE.TubeGeometry(curve, 8, 0.065, 6, false));
+      }
+      // Raised tile seams make the sloping planes readable from ground level.
+      for (let x = cx - width / 2 + 0.2; x < cx + width / 2; x += 0.36) {
+        gateBox(gateTileGeos, 0.045, 0.06, depth * 0.56, x, y + 0.38, side * depth * 0.23, side * 0.27);
+      }
+    }
+    gateBox(gateGoldGeos, width * 0.85, 0.10, 0.14, cx, y + 0.51);
+  }
+  for (const [cx, height, width] of [[0, pillarH, 5.8], [-3.35, 3.8, 1.9], [3.35, 3.8, 1.9]]) {
+    gateBox(gateWoodGeos, width, 0.42, 0.86, cx, height + 0.35);
+    gateBox(gateGoldGeos, width, 0.07, 0.92, cx, height + 0.18);
+    for (let x = cx - width / 2 + 0.3; x < cx + width / 2; x += 0.65) {
+      for (let tier = 0; tier < 3; tier++) {
+        gateBox(tier % 2 ? gateGoldGeos : gateMaroonGeos,
+          0.24 + tier * 0.17, 0.12, 1.0 + tier * 0.18, x, height + 0.60 + tier * 0.13);
+      }
+    }
+    gateRoof(cx, height + 1.0, width + 0.55, 1.9);
+  }
+  gateRoof(0, pillarH + 1.65, 4.9, 1.55);
 
-  // Tibetan bracket cluster tier (Dou-gong style)
-  const bracketTier = new THREE.BoxGeometry(5.8, 0.26, 0.92);
-  bracketTier.translate(0, pillarH + 0.61, 0);
-  gateMaroonGeos.push(bracketTier);
-
-  // Signboard / entrance inscription plaque facing south (+Z toward stupa)
-  const plaque = new THREE.BoxGeometry(2.4, 0.55, 0.12);
-  plaque.translate(0, pillarH + 0.30, 0.42);
-  gateMaroonGeos.push(plaque);
-
-  const plaqueRim = new THREE.BoxGeometry(2.48, 0.62, 0.08);
-  plaqueRim.translate(0, pillarH + 0.30, 0.40);
-  gateGoldGeos.push(plaqueRim);
-
-  // Sloped tile eave roof
-  const roofLower = new THREE.BoxGeometry(6.4, 0.20, 1.45);
-  roofLower.translate(0, pillarH + 0.84, 0);
-  gateTileGeos.push(roofLower);
-
-  const roofUpper = new THREE.BoxGeometry(5.0, 0.28, 1.15);
-  roofUpper.translate(0, pillarH + 1.08, 0);
-  gateTileGeos.push(roofUpper);
-
-  // Golden Dharmachakra (Wheel of Dharma) at crest center
-  const wheelCrest = new THREE.CylinderGeometry(0.36, 0.36, 0.10, 16);
-  wheelCrest.rotateX(Math.PI / 2);
-  wheelCrest.translate(0, pillarH + 1.55, 0);
-  gateGoldGeos.push(wheelCrest);
-
-  const wheelHub = new THREE.SphereGeometry(0.12, 10, 8);
-  wheelHub.translate(0, pillarH + 1.55, 0);
-  gateGoldGeos.push(wheelHub);
-
-  // Golden flanking kneeling deer (left & right)
+  // Gold-framed south-facing plaque with an embossed auspicious wheel motif.
+  gateBox(gateGoldGeos, 3.14, 0.79, 0.10, 0, pillarH + 0.35, 0.52);
+  gateBox(gateMaroonGeos, 2.96, 0.61, 0.12, 0, pillarH + 0.35, 0.59);
+  for (const x of [-1.08, -0.72, 0.72, 1.08]) {
+    const diamond = new THREE.BoxGeometry(0.12, 0.12, 0.035);
+    diamond.rotateZ(Math.PI / 4);
+    diamond.translate(x, pillarH + 0.35, 0.67);
+    gateGoldGeos.push(diamond);
+  }
+  function gateWheel(x, y, z, radius) {
+    const rim = new THREE.TorusGeometry(radius, radius * 0.09, 8, 32);
+    rim.translate(x, y, z);
+    gateGoldGeos.push(rim);
+    gateOrb(gateGoldGeos, x, y, z, radius * 0.22);
+    for (let i = 0; i < 8; i++) {
+      const a = i * Math.PI / 4;
+      gateRod(gateGoldGeos, [x, y, z], [x + Math.sin(a) * radius, y + Math.cos(a) * radius, z], radius * 0.055);
+    }
+  }
+  gateWheel(0, pillarH + 0.35, 0.70, 0.23);
+  const crestY = pillarH + 2.95;
+  gateWheel(0, crestY, 0.08, 0.70);
+  gateBox(gateGoldGeos, 3.3, 0.14, 0.48, 0, pillarH + 2.24);
   for (const s of [-1, 1]) {
-    const deerBody = new THREE.BoxGeometry(0.38, 0.24, 0.16);
-    deerBody.translate(s * 0.68, pillarH + 1.36, 0);
-    gateGoldGeos.push(deerBody);
-
-    const deerHead = new THREE.BoxGeometry(0.14, 0.22, 0.14);
-    deerHead.translate(s * 0.52, pillarH + 1.54, 0);
-    gateGoldGeos.push(deerHead);
+    gateOrb(gateGoldGeos, s * 1.20, crestY - 0.44, 0, 0.46, 0.23, 0.18);
+    gateOrb(gateGoldGeos, s * 0.94, crestY - 0.21, 0, 0.14, 0.30, 0.13);
+    gateOrb(gateGoldGeos, s * 0.82, crestY + 0.03, 0, 0.22, 0.13, 0.12);
+    for (const z of [-0.12, 0.12]) {
+      gateRod(gateGoldGeos, [s * 1.44, crestY - 0.55, z], [s * 1.02, crestY - 0.62, z], 0.07);
+      gateRod(gateGoldGeos, [s * 0.94, crestY + 0.10, z], [s * 1.07, crestY + 0.40, z], 0.035);
+      gateRod(gateGoldGeos, [s * 1.02, crestY + 0.28, z], [s * 0.90, crestY + 0.39, z], 0.025);
+    }
   }
 
-  if (gatePlasterGeos.length) {
-    const m = new THREE.Mesh(mergeGeometries(gatePlasterGeos, false), plasterMat);
-    m.castShadow = true;
-    m.receiveShadow = true;
-    gateGroup.add(m);
+  // Inlaid stone runner: flush with the plaza, leaving the central passage clear.
+  gateBox(gateMaroonGeos, 3.6, 0.012, 15.7, 0, 0.026, 7.85);
+  for (const x of [-1.87, 1.87]) gateBox(gateGoldGeos, 0.14, 0.012, 15.7, x, 0.032, 7.85);
+  for (const z of [0.09, 15.61]) gateBox(gateGoldGeos, 3.6, 0.008, 0.12, 0, 0.036, z);
+  for (const z of [2.0, 5.8, 9.6, 13.4]) {
+    const ring = new THREE.RingGeometry(0.38, 0.43, 32);
+    ring.rotateX(-Math.PI / 2);
+    ring.translate(0, 0.04, z);
+    gateGoldGeos.push(ring);
+    for (let i = 0; i < 8; i++) {
+      const a = i * Math.PI / 4;
+      const petal = new THREE.CircleGeometry(1, 12);
+      petal.scale(0.13, 0.30, 1);
+      petal.rotateZ(-a);
+      petal.rotateX(-Math.PI / 2);
+      petal.translate(Math.sin(a) * 0.38, 0.04, z - Math.cos(a) * 0.38);
+      gateGoldGeos.push(petal);
+    }
   }
-  if (gateMaroonGeos.length) {
-    const m = new THREE.Mesh(mergeGeometries(gateMaroonGeos, false), maroonTrimMat);
-    m.castShadow = true;
-    m.receiveShadow = true;
-    gateGroup.add(m);
+
+  // Four pairs of low lotus butter lamps, sharing baked geometry and materials.
+  for (const z of [13.2, 8.7, 4.2, 1.0]) {
+    for (const s of [-1, 1]) {
+      const x = s * 2.8;
+      gateBox(gatePlasterGeos, 0.52, 0.22, 0.52, x, 0.11, z);
+      gateBox(gateGoldGeos, 0.30, 0.52, 0.30, x, 0.46, z);
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4;
+        gateOrb(gateGoldGeos, x + Math.cos(a) * 0.19, 0.76, z + Math.sin(a) * 0.19, 0.12, 0.17, 0.12);
+      }
+      gateOrb(gateFlameGeos, x, 0.95, z, 0.12, 0.24, 0.12);
+      gateOrb(gateGlowGeos, x, 0.97, z, 0.32, 0.40, 0.32);
+      colliders?.push({ type: 'circle', x, z: z - 37.2, r: 0.32, zone: 'stupa' });
+    }
   }
-  if (gateWoodGeos.length) {
-    const m = new THREE.Mesh(mergeGeometries(gateWoodGeos, false), gateWoodMat);
-    m.castShadow = true;
-    m.receiveShadow = true;
-    gateGroup.add(m);
+
+  // Darchen poles and five-colour Gyaltsen banners, reaching 9.6 metres.
+  const flagColors = [0x2454af, 0xf7efda, 0xbb3028, 0x2c854a, 0xf3c33b];
+  const flagBuckets = flagColors.map(() => []);
+  for (const s of [-1, 1]) {
+    const x = s * 3.8;
+    gateBox(gatePlasterGeos, 0.74, 0.44, 0.74, x, 0.22, 1.6);
+    gateRod(gateWoodGeos, [x, 0.44, 1.6], [x, 9.2, 1.6], 0.095);
+    for (const y of [0.55, 3.0, 6.0, 9.0]) {
+      gateBox(gateGoldGeos, 0.23, 0.12, 0.23, x, y, 1.6);
+    }
+    gateOrb(gateFlameGeos, x, 9.32, 1.6, 0.15, 0.28, 0.15);
+    gateOrb(gateGlowGeos, x, 9.32, 1.6, 0.31, 0.40, 0.31);
+    for (let i = 0; i < 5; i++) {
+      const banner = new THREE.CylinderGeometry(0.28, 0.28, 0.40, 16);
+      banner.translate(x, 8.65 - i * 0.42, 1.6);
+      flagBuckets[i].push(banner);
+      const rim = new THREE.TorusGeometry(0.29, 0.035, 6, 16);
+      rim.rotateX(Math.PI / 2);
+      rim.translate(x, 8.86 - i * 0.42, 1.6);
+      gateGoldGeos.push(rim);
+    }
+    for (let i = 0; i < 8; i++) {
+      const a = i * Math.PI / 4;
+      gateRod(gateGoldGeos, [x + Math.cos(a) * 0.25, 6.75, 1.6 + Math.sin(a) * 0.25],
+        [x + Math.cos(a) * 0.25, 6.35, 1.6 + Math.sin(a) * 0.25], 0.025);
+    }
+    const garland = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(x, 9.05, 1.6),
+      new THREE.Vector3(s * 2.6, 7.25, 1.25),
+      new THREE.Vector3(s * 0.6, pillarH + 2.05, 0.7),
+    ]);
+    gateGoldGeos.push(new THREE.TubeGeometry(garland, 24, 0.018, 4, false));
+    for (let i = 0; i < 15; i++) {
+      const t = (i + 0.5) / 15;
+      const point = garland.getPoint(t);
+      const tangent = garland.getTangent(t);
+      const flag = new THREE.PlaneGeometry(0.24, 0.34);
+      flag.rotateZ(Math.atan2(tangent.y, tangent.x));
+      flag.translate(point.x, point.y - 0.19, point.z);
+      flagBuckets[i % 5].push(flag);
+    }
+    colliders?.push({ type: 'circle', x, z: -35.6, r: 0.46, zone: 'stupa' });
   }
-  if (gateTileGeos.length) {
-    const m = new THREE.Mesh(mergeGeometries(gateTileGeos, false), gateTileMat);
-    m.castShadow = true;
-    m.receiveShadow = true;
-    gateGroup.add(m);
+
+  // Red-gold lanterns below the central and side lintels, all self-illuminated.
+  for (const [x, y] of [[-1.65, 4.25], [1.65, 4.25], [-3.35, 3.28], [3.35, 3.28]]) {
+    gateRod(gateGoldGeos, [x, y + 0.32, 0], [x, y + 0.75, 0], 0.025);
+    gateOrb(gateMaroonGeos, x, y, 0, 0.26, 0.36, 0.26);
+    gateOrb(gateFlameGeos, x, y, 0, 0.21, 0.25, 0.28);
+    for (const dy of [-0.30, 0.30]) gateBox(gateGoldGeos, 0.46, 0.09, 0.46, x, y + dy);
+    gateRod(gateGoldGeos, [x, y - 0.32, 0], [x, y - 0.62, 0], 0.04);
+    gateOrb(gateGlowGeos, x, y, 0, 0.43, 0.53, 0.43);
   }
-  if (gateGoldGeos.length) {
-    const m = new THREE.Mesh(mergeGeometries(gateGoldGeos, false), gateGoldMat);
-    m.castShadow = true;
-    gateGroup.add(m);
+
+  const batches = [
+    [gatePlasterGeos, plasterMat], [gateMaroonGeos, maroonTrimMat],
+    [gateWoodGeos, gateWoodMat], [gateTileGeos, gateTileMat], [gateGoldGeos, gateGoldMat],
+    [gateFlameGeos, gateFlameMat], [gateGlowGeos, gateGlowMat],
+    ...flagBuckets.map((geos, i) => [geos, new THREE.MeshStandardMaterial({
+      color: flagColors[i], roughness: 0.92, side: THREE.DoubleSide,
+    })]),
+  ];
+  for (const [geos, material] of batches) {
+    const mesh = new THREE.Mesh(mergeGeometries(geos, false), material);
+    mesh.castShadow = material.isMeshStandardMaterial;
+    mesh.receiveShadow = material.isMeshStandardMaterial;
+    gateGroup.add(mesh);
+    for (const geo of geos) geo.dispose();
   }
+
+  // Soft radial halo behind the open-spoked wheel; no opaque disc hiding the crest.
+  const haloCanvas = document.createElement('canvas');
+  haloCanvas.width = haloCanvas.height = 64;
+  const haloCtx = haloCanvas.getContext('2d');
+  const haloGradient = haloCtx.createRadialGradient(32, 32, 3, 32, 32, 32);
+  haloGradient.addColorStop(0, 'rgba(255, 216, 134, 0.65)');
+  haloGradient.addColorStop(0.45, 'rgba(255, 186, 64, 0.3)');
+  haloGradient.addColorStop(1, 'rgba(255, 160, 32, 0)');
+  haloCtx.fillStyle = haloGradient;
+  haloCtx.fillRect(0, 0, 64, 64);
+  const haloTexture = new THREE.CanvasTexture(haloCanvas);
+  haloTexture.colorSpace = THREE.SRGBColorSpace;
+  const halo = new THREE.Mesh(new THREE.CircleGeometry(1.2, 40), new THREE.MeshBasicMaterial({
+    map: haloTexture, toneMapped: false, transparent: true, opacity: 0.55,
+    blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+  }));
+  halo.position.set(0, crestY, -0.16);
+  gateGroup.add(halo);
+
+  const auraMat = new THREE.MeshBasicMaterial({
+    color: 0xffc369, toneMapped: false, transparent: true, opacity: 0.22,
+    blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+  });
+  const portalAura = new THREE.Mesh(new THREE.RingGeometry(1, 1.06, 64), auraMat);
+  portalAura.scale.set(2.0, 2.15, 1);
+  portalAura.position.set(0, 2.2, 0);
+  gateGroup.add(portalAura);
+  const thresholdGlow = new THREE.Mesh(new THREE.RingGeometry(1.65, 2.1, 64), auraMat);
+  thresholdGlow.rotation.x = -Math.PI / 2;
+  thresholdGlow.scale.y = 0.52;
+  thresholdGlow.position.set(0, 0.045, 0);
+  gateGroup.add(thresholdGlow);
 
   root.add(gateGroup);
 
