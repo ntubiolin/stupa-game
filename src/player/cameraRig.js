@@ -16,6 +16,86 @@ function lerpAngle(a, b, t) {
   return a + wrapAngle(b - a) * Math.min(1, t);
 }
 
+const DUNGEON_CORNER_OFFSETS = [
+  [-7.3, -7.3],
+  [7.3, -7.3],
+  [-7.3, 7.3],
+  [7.3, 7.3],
+];
+const DUNGEON_COLONNADE_OFFSETS = [
+  [-3.6, -3.6],
+  [3.6, -3.6],
+  [-3.6, 3.6],
+  [3.6, 3.6],
+];
+const DUNGEON_CORRIDOR_OFFSETS = [
+  [-4.8, 0],
+  [4.8, 0],
+];
+
+function intersectSegmentAABB2D(lx, lz, dx, dz, minX, maxX, minZ, maxZ) {
+  let t0 = 0;
+  let t1 = 1;
+  if (Math.abs(dx) < 1e-7) {
+    if (lx < minX || lx > maxX) return 1;
+  } else {
+    const invDx = 1 / dx;
+    let tx0 = (minX - lx) * invDx;
+    let tx1 = (maxX - lx) * invDx;
+    if (tx0 > tx1) { const tmp = tx0; tx0 = tx1; tx1 = tmp; }
+    if (tx0 > t0) t0 = tx0;
+    if (tx1 < t1) t1 = tx1;
+    if (t0 > t1) return 1;
+  }
+  if (Math.abs(dz) < 1e-7) {
+    if (lz < minZ || lz > maxZ) return 1;
+  } else {
+    const invDz = 1 / dz;
+    let tz0 = (minZ - lz) * invDz;
+    let tz1 = (maxZ - lz) * invDz;
+    if (tz0 > tz1) { const tmp = tz0; tz0 = tz1; tz1 = tmp; }
+    if (tz0 > t0) t0 = tz0;
+    if (tz1 < t1) t1 = tz1;
+    if (t0 > t1) return 1;
+  }
+  return t0 >= 0 && t0 < 1 ? t0 : 1;
+}
+
+function intersectSegmentPillar2D(lx, lz, ux, uz, horizLen, cx, cz, rPillar, useFeather) {
+  if (horizLen < 1e-4) return 1;
+  const ox = lx - cx;
+  const oz = lz - cz;
+  const sClosest = -(ox * ux + oz * uz);
+  if (sClosest <= 0) return 1;
+
+  const dLookSq = ox * ox + oz * oz;
+  const dLook = Math.sqrt(dLookSq);
+  const rInner = rPillar + 0.22;
+  const rOuter = useFeather ? rPillar + 0.56 : rInner;
+
+  if (dLook <= rInner) {
+    return Math.max(0.03, Math.min(1, 0.24 / horizLen));
+  }
+
+  const dMinSq = Math.max(0, dLookSq - sClosest * sClosest);
+  const dMin = Math.sqrt(dMinSq);
+  if (dMin >= rOuter) return 1;
+
+  const effOuter = Math.min(rOuter, Math.max(rPillar + 0.04, dLook - 0.05));
+  const chordSq = Math.max(0, effOuter * effOuter - Math.min(effOuter * effOuter, dMinSq));
+  const sFront = Math.max(0.20, sClosest - Math.sqrt(chordSq));
+  if (sFront >= horizLen) return 1;
+
+  const tHit = sFront / horizLen;
+  if (!useFeather || dMin <= rInner) {
+    return Math.max(0.03, Math.min(1, tHit));
+  }
+
+  const w = (rOuter - dMin) / (rOuter - rInner);
+  const smoothW = w * w * (3 - 2 * w);
+  return Math.max(0.03, Math.min(1, 1 - smoothW * (1 - tHit)));
+}
+
 export function createCameraRig(ctx) {
   const { THREE, camera, state, config, bus } = ctx;
 
@@ -45,6 +125,8 @@ export function createCameraRig(ctx) {
   // Smooth transition from intro orbit -> play mode
   let introBlend = 0;        // 0 = intro, 1 = play
   let wasIntro = true;
+  let dungeonRayScale = 1;
+  let lastDesiredHorizDist = 6.8;
 
   const currentPos = new THREE.Vector3(0, 18, 55);
   const currentLook = new THREE.Vector3(0, 12, 0);
@@ -97,7 +179,7 @@ export function createCameraRig(ctx) {
   }
 
   function isInCombatOrTargeted() {
-    if (combatLockTimer > 0 || state.boss?.active || state.player?.combatTarget || state.combatTarget) return true;
+    if (combatLockTimer > 0 || state.boss?.active || state.bossActive || state.player?.combatTarget || state.combatTarget) return true;
     const bossBar = typeof document !== 'undefined' ? document.getElementById('boss-bar') : null;
     if (bossBar && !bossBar.classList.contains('is-hidden')) return true;
     const pPos = state.player.position;
@@ -172,7 +254,303 @@ export function createCameraRig(ctx) {
     pos.y = Math.max(0.55, pos.y);
   }
 
-  function clampWildCamera(pos, look, mapDef) {
+  function computeDungeonRayHit(look, pos, useFeather) {
+    const lx = look.x;
+    const lz = look.z;
+    const dx = pos.x - lx;
+    const dz = pos.z - lz;
+    const horizLen = Math.hypot(dx, dz);
+    if (horizLen < 1e-4) return { t: 1, underDoorLintel: false };
+
+    let tMax = 1;
+    let underDoorLintel = false;
+    const ux = dx / horizLen;
+    const uz = dz / horizLen;
+
+    // 1. Active Terma box & circle colliders from ctx.colliders
+    const colliders = ctx.colliders;
+    if (Array.isArray(colliders)) {
+      for (let i = 0; i < colliders.length; i++) {
+        const c = colliders[i];
+        if (!c || c.zone !== 'terma') continue;
+        if (
+          c.type === 'box' &&
+          Number.isFinite(c.minX) &&
+          Number.isFinite(c.maxX) &&
+          Number.isFinite(c.minZ) &&
+          Number.isFinite(c.maxZ)
+        ) {
+          const nearX = Math.max(c.minX, Math.min(c.maxX, lx));
+          const nearZ = Math.max(c.minZ, Math.min(c.maxZ, lz));
+          const lookClearance = Math.hypot(lx - nearX, lz - nearZ);
+          if (lookClearance > 0.06) {
+            const pad = Math.max(0.02, Math.min(0.32, lookClearance - 0.05));
+            const tHit = intersectSegmentAABB2D(
+              lx,
+              lz,
+              dx,
+              dz,
+              c.minX - pad,
+              c.maxX + pad,
+              c.minZ - pad,
+              c.maxZ + pad
+            );
+            if (tHit < tMax) tMax = tHit;
+          }
+        } else if (c.type === 'circle' && Number.isFinite(c.x) && Number.isFinite(c.z) && (c.r || 0) >= 0.4) {
+          const tCyl = intersectSegmentPillar2D(lx, lz, ux, uz, horizLen, c.x, c.z, c.r, useFeather);
+          if (tCyl < tMax) tMax = tCyl;
+        }
+      }
+    }
+
+    // 2. Terma dungeon rooms: inner wall planes, doorway jambs & lintels, closed-wall rock crags, and pillars
+    let rooms = ctx.dungeon?.getLayout?.()?.rooms || state.dungeon?.rooms;
+    if (!Array.isArray(rooms) || rooms.length === 0) {
+      const bWorld = state.dungeon?.bossRoomWorld || state.dungeon?.exitRoomWorld || state.dungeon?.startRoomWorld;
+      const fallbackWx = bWorld?.x ?? (Math.abs(lx) > 500 ? 6960 + Math.round((lx - 6960) / 16) * 16 : Math.round(lx / 16) * 16);
+      const fallbackWz = bWorld?.z ?? (-40 + Math.round((lz + 40) / 16) * 16);
+      rooms = [{
+        wx: fallbackWx,
+        wz: fallbackWz,
+        role: state.dungeon?.floor === 3 || bWorld === state.dungeon?.bossRoomWorld ? 'boss' : 'normal',
+        template: 'mandala',
+        doors: { N: false, S: false, E: false, W: false },
+      }];
+    }
+
+    let currentRoom = null;
+    let bestRoomDist = Infinity;
+    for (let i = 0; i < rooms.length; i++) {
+      const r = rooms[i];
+      if (!r || !Number.isFinite(r.wx) || !Number.isFinite(r.wz)) continue;
+      const d = Math.max(Math.abs(lx - r.wx), Math.abs(lz - r.wz));
+      if (d < bestRoomDist) {
+        bestRoomDist = d;
+        currentRoom = r;
+      }
+    }
+
+    const baseWallHalf = 7.08;
+    const doorSafeHalf = 2.42;
+    const activeBoss =
+      state.boss?.active ||
+      (state.bossActive ? (ctx.bosses?.getActiveBoss?.() || true) : ctx.bosses?.getActiveBoss?.());
+    const bossLocked = Boolean(activeBoss && !activeBoss.dead);
+
+    if (currentRoom && bestRoomDist <= 8.8) {
+      const { wx, wz } = currentRoom;
+      const doors = currentRoom.doors || {};
+      const inBossInterior =
+        currentRoom.role === 'boss' && Math.abs(lx - wx) <= 7.35 && Math.abs(lz - wz) <= 7.35;
+      const sealDoors = bossLocked || inBossInterior;
+
+      // North wall (z = wz - 8.0)
+      if (dz < -1e-5) {
+        const nLim = Math.min(7.32, Math.max(baseWallHalf, (wz - lz) + 0.22));
+        const zWall = wz - nLim;
+        if (lz > zWall && lz + dz * tMax < zWall) {
+          const tCross = (zWall - lz) / dz;
+          const xAtWall = lx + dx * tCross;
+          const tOuter = Math.min(1, (wz - 8.0 - lz) / dz);
+          const xAtOuter = lx + dx * tOuter;
+          const canPassDoor = Boolean(doors.N) && !sealDoors && Math.abs(xAtWall - wx) <= doorSafeHalf && Math.abs(xAtOuter - wx) <= doorSafeHalf;
+          if (!canPassDoor) {
+            if (tCross >= 0 && tCross < tMax) tMax = tCross;
+          } else {
+            underDoorLintel = true;
+          }
+        }
+      }
+      // South wall (z = wz + 8.0)
+      if (dz > 1e-5) {
+        const sLim = Math.min(7.32, Math.max(baseWallHalf, (lz - wz) + 0.22));
+        const zWall = wz + sLim;
+        if (lz < zWall && lz + dz * tMax > zWall) {
+          const tCross = (zWall - lz) / dz;
+          const xAtWall = lx + dx * tCross;
+          const tOuter = Math.min(1, (wz + 8.0 - lz) / dz);
+          const xAtOuter = lx + dx * tOuter;
+          const canPassDoor = Boolean(doors.S) && !sealDoors && Math.abs(xAtWall - wx) <= doorSafeHalf && Math.abs(xAtOuter - wx) <= doorSafeHalf;
+          if (!canPassDoor) {
+            if (tCross >= 0 && tCross < tMax) tMax = tCross;
+          } else {
+            underDoorLintel = true;
+          }
+        }
+      }
+      // West wall (x = wx - 8.0)
+      if (dx < -1e-5) {
+        const wLim = Math.min(7.32, Math.max(baseWallHalf, (wx - lx) + 0.22));
+        const xWall = wx - wLim;
+        if (lx > xWall && lx + dx * tMax < xWall) {
+          const tCross = (xWall - lx) / dx;
+          const zAtWall = lz + dz * tCross;
+          const tOuter = Math.min(1, (wx - 8.0 - lx) / dx);
+          const zAtOuter = lz + dz * tOuter;
+          const canPassDoor = Boolean(doors.W) && !sealDoors && Math.abs(zAtWall - wz) <= doorSafeHalf && Math.abs(zAtOuter - wz) <= doorSafeHalf;
+          if (!canPassDoor) {
+            if (tCross >= 0 && tCross < tMax) tMax = tCross;
+          } else {
+            underDoorLintel = true;
+          }
+        }
+      }
+      // East wall (x = wx + 8.0)
+      if (dx > 1e-5) {
+        const eLim = Math.min(7.32, Math.max(baseWallHalf, (lx - wx) + 0.22));
+        const xWall = wx + eLim;
+        if (lx < xWall && lx + dx * tMax > xWall) {
+          const tCross = (xWall - lx) / dx;
+          const zAtWall = lz + dz * tCross;
+          const tOuter = Math.min(1, (wx + 8.0 - lx) / dx);
+          const zAtOuter = lz + dz * tOuter;
+          const canPassDoor = Boolean(doors.E) && !sealDoors && Math.abs(zAtWall - wz) <= doorSafeHalf && Math.abs(zAtOuter - wz) <= doorSafeHalf;
+          if (!canPassDoor) {
+            if (tCross >= 0 && tCross < tMax) tMax = tCross;
+          } else {
+            underDoorLintel = true;
+          }
+        }
+      }
+    }
+
+    // 3. Check corner pillars, closed-wall rock crags, and interior pillars across nearby rooms
+    for (let i = 0; i < rooms.length; i++) {
+      const r = rooms[i];
+      if (!r || !Number.isFinite(r.wx) || !Number.isFinite(r.wz)) continue;
+      if (Math.abs(lx - r.wx) > 20 || Math.abs(lz - r.wz) > 20) continue;
+      const { wx, wz } = r;
+      const doors = r.doors || {};
+
+      // 4 Corner pillars per room at (wx ± 7.3, wz ± 7.3), visual radius 0.66m
+      for (let k = 0; k < DUNGEON_CORNER_OFFSETS.length; k++) {
+        const [ox, oz] = DUNGEON_CORNER_OFFSETS[k];
+        const tCyl = intersectSegmentPillar2D(lx, lz, ux, uz, horizLen, wx + ox, wz + oz, 0.66, useFeather);
+        if (tCyl < tMax) tMax = tCyl;
+      }
+
+      // Closed-wall craggy rock formations protruding inward to ±6.26m at offset ±4.2m
+      if (!doors.N) {
+        for (const s of [-1, 1]) {
+          const tCrag = intersectSegmentPillar2D(lx, lz, ux, uz, horizLen, wx + s * 4.2, wz - 7.55, 1.24, useFeather);
+          if (tCrag < tMax) tMax = tCrag;
+        }
+      }
+      if (!doors.S) {
+        for (const s of [-1, 1]) {
+          const tCrag = intersectSegmentPillar2D(lx, lz, ux, uz, horizLen, wx + s * 4.2, wz + 7.55, 1.24, useFeather);
+          if (tCrag < tMax) tMax = tCrag;
+        }
+      }
+      if (!doors.W) {
+        for (const s of [-1, 1]) {
+          const tCrag = intersectSegmentPillar2D(lx, lz, ux, uz, horizLen, wx - 7.55, wz + s * 4.2, 1.24, useFeather);
+          if (tCrag < tMax) tMax = tCrag;
+        }
+      }
+      if (!doors.E) {
+        for (const s of [-1, 1]) {
+          const tCrag = intersectSegmentPillar2D(lx, lz, ux, uz, horizLen, wx + 7.55, wz + s * 4.2, 1.24, useFeather);
+          if (tCrag < tMax) tMax = tCrag;
+        }
+      }
+
+      // Interior pillars in non-boss colonnade and corridor rooms
+      if (r.role !== 'boss') {
+        if (r.template === 'colonnade') {
+          for (let k = 0; k < DUNGEON_COLONNADE_OFFSETS.length; k++) {
+            const [ox, oz] = DUNGEON_COLONNADE_OFFSETS[k];
+            const tCyl = intersectSegmentPillar2D(lx, lz, ux, uz, horizLen, wx + ox, wz + oz, 0.56, useFeather);
+            if (tCyl < tMax) tMax = tCyl;
+          }
+        } else if (r.template === 'corridor') {
+          for (let k = 0; k < DUNGEON_CORRIDOR_OFFSETS.length; k++) {
+            const [ox, oz] = DUNGEON_CORRIDOR_OFFSETS[k];
+            const tCyl = intersectSegmentPillar2D(lx, lz, ux, uz, horizLen, wx + ox, wz + oz, 0.53, useFeather);
+            if (tCyl < tMax) tMax = tCyl;
+          }
+        }
+      }
+
+      // Check if look or clamped camera sits near an open doorway arch lintel (doorHeight = 4.35m)
+      const endX = lx + dx * tMax;
+      const endZ = lz + dz * tMax;
+      if (
+        (doors.N && Math.abs(endZ - (wz - 8.0)) < 1.35 && Math.abs(endX - wx) < 3.1) ||
+        (doors.S && Math.abs(endZ - (wz + 8.0)) < 1.35 && Math.abs(endX - wx) < 3.1) ||
+        (doors.W && Math.abs(endX - (wx - 8.0)) < 1.35 && Math.abs(endZ - wz) < 3.1) ||
+        (doors.E && Math.abs(endX - (wx + 8.0)) < 1.35 && Math.abs(endZ - wz) < 3.1)
+      ) {
+        underDoorLintel = true;
+      }
+    }
+
+    return {
+      t: Math.max(0.03, Math.min(1, tMax)),
+      underDoorLintel,
+    };
+  }
+
+  function clampDungeonCamera(pos, look, dt = 0.016, isPostLerp = false) {
+    const dx = pos.x - look.x;
+    const dy = pos.y - look.y;
+    const dz = pos.z - look.z;
+    const curHorizDist = Math.hypot(dx, dz);
+
+    if (!isPostLerp) {
+      const { t: tMax, underDoorLintel } = computeDungeonRayHit(look, pos, true);
+      if (tMax <= dungeonRayScale) {
+        dungeonRayScale = tMax;
+      } else {
+        const recoverRate = 1 - Math.exp(-Math.max(0.001, dt) * 9.0);
+        dungeonRayScale = Math.min(tMax, dungeonRayScale + (tMax - dungeonRayScale) * recoverRate);
+      }
+      const t = dungeonRayScale;
+      if (!frontCamActive && t < 0.48) {
+        const squeeze = Math.max(0, Math.min(1, (0.48 - t) / 0.40));
+        const liftY = squeeze * squeeze * (3 - 2 * squeeze) * 0.36;
+        look.y += liftY;
+      }
+      pos.x = look.x + dx * t;
+      pos.z = look.z + dz * t;
+      pos.y = look.y + dy * t;
+      lastDesiredHorizDist = Math.hypot(pos.x - look.x, pos.z - look.z);
+
+      const terrainY = ctx.world ? ctx.world.getHeight(pos.x, pos.z) : 0;
+      const minFloorY = terrainY + 0.58;
+      const maxCeilY = terrainY + (underDoorLintel ? 3.88 : 4.45);
+      pos.y = Math.max(minFloorY, Math.min(maxCeilY, pos.y));
+      return;
+    }
+
+    const { t: rawHard, underDoorLintel } = computeDungeonRayHit(look, pos, false);
+    let tHard = rawHard;
+    if (dungeonRayScale < 0.999 && curHorizDist > lastDesiredHorizDist + 1e-4 && curHorizDist > 1e-4) {
+      tHard = Math.min(tHard, lastDesiredHorizDist / curHorizDist);
+    }
+    if (tHard < 1) {
+      pos.x = look.x + dx * tHard;
+      pos.y = look.y + dy * tHard;
+      pos.z = look.z + dz * tHard;
+    }
+    const terrainY = ctx.world ? ctx.world.getHeight(pos.x, pos.z) : 0;
+    const minFloorY = terrainY + 0.58;
+    const maxCeilY = terrainY + (underDoorLintel ? 3.88 : 4.45);
+    pos.y = Math.max(minFloorY, Math.min(maxCeilY, pos.y));
+  }
+
+  function hasActiveDungeonGeometry() {
+    if (state.zone !== 'terma') return false;
+    if (ctx.dungeon?.getLayout?.()?.rooms?.length) return true;
+    return Array.isArray(ctx.colliders) && ctx.colliders.some((c) => c && c.zone === 'terma');
+  }
+
+  function clampWildCamera(pos, look, mapDef, dt = 0.016, isPostLerp = false) {
+    if (hasActiveDungeonGeometry()) {
+      clampDungeonCamera(pos, look, dt, isPostLerp);
+      return;
+    }
     const wOrigin = mapDef?.origin || config.WILD?.origin || { x: 1000, z: 0 };
     const maxR = ((mapDef?.walkRadius ?? config.WILD?.walkRadius) || 70) + 15;
     const cdx = pos.x - wOrigin.x;
@@ -243,7 +621,7 @@ export function createCameraRig(ctx) {
     }
   });
 
-  bus.on('zone:change', () => {
+  function snapCameraToPlayer() {
     yaw = frontCamActive
       ? wrapAngle((state.player.heading || 0) + Math.PI)
       : (state.player.heading || 0);
@@ -259,8 +637,11 @@ export function createCameraRig(ctx) {
       pPos.y + 1.35 + sinP * distance,
       pPos.z + Math.cos(yaw) * cosP * distance
     );
+    dungeonRayScale = 1;
     if (isStupa) {
       clampStupaCamera(desiredPos, desiredLook);
+    } else if (hasActiveDungeonGeometry()) {
+      clampDungeonCamera(desiredPos, desiredLook, 1, false);
     } else {
       const terrainY = ctx.world ? ctx.world.getHeight(desiredPos.x, desiredPos.z) : 0;
       desiredPos.y = Math.max(terrainY + 0.65, desiredPos.y);
@@ -273,7 +654,10 @@ export function createCameraRig(ctx) {
     camera.lookAt(currentLook);
     camera.updateMatrixWorld();
     camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
-  });
+  }
+
+  bus.on('zone:change', snapCameraToPlayer);
+  bus.on('dungeon:floorLoaded', snapCameraToPlayer);
 
   function computeIntroCamera(elapsed) {
     // Slow clockwise panoramic orbit inside the plaza ring framing the Buddha eyes & spire
@@ -467,7 +851,7 @@ export function createCameraRig(ctx) {
       // 4. Keep camera outside stupa collider (r > ~20.1) and above plaza ground
       clampStupaCamera(desiredPos, desiredLook);
     } else {
-      clampWildCamera(desiredPos, desiredLook, mapDef);
+      clampWildCamera(desiredPos, desiredLook, mapDef, dt, false);
     }
 
     // 5. Smooth damping (and blend from intro orbit right after game:start)
@@ -487,7 +871,7 @@ export function createCameraRig(ctx) {
       if (introBlend >= 0.99) clampStupaCamera(currentPos, currentLook);
       if (currentPos.y < 0.55) currentPos.y = 0.55;
     } else {
-      if (introBlend >= 0.99) clampWildCamera(currentPos, currentLook, mapDef);
+      if (introBlend >= 0.99) clampWildCamera(currentPos, currentLook, mapDef, dt, true);
       else {
         const curTerrainY = ctx.world ? ctx.world.getHeight(currentPos.x, currentPos.z) : 0;
         if (currentPos.y < curTerrainY + 0.55) currentPos.y = curTerrainY + 0.55;
@@ -517,5 +901,6 @@ export function createCameraRig(ctx) {
     isCombatLocked() { return Boolean(isInCombatOrTargeted()); },
   };
   ctx.cameraRig = api;
+  ctx.debug?.register?.('cameraRig', api);
   return api;
 }
