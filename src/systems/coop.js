@@ -1,12 +1,14 @@
 /**
- * Vajra Sangha Co-op Party & Real-Time Synchronization System (`src/systems/coop.js`) — Issue #61
+ * Vajra Sangha Co-op Party, Zone Presence & Real-Time Synchronization (`src/systems/coop.js`) — Issue #61 / #176
  *
- * Supports 2–4 player Co-op Parties via:
- *   1. Multi-tab / multi-window `BroadcastChannel('stupa.coop.v1')` (~15Hz state + instant events)
- *   2. Dev-server `/api/coop` HTTP polling/push (~2Hz cross-browser sync)
- *   3. AI Dharma Companions (`蓮華行者・扎西`, `普巴行者・卓瑪`, `金剛行者・貢噶`) so a solo or 2-player
- *      party can fill up to 4 slots immediately, follow across zones & Terma floors, fight enemies,
- *      and trigger Six-Syllable Mantra Resonance (`☸ 六字真言共鳴`)!
+ * Supports:
+ *   1. Public Zone Presence (`stupa`, `grove`, `wild`, chapter zones): online pilgrims share the same
+ *      zone shard without needing a room code, walk Kora together for Shared Kora Communion (`☸ 十方共修繞塔加持`),
+ *      send Dharma Emotes / Prayer Bubbles (`🙏`, `☸`, `🪔`, `⚔️`), and co-fight monsters in the wilderness.
+ *   2. WebSocket Real-Time Client (`/ws/multiplayer`) with automatic fallback to HTTP (`/api/presence`, `/api/coop`)
+ *      and multi-tab `BroadcastChannel('stupa.coop.v1')`.
+ *   3. 2–4 player Co-op Parties with Public Room Matchmaking (`getPublicRooms`, `refreshPublicRooms`)
+ *      and AI Dharma Companions (`蓮華行者・扎西`, `普巴行者・卓瑪`, `金剛行者・貢噶`).
  */
 import '../i18n/coop.js';
 import { i18n } from '../i18n.js';
@@ -14,8 +16,14 @@ import { resolveAppearanceColors } from '../data/appearance.js';
 
 const CHANNEL_NAME = 'stupa.coop.v1';
 const STORAGE_NAME_KEY = 'stupa.coop.pilgrimName';
+const STORAGE_AMBIENT_KEY = 'stupa.coop.showAmbientPilgrims';
 
 const ROOM_PREFIXES = ['PADMA', 'VAJRA', 'LOTUS', 'MANI', 'SAMYE', 'TERMA', 'TARA', 'HUM'];
+
+const VALID_EMOTES = new Set(['prostrate', 'mantra', 'lamp', 'protect']);
+const COMBAT_ZONES = new Set(['wild', 'pharping', 'mangyul', 'yarlung', 'samye', 'chimphu', 'terma']);
+const KORA_ZONES = new Set(['stupa', 'grove']);
+const MAX_AMBIENT_PILGRIMS = 8;
 
 const AI_PRESETS = [
   {
@@ -60,25 +68,61 @@ export function createCoop(ctx) {
   const peerId = `peer_${Math.random().toString(36).slice(2, 8)}_${Date.now().toString(36).slice(-4)}`;
 
   let pilgrimName = loadPilgrimName();
+  let showAmbientPilgrims = loadShowAmbientPilgrims();
   let active = false;
   let roomCode = '';
   let isHost = false;
+  let roomPublic = true;
   let resonanceCount = 0;
+  let koraCommunionCount = 0;
+  let koraCommunionTimer = 0;
 
-  // Map<peerId, memberSnapshot>
+  // Map<peerId, memberSnapshot> for 4-player Co-op Party
   const remoteMembers = new Map();
   // Array<aiCompanion>
   const aiCompanions = [];
 
+  // Map<peerId, ambientPilgrimSnapshot> for Public Zone Presence
+  const zonePilgrims = new Map();
+  // Map<peerId, { zone, updatedAt }> for BroadcastChannel peer tracking
+  const bcPeerZones = new Map();
+  // Map<roomCode, publicRoomSummary> for BroadcastChannel public rooms
+  const bcPublicRooms = new Map();
+  let serverPublicRooms = [];
+  let serverZoneCounts = {};
+  let serverTotalOnline = 0;
+  let shardId = `${state.zone || 'stupa'}#1`;
+
+  // Local Dharma Emote state
+  let localEmote = null;
+
   // Networking & sync timers
   let bc = null;
   let broadcastTimer = 0;
+  let presenceBroadcastTimer = 0;
   let httpSyncTimer = 0;
+  let presenceHttpTimer = 0;
   let httpInFlight = false;
+  let presenceHttpInFlight = false;
   let lastHttpEventTs = 0;
+  let lastZoneEventTs = 0;
+  let lastKnownZone = state.zone || 'stupa';
+  let lastPlayerX = state.player?.position?.x ?? 0;
+  let lastPlayerZ = state.player?.position?.z ?? 0;
   const outboundHttpEvents = [];
+  const outboundZoneEvents = [];
   const seenEventIds = new Set();
+  const liberatedEnemyIds = new Set();
+  const remoteLiberatedEnemyIds = new Set();
   let leaderDungeonState = null;
+
+  // WebSocket state
+  let ws = null;
+  let wsConnected = false;
+  let wsConnecting = false;
+  let wsSyncTimer = 0;
+  let wsReconnectTimer = 0;
+  let wsReconnectDelay = 2.0;
 
   // Mantra Resonance tracking
   let lastLocalMantraTime = -999;
@@ -89,6 +133,34 @@ export function createCoop(ctx) {
   const RESONANCE_COOLDOWN_SEC = 6.0;
   const RESONANCE_RANGE = 18.0;
 
+  function resolveApiUrl(path) {
+    const base =
+      globalThis.__STUPA_BACKEND_URL__ ||
+      (typeof import.meta !== 'undefined' && import.meta.env?.VITE_BACKEND_URL) ||
+      '';
+    return base ? `${String(base).replace(/\/$/, '')}${path}` : path;
+  }
+
+  function resolveWsUrl() {
+    if (globalThis.__STUPA_WS_URL__) return String(globalThis.__STUPA_WS_URL__);
+    const base =
+      globalThis.__STUPA_BACKEND_URL__ ||
+      (typeof import.meta !== 'undefined' && import.meta.env?.VITE_BACKEND_URL) ||
+      '';
+    if (base) {
+      const wsBase = String(base)
+        .replace(/^http:\/\//i, 'ws://')
+        .replace(/^https:\/\//i, 'wss://')
+        .replace(/\/$/, '');
+      return `${wsBase}/ws/multiplayer`;
+    }
+    if (typeof window !== 'undefined' && window.location?.host) {
+      const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${proto}//${window.location.host}/ws/multiplayer`;
+    }
+    return '';
+  }
+
   function loadPilgrimName() {
     try {
       const saved = localStorage.getItem(STORAGE_NAME_KEY);
@@ -97,6 +169,36 @@ export function createCoop(ctx) {
       /* ignore */
     }
     return i18n.t('coop.pilgrimName.default');
+  }
+
+  function loadShowAmbientPilgrims() {
+    try {
+      const saved = localStorage.getItem(STORAGE_AMBIENT_KEY);
+      if (saved === 'false' || saved === '0') return false;
+      if (saved === 'true' || saved === '1') return true;
+    } catch {
+      /* ignore */
+    }
+    return true;
+  }
+
+  function getShowAmbientPilgrims() {
+    return Boolean(showAmbientPilgrims);
+  }
+
+  function setShowAmbientPilgrims(val) {
+    showAmbientPilgrims = Boolean(val);
+    try {
+      localStorage.setItem(STORAGE_AMBIENT_KEY, showAmbientPilgrims ? 'true' : 'false');
+    } catch {
+      /* ignore */
+    }
+    if (showAmbientPilgrims) {
+      postLocalPresence(true);
+    }
+    syncStateOnCtx();
+    bus?.emit('coop:changed', getState());
+    return showAmbientPilgrims;
   }
 
   function setPilgrimName(name) {
@@ -129,10 +231,19 @@ export function createCoop(ctx) {
     return typeof state.elapsed === 'number' ? state.elapsed : performance.now() / 1000;
   }
 
+  function getLocalEmote() {
+    if (localEmote && localEmote.expiresAt > Date.now()) {
+      return localEmote;
+    }
+    localEmote = null;
+    return null;
+  }
+
   function buildLocalMemberSnapshot() {
     const p = state.player || {};
     const pos = p.position || { x: 0, y: 0, z: 0 };
     const resolvedLook = resolveAppearanceColors(p.appearance || {});
+    const activeEmote = getLocalEmote();
     return {
       id: peerId,
       name: resolvedLook.name || getPilgrimName(),
@@ -156,6 +267,7 @@ export function createCoop(ctx) {
       mp: Math.max(0, Math.round(p.mp ?? p.maxMp ?? 60)),
       maxMp: Math.max(1, Math.round(p.maxMp ?? 60)),
       fainted: p.action === 'faint' || (p.hp != null && p.hp <= 0),
+      emote: activeEmote ? { ...activeEmote } : null,
     };
   }
 
@@ -171,35 +283,57 @@ export function createCoop(ctx) {
     return { active: false };
   }
 
+  function buildPublicRoomSummary() {
+    if (!active || !roomCode || !roomPublic) return null;
+    return {
+      room: roomCode,
+      code: roomCode,
+      hostId: peerId,
+      hostName: getPilgrimName(),
+      zone: state.zone || 'stupa',
+      partySize: getPartySize(),
+      maxSize: 4,
+      updatedAt: Date.now(),
+    };
+  }
+
+  function formatPilgrimRecord(m, isAmbient = false) {
+    const activeEmote =
+      m.emote && m.emote.expiresAt && m.emote.expiresAt > Date.now() ? { ...m.emote } : null;
+    return {
+      id: m.id,
+      name: m.name || 'Pilgrim',
+      isHost: isAmbient ? false : Boolean(m.isHost),
+      isAi: isAmbient ? false : Boolean(m.isAi),
+      isAmbient: Boolean(isAmbient),
+      look: m.look || {
+        robeColor: 0x7a1c24,
+        shawlColor: 0xe08a1e,
+        hatType: 'lotus',
+        auraColor: isAmbient ? 0x38bdf8 : 0xfbbf24,
+      },
+      zone: m.zone || 'stupa',
+      x: Number(m.x) || 0,
+      y: Number(m.y) || 0,
+      z: Number(m.z) || 0,
+      heading: Number(m.heading) || 0,
+      action: m.action || 'idle',
+      level: Number(m.level) || 1,
+      hp: Number(m.hp ?? 100),
+      maxHp: Number(m.maxHp || 100),
+      mp: Number(m.mp ?? 60),
+      maxMp: Number(m.maxMp || 60),
+      fainted: Boolean(m.fainted),
+      emote: activeEmote,
+    };
+  }
+
   function getMembers() {
     if (!active) return [];
     const list = [];
     for (const m of remoteMembers.values()) {
       if (m.id === peerId) continue;
-      list.push({
-        id: m.id,
-        name: m.name || 'Pilgrim',
-        isHost: Boolean(m.isHost),
-        isAi: Boolean(m.isAi),
-        look: m.look || {
-          robeColor: 0x7a1c24,
-          shawlColor: 0xe08a1e,
-          hatType: 'lotus',
-          auraColor: 0xfbbf24,
-        },
-        zone: m.zone || 'stupa',
-        x: Number(m.x) || 0,
-        y: Number(m.y) || 0,
-        z: Number(m.z) || 0,
-        heading: Number(m.heading) || 0,
-        action: m.action || 'idle',
-        level: Number(m.level) || 1,
-        hp: Number(m.hp ?? 100),
-        maxHp: Number(m.maxHp || 100),
-        mp: Number(m.mp ?? 60),
-        maxMp: Number(m.maxMp || 60),
-        fainted: Boolean(m.fainted),
-      });
+      list.push(formatPilgrimRecord(m, false));
       if (list.length >= 3) break;
     }
 
@@ -212,6 +346,7 @@ export function createCoop(ctx) {
         presetIdx: ai.presetIdx,
         isHost: false,
         isAi: true,
+        isAmbient: false,
         look: { ...ai.look },
         zone: ai.zone,
         x: Number(ai.x.toFixed(2)),
@@ -225,9 +360,189 @@ export function createCoop(ctx) {
         mp: Math.round(ai.mp),
         maxMp: Math.round(ai.maxMp),
         fainted: Boolean(ai.fainted),
+        emote: null,
       });
     }
     return list;
+  }
+
+  function getZonePilgrims() {
+    const currentZone = state.zone || 'stupa';
+    const list = [];
+    const now = Date.now();
+    for (const [id, m] of zonePilgrims.entries()) {
+      if (!m || id === peerId || remoteMembers.has(id)) continue;
+      if (m.updatedAt && now - m.updatedAt > 15000) {
+        zonePilgrims.delete(id);
+        continue;
+      }
+      if ((m.zone || 'stupa') !== currentZone) continue;
+      list.push(formatPilgrimRecord(m, true));
+      if (list.length >= MAX_AMBIENT_PILGRIMS) break;
+    }
+    return list;
+  }
+
+  function getAllVisiblePilgrims() {
+    const party = getMembers();
+    if (!showAmbientPilgrims) return party;
+    const ambient = getZonePilgrims();
+    return [...party, ...ambient];
+  }
+
+  function getZoneCounts() {
+    const currentZone = state.zone || 'stupa';
+    const counts = {
+      stupa: 0,
+      grove: 0,
+      wild: 0,
+      pharping: 0,
+      mangyul: 0,
+      yarlung: 0,
+      samye: 0,
+      chimphu: 0,
+      terma: 0,
+      ...serverZoneCounts,
+    };
+
+    // Count local player + active BroadcastChannel / party peers if server hasn't already counted them
+    const localCountByZone = { [currentZone]: 1 };
+    const countedPeers = new Set([peerId]);
+    const now = Date.now();
+
+    for (const [id, info] of bcPeerZones.entries()) {
+      if (now - (info.updatedAt || 0) > 15000) {
+        bcPeerZones.delete(id);
+        continue;
+      }
+      if (!countedPeers.has(id)) {
+        countedPeers.add(id);
+        const z = info.zone || 'stupa';
+        localCountByZone[z] = (localCountByZone[z] || 0) + 1;
+      }
+    }
+    for (const [id, m] of remoteMembers.entries()) {
+      if (!countedPeers.has(id)) {
+        countedPeers.add(id);
+        const z = m.zone || 'stupa';
+        localCountByZone[z] = (localCountByZone[z] || 0) + 1;
+      }
+    }
+    for (const [id, m] of zonePilgrims.entries()) {
+      if (!countedPeers.has(id)) {
+        countedPeers.add(id);
+        const z = m.zone || 'stupa';
+        localCountByZone[z] = (localCountByZone[z] || 0) + 1;
+      }
+    }
+
+    for (const [z, c] of Object.entries(localCountByZone)) {
+      counts[z] = Math.max(Number(counts[z]) || 0, c);
+    }
+    return counts;
+  }
+
+  function getTotalOnline() {
+    const counts = getZoneCounts();
+    const sumZones = Object.values(counts).reduce((acc, n) => acc + (Number(n) || 0), 0);
+    return Math.max(1, Number(serverTotalOnline) || 0, sumZones);
+  }
+
+  function getPublicRooms() {
+    const now = Date.now();
+    const byCode = new Map();
+
+    for (const r of serverPublicRooms) {
+      const code = r?.code || r?.room;
+      if (!code) continue;
+      byCode.set(code, {
+        code,
+        room: code,
+        hostName: r.hostName || r.host || 'Pilgrim',
+        zone: r.zone || 'stupa',
+        partySize: Number(r.partySize || r.size || 1),
+        maxSize: Number(r.maxSize || 4),
+      });
+    }
+
+    for (const [code, r] of bcPublicRooms.entries()) {
+      if (r.updatedAt && now - r.updatedAt > 15000) {
+        bcPublicRooms.delete(code);
+        continue;
+      }
+      byCode.set(code, {
+        code,
+        room: code,
+        hostName: r.hostName || 'Pilgrim',
+        zone: r.zone || 'stupa',
+        partySize: Number(r.partySize || 1),
+        maxSize: Number(r.maxSize || 4),
+      });
+    }
+
+    if (active && isHost && roomPublic && roomCode) {
+      const own = buildPublicRoomSummary();
+      if (own) {
+        byCode.set(roomCode, {
+          code: roomCode,
+          room: roomCode,
+          hostName: own.hostName,
+          zone: own.zone,
+          partySize: own.partySize,
+          maxSize: own.maxSize,
+        });
+      }
+    }
+
+    return Array.from(byCode.values());
+  }
+
+  async function refreshPublicRooms() {
+    ensureBroadcastChannel();
+    if (bc) {
+      try {
+        bc.postMessage({
+          kind: 'discover_rooms',
+          senderId: peerId,
+        });
+      } catch {
+        /* ignore */
+      }
+    }
+    if (wsConnected) {
+      wsSend({ type: 'coop:listPublic' });
+    }
+    if (typeof fetch !== 'undefined') {
+      try {
+        const res = await fetch(resolveApiUrl('/api/coop?list=public'));
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data?.rooms)) {
+            serverPublicRooms = data.rooms;
+          } else if (Array.isArray(data?.publicRooms)) {
+            serverPublicRooms = data.publicRooms;
+          }
+        }
+      } catch {
+        /* offline or static mode */
+      }
+    }
+    syncStateOnCtx();
+    bus?.emit('coop:publicRooms', getPublicRooms());
+    bus?.emit('coop:changed', getState());
+    return getPublicRooms();
+  }
+
+  function isRoomPublic() {
+    return Boolean(roomPublic);
+  }
+
+  function setRoomPublic(val) {
+    roomPublic = Boolean(val);
+    postLocalPresence(false);
+    syncStateOnCtx();
+    bus?.emit('coop:changed', getState());
+    return roomPublic;
   }
 
   function getPartySize() {
@@ -240,6 +555,11 @@ export function createCoop(ctx) {
     return extra * 25;
   }
 
+  function getExpBonusPct() {
+    const extra = Math.max(0, getPartySize() - 1);
+    return extra * 15;
+  }
+
   function getHpScaleMult() {
     const extra = Math.max(0, getPartySize() - 1);
     return Number((1 + 0.45 * extra).toFixed(2));
@@ -248,18 +568,31 @@ export function createCoop(ctx) {
   function getState() {
     const members = getMembers();
     const partySize = active ? Math.min(4, 1 + members.length) : 1;
+    const currentZone = state.zone || 'stupa';
+    const currentShard = shardId && shardId.startsWith(currentZone) ? shardId : `${currentZone}#1`;
     return {
       active,
       roomCode,
       isHost,
+      isRoomPublic: Boolean(roomPublic),
       peerId,
       pilgrimName: getPilgrimName(),
       members,
       partySize,
       resonanceCount,
+      koraCommunionCount,
       findBonusPct: Math.max(0, partySize - 1) * 25,
+      expBonusPct: Math.max(0, partySize - 1) * 15,
       hpScaleMult: Number((1 + 0.45 * Math.max(0, partySize - 1)).toFixed(2)),
       leaderDungeonState,
+      showAmbientPilgrims: Boolean(showAmbientPilgrims),
+      zonePilgrims: showAmbientPilgrims ? getZonePilgrims() : [],
+      zoneCounts: getZoneCounts(),
+      totalOnline: getTotalOnline(),
+      shardId: currentShard,
+      publicRooms: getPublicRooms(),
+      localEmote: getLocalEmote(),
+      wsConnected: Boolean(wsConnected),
     };
   }
 
@@ -267,15 +600,115 @@ export function createCoop(ctx) {
     state.coop = getState();
   }
 
-  // ---------------------------------------------------------------- BroadcastChannel & HTTP Sync
+  // ---------------------------------------------------------------- BroadcastChannel, WebSocket & HTTP Sync
+  function postLocalPresence(replyRequested = false) {
+    ensureBroadcastChannel();
+    if (!bc) return;
+    try {
+      bc.postMessage({
+        kind: 'presence',
+        senderId: peerId,
+        zone: state.zone || 'stupa',
+        pilgrim: buildLocalMemberSnapshot(),
+        publicRoom: buildPublicRoomSummary(),
+        replyRequested: Boolean(replyRequested),
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function upsertZonePilgrim(p, fromBc = false) {
+    if (!p || !p.id || p.id === peerId || remoteMembers.has(p.id)) return;
+    const currentZone = state.zone || 'stupa';
+    if ((p.zone || 'stupa') !== currentZone) {
+      if (zonePilgrims.has(p.id)) {
+        zonePilgrims.delete(p.id);
+        syncStateOnCtx();
+        bus?.emit('coop:changed', getState());
+      }
+      return;
+    }
+    const isNew = !zonePilgrims.has(p.id);
+    if (isNew && zonePilgrims.size >= MAX_AMBIENT_PILGRIMS) return;
+    const prev = zonePilgrims.get(p.id);
+    zonePilgrims.set(p.id, {
+      ...prev,
+      ...p,
+      emote: p.emote !== undefined ? p.emote : prev?.emote || null,
+      isAmbient: true,
+      fromBc: Boolean(fromBc || prev?.fromBc),
+      updatedAt: Date.now(),
+    });
+    if (isNew) {
+      syncStateOnCtx();
+      bus?.emit('coop:zonePilgrimJoined', p);
+      bus?.emit('coop:changed', getState());
+    }
+  }
+
   function ensureBroadcastChannel() {
     if (bc || typeof BroadcastChannel === 'undefined') return;
     try {
       bc = new BroadcastChannel(CHANNEL_NAME);
       bc.onmessage = (ev) => {
         const msg = ev?.data;
-        if (!msg || !active || msg.room !== roomCode || msg.senderId === peerId) return;
+        if (!msg || msg.senderId === peerId) return;
+
+        // 1. Ambient Zone Presence & Public Room Discovery over BroadcastChannel
+        if (msg.kind === 'presence') {
+          const isUnknownPeer = !bcPeerZones.has(msg.senderId);
+          bcPeerZones.set(msg.senderId, {
+            zone: msg.zone || msg.pilgrim?.zone || 'stupa',
+            updatedAt: Date.now(),
+          });
+
+          if (msg.publicRoom && msg.publicRoom.code) {
+            bcPublicRooms.set(msg.publicRoom.code, {
+              ...msg.publicRoom,
+              updatedAt: Date.now(),
+            });
+          } else {
+            for (const [code, r] of bcPublicRooms.entries()) {
+              if (r.hostId === msg.senderId) bcPublicRooms.delete(code);
+            }
+          }
+
+          if (msg.pilgrim) {
+            upsertZonePilgrim(msg.pilgrim, true);
+          }
+
+          if (Array.isArray(msg.events)) {
+            for (const e of msg.events) {
+              handleRemoteEvent(e);
+            }
+          }
+
+          if (msg.replyRequested || isUnknownPeer) {
+            postLocalPresence(false);
+          }
+          syncStateOnCtx();
+          return;
+        }
+
+        if (msg.kind === 'discover_rooms') {
+          if (active && isHost && roomPublic && roomCode) {
+            postLocalPresence(false);
+          }
+          return;
+        }
+
+        if (msg.kind === 'zone_event' && msg.event) {
+          if (!msg.zone || msg.zone === (state.zone || 'stupa')) {
+            handleRemoteEvent(msg.event);
+          }
+          return;
+        }
+
+        // 2. Private / Public 4-Player Co-op Room Messages
+        if (!active || msg.room !== roomCode) return;
         if (msg.kind === 'snapshot' && msg.member) {
+          zonePilgrims.delete(msg.member.id);
           upsertRemoteMember(msg.member);
           if (msg.dungeonState && msg.member.isHost) {
             leaderDungeonState = msg.dungeonState;
@@ -293,24 +726,18 @@ export function createCoop(ctx) {
     }
   }
 
-  function closeBroadcastChannel() {
-    if (!bc) return;
-    try {
-      bc.close();
-    } catch {
-      /* ignore */
-    }
-    bc = null;
-  }
-
   function upsertRemoteMember(m) {
     if (!m || !m.id || m.id === peerId) return;
+    zonePilgrims.delete(m.id);
     const isNew = !remoteMembers.has(m.id);
     if (isNew && 1 + remoteMembers.size + aiCompanions.length >= 4) {
       return;
     }
+    const prev = remoteMembers.get(m.id);
     remoteMembers.set(m.id, {
+      ...prev,
       ...m,
+      emote: m.emote !== undefined ? m.emote : prev?.emote || null,
       updatedAt: Date.now(),
     });
     if (isNew) {
@@ -320,16 +747,26 @@ export function createCoop(ctx) {
     }
   }
 
-  function broadcastEvent(type, payload = {}) {
-    if (!active || !roomCode) return false;
-    const ev = {
+  function createEventEnvelope(type, payload = {}, roomTarget = roomCode) {
+    return {
       id: `${peerId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      room: roomCode,
+      room: roomTarget || '*',
+      zone: payload.zone || state.zone || 'stupa',
       senderId: peerId,
+      senderName: getPilgrimName(),
       type,
-      payload,
+      payload: {
+        ...payload,
+        zone: payload.zone || state.zone || 'stupa',
+        senderName: payload.senderName || getPilgrimName(),
+      },
       ts: Date.now(),
     };
+  }
+
+  function broadcastEvent(type, payload = {}) {
+    if (!active || !roomCode) return false;
+    const ev = createEventEnvelope(type, payload, roomCode);
     seenEventIds.add(ev.id);
     if (bc) {
       try {
@@ -345,7 +782,254 @@ export function createCoop(ctx) {
     }
     outboundHttpEvents.push(ev);
     if (outboundHttpEvents.length > 30) outboundHttpEvents.shift();
+    if (wsConnected) {
+      wsSend({
+        type: 'coop:event',
+        room: roomCode,
+        peerId,
+        event: ev,
+      });
+    }
     return true;
+  }
+
+  function broadcastZoneEvent(type, payload = {}) {
+    const ev = createEventEnvelope(type, payload, roomCode || '*');
+    seenEventIds.add(ev.id);
+    ensureBroadcastChannel();
+    if (bc) {
+      try {
+        bc.postMessage({
+          kind: 'zone_event',
+          zone: ev.zone,
+          room: roomCode || '',
+          senderId: peerId,
+          event: ev,
+        });
+        if (active && roomCode) {
+          bc.postMessage({
+            room: roomCode,
+            senderId: peerId,
+            kind: 'event',
+            event: ev,
+          });
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    outboundZoneEvents.push(ev);
+    if (outboundZoneEvents.length > 30) outboundZoneEvents.shift();
+    if (active && roomCode) {
+      outboundHttpEvents.push(ev);
+      if (outboundHttpEvents.length > 30) outboundHttpEvents.shift();
+    }
+    if (wsConnected) {
+      wsSend({
+        type: 'presence:event',
+        peerId,
+        zone: ev.zone,
+        room: roomCode || undefined,
+        event: ev,
+      });
+    }
+    return true;
+  }
+
+  function applyServerPresenceData(data) {
+    if (!data || typeof data !== 'object') return;
+    if (data.shardId || data.shard) {
+      shardId = String(data.shardId || data.shard);
+    }
+    if (data.zoneCounts && typeof data.zoneCounts === 'object') {
+      serverZoneCounts = { ...serverZoneCounts, ...data.zoneCounts };
+    } else if (data.zones && typeof data.zones === 'object') {
+      serverZoneCounts = { ...serverZoneCounts, ...data.zones };
+    }
+    if (typeof data.totalOnline === 'number') {
+      serverTotalOnline = data.totalOnline;
+    }
+    if (Array.isArray(data.publicRooms)) {
+      serverPublicRooms = data.publicRooms;
+    }
+    const list = data.pilgrims || data.zonePilgrims || data.members;
+    if (Array.isArray(list)) {
+      const now = Date.now();
+      const serverIds = new Set();
+      for (const p of list) {
+        if (!p || p.id === peerId || remoteMembers.has(p.id)) continue;
+        serverIds.add(p.id);
+        upsertZonePilgrim(p, false);
+      }
+      // Remove non-BroadcastChannel pilgrims no longer in server snapshot for this zone
+      for (const [id, existing] of zonePilgrims.entries()) {
+        if (!existing.fromBc && !serverIds.has(id) && now - (existing.updatedAt || 0) > 4000) {
+          zonePilgrims.delete(id);
+        }
+      }
+    }
+    if (Array.isArray(data.events)) {
+      for (const ev of data.events) {
+        if (ev?.ts && ev.ts > lastZoneEventTs) {
+          lastZoneEventTs = ev.ts;
+        }
+        handleRemoteEvent(ev);
+      }
+    }
+    syncStateOnCtx();
+  }
+
+  function applyServerCoopData(data) {
+    if (!data || !active || (data.room && data.room !== roomCode)) return;
+    if (data.hostId) {
+      isHost = data.hostId === peerId;
+    }
+    if (data.dungeonState) {
+      leaderDungeonState = data.dungeonState;
+    }
+    if (Array.isArray(data.members)) {
+      for (const m of data.members) {
+        if (!m || m.id === peerId) continue;
+        upsertRemoteMember({
+          ...m,
+          isHost: data.hostId ? m.id === data.hostId : Boolean(m.isHost),
+        });
+      }
+    }
+    if (Array.isArray(data.events)) {
+      for (const ev of data.events) {
+        if (ev?.ts && ev.ts > lastHttpEventTs) {
+          lastHttpEventTs = ev.ts;
+        }
+        handleRemoteEvent(ev);
+      }
+    }
+    syncStateOnCtx();
+  }
+
+  function wsSend(msg) {
+    if (!ws || !wsConnected) return false;
+    try {
+      ws.send(JSON.stringify(msg));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function connectWebSocket() {
+    if (ws || wsConnecting || typeof WebSocket === 'undefined') return;
+    const url = resolveWsUrl();
+    if (!url) return;
+    wsConnecting = true;
+    try {
+      const socket = new WebSocket(url);
+      ws = socket;
+      socket.onopen = () => {
+        wsConnecting = false;
+        wsConnected = true;
+        wsReconnectDelay = 2.0;
+        wsSend({
+          type: 'presence:update',
+          peerId,
+          zone: state.zone || 'stupa',
+          pilgrim: buildLocalMemberSnapshot(),
+          events: outboundZoneEvents.splice(0, outboundZoneEvents.length),
+        });
+        if (active && roomCode) {
+          wsSend({
+            type: 'coop:sync',
+            room: roomCode,
+            isPublic: roomPublic,
+            member: buildLocalMemberSnapshot(),
+            dungeonState: isHost ? buildLocalDungeonState() : undefined,
+            events: outboundHttpEvents.splice(0, outboundHttpEvents.length),
+          });
+        }
+        syncStateOnCtx();
+      };
+      socket.onmessage = (event) => {
+        try {
+          const msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+          if (!msg || typeof msg !== 'object') return;
+          if (
+            msg.type === 'presence:state' ||
+            msg.type === 'presence:sync' ||
+            msg.type === 'presence:update'
+          ) {
+            applyServerPresenceData(msg);
+          } else if (msg.type === 'presence:event' || msg.type === 'zone:event') {
+            if (msg.event) handleRemoteEvent(msg.event);
+          } else if (
+            msg.type === 'coop:state' ||
+            msg.type === 'coop:sync' ||
+            msg.type === 'coop:update'
+          ) {
+            applyServerCoopData(msg);
+          } else if (msg.type === 'coop:event') {
+            if (msg.event) handleRemoteEvent(msg.event);
+          } else if (msg.type === 'coop:publicRooms') {
+            if (Array.isArray(msg.rooms || msg.publicRooms)) {
+              serverPublicRooms = msg.rooms || msg.publicRooms;
+              syncStateOnCtx();
+              bus?.emit('coop:publicRooms', getPublicRooms());
+              bus?.emit('coop:changed', getState());
+            }
+          } else if (msg.type === 'community:event' || msg.type === 'community:state') {
+            bus?.emit('ws:community', {
+              action: msg.action || msg.type,
+              payload: msg.payload ?? msg.state ?? msg,
+            });
+          }
+        } catch {
+          /* ignore malformed WS message */
+        }
+      };
+      socket.onerror = () => {
+        /* handled by onclose */
+      };
+      socket.onclose = () => {
+        ws = null;
+        wsConnected = false;
+        wsConnecting = false;
+        wsReconnectTimer = wsReconnectDelay;
+        wsReconnectDelay = Math.min(30, wsReconnectDelay * 1.8);
+      };
+    } catch {
+      ws = null;
+      wsConnected = false;
+      wsConnecting = false;
+      wsReconnectTimer = wsReconnectDelay;
+    }
+  }
+
+  async function pollHttpPresence() {
+    if (!showAmbientPilgrims || presenceHttpInFlight || typeof fetch === 'undefined') return;
+    presenceHttpInFlight = true;
+    try {
+      const body = {
+        peerId,
+        zone: state.zone || 'stupa',
+        since: lastZoneEventTs,
+        pilgrim: buildLocalMemberSnapshot(),
+        events: outboundZoneEvents.splice(0, outboundZoneEvents.length),
+      };
+      const res = await fetch(resolveApiUrl('/api/presence'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.ok !== false) {
+          applyServerPresenceData(data);
+        }
+      }
+    } catch {
+      /* offline or static mode */
+    } finally {
+      presenceHttpInFlight = false;
+    }
   }
 
   async function pollHttpCoop(extraBody = null) {
@@ -354,12 +1038,13 @@ export function createCoop(ctx) {
     try {
       const body = extraBody || {
         room: roomCode,
+        isPublic: roomPublic,
         since: lastHttpEventTs,
         member: buildLocalMemberSnapshot(),
         dungeonState: isHost ? buildLocalDungeonState() : undefined,
         events: outboundHttpEvents.splice(0, outboundHttpEvents.length),
       };
-      const res = await fetch('/api/coop', {
+      const res = await fetch(resolveApiUrl('/api/coop'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -367,31 +1052,7 @@ export function createCoop(ctx) {
       if (res.ok) {
         const data = await res.json();
         if (data && data.ok && data.room === roomCode) {
-          if (data.hostId) {
-            isHost = data.hostId === peerId;
-          }
-          if (data.dungeonState) {
-            leaderDungeonState = data.dungeonState;
-          }
-          if (Array.isArray(data.members)) {
-            const seenRemoteIds = new Set();
-            for (const m of data.members) {
-              if (!m || m.id === peerId) continue;
-              seenRemoteIds.add(m.id);
-              upsertRemoteMember({
-                ...m,
-                isHost: data.hostId ? m.id === data.hostId : Boolean(m.isHost),
-              });
-            }
-          }
-          if (Array.isArray(data.events)) {
-            for (const ev of data.events) {
-              if (ev.ts && ev.ts > lastHttpEventTs) {
-                lastHttpEventTs = ev.ts;
-              }
-              handleRemoteEvent(ev);
-            }
-          }
+          applyServerCoopData(data);
         }
       }
     } catch {
@@ -402,18 +1063,33 @@ export function createCoop(ctx) {
   }
 
   // ---------------------------------------------------------------- Room Lifecycle
-  function createRoom(customCode) {
+  function createRoom(customCode, opts = {}) {
     const cleanCustom = customCode ? String(customCode).trim().toUpperCase() : '';
     roomCode = cleanCustom || generateRoomCode();
     active = true;
     isHost = true;
+    if (typeof opts?.isPublic === 'boolean') {
+      roomPublic = opts.isPublic;
+    }
     remoteMembers.clear();
     outboundHttpEvents.length = 0;
     lastHttpEventTs = Date.now();
     ensureBroadcastChannel();
+    postLocalPresence(false);
     syncStateOnCtx();
 
-    pollHttpCoop();
+    if (wsConnected) {
+      wsSend({
+        type: 'coop:sync',
+        room: roomCode,
+        isPublic: roomPublic,
+        member: buildLocalMemberSnapshot(),
+        dungeonState: buildLocalDungeonState(),
+        events: [],
+      });
+    } else {
+      pollHttpCoop();
+    }
     bus?.emit('coop:roomCreated', getState());
     bus?.emit('coop:changed', getState());
     bus?.emit('toast', {
@@ -437,7 +1113,6 @@ export function createCoop(ctx) {
     ensureBroadcastChannel();
     syncStateOnCtx();
 
-    // Immediately broadcast snapshot & poll HTTP
     if (bc) {
       try {
         bc.postMessage({
@@ -450,7 +1125,17 @@ export function createCoop(ctx) {
         /* ignore */
       }
     }
-    pollHttpCoop();
+    if (wsConnected) {
+      wsSend({
+        type: 'coop:sync',
+        room: roomCode,
+        isPublic: roomPublic,
+        member: buildLocalMemberSnapshot(),
+        events: [],
+      });
+    } else {
+      pollHttpCoop();
+    }
 
     bus?.emit('coop:roomJoined', getState());
     bus?.emit('coop:changed', getState());
@@ -466,6 +1151,7 @@ export function createCoop(ctx) {
   function leaveRoom() {
     if (!active) return;
     const prevCode = roomCode;
+    bcPublicRooms.delete(prevCode);
     if (bc) {
       try {
         bc.postMessage({
@@ -477,8 +1163,14 @@ export function createCoop(ctx) {
         /* ignore */
       }
     }
-    if (typeof fetch !== 'undefined' && prevCode) {
-      fetch('/api/coop', {
+    if (wsConnected && prevCode) {
+      wsSend({
+        type: 'coop:leave',
+        room: prevCode,
+        peerId,
+      });
+    } else if (typeof fetch !== 'undefined' && prevCode) {
+      fetch(resolveApiUrl('/api/coop'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ room: prevCode, action: 'leave', peerId }),
@@ -490,7 +1182,7 @@ export function createCoop(ctx) {
     remoteMembers.clear();
     aiCompanions.length = 0;
     leaderDungeonState = null;
-    closeBroadcastChannel();
+    postLocalPresence(false);
     syncStateOnCtx();
     bus?.emit('coop:roomLeft', { roomCode: prevCode });
     bus?.emit('coop:changed', getState());
@@ -499,6 +1191,49 @@ export function createCoop(ctx) {
       text: i18n.t('toast.coopLeft'),
       kind: 'info',
     });
+  }
+
+  // ---------------------------------------------------------------- Dharma Emotes / Prayer Bubbles
+  function sendEmote(emoteId = 'mantra') {
+    const cleanId = VALID_EMOTES.has(emoteId) ? emoteId : 'mantra';
+    const text = i18n.t(`coop.emote.${cleanId}`);
+    const expiresAt = Date.now() + 4500;
+    localEmote = {
+      id: cleanId,
+      text,
+      ts: Date.now(),
+      expiresAt,
+    };
+
+    const pos = state.player?.position || { x: 0, y: 0, z: 0 };
+    broadcastZoneEvent('coop:emote', {
+      emoteId: cleanId,
+      text,
+      senderName: getPilgrimName(),
+      zone: state.zone || 'stupa',
+      x: Number((pos.x || 0).toFixed(2)),
+      y: Number((pos.y || 0).toFixed(2)),
+      z: Number((pos.z || 0).toFixed(2)),
+    });
+    postLocalPresence(false);
+    syncStateOnCtx();
+
+    bus?.emit('coop:emote', {
+      peerId,
+      isSelf: true,
+      senderName: getPilgrimName(),
+      emoteId: cleanId,
+      text,
+      expiresAt,
+    });
+    bus?.emit('toast', {
+      key: 'toast.emoteSent',
+      params: { text },
+      text: i18n.t('toast.emoteSent', { text }),
+      kind: 'merit',
+    });
+    bus?.emit('coop:changed', getState());
+    return localEmote;
   }
 
   // ---------------------------------------------------------------- AI Dharma Companions
@@ -605,7 +1340,7 @@ export function createCoop(ctx) {
     const partner =
       partnerMember ||
       lastRemoteMantraMember ||
-      getMembers().find((m) => m.zone === state.zone && !m.fainted) ||
+      getAllVisiblePilgrims().find((m) => m.zone === state.zone && !m.fainted) ||
       null;
 
     // 1. Heal local player 15% maxHp & 15% maxMp
@@ -715,12 +1450,12 @@ export function createCoop(ctx) {
   }
 
   function onLocalMantraCast(origin) {
-    if (!active) return;
+    if (!active && zonePilgrims.size === 0) return;
     const now = nowSec();
     const pos = origin || state.player?.position || { x: 0, y: 0, z: 0 };
     lastLocalMantraTime = now;
 
-    broadcastEvent('skill:cast', {
+    broadcastZoneEvent('skill:cast', {
       skillId: 'mantra',
       x: Number((pos.x || 0).toFixed(2)),
       y: Number((pos.y || 0).toFixed(2)),
@@ -737,7 +1472,7 @@ export function createCoop(ctx) {
       }
     }
 
-    // Check if a remote member or AI companion cast mantra within 3.0s within 18m
+    // Check if a remote member or ambient pilgrim cast mantra within 3.0s within 18m
     if (
       now - lastRemoteMantraTime <= RESONANCE_WINDOW_SEC &&
       now - lastResonanceTime >= RESONANCE_COOLDOWN_SEC
@@ -747,7 +1482,6 @@ export function createCoop(ctx) {
     }
 
     // If an AI Dharma Companion is within 18m and not fainted, have them harmonize their chant
-    // so Six-Syllable Mantra Resonance activates seamlessly in AI companion parties!
     if (now - lastResonanceTime >= RESONANCE_COOLDOWN_SEC) {
       const readyAi = aiCompanions.find(
         (ai) =>
@@ -900,18 +1634,47 @@ export function createCoop(ctx) {
     }
 
     const payload = ev.payload || {};
-    const sender = remoteMembers.get(ev.senderId) || {
-      id: ev.senderId,
-      name: payload.senderName || 'Pilgrim',
-      zone: payload.zone || state.zone,
-      x: payload.x || 0,
-      y: payload.y || 0,
-      z: payload.z || 0,
-    };
+    const sender =
+      remoteMembers.get(ev.senderId) ||
+      zonePilgrims.get(ev.senderId) || {
+        id: ev.senderId,
+        name: payload.senderName || ev.senderName || 'Pilgrim',
+        zone: payload.zone || ev.zone || state.zone,
+        x: payload.x || 0,
+        y: payload.y || 0,
+        z: payload.z || 0,
+      };
 
     switch (ev.type) {
       case 'skill:cast': {
         handleRemoteSkillCast(sender, payload.skillId || 'mantra', payload);
+        break;
+      }
+      case 'coop:emote': {
+        const emoteId = VALID_EMOTES.has(payload.emoteId) ? payload.emoteId : 'mantra';
+        const emoteText = payload.text || i18n.t(`coop.emote.${emoteId}`);
+        const emoteObj = {
+          id: emoteId,
+          text: emoteText,
+          ts: Date.now(),
+          expiresAt: Date.now() + 4500,
+        };
+        if (remoteMembers.has(ev.senderId)) {
+          remoteMembers.get(ev.senderId).emote = emoteObj;
+        }
+        if (zonePilgrims.has(ev.senderId)) {
+          zonePilgrims.get(ev.senderId).emote = emoteObj;
+        }
+        syncStateOnCtx();
+        bus?.emit('coop:emote', {
+          peerId: ev.senderId,
+          isSelf: false,
+          senderName: payload.senderName || sender.name || 'Pilgrim',
+          emoteId,
+          text: emoteText,
+          expiresAt: emoteObj.expiresAt,
+        });
+        bus?.emit('coop:changed', getState());
         break;
       }
       case 'terma:entered': {
@@ -953,13 +1716,34 @@ export function createCoop(ctx) {
         break;
       }
       case 'enemy:damage': {
+        if (payload.zone && state.zone && payload.zone !== state.zone) break;
         const amount = Number(payload.amount) || 0;
         if (amount <= 0) break;
-        const activeEnemies = ctx.enemies?.getActiveEnemies?.() || [];
-        const target =
-          (payload.enemyId && activeEnemies.find((e) => e.id === payload.enemyId)) ||
+        bus?.emit('coop:enemyDamage', {
+          ...payload,
+          senderId: ev.senderId,
+        });
+        const activeEnemies = ctx.enemies?.getActiveEnemies?.() || ctx.enemies?.list?.() || [];
+        let target =
+          (payload.enemyId && activeEnemies.find((e) => e.id === payload.enemyId && e.hp > 0)) ||
           (typeof payload.index === 'number' && activeEnemies[payload.index]) ||
           null;
+        if (!target && activeEnemies.length > 0) {
+          const ex = Number(payload.x ?? sender.x) || 0;
+          const ez = Number(payload.z ?? sender.z) || 0;
+          let bestDist = 16.0;
+          for (const e of activeEnemies) {
+            if (!e || e.hp <= 0 || e.state === 'liberated' || e.state === 'calmed') continue;
+            if (payload.kind && e.kind && e.kind !== payload.kind) continue;
+            const epX = e.pos?.x ?? e.x ?? 0;
+            const epZ = e.pos?.z ?? e.z ?? 0;
+            const d = Math.hypot(epX - ex, epZ - ez);
+            if (d < bestDist) {
+              bestDist = d;
+              target = e;
+            }
+          }
+        }
         if (target && target.hp > 0) {
           ctx.enemies?.damage?.(target.id, amount, {
             type: 'magic',
@@ -969,6 +1753,83 @@ export function createCoop(ctx) {
         } else if (payload.isBoss && ctx.bosses?.getActiveBoss?.()) {
           const boss = ctx.bosses.getActiveBoss();
           boss.damage?.(amount, { source: 'coop:remote', fromCoop: true });
+        }
+        break;
+      }
+      case 'enemy:liberated': {
+        if (payload.zone && state.zone && payload.zone !== state.zone) break;
+        const pPos = state.player?.position || { x: 0, z: 0 };
+        const ex = Number(payload.x ?? sender.x) || 0;
+        const ez = Number(payload.z ?? sender.z) || 0;
+        const distToEvent = Math.hypot((pPos.x || 0) - ex, (pPos.z || 0) - ez);
+        const inSameParty = active && remoteMembers.has(ev.senderId);
+        if (!inSameParty && distToEvent > 28.0) break;
+
+        const enemyId = payload.enemyId || payload.id;
+        if (enemyId && liberatedEnemyIds.has(enemyId)) break;
+        if (enemyId) {
+          remoteLiberatedEnemyIds.add(enemyId);
+          if (remoteLiberatedEnemyIds.size > 400) {
+            remoteLiberatedEnemyIds.delete(remoteLiberatedEnemyIds.values().next().value);
+          }
+        }
+
+        const activeEnemies = ctx.enemies?.getActiveEnemies?.() || ctx.enemies?.list?.() || [];
+        let target =
+          (enemyId &&
+            activeEnemies.find(
+              (e) => e.id === enemyId && e.hp > 0 && e.state !== 'liberated' && e.state !== 'calmed',
+            )) ||
+          null;
+        if (!target && activeEnemies.length > 0) {
+          let bestDist = 12.0;
+          for (const e of activeEnemies) {
+            if (!e || e.hp <= 0 || e.state === 'liberated' || e.state === 'calmed') continue;
+            if (payload.kind && e.kind && e.kind !== payload.kind) continue;
+            const epX = e.pos?.x ?? e.x ?? 0;
+            const epZ = e.pos?.z ?? e.z ?? 0;
+            const d = Math.hypot(epX - ex, epZ - ez);
+            if (d < bestDist) {
+              bestDist = d;
+              target = e;
+            }
+          }
+        }
+
+        if (target && target.hp > 0) {
+          remoteLiberatedEnemyIds.add(target.id);
+          ctx.enemies?.damage?.(target.id, target.hp + 9999, {
+            type: 'magic',
+            source: 'coop:remote',
+            fromCoop: true,
+            execute: true,
+          });
+        } else {
+          if (enemyId) {
+            liberatedEnemyIds.add(enemyId);
+          }
+          const baseExp = Math.max(0, Number(payload.exp) || 0);
+          const extraContributors = Math.min(
+            3,
+            Math.max(1, Math.max(0, getPartySize() - 1) + getZonePilgrims().length),
+          );
+          const bonusExp = baseExp > 0 ? Math.max(1, Math.round(baseExp * 0.15 * extraContributors)) : 0;
+          const totalSharedExp = baseExp + bonusExp;
+          if (totalSharedExp > 0) {
+            if (ctx.vitals?.addExp) {
+              ctx.vitals.addExp(totalSharedExp);
+            } else if (state.player && typeof state.player.exp === 'number') {
+              state.player.exp += totalSharedExp;
+            }
+          }
+          bus?.emit('coop:sharedLiberation', {
+            enemyId,
+            kind: payload.kind,
+            baseExp,
+            bonusExp,
+            totalExp: totalSharedExp,
+            senderId: ev.senderId,
+          });
         }
         break;
       }
@@ -1004,23 +1865,187 @@ export function createCoop(ctx) {
   });
 
   bus?.on('skill:cast', (payload) => {
-    if (!active) return;
     const skillId = payload?.id || payload?.skillId;
     if (skillId === 'mantra') {
-      // Handled via mantra:cast or if emitted only on skill:cast
       if (nowSec() - lastLocalMantraTime > 0.25) {
         onLocalMantraCast(payload?.origin || state.player?.position);
       }
       return;
     }
+    if (!active && zonePilgrims.size === 0) return;
     const pos = payload?.origin || state.player?.position || { x: 0, y: 0, z: 0 };
-    broadcastEvent('skill:cast', {
+    broadcastZoneEvent('skill:cast', {
       skillId: skillId || 'skill',
       x: Number((pos.x || 0).toFixed(2)),
       y: Number((pos.y || 0).toFixed(2)),
       z: Number((pos.z || 0).toFixed(2)),
     });
   });
+
+  // Wilderness & Dungeon Combat Sync (`enemy:hit` -> `enemy:damage`)
+  bus?.on('enemy:hit', (payload) => {
+    if (!payload || payload.source === 'coop:remote' || payload.fromCoop) return;
+    const amount = Number(payload.damage ?? payload.amount) || 0;
+    if (amount <= 0) return;
+    const currentZone = state.zone || 'wild';
+    if (!COMBAT_ZONES.has(currentZone)) return;
+    const ex = Number((payload.position?.x ?? state.player?.position?.x ?? 0).toFixed(2));
+    const ez = Number((payload.position?.z ?? state.player?.position?.z ?? 0).toFixed(2));
+    broadcastZoneEvent('enemy:damage', {
+      enemyId: payload.id || payload.enemyId,
+      kind: payload.kind,
+      amount,
+      x: ex,
+      z: ez,
+      zone: currentZone,
+    });
+  });
+
+  // Wilderness & Party Co-op Liberation EXP Sharing (+15% EXP bonus per extra pilgrim, 100% shared base EXP)
+  bus?.on('enemy:liberated', (payload) => {
+    if (!payload) return;
+    const enemyId = payload.id || payload.enemyId;
+    if (enemyId && liberatedEnemyIds.has(enemyId)) return;
+    if (enemyId) {
+      liberatedEnemyIds.add(enemyId);
+      if (liberatedEnemyIds.size > 400) {
+        liberatedEnemyIds.delete(liberatedEnemyIds.values().next().value);
+      }
+    }
+
+    const ex = Number((payload.position?.x ?? state.player?.position?.x ?? 0).toFixed(2));
+    const ez = Number((payload.position?.z ?? state.player?.position?.z ?? 0).toFixed(2));
+    const baseExp = Math.max(0, Number(payload.exp) || 0);
+
+    const nearbyAmbientCount = getZonePilgrims().filter(
+      (m) => Math.hypot((m.x || 0) - ex, (m.z || 0) - ez) <= 24.0,
+    ).length;
+    const bonusContributors = Math.min(
+      3,
+      Math.max(0, getPartySize() - 1) + nearbyAmbientCount,
+    );
+
+    if (bonusContributors > 0 && baseExp > 0) {
+      const bonusExp = Math.max(1, Math.round(baseExp * 0.15 * bonusContributors));
+      if (ctx.vitals?.addExp) {
+        ctx.vitals.addExp(bonusExp);
+      } else if (state.player && typeof state.player.exp === 'number') {
+        state.player.exp += bonusExp;
+      }
+      bus?.emit('coop:expBonus', {
+        enemyId,
+        baseExp,
+        bonusExp,
+        contributors: bonusContributors,
+      });
+    }
+
+    const wasFromRemote =
+      Boolean(payload.fromCoop) || Boolean(enemyId && remoteLiberatedEnemyIds.has(enemyId));
+    if (!wasFromRemote && (active || zonePilgrims.size > 0)) {
+      const currentZone = state.zone || payload.mapId || 'wild';
+      if (COMBAT_ZONES.has(currentZone)) {
+        broadcastZoneEvent('enemy:liberated', {
+          enemyId,
+          kind: payload.kind,
+          exp: baseExp,
+          level: payload.level || 1,
+          rank: payload.rank || 'normal',
+          x: ex,
+          z: ez,
+          zone: currentZone,
+        });
+      }
+    }
+  });
+
+  // Forward Community Stupa / Butter Lamp outbound actions over WebSocket when connected
+  bus?.on('community:outbound', (msg) => {
+    if (!msg) return;
+    wsSend({
+      type: 'community:action',
+      action: msg.action,
+      payload: msg.payload,
+    });
+  });
+
+  // ---------------------------------------------------------------- Shared Kora Communion
+  function updateSharedKoraCommunion(dt) {
+    const currentZone = state.zone || 'stupa';
+    if (!KORA_ZONES.has(currentZone)) {
+      koraCommunionTimer = 0;
+      return;
+    }
+
+    const p = state.player || {};
+    const pos = p.position || { x: 0, y: 0, z: 0 };
+    const movedDist = Math.hypot((pos.x || 0) - lastPlayerX, (pos.z || 0) - lastPlayerZ);
+    const isPracticing =
+      p.action === 'walk' ||
+      p.action === 'run' ||
+      p.action === 'prostrate' ||
+      Boolean(p.isMoving) ||
+      (typeof p.speed === 'number' && p.speed > 0.1) ||
+      movedDist > 0.005;
+
+    if (!isPracticing) return;
+
+    const visiblePilgrims = getAllVisiblePilgrims();
+    const nearbyPilgrim = visiblePilgrims.find(
+      (m) =>
+        (m.zone || 'stupa') === currentZone &&
+        !m.fainted &&
+        Math.hypot((pos.x || 0) - (m.x || 0), (pos.z || 0) - (m.z || 0)) <= 15.0,
+    );
+
+    if (!nearbyPilgrim) return;
+
+    koraCommunionTimer += dt;
+    if (koraCommunionTimer >= 8.0) {
+      koraCommunionTimer -= 8.0;
+      koraCommunionCount += 1;
+
+      const maxHp = Math.max(1, Number(p.maxHp) || 100);
+      const maxMp = Math.max(1, Number(p.maxMp) || 60);
+      const healHp = Math.max(1, Math.round(maxHp * 0.05));
+      const healMp = Math.max(1, Math.round(maxMp * 0.08));
+
+      if (typeof p.hp === 'number') {
+        p.hp = Math.min(maxHp, p.hp + healHp);
+      }
+      if (typeof p.mp === 'number') {
+        p.mp = Math.min(maxMp, p.mp + healMp);
+      }
+
+      bus?.emit('vitals:restore', {
+        hp: healHp,
+        mp: healMp,
+        source: 'sharedKoraCommunion',
+      });
+      bus?.emit('merit', {
+        type: 'kora',
+        count: 1,
+        source: 'sharedKoraCommunion',
+      });
+      bus?.emit('coop:koraCommunion', {
+        count: koraCommunionCount,
+        partnerId: nearbyPilgrim.id,
+        partnerName: nearbyPilgrim.name,
+        hp: healHp,
+        mp: healMp,
+      });
+      bus?.emit('toast', {
+        key: 'toast.sharedKoraCommunion',
+        params: { name: nearbyPilgrim.name || i18n.t('coop.pilgrimName.default') },
+        text: i18n.t('toast.sharedKoraCommunion', {
+          name: nearbyPilgrim.name || i18n.t('coop.pilgrimName.default'),
+        }),
+        kind: 'merit',
+      });
+      syncStateOnCtx();
+      bus?.emit('coop:changed', getState());
+    }
+  }
 
   // ---------------------------------------------------------------- Frame Update
   function updateAiCompanions(dt) {
@@ -1143,46 +2168,139 @@ export function createCoop(ctx) {
   }
 
   function update(dt) {
-    if (!active) return;
+    if (state.mode && state.mode !== 'play') return;
 
-    updateAiCompanions(dt);
+    const currentZone = state.zone || 'stupa';
+    if (currentZone !== lastKnownZone) {
+      lastKnownZone = currentZone;
+      shardId = `${currentZone}#1`;
+      koraCommunionTimer = 0;
+      postLocalPresence(true);
+    }
 
-    // Broadcast local snapshot at ~15Hz over BroadcastChannel
-    broadcastTimer += dt;
-    if (broadcastTimer >= 0.066) {
-      broadcastTimer = 0;
-      if (bc && roomCode) {
-        try {
-          bc.postMessage({
-            room: roomCode,
-            senderId: peerId,
-            kind: 'snapshot',
-            member: buildLocalMemberSnapshot(),
-            dungeonState: isHost ? buildLocalDungeonState() : undefined,
-          });
-        } catch {
-          /* ignore */
+    if (active) {
+      updateAiCompanions(dt);
+    }
+
+    updateSharedKoraCommunion(dt);
+
+    const pos = state.player?.position || { x: 0, y: 0, z: 0 };
+    const isMovingOrActing =
+      Math.hypot((pos.x || 0) - lastPlayerX, (pos.z || 0) - lastPlayerZ) > 0.005 ||
+      (state.player?.action && state.player.action !== 'idle');
+    lastPlayerX = pos.x || 0;
+    lastPlayerZ = pos.z || 0;
+
+    // 1. BroadcastChannel sync: ~15Hz for room members, ~5Hz for ambient zone presence
+    ensureBroadcastChannel();
+    if (active && roomCode) {
+      broadcastTimer += dt;
+      if (broadcastTimer >= 0.066) {
+        broadcastTimer = 0;
+        if (bc) {
+          try {
+            bc.postMessage({
+              room: roomCode,
+              senderId: peerId,
+              kind: 'snapshot',
+              member: buildLocalMemberSnapshot(),
+              dungeonState: isHost ? buildLocalDungeonState() : undefined,
+            });
+          } catch {
+            /* ignore */
+          }
         }
       }
     }
 
-    // Sync with /api/coop at ~2Hz
-    httpSyncTimer += dt;
-    if (httpSyncTimer >= 0.5) {
-      httpSyncTimer = 0;
-      pollHttpCoop();
+    if (showAmbientPilgrims || active) {
+      presenceBroadcastTimer += dt;
+      if (presenceBroadcastTimer >= 0.18) {
+        presenceBroadcastTimer = 0;
+        postLocalPresence(false);
+      }
+    }
+
+    // 2. WebSocket Real-Time Sync or HTTP Fallback
+    if (!ws && !wsConnecting) {
+      if (wsReconnectTimer > 0) {
+        wsReconnectTimer -= dt;
+      } else {
+        connectWebSocket();
+      }
+    }
+
+    if (wsConnected) {
+      wsSyncTimer += dt;
+      const wsInterval =
+        isMovingOrActing || outboundZoneEvents.length > 0 || outboundHttpEvents.length > 0
+          ? 0.2
+          : 1.0;
+      if (wsSyncTimer >= wsInterval) {
+        wsSyncTimer = 0;
+        if (showAmbientPilgrims) {
+          wsSend({
+            type: 'presence:update',
+            peerId,
+            zone: currentZone,
+            pilgrim: buildLocalMemberSnapshot(),
+            events: outboundZoneEvents.splice(0, outboundZoneEvents.length),
+          });
+        }
+        if (active && roomCode) {
+          wsSend({
+            type: 'coop:sync',
+            room: roomCode,
+            isPublic: roomPublic,
+            member: buildLocalMemberSnapshot(),
+            dungeonState: isHost ? buildLocalDungeonState() : undefined,
+            events: outboundHttpEvents.splice(0, outboundHttpEvents.length),
+          });
+        }
+      }
+    } else {
+      if (active && roomCode) {
+        httpSyncTimer += dt;
+        if (httpSyncTimer >= 0.5) {
+          httpSyncTimer = 0;
+          pollHttpCoop();
+        }
+      }
+      if (showAmbientPilgrims) {
+        presenceHttpTimer += dt;
+        if (presenceHttpTimer >= 2.0) {
+          presenceHttpTimer = 0;
+          pollHttpPresence();
+        }
+      }
     }
 
     syncStateOnCtx();
   }
 
+  // Initialize BroadcastChannel & announce initial presence immediately
+  ensureBroadcastChannel();
+  postLocalPresence(true);
   syncStateOnCtx();
 
   const api = {
     getState,
     getPartySize,
     getMembers,
+    getZonePilgrims,
+    getAllVisiblePilgrims,
+    getZoneCounts,
+    getTotalOnline,
+    getShowAmbientPilgrims,
+    setShowAmbientPilgrims,
+    isRoomPublic,
+    setRoomPublic,
+    getPublicRooms,
+    refreshPublicRooms,
+    sendEmote,
+    getLocalEmote,
     getFindBonusPct,
+    getExpBonusPct,
     getHpScaleMult,
     getPilgrimName,
     setPilgrimName,
@@ -1192,6 +2310,7 @@ export function createCoop(ctx) {
     addAiCompanion,
     removeAiCompanion,
     broadcastEvent,
+    broadcastZoneEvent,
     reviveMember,
     setMemberFainted,
     teleportToLeader,
