@@ -46,6 +46,8 @@ export function createRemotePilgrims(ctx) {
 
   // Map<member.id, actorRecord>
   const actors = new Map();
+  // Map<peerId, number> for skill cast timers triggered before actor creation
+  const pendingCastTimers = new Map();
   // Map<peerId, { id, text, expiresAt }>
   const activeEmotes = new Map();
   const activeVfx = [];
@@ -303,14 +305,53 @@ export function createRemotePilgrims(ctx) {
       headGroup.add(band);
     }
 
-    // 4. Arms & Legs
+    // 4. Arms (Upper Sleeve + Golden Cuff + Forearm + Wrist Mala + Hand) & Legs
     function makeArm(side) {
       const pivot = new THREE.Group();
+      pivot.name = side < 0 ? 'LeftArm' : 'RightArm';
       pivot.position.set(side * 0.24, 0.45, 0);
-      const sleeveGeo = new THREE.CylinderGeometry(0.068, 0.055, 0.36, 8);
-      sleeveGeo.translate(0, -0.18, 0);
+      pivot.rotation.z = side < 0 ? -0.09 : 0.09;
+
+      const sleeveGeo = new THREE.CylinderGeometry(0.068, 0.058, 0.28, 10);
+      sleeveGeo.translate(0, -0.13, 0);
       const sleeve = new THREE.Mesh(sleeveGeo, side < 0 ? shawlMat : robeMat);
+      sleeve.castShadow = true;
       pivot.add(sleeve);
+
+      const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.056, 0.012, 6, 12), goldMat);
+      cuff.rotation.x = Math.PI / 2;
+      cuff.position.y = -0.26;
+      pivot.add(cuff);
+
+      const forearmPivot = new THREE.Group();
+      forearmPivot.name = side < 0 ? 'LeftForearmPivot' : 'RightForearmPivot';
+      forearmPivot.position.set(0, -0.26, 0);
+      forearmPivot.rotation.x = 0.22;
+      pivot.add(forearmPivot);
+
+      const forearmGeo = new THREE.CylinderGeometry(0.052, 0.044, 0.24, 10);
+      forearmGeo.translate(0, -0.12, 0);
+      const forearm = new THREE.Mesh(forearmGeo, skinMat);
+      forearm.name = side < 0 ? 'LeftForearm' : 'RightForearm';
+      forearm.castShadow = true;
+      forearmPivot.add(forearm);
+
+      const wristBeads = new THREE.Mesh(new THREE.TorusGeometry(0.046, 0.011, 6, 10), beadMat);
+      wristBeads.rotation.x = Math.PI / 2;
+      wristBeads.position.y = -0.21;
+      forearmPivot.add(wristBeads);
+
+      const handGeo = new THREE.SphereGeometry(0.052, 10, 8);
+      handGeo.scale(0.85, 1.18, 0.95);
+      const hand = new THREE.Mesh(handGeo, skinMat);
+      hand.name = side < 0 ? 'LeftHand' : 'RightHand';
+      hand.position.set(0, -0.25, 0);
+      hand.castShadow = true;
+      forearmPivot.add(hand);
+
+      pivot.forearmPivot = forearmPivot;
+      pivot.forearm = forearm;
+      pivot.hand = hand;
       torsoPivot.add(pivot);
       return pivot;
     }
@@ -367,6 +408,9 @@ export function createRemotePilgrims(ctx) {
     root.rotation.y = member.heading || 0;
     group.add(root);
 
+    const initialCastTimer = pendingCastTimers.get(member.id) || 0;
+    pendingCastTimers.delete(member.id);
+
     return {
       id: member.id,
       root,
@@ -374,6 +418,10 @@ export function createRemotePilgrims(ctx) {
       torsoPivot,
       leftArm,
       rightArm,
+      leftForearm: leftArm.forearmPivot,
+      rightForearm: rightArm.forearmPivot,
+      leftHand: leftArm.hand,
+      rightHand: rightArm.hand,
       leftLeg,
       rightLeg,
       robeMat,
@@ -384,6 +432,7 @@ export function createRemotePilgrims(ctx) {
       canvas,
       tex,
       walkPhase: Math.random() * TWO_PI,
+      castTimer: initialCastTimer,
       lastSignature: '',
       data: { ...member },
     };
@@ -455,6 +504,14 @@ export function createRemotePilgrims(ctx) {
 
   bus?.on('coop:remoteSkill', (payload) => {
     if (!payload) return;
+    if (payload.peerId) {
+      const actor = actors.get(payload.peerId);
+      if (actor) {
+        actor.castTimer = 0.55;
+      } else {
+        pendingCastTimers.set(payload.peerId, 0.55);
+      }
+    }
     if (payload.skillId === 'mantra') {
       spawnTeammateMantraWave(payload.x || 0, payload.y || 0, payload.z || 0, 0xfbbf24, 6.0, 0.65);
     } else {
@@ -597,15 +654,30 @@ export function createRemotePilgrims(ctx) {
       }
 
       // Limb & posture animation
+      if (actor.castTimer > 0) {
+        actor.castTimer = Math.max(0, actor.castTimer - dt);
+      }
+      if (m.action === 'cast' || m.action === 'chant' || m.action === 'attack') {
+        actor.castTimer = 0.55;
+      }
+
       const isMoving = m.action === 'walk' || m.action === 'run' || moveDist > 0.04;
       if (m.fainted) {
         actor.body.rotation.x = Math.PI * 0.46;
         actor.body.position.y = 0.12;
+        actor.leftArm.rotation.set(0.2, 0, -0.25);
+        actor.rightArm.rotation.set(0.2, 0, 0.25);
+        actor.leftForearm.rotation.set(0.15, 0, 0);
+        actor.rightForearm.rotation.set(0.15, 0, 0);
         actor.ringMat.color.setHex(0xef4444);
         actor.ringMat.opacity = 0.55 + Math.sin((state.elapsed || 0) * 5) * 0.25;
       } else if (m.action === 'prostrate') {
         actor.body.rotation.x = Math.PI * 0.42;
         actor.body.position.y = 0.15;
+        actor.leftArm.rotation.set(2.4, 0, -0.12);
+        actor.rightArm.rotation.set(2.4, 0, 0.12);
+        actor.leftForearm.rotation.set(0.2, 0, 0);
+        actor.rightForearm.rotation.set(0.2, 0, 0);
         actor.ringMat.color.setHex(0xfbbf24);
         actor.ringMat.opacity = 0.75;
       } else {
@@ -619,17 +691,33 @@ export function createRemotePilgrims(ctx) {
           const speed = m.action === 'run' ? 10 : 6.5;
           actor.walkPhase += dt * speed;
           const swing = Math.sin(actor.walkPhase) * 0.48;
-          actor.leftArm.rotation.x = swing;
-          actor.rightArm.rotation.x = -swing;
+          actor.leftArm.rotation.set(swing, 0, -0.08);
+          actor.rightArm.rotation.set(-swing, 0, 0.08);
+          actor.leftForearm.rotation.set(0.28 + Math.max(0, swing) * 0.35, 0, 0);
+          actor.rightForearm.rotation.set(0.28 + Math.max(0, -swing) * 0.35, 0, 0);
           actor.leftLeg.rotation.x = -swing * 0.8;
           actor.rightLeg.rotation.x = swing * 0.8;
           actor.body.position.y = Math.abs(Math.sin(actor.walkPhase)) * 0.05;
         } else {
           actor.leftArm.rotation.x *= 0.85;
           actor.rightArm.rotation.x *= 0.85;
+          actor.leftArm.rotation.y = 0;
+          actor.rightArm.rotation.y = 0;
+          actor.leftArm.rotation.z = -0.09;
+          actor.rightArm.rotation.z = 0.09;
+          actor.leftForearm.rotation.set(0.22, 0, 0);
+          actor.rightForearm.rotation.set(0.22, 0, 0);
           actor.leftLeg.rotation.x *= 0.85;
           actor.rightLeg.rotation.x *= 0.85;
           actor.body.position.y = 0;
+          actor.torsoPivot.position.y = 0.72 + Math.sin((state.elapsed || 0) * 2.2) * 0.012;
+        }
+
+        if (actor.castTimer > 0) {
+          actor.leftArm.rotation.set(0.75, -0.38, -0.1);
+          actor.rightArm.rotation.set(1.15, 0.15, 0.1);
+          actor.leftForearm.rotation.set(0.95, 0, 0.25);
+          actor.rightForearm.rotation.set(0.35, 0, -0.15);
         }
       }
 
@@ -688,6 +776,7 @@ export function createRemotePilgrims(ctx) {
   const api = {
     update,
     getMeshes,
+    getActor: (id) => actors.get(id) || null,
     getCount: () => getMeshes().length,
     spawnResonanceMandalaVfx,
   };
