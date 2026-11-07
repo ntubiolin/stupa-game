@@ -174,9 +174,6 @@ export default defineConfig({
       output: {
         codeSplitting: {
           groups: [
-            { name: 'story-data', test: /src[\\/](data[\\/]story[\\/]|i18n[\\/]story)/, priority: 40 },
-            { name: 'story-ui', test: /src[\\/]ui[\\/]story[\\/]/, priority: 40 },
-            { name: 'story-world-data', test: /src[\\/](data[\\/]maps[\\/]pharping|i18n[\\/]ch1)/, priority: 40 },
             { name: 'vendor-three', test: /node_modules[\\/]three/, priority: 30 },
             { name: 'game-data', test: /src[\\/](i18n|data)[\\/]/, priority: 20 },
             { name: 'game-ui', test: /src[\\/]ui[\\/]/, priority: 15 },
