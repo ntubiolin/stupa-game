@@ -41,13 +41,13 @@ function escapeHtml(str) {
 }
 
 /**
- * Parse raw localized string containing `[[codex:id|label]]` into tokens:
+ * Parse raw localized string containing `[[codex:id|label]]` (or `[[codex:id]]`) into tokens:
  *   [{ type: 'text', text }, { type: 'codex', id, text }]
  */
-export function parseDialogueTokens(rawText) {
+export function parseDialogueTokens(rawText, resolveLabel) {
   const str = String(rawText || '');
   const tokens = [];
-  const regex = /\[\[codex:([^|\]]+)\|([^\]]+)\]\]/g;
+  const regex = /\[\[codex:([^|\]]+)(?:\|([^\]]+))?\]\]/g;
   let lastIndex = 0;
   let match;
 
@@ -58,10 +58,12 @@ export function parseDialogueTokens(rawText) {
         text: str.slice(lastIndex, match.index),
       });
     }
+    const id = match[1].trim();
+    const label = match[2] ? match[2] : (typeof resolveLabel === 'function' ? resolveLabel(id) : id);
     tokens.push({
       type: 'codex',
-      id: match[1].trim(),
-      text: match[2],
+      id,
+      text: label,
     });
     lastIndex = regex.lastIndex;
   }
@@ -276,7 +278,12 @@ export function createDialogue(ctx) {
   const registry = new Map();
   const executedActionsLog = [];
 
-  function register(defs) {
+  function register(idOrDefs, maybeDef) {
+    if (typeof idOrDefs === 'string' && maybeDef && typeof maybeDef === 'object') {
+      registry.set(idOrDefs, { id: idOrDefs, ...maybeDef });
+      return;
+    }
+    const defs = idOrDefs;
     if (!defs || typeof defs !== 'object') return;
     if (defs.id && defs.nodes) {
       registry.set(defs.id, defs);
@@ -287,6 +294,20 @@ export function createDialogue(ctx) {
         registry.set(def.id || id, { id: def.id || id, ...def });
       }
     }
+  }
+
+  function resolveSpeakerKey(rawSpeaker) {
+    if (!rawSpeaker || typeof rawSpeaker !== 'string') return 'npc.oldLama';
+    if (i18n.has?.(rawSpeaker)) return rawSpeaker;
+    if (i18n.has?.(`${rawSpeaker}.name`)) return `${rawSpeaker}.name`;
+    if (rawSpeaker.startsWith('npc.') || rawSpeaker.startsWith('boss.')) return rawSpeaker;
+    return `npc.${rawSpeaker}`;
+  }
+
+  function resolveCodexLabel(codexId) {
+    if (i18n.has?.(`codex.${codexId}.title`)) return i18n.t(`codex.${codexId}.title`);
+    if (i18n.has?.(`codex.entry.${codexId}.title`)) return i18n.t(`codex.entry.${codexId}.title`);
+    return codexId;
   }
 
   // Register debug & prologue dialogues + auto-discover chapter dialogues (`src/data/dialogues/*.js`)
@@ -583,8 +604,9 @@ export function createDialogue(ctx) {
 
     active.nodeId = nodeId;
     active.node = node;
-    if (node.speaker) {
-      active.speakerKey = node.speaker.startsWith('npc.') ? node.speaker : `npc.${node.speaker}`;
+    const nodeSpeaker = node.speakerKey || node.speaker;
+    if (nodeSpeaker) {
+      active.speakerKey = resolveSpeakerKey(nodeSpeaker);
     }
     if (node.look) {
       active.look = node.look;
@@ -596,7 +618,7 @@ export function createDialogue(ctx) {
     }
 
     const rawText = i18n.t(node.textKey || node.text || '');
-    const tokens = parseDialogueTokens(rawText);
+    const tokens = parseDialogueTokens(rawText, resolveCodexLabel);
     const totalChars = tokens.reduce((sum, t) => sum + t.text.length, 0);
 
     active.tokens = tokens;
@@ -624,9 +646,16 @@ export function createDialogue(ctx) {
     const firstNode = def.nodes?.[startNodeId];
     if (!firstNode) return false;
 
-    const rawSpeaker = opts.speaker || firstNode.speaker || 'npc.oldLama';
-    const speakerKey = rawSpeaker.startsWith('npc.') ? rawSpeaker : `npc.${rawSpeaker}`;
-    const look = opts.look || firstNode.look || 'lama';
+    const rawSpeaker =
+      opts.speakerKey ||
+      opts.speaker ||
+      firstNode.speakerKey ||
+      firstNode.speaker ||
+      def.speakerKey ||
+      def.speaker ||
+      'npc.oldLama';
+    const speakerKey = resolveSpeakerKey(rawSpeaker);
+    const look = opts.look || firstNode.look || def.look || 'lama';
 
     active = {
       id: dialogueId,
@@ -702,6 +731,15 @@ export function createDialogue(ctx) {
 
     if (Array.isArray(choice.actions)) {
       executeActions(choice.actions);
+    } else if (choice.action && typeof choice.action === 'object') {
+      const normalized = choice.action.type
+        ? choice.action
+        : choice.action.flag
+          ? { type: 'setFlag', flag: choice.action.flag, value: choice.action.value ?? true }
+          : null;
+      if (normalized) {
+        executeActions([normalized]);
+      }
     }
 
     if (choice.next) {
@@ -815,7 +853,7 @@ export function createDialogue(ctx) {
   i18n.onChange(() => {
     if (!active) return;
     const rawText = i18n.t(active.node.textKey || active.node.text || '');
-    active.tokens = parseDialogueTokens(rawText);
+    active.tokens = parseDialogueTokens(rawText, resolveCodexLabel);
     active.totalChars = active.tokens.reduce((sum, t) => sum + t.text.length, 0);
     if (!active.typing) {
       active.revealedChars = active.totalChars;
@@ -861,7 +899,11 @@ export function createDialogue(ctx) {
         nodeId: active?.nodeId || null,
         npcId: active?.npcId || null,
         typing: Boolean(active?.typing),
-        choices: active?.visibleChoices?.map((c, i) => ({ index: i + 1, textKey: c.textKey, text: i18n.t(c.textKey) })) || [],
+        choices:
+          active?.visibleChoices?.map((c, i) => {
+            const ck = c.textKey || c.labelKey || '';
+            return { index: i + 1, textKey: ck, text: i18n.t(ck) };
+          }) || [],
         executedActions: [...executedActionsLog],
       };
     },

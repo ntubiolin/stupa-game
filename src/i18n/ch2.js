@@ -29,11 +29,12 @@ export const CH2_STRINGS = {
     'enemy.avalancheBrute': '雪崩魔',
 
     // Boss: Storm of the Twelve Tenma
+    'boss.tenmaStorm': '十二丹瑪之風暴',
     'boss.tenmaStorm.name': '十二丹瑪之風暴',
     'boss.tenmaStorm.title': '芒域山口・雪域邊境之障',
     'boss.tenmaStorm.phase2Toast': '用六字咒將光點送回漩渦',
     'boss.tenmaStorm.orbReturned': '丹瑪光點歸回風暴核心（剩餘 {n} 處氣候光點）',
-    'boss.tenmaStorm.allOrbsReturned': '四方氣候光點盡數歸位，風暴防護已 ослаб！',
+    'boss.tenmaStorm.allOrbsReturned': '四方氣候光點盡數歸位，風暴防護已削弱！',
     'boss.tenmaStorm.oath.n1': '「嗡！持明蓮花生大士，祈請垂聽！」狂暴的風雪驟然止息，十二道晶瑩如冰的女神身影環繞山口拉則，依序俯首頂禮。',
     'boss.tenmaStorm.oath.n2': '「吾等乃守護藏地地脈與雪山的[[codex:twelveTenma|十二丹瑪]]。昔日不知大士受贊普迎請入藏弘法，故以冰雹、雪崩、迷霧與雷電試探大士威德。」',
     'boss.tenmaStorm.oath.n3': '「今見大士金剛定力不可動搖，吾等十二姊妹願獻上生命心咒，奉上甘露寶瓶，永為佛法與雪域行者之堅固護法，守護入藏正道！」',
@@ -168,6 +169,7 @@ export const CH2_STRINGS = {
     'enemy.avalancheBrute': 'Avalanche Brute',
 
     // Boss: Storm of the Twelve Tenma
+    'boss.tenmaStorm': 'Storm of the Twelve Tenma',
     'boss.tenmaStorm.name': 'Storm of the Twelve Tenma',
     'boss.tenmaStorm.title': 'Blizzard Barrier of Mangyul Pass',
     'boss.tenmaStorm.phase2Toast': 'Cast the Six-Syllable Mantra (R) near each light orb to return it to the vortex!',
