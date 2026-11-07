@@ -276,7 +276,11 @@ export function createDialogue(ctx) {
   const registry = new Map();
   const executedActionsLog = [];
 
-  function register(defs) {
+  function register(defs, maybeDef) {
+    if (typeof defs === 'string' && maybeDef && typeof maybeDef === 'object') {
+      registry.set(defs, { id: defs, ...maybeDef });
+      return;
+    }
     if (!defs || typeof defs !== 'object') return;
     if (defs.id && defs.nodes) {
       registry.set(defs.id, defs);
@@ -289,10 +293,54 @@ export function createDialogue(ctx) {
     }
   }
 
+  function resolveSpeakerKey(raw) {
+    if (!raw || typeof raw !== 'string') return 'npc.oldLama';
+    if (
+      raw.startsWith('npc.') ||
+      raw.startsWith('boss.') ||
+      raw.startsWith('dlg.') ||
+      i18n?.has?.(raw)
+    ) {
+      if (raw.startsWith('boss.') && !raw.endsWith('.name') && i18n?.has?.(`${raw}.name`)) {
+        return `${raw}.name`;
+      }
+      return raw;
+    }
+    return `npc.${raw}`;
+  }
+
+  function normalizeActionItem(act) {
+    if (!act || typeof act !== 'object') return null;
+    if (act.type) return act;
+    if (act.flag) {
+      return { type: 'setFlag', flag: act.flag, value: act.value ?? true };
+    }
+    return null;
+  }
+
+  function collectActions(obj) {
+    if (!obj || typeof obj !== 'object') return [];
+    const list = [];
+    if (Array.isArray(obj.actions)) {
+      for (const a of obj.actions) {
+        const norm = normalizeActionItem(a);
+        if (norm) list.push(norm);
+      }
+    }
+    if (obj.action && typeof obj.action === 'object') {
+      const norm = normalizeActionItem(obj.action);
+      if (norm) list.push(norm);
+    }
+    return list;
+  }
+
   // Register debug & prologue dialogues + auto-discover chapter dialogues (`src/data/dialogues/*.js`)
   register(DEBUG_DIALOGUES);
   register(PROLOGUE_DIALOGUES);
-  const chapterDialogueModules = import.meta.glob('../data/dialogues/*.js', { eager: true });
+  const chapterDialogueModules =
+    (typeof import.meta.glob === 'function' &&
+      import.meta.glob('../data/dialogues/*.js', { eager: true })) ||
+    {};
   for (const mod of Object.values(chapterDialogueModules)) {
     if (!mod || typeof mod !== 'object') continue;
     for (const val of Object.values(mod)) {
@@ -583,16 +631,18 @@ export function createDialogue(ctx) {
 
     active.nodeId = nodeId;
     active.node = node;
-    if (node.speaker) {
-      active.speakerKey = node.speaker.startsWith('npc.') ? node.speaker : `npc.${node.speaker}`;
+    const nodeSpeaker = node.speakerKey || node.speaker;
+    if (nodeSpeaker) {
+      active.speakerKey = resolveSpeakerKey(nodeSpeaker);
     }
     if (node.look) {
       active.look = node.look;
     }
 
     // Execute node entry actions BEFORE evaluating choices so flags set by the node are available to choice `requires`
-    if (Array.isArray(node.actions)) {
-      executeActions(node.actions);
+    const nodeActions = collectActions(node);
+    if (nodeActions.length > 0) {
+      executeActions(nodeActions);
     }
 
     const rawText = i18n.t(node.textKey || node.text || '');
@@ -624,9 +674,16 @@ export function createDialogue(ctx) {
     const firstNode = def.nodes?.[startNodeId];
     if (!firstNode) return false;
 
-    const rawSpeaker = opts.speaker || firstNode.speaker || 'npc.oldLama';
-    const speakerKey = rawSpeaker.startsWith('npc.') ? rawSpeaker : `npc.${rawSpeaker}`;
-    const look = opts.look || firstNode.look || 'lama';
+    const rawSpeaker =
+      opts.speakerKey ||
+      opts.speaker ||
+      firstNode.speakerKey ||
+      firstNode.speaker ||
+      def.speakerKey ||
+      def.speaker ||
+      'npc.oldLama';
+    const speakerKey = resolveSpeakerKey(rawSpeaker);
+    const look = opts.look || firstNode.look || def.look || 'lama';
 
     active = {
       id: dialogueId,
@@ -700,8 +757,9 @@ export function createDialogue(ctx) {
     const choice = active.visibleChoices[index];
     if (!choice) return false;
 
-    if (Array.isArray(choice.actions)) {
-      executeActions(choice.actions);
+    const choiceActions = collectActions(choice);
+    if (choiceActions.length > 0) {
+      executeActions(choiceActions);
     }
 
     if (choice.next) {
@@ -860,8 +918,14 @@ export function createDialogue(ctx) {
         id: active?.id || null,
         nodeId: active?.nodeId || null,
         npcId: active?.npcId || null,
+        speakerKey: active?.speakerKey || null,
+        speaker: active?.speakerKey ? i18n.t(active.speakerKey) : null,
         typing: Boolean(active?.typing),
-        choices: active?.visibleChoices?.map((c, i) => ({ index: i + 1, textKey: c.textKey, text: i18n.t(c.textKey) })) || [],
+        choices:
+          active?.visibleChoices?.map((c, i) => {
+            const key = c.textKey || c.labelKey || '';
+            return { index: i + 1, textKey: key, text: i18n.t(key) };
+          }) || [],
         executedActions: [...executedActionsLog],
       };
     },
