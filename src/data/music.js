@@ -109,6 +109,11 @@ const TSOGYAL_B = phrase('A5:2 F#5:1 E5:1 C#5:2 B4:1 C#5:1 E5:3 C#5:0.5 B4:0.5 A
 // Terma Realm — subterranean crystal cavern motif (in F# minor / Dorian: F# G# A B C# D# E)
 const TERMA_A = phrase('C#5:2 D#5:1 C#5:1 A4:2 G#4:1 F#4:1 A4:1.5 B4:0.5 C#5:2 A4:1 G#4:1 F#4:2');
 const TERMA_B = phrase('F#5:2 E5:1 C#5:1 B4:2 A4:1 G#4:1 F#4:4 -:4');
+// 《鏡中之人》三線敘事主題動機 (Lin Che × Hsu Ying-Chen × Digital Proxy)
+const MIRROR_YINGZHEN = phrase('F#4:2 A4:1 B4:1 D5:2 C#5:1 B4:1 A4:2 F#4:1 E4:1 F#4:4');
+const MIRROR_MEMORY_A = phrase('B4:2 D5:1 E5:1 G5:2 F#5:1 D5:1 E5:2 D5:1 B4:1 A4:4');
+const MIRROR_MEMORY_B = phrase('G5:2 F#5:1 E5:1 D5:2 B4:1 A4:1 B4:2 D5:1 B4:1 G4:4');
+const MIRROR_FINALE_A = phrase('F#4:1.5 A4:0.5 B4:1 D5:1 A4:2 F#4:1 E4:1 F#4:1.5 A4:0.5 B4:1 A4:1 F#4:2 D4:2');
 
 // ---------------------------------------------------------------- shared figures
 function tanpuraCycle(a, root = 62, vel = 0.42) {
@@ -544,6 +549,141 @@ export const MUSIC_TRACKS = {
         a.line(MOTIFS.vajraGuru, 13, 'mantraVoice', 0.72, { voice: 'umdze', syllables: VAJRA_GURU_SYLLABLES });
         a.line(MOTIFS.vajraGuru, 13, 'gyaling', 0.42, { legato: true });
       }
+    },
+  },
+
+  // ============================================================ 《鏡中之人》 STORY MODE SUITE
+  // 1) Digital Proxy & Unsent Words (Prologue / Phone Threads / Night Map)
+  'story.mirror': {
+    title: { zh: '鏡中之人・未知來訊與數位代理', en: 'The Person in the Mirror · Digital Proxy' },
+    desc: 'B 小調／D 大調五聲（54 BPM）：溫潤的撫琴撥弦彈奏許映真記憶主題，高頻冰晶泛音如螢幕微光與 AI 訊號脈動，低音林布竹笛在靜夜裡回應林澈的思念。',
+    root: 62,
+    beatsPerBar: 4,
+    loopBars: 16,
+    bpm: (v) => (v.night ? 52 : 56),
+    pads: [
+      { notes: [n('B2'), n('F#3'), n('D4')], cutoff: 540, gain: 0.028, lfoRate: 0.05, lfoDepth: 0.32, sub: 0.24 },
+      { notes: [n('F#5')], type: 'sine', detune: 5, cutoff: 3200, gain: 0.006, lfoDepth: 0.18 },
+    ],
+    bar(a) {
+      const B = a.bar;
+      const chords = [
+        [n('B2'), n('F#3'), n('B3'), n('D4')],
+        [n('G2'), n('D3'), n('G3'), n('B3')],
+        [n('D3'), n('A3'), n('D4'), n('F#4')],
+        [n('A2'), n('E3'), n('A3'), n('C#4')],
+      ];
+      dranyenLilt(a, chords[Math.floor(B / 2) % 4], 0.26);
+      if (B % 4 === 0) a.bowl(0, n('F#3'), 0.36);
+      // Crystalline AI signal pulse on off-beats
+      if (B % 2 === 0) a.chime(1.5, a.pick([n('F#6'), n('A6'), n('C#7'), n('D7')]), 0.22);
+      if (B % 4 === 3) a.chime(3.5, n('A6'), 0.2);
+      // Bars 2–5: Yingzhen's motif on warm plucked strings
+      if (B >= 2 && B <= 5) a.line(MIRROR_YINGZHEN, 2, 'pluck', 0.44);
+      // Bars 6–9: Bamboo flute answers an octave higher with soft breath
+      if (B >= 6 && B <= 9) a.line(MIRROR_YINGZHEN, 6, 'flute', 0.56, { tr: 12, legato: true, glideTime: 0.07, breath: 1.3 });
+      // Bars 10–12: Vow motif left suspended like an unfinished promise
+      if (B >= 10 && B <= 12) a.line(MOTIFS.vow, 10, 'flute', 0.5, { tr: 12, legato: true });
+      if (B === 14) a.tingsha(2, n('F#6'), 0.22);
+    },
+  },
+
+  // 2) The World She Once Saw (Photography / Restoration / Diaries / Dorm Video)
+  'story.memory': {
+    title: { zh: '鏡中之人・她曾看見的世界', en: 'The Person in the Mirror · The World She Once Saw' },
+    desc: 'G 大調五聲抒情曲（58 BPM）：溫柔的札木聶琴分解和弦、雨滴與頌缽泛音，竹笛吹奏映真與林澈的回憶主題，尾段由遠方空行女聲輕吟心咒回應。',
+    root: 67,
+    beatsPerBar: 4,
+    loopBars: 16,
+    bpm: 58,
+    pads: [{ notes: [n('G2'), n('D3'), n('B3')], cutoff: 660, gain: 0.028, lfoRate: 0.05, sub: 0.24 }],
+    bar(a) {
+      const B = a.bar;
+      const chords = [
+        [n('G2'), n('D3'), n('G3'), n('B3')],
+        [n('E2'), n('B2'), n('E3'), n('G3')],
+        [n('C3'), n('G3'), n('C4'), n('E4')],
+        [n('D3'), n('A3'), n('D4'), n('F#4')],
+      ];
+      dranyenLilt(a, chords[Math.floor(B / 2) % 4], 0.28);
+      if (B % 8 === 0) a.bowl(0, n('G3'), 0.4);
+      if (a.chance(0.45)) a.rainDrop(a.rand(0, 4), 0.24);
+      if (B >= 2 && B <= 5) a.line(MIRROR_MEMORY_A, 2, 'flute', 0.62, { legato: true, glideTime: 0.07, breath: 1.2 });
+      if (B >= 6 && B <= 9) a.line(MIRROR_MEMORY_B, 6, 'flute', 0.6, { legato: true, glideTime: 0.07, breath: 1.2 });
+      if (B >= 10 && B <= 12) {
+        a.line(MOTIFS.vajraGuru, 10, 'mantraVoice', 0.56, {
+          tr: 5,
+          voice: 'dakini',
+          syllables: VAJRA_GURU_SYLLABLES,
+        });
+      }
+      if (B >= 13 && B <= 15) a.line(MIRROR_YINGZHEN, 13, 'pluck', 0.38, { tr: 5 });
+      if (B === 15) a.tingsha(2, n('D7'), 0.24);
+    },
+  },
+
+  // 3) Starlight Dakini Script in Chimphu Cave (Cave / Light / Terma Question)
+  'story.terma': {
+    title: { zh: '鏡中之人・青朴星光空行字', en: 'The Person in the Mirror · Starlight Dakini Script' },
+    desc: 'A 大調／升 F 小調五聲（52 BPM）：石窟甘露水滴、星光般閃爍的冰晶風鈴與五口頌缽，空行女聲與竹笛在無訊號的洞窟中交織出超越文字的共鳴。',
+    root: 57,
+    beatsPerBar: 4,
+    loopBars: 16,
+    bpm: 52,
+    pads: [
+      { notes: [n('A2'), n('E3'), n('C#4')], cutoff: 620, gain: 0.03, lfoRate: 0.04, lfoDepth: 0.32, sub: 0.26 },
+      { notes: [n('E6')], type: 'sine', detune: 4, cutoff: 3600, gain: 0.007, lfoDepth: 0.16 },
+    ],
+    bar(a) {
+      const B = a.bar;
+      tanpuraCycle(a, 57, 0.26);
+      scatterChimes(a, [n('A6'), n('B6'), n('C#7'), n('E7'), n('F#7')], 2, 0.32);
+      if (a.chance(0.65)) a.rainDrop(a.rand(0, 4), 0.3);
+      if (B % 4 === 0) a.bowl(0, n('A3'), 0.44);
+      if (B % 8 === 4) a.tingsha(0, n('E7'), 0.26);
+      if (B >= 2 && B <= 5) a.line(TSOGYAL_A, 2, 'flute', 0.62, { legato: true, glideTime: 0.08, breath: 1.3 });
+      if (B >= 6 && B <= 9) {
+        a.line(VG_DAKINI_A, 6, 'mantraVoice', 0.68, { voice: 'dakini', syllables: VAJRA_GURU_SYLLABLES });
+      }
+      if (B >= 10 && B <= 13) a.line(TSOGYAL_B, 10, 'flute', 0.6, { legato: true, glideTime: 0.08, breath: 1.2 });
+      if (B === 14 || B === 15) a.chant(0, n('A2'), 6, 0.32, 'om');
+    },
+  },
+
+  // 4) To You in the Future & A Single Lamp (Finale Letter / Kora / Lamp / Tea Shop)
+  'story.finale': {
+    title: { zh: '鏡中之人・寫給未來的你／一盞燈', en: 'The Person in the Mirror · To You in the Future & A Single Lamp' },
+    desc: 'D 大調（60 BPM）：讀信時為親密純淨的撥弦與輕柔竹笛；當回到博達哈交還石板、繞塔並點亮酥油燈時，綻放為溫暖澄明的晨光合奏。',
+    root: 62,
+    beatsPerBar: 4,
+    loopBars: 16,
+    bpm: (v) => (v.intimate ? 56 : 64),
+    pads: [{ notes: [n('D2'), n('A2'), n('F#3')], cutoff: 720, gain: 0.03, lfoRate: 0.05, sub: 0.26 }],
+    bar(a, v) {
+      const B = a.bar;
+      const intimate = Boolean(v.intimate);
+      tanpuraCycle(a, 62, intimate ? 0.24 : 0.34);
+      dranyenLilt(
+        a,
+        B % 2 === 0 ? [n('D3'), n('A3'), n('D4'), n('F#4')] : [n('G3'), n('D4'), n('G4'), n('B4')],
+        intimate ? 0.24 : 0.32
+      );
+      if (B % 8 === 0) a.bowl(0, n('D4'), intimate ? 0.34 : 0.48);
+      if (B >= 2 && B <= 5) {
+        a.line(MIRROR_FINALE_A, 2, 'pluck', 0.42);
+        if (!intimate) a.line(MIRROR_FINALE_A, 2, 'flute', 0.62, { tr: 12, legato: true, glideTime: 0.06 });
+      }
+      if (B >= 6 && B <= 9) {
+        a.line(MIRROR_YINGZHEN, 6, 'flute', intimate ? 0.52 : 0.66, { tr: 12, legato: true, glideTime: 0.06 });
+      }
+      if (!intimate && B >= 10 && B <= 12) {
+        a.line(MOTIFS.vajraGuru, 10, 'mantraVoice', 0.64, { voice: 'dakini', syllables: VAJRA_GURU_SYLLABLES });
+        a.line(MOTIFS.vajraGuru, 10, 'mantraVoice', 0.56, { voice: 'choir', syllables: VAJRA_GURU_SYLLABLES });
+      }
+      if (B >= 13 && B <= 15) {
+        a.line(STUPA_ANSWER, 13, 'flute', intimate ? 0.48 : 0.64, { tr: 12, legato: true, glideTime: 0.06 });
+      }
+      if (B === 15) a.tingsha(2, n('A6'), 0.28);
     },
   },
 

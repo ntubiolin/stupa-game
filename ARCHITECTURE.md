@@ -316,6 +316,247 @@ Because maps, enemies, bosses, quests, dialogues, codex entries, and i18n dictio
    - Call `i18n.register({ 'zh-Hant': { ... }, en: { ... } })`.
    - Run `npm run check:i18n`, `npm run check:links`, `node scripts/balance-report.mjs`, and `npm run build`.
 
+## Mirror narrative demo (Epic #68)
+
+The launcher `src/main.js` selects exactly one dynamic entry: `src/adventure.js`
+(the previous bootstrap, unchanged) or `src/story/runtime.js`. Use `?mode=story`
+for the demo and `?mode=adventure` for the original game. Mode changes navigate
+and rebuild the document; they do not reuse listeners or serializers.
+Narrative does not construct `createZones`, quests, combat, inventory, community,
+coop, adventure player, HUD, or input. Its lightweight world adapter reuses
+stupa/sky/environment and lazy Pharping geometry without adventure persistence.
+
+Public narrative APIs and ordered beat/event schemas are specified in
+[docs/story/contracts.md](docs/story/contracts.md). Module ownership:
+
+| Module | Runtime API | Purpose |
+|---|---|---|
+| `story/storyDirector.js` | `ctx.story` | Validated nine-beat state machine, evidence, fixed signals, replay guards |
+| `story/narrativeCamera.js` | `ctx.storyCamera` | Eye-pose camera, keyboard/mouse/touch movement with collisions |
+| `story/cinematicArt.js` | `ctx.storyArt` | Reversible material/light grade, three light presets, two quality settings |
+| `ui/story/phone.js` | `ctx.phone` | Novel-based fixed messages, diaries, evidence, train transcript |
+| `ui/story/documentary.js` | `ctx.documentary` | Lazy full-frame still/video cues, captions, next/finish, pause/seek/replay/skip/cancel and fallback |
+| `story/memorySystem.js` | `ctx.memory` | Pose threshold evaluation, accessible camera assistance and explicit capture |
+| `story/storyAudio.js` | `ctx.storyAudio` | 432 Hz adaptive procedural music & soundscape controller across Demo beats and Chapter checkpoints (#135) |
+| `story/runtime.js` | bootstrap owner only | World exploration, Losang, map, three spring interactions, return, focus/overlay integration |
+
+Only `ctx.save.set('story', ...)` persists narrative state in `stupa.save.v2`.
+`story.version=1` contains beat, evidence, choices, flags, clipsSeen,
+elapsedSeconds. Director sanitizes fields and reconstructs necessary evidence.
+`ctx.story.recordPrologueReply(replyId)` validates/persists one sequential reply
+in `choices["prologue.<turnId>"]`; `acknowledgePrologueRecording()` persists
+`flags["prologue.recordingRead"]` only after all replies. These guarded APIs return
+booleans, work only in the started prologue, and do not emit progression/evidence.
+Phone resumes partial conversations and shows later read-only history; replay
+uses separate transient state. Missing choices in older post-prologue saves are
+shown as a labeled original-script reconstruction, without inventing saved choices.
+Future story schemas remain untouched until explicit reset. Reset sets only the
+story section and reloads scene state. Existing v1 migration remains in the shared
+save service. Story mode never registers adventure serializers. Language uses
+existing i18n settings; narrative does not bind i18n to the adventure save service.
+
+Narrative uses original procedural maps plus local image/audio/document assets
+under `public/story`, allowing attributed, authorized or generated still images.
+Provenance and budgets live in `public/story/manifest.json`; no asset represents
+itself as a historical photograph. The fixed photograph reference is a pose
+exercise, not computer-vision evidence of historical identity. No real LLM or
+synthetic impersonation of the deceased is used. New PointLights: zero.
+
+Runtime frame order is camera → sky/world → cinematic grade → story/UI/save →
+render. UI ownership is derived from actual modal visibility every frame. Scene
+loading has retry and an epoch guard; delayed loads cannot replace a later beat.
+Optional world navigation assistance is a visible player control. Photo assist
+sets a real pose and still requires capture. Core story progress has no timed lock.
+
+Validation: `npm test`, `npm run build`, `npm run check:i18n`, and
+`npm run test:browser`. Browser evidence and hardware limitations are reported in
+`docs/story/validation.md`. Source-boundary and merge decisions are in the ADR;
+all #68 work stops at PRs for human acceptance, never automatic master merge.
+
+Narrative calls `createSave(ctx, {writableSections:['story']})`. This optional
+scope rejects unrelated set() writes and merges current storage's non-story
+sections at flush time, preserving progression made by a simultaneously open
+adventure tab. Default adventure behavior is unchanged. Scoped reset removes
+only permitted sections. This is a defensive write boundary, not a distributed
+transaction/locking protocol between multiple story sessions.
+
+Narrative playtest refinements: camera speed is 4 m/s (Shift 6 m/s), with collision
+substeps and its own 100 ms delta limit. Low quality disables the phone/card
+backdrop blur as well as shadows; runtime mirrors quality to a body class without
+changing adventure styles. Documentary manual Next/Finish uses the same guarded
+completion path as automatic playback and remains available while paused.
+
+## Narrative Losang character (#90)
+
+`src/story/characters/losang.js` exports `createLosang(THREE)` returning
+`{group, update(dt), dispose()}`. Origin is at the feet, front is +Z; the factory
+creates no lights, DOM, event subscriptions or saves. It owns deduplicated
+geometry/material sets and disposes them once. Narrative runtime owns placement,
+a 0.35 m collision circle, visibility, update (disabled for reduced motion), and
+non-bfcache pagehide disposal. The accessible guide faces the character from
+3 m away. Adventure NPC builders and saves are unchanged.
+
+This is an original procedural character study, not an approved final portrait.
+Novel chapter 2 identifies Losang as an elderly lama; source-corrected reference
+request #84 still owns final face/costume acceptance. No generated text/sacred
+symbols or external assets are embedded in the folded map prop.
+## Planned chapter expansion (ADR-002, not implemented)
+
+User confirmed independent ARPG and exploration-first narrative on 2026-11-06.
+See [chapter roadmap](docs/story/chapter-roadmap.md) (#89, #91–#98) for proposed
+chapter/store/map adapter contracts and dependency gates. Existing Demo APIs and
+save schema remain unchanged by this documentation PR; next chapters require
+their own tested implementation PRs. Never import adventure gameplay serializers
+into narrative or treat shared world factories as side-effect-free.
+
+## Narrative chapters and mode switching (#91–#98)
+
+The chapter preview retains the independent Adventure runtime. `createChapterDirector(ctx)`
+assigns `ctx.chapters` after `ctx.story`; `getState`, `canStart`, asynchronous `start`/`resume`,
+checkpoint-checked `signal`, `exit`, and `dispose` control only narrative state. The original
+nine Demo beats remain intact. At the terminal Demo beat the player explicitly opens the
+journey journal; no automatic chapter jump or Adventure progression requirement is added.
+
+The root save format remains `stupa.save.v2`, version 2. The story section migrates version 1
+to version 2 with `journey: {activeChapterId, chapters}`. Records hold a canonical checkpoint,
+completion, bounded choices and flags. The ordered registry in `data/story/chapters.js`
+rejects invalid completion and missing prerequisite records. `story.getJourney()` returns a
+snapshot and `story.commitJourney()` uses `save.commitSection()`; there is no second story
+serializer. `save.flush()` returns success, `getStatus()` exposes errors, and failed writes
+keep dirty updates while atomic chapter commits keep the prior checkpoint. Both modes merge
+latest untouched sections, and unchanged Adventure serializers do not overwrite newer data.
+Stale story snapshots are rejected. This protects sequential interleaved writes; it is not
+an atomic cross-tab compare-and-swap or a distributed save synchronization service. Unknown
+newer root/story versions remain read-only.
+
+Runtime owns `ctx.prepareChapter(id, checkpoint)` and stages an explicitly allowlisted lazy
+scene before any durable chapter start. `story:chapter-change` carries
+`{chapterId, checkpointId, replaying}` after successful commit; `story:chapter-exit` carries
+`{chapterId}`. A session token rejects stale preparation. Revisit state is transient, only
+available after exiting a completed chapter, and never overwrites original progress.
+
+Each `story/world/*Scene.js` exports an async `create<Name>Scene(ctx)` with a detached `group`,
+`getHeight`, `getTarget(checkpointId)`, `restore(checkpointId, {animate, reducedMotion})`,
+`update(dt)`, `getSnapshot`, and `dispose`. Targets include a safe approach and `lookAt`.
+The scene never writes saves or advances the story. Owned colliders/listeners/GPU resources
+are removed on disposal. Existing native maps are used with private buses/state and minimal
+opt-in presentation guards; their default Adventure behavior is unchanged. Cinematic grading
+covers the active chapter; `storyArt.releaseRoot(group)` drops owned material references
+before disposal. The short Demo vision also uses the interactive Pharping scene.
+
+`createChapterJournal(ctx)` derives sacred-site unlocks from begun chapter records and looks
+up existing `CODEX_BY_ID` records, bilingual bodies and source links. It does not write the
+Adventure codex or copy/replace historical text. Fictional chapter prose is labeled separately.
+The journal supports explicit start/resume/exit/revisit and durable chapter diaries.
+
+`createModeSwitch(ctx, mode, mount?)` adds a native modal dialog in both runtimes. It flushes
+before a normal page navigation, preserving runtime isolation, and blocks switching on
+storage failure. Story navigation owns all its modal state; keyboard/touch controls remain
+available and the active mode is visibly disabled in the menu.
+
+A completed active chapter permits atomic handoff to the next chapter from the journal,
+without an intermediate exit/save. Replay still requires an explicit exit. Finale decision
+checkpoints validate allowlisted `payload.choice`, stored only after successful commit;
+`chapters.getChoices(id)` exposes a copy. Replay choices are transient. Reader pages are
+canonical checkpoints and remain available in the journal after completion. Missing required
+choices invalidate a corrupt advanced record instead of inventing an ending.
+
+### Story preview tools (#109)
+
+The settings panel opens `createStoryDebugPanel(ctx)`, which uses the existing
+`ctx.debug.unlock(password)` session gate. Its chapter and checkpoint selectors
+call `ctx.requestChapterPreview(id, checkpointId, { choice })`, the runtime
+wrapper around `ctx.chapters.preview(...)`. The director requires the password
+unlock, stages the requested scene, and rejects stale or unsuccessful prepares.
+It publishes `story:chapter-change` with `testing: true` and reports
+`getState().testing` only for an active preview. Jumping past the finale decision
+requires an explicit test choice. Signals and choices advance only the preview
+record. They do not unlock durable progress or write the story section.
+
+Exiting a preview publishes `story:chapter-exit` with `testing: true` and the
+runtime restores the canonical active chapter or Demo beat. Runtime pauses
+canonical elapsed time while the test panel or preview is active and disables
+the underlying Demo phone, replay and reset actions during a preview. A failed
+preview leaves the currently displayed scene and checkpoint intact. The separately labeled original Demo jump is
+available only for an unfinished Demo without chapter progress. It requires
+confirmation and uses the existing persistent `story.skipTo` debug API.
+
+Run the GUI regression against a production preview with
+`BROWSER_CHANNEL=chrome node scripts/story-debug-browser-test.mjs`. It covers
+password rejection, desktop and touch previews, branch selection, load failure,
+and save preservation through exit and reload.
+
+### Optional motion cues (#84/#85)
+
+A documentary cue accepts `video: {src, poster}` alongside its existing image and
+caption/source keys. `createCueVideo` owns only the current muted inline media and
+releases it on cue change/close. The documentary owns progression; media ending
+does not itself complete a cue. Errors or a bounded 2.5-second unrecovered buffer
+wait fall back to the high-quality still, then poster, then readable captions.
+Initial decoder startup has an 8-second deadline while the still is already visible.
+Brief pauses/buffering do not discard a usable clip. Reduced-motion and Data Saver
+start with stills and expose an explicit Play motion button. Captions and provenance
+remain outside an uncropped frame. V1–V3 augment restoration, D stays static; V4 is
+an optional settings viewer after reaching the vision, with no story signal or
+chapter advancement. No media is used as documentary historical evidence.
+
+### Narrative adaptive score & soundscape (#135)
+
+`src/story/storyAudio.js` exports `createStoryAudio(ctx)` (`ctx.storyAudio`) and pure
+resolvers `resolveBeatAudio(beat)` and `resolveChapterAudio(chapterId, checkpointId)`.
+It connects Chapter Mode to `createMusicEngine` (`src/systems/music.js`) and adds four
+narrative tracks in `src/data/music.js` (`story.mirror`, `story.memory`, `story.terma`,
+`story.finale`) alongside existing Himalayan chapter tracks (`stupa`, `pharping.drought`,
+`pharping.rain`, `mangyul.storm`, `mangyul.calm`, `yarlung.unrest`, `yarlung.calm`,
+`samye.day`, `samye.night`, `samye.complete`, `chimphu`, `credits`). It transitions
+tracks, stingers, resonant pink-noise wind and procedural SFX (`bowl`, `phoneChime`,
+`pageTurn`, `stone`, `water`, `windhorse`, `starlight`, `lamp`) on `story:chapter-change`,
+`story:chapter-exit`, `story:phone-open`, and `story:clip-play`/`story:clip-end` without
+external audio files or save writes.
+
+### Three-thread narrative and offline handover (#127–#134)
+
+`data/story/phoneThreads.js` owns fixed authored exchanges for the hotel, Pharping,
+Mangyul, Yarlung, Samye and Chimphu, alongside the existing prologue conversation.
+The finale uses the phone's local handover screen. No external dialogue service is
+involved. `story.recordPhoneReply(threadId, replyId)` accepts only the next unlocked
+turn. `story.acknowledgePhoneThread(threadId)` acknowledges a completed thread.
+Both use `save.commitSection('story', snapshot)` before publishing
+`story:phone-change {threadId}`. Failed writes retain the previous reply/read state.
+
+Story save version remains 2. Replies use `choices['phone.<threadId>.<turnId>']`,
+and read receipts use `flags['phone.read.<threadId>']`. Old v1/v2 fields and chapter
+checkpoint IDs are retained. Orphaned phone turns are removed on resume. The new
+Mangyul record marks `flags.windAnswerRequired`; its fourth wind question requires
+an explicit `yes` choice. Older advanced v2 records without that marker retain
+progress and do not receive an invented answer.
+
+Chapter checkpoints can declare `phoneThreadId`. The chapter director requires
+its saved read receipt before committing the normal transition. Replay and preview
+keep their phone exchanges transient. The phone binds a completion callback to its
+requested thread, so finishing an archived conversation cannot complete another
+checkpoint. Runtime derives unread counts from canonical progress and emits
+`story:phone-open {tab:'messages', threadId, notification:true}` once per newly
+available thread in a session. The existing #135 controller supplies its chime.
+Signal labels resolve from chapter/thread state, including delayed, weak, sending,
+offline and completed states.
+
+`phone.open('messages', {threadId, onComplete, transient})` presents a chapter
+exchange. `{handover:true, scanned, onComplete}` opens the finale QR screen.
+The static QR encodes `stupa:task-handover` and is generated locally with qrcode
+8.2 (MIT). Its in-game scan opens bundled UI. Both allowlisted choices persist
+through `chapters.signal`, then immediately show their account response. The
+completed proxy does not accept more replies or publish unread notifications.
+The notebook becomes written only after the finale diary is explicitly completed.
+
+The Yarlung `dorm-memory` cue provides a 17-second subtitle recollection through
+`createDocumentary`, including pause, next, skip, replay and cancel. Original
+footage is unavailable. Text fallback and source labels remain readable offline.
+`provenanceKey` and `fallbackKey` optionally customize these labels. Cancel keeps
+the current memory checkpoint. All new chapter props use emissive meshes with
+zero new PointLights. The existing #135 score implementation and score data are
+preserved.
+
 ## Adventure difficulty and settings (#120)
 
 - `src/data/combatSettings.js`: shared `MIGOI_ARENA_RADIUS` (20 m) for the snow king barrier/player clamp, wilderness flattening and boulder exclusion. Difficulty presets resolve unknown/missing values to `normal`.

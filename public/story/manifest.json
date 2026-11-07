@@ -1,0 +1,201 @@
+{
+  "version": 1,
+  "scope": "Epic #68, Stories 1–6 demo only",
+  "policy": "Illustrative reconstructions are never presented as archival photographs. No synthesized deceased voice or generated Tibetan text. Core dialogue follows the supplied novel; English is an adaptation.",
+  "assets": [
+    {
+      "path": "restoration-memory.jpg",
+      "purpose": "Restoration documentary still and unlocked phone photograph, with illustrative provenance shown in UI",
+      "source": "OpenAI built-in image_gen, generated for this project on 2026-11-06",
+      "method": "AI-generated illustration, PNG converted to quality-78 JPEG using sips",
+      "rights": "Generated for the project; no third-party archival photograph is incorporated. Cultural and historical fidelity requires human review.",
+      "classification": "fictional illustrative reconstruction with historical background",
+      "notArchival": true,
+      "prompt": "docs/story/image-prompt.txt",
+      "lazy": true
+    },
+    {
+      "path": "src/story/runtime.js#mapDrawing",
+      "purpose": "Six-stop old-map diagram",
+      "source": "Original code-authored SVG route diagram",
+      "method": "SVG geometry and localized labels, not geographically accurate",
+      "rights": "Project-authored",
+      "classification": "fictional document"
+    },
+    {
+      "path": "src/ui/story/documentary.css#slate",
+      "purpose": "Uninscribed stone silhouette",
+      "source": "Original CSS geometry",
+      "method": "Abstract material diagram, no purported ancient writing",
+      "rights": "Project-authored",
+      "classification": "fictional document"
+    },
+    {
+      "path": "src/ui/story/phone.js#createTrainSource",
+      "purpose": "Optional train ambience accompanying text transcript",
+      "source": "Original Web Audio sound design",
+      "method": "Noise and wheel rhythm; contains no speech",
+      "rights": "Project-authored",
+      "classification": "fictional reconstruction"
+    },
+    {
+      "path": "restoration/A.webp",
+      "purpose": "Approved restoration documentary still A (#84)",
+      "source": "Google Flow Nano Banana 2.1, project-generated export, 2026-11-06",
+      "method": "Approved WebP game export; displayed without cropping; 2752 × 1536 export does not imply native generation resolution",
+      "classification": "AI illustrative reconstruction, not an archival photograph",
+      "notArchival": true,
+      "bytes": 395820,
+      "sha256": "95dd04df5f564f9ea43692810fa648d7362c9f522984b0a8d195578f6b90b206",
+      "lazy": true,
+      "review": "docs/story/stills-qc-84.md"
+    },
+    {
+      "path": "restoration/B.webp",
+      "purpose": "Approved restoration documentary still B (#84)",
+      "source": "Google Flow Nano Banana 2.1, project-generated export, 2026-11-06",
+      "method": "Approved WebP game export; displayed without cropping; 2752 × 1536 export does not imply native generation resolution",
+      "classification": "AI illustrative reconstruction, not an archival photograph",
+      "notArchival": true,
+      "bytes": 219380,
+      "sha256": "d88d713ec3c9d2eb6937e0f8bc8676e392f0e4b56b5a68a9a9bf069b0091dce2",
+      "lazy": true,
+      "review": "docs/story/stills-qc-84.md"
+    },
+    {
+      "path": "restoration/C.webp",
+      "purpose": "Approved restoration documentary still C (#84)",
+      "source": "Google Flow Nano Banana 2.1, project-generated export, 2026-11-06",
+      "method": "Approved WebP game export; displayed without cropping; 2752 × 1536 export does not imply native generation resolution",
+      "classification": "AI illustrative reconstruction, not an archival photograph",
+      "notArchival": true,
+      "bytes": 176948,
+      "sha256": "93a42bdbdf4be1a1830ab47e7afab21973b6acab82d283a032b2d276e5c08fec",
+      "lazy": true,
+      "review": "docs/story/stills-qc-84.md"
+    },
+    {
+      "path": "restoration/D.webp",
+      "purpose": "Approved restoration documentary still D (#84)",
+      "source": "Google Flow Nano Banana 2.1, project-generated export, 2026-11-06",
+      "method": "Approved WebP game export; displayed without cropping; 2752 × 1536 export does not imply native generation resolution",
+      "classification": "AI illustrative reconstruction, not an archival photograph",
+      "notArchival": true,
+      "bytes": 376630,
+      "sha256": "47f556ecd98bfb68e8ca7a44d35fba6fee664f188a96e0ebba4a0d531c0d5489",
+      "lazy": true,
+      "review": "docs/story/stills-qc-84.md"
+    },
+    {
+      "path": "video/V1.mp4",
+      "purpose": "Optional motion cue V1",
+      "source": "Google Flow Omni 1.1 Flash, project-approved 360p export (#85), 2026-11-06",
+      "classification": "AI illustrative reconstruction, not archival footage",
+      "notArchival": true,
+      "lazy": true,
+      "bytes": 635995,
+      "sha256": "46817799c1dc3d81982f71d77f760545331860ae60bf8697e523b4dd010242da",
+      "review": "docs/story/video-qc-85.md"
+    },
+    {
+      "path": "video/V1.jpg",
+      "purpose": "Static fallback V1",
+      "source": "Google Flow Omni 1.1 Flash, project-approved 360p export (#85), 2026-11-06",
+      "classification": "AI illustrative reconstruction, not archival footage",
+      "notArchival": true,
+      "lazy": true,
+      "bytes": 31317,
+      "sha256": "b5167c8ef5d84abac9dc4ac4ce1ae55c28132122ac774d522bd6d33ee7f7837c",
+      "review": "docs/story/video-qc-85.md"
+    },
+    {
+      "path": "video/V2.mp4",
+      "purpose": "Optional motion cue V2",
+      "source": "Google Flow Omni 1.1 Flash, project-approved 360p export (#85), 2026-11-06",
+      "classification": "AI illustrative reconstruction, not archival footage",
+      "notArchival": true,
+      "lazy": true,
+      "bytes": 360021,
+      "sha256": "c806fe108a8cf3680d5ea0bf70fce8c79bd45cffad5ddff13f5af0cf324048ae",
+      "review": "docs/story/video-qc-85.md"
+    },
+    {
+      "path": "video/V2.jpg",
+      "purpose": "Static fallback V2",
+      "source": "Google Flow Omni 1.1 Flash, project-approved 360p export (#85), 2026-11-06",
+      "classification": "AI illustrative reconstruction, not archival footage",
+      "notArchival": true,
+      "lazy": true,
+      "bytes": 23397,
+      "sha256": "2f7fe3e38c28bda85a994ce7407c029bdb601f1952dd7f19152a1d0617f8f8d5",
+      "review": "docs/story/video-qc-85.md"
+    },
+    {
+      "path": "video/V3.mp4",
+      "purpose": "Optional motion cue V3",
+      "source": "Google Flow Omni 1.1 Flash, project-approved 360p export (#85), 2026-11-06",
+      "classification": "AI illustrative reconstruction, not archival footage",
+      "notArchival": true,
+      "lazy": true,
+      "bytes": 330837,
+      "sha256": "5edd1099c4aabbece950d41e2902ac4142c69e8c9720896b779c8525ceb07e20",
+      "review": "docs/story/video-qc-85.md"
+    },
+    {
+      "path": "video/V3.jpg",
+      "purpose": "Static fallback V3",
+      "source": "Google Flow Omni 1.1 Flash, project-approved 360p export (#85), 2026-11-06",
+      "classification": "AI illustrative reconstruction, not archival footage",
+      "notArchival": true,
+      "lazy": true,
+      "bytes": 28968,
+      "sha256": "951e255a06e05aa10ae650b7acb78f3987229afff9834b5eea050f15a489a18f",
+      "review": "docs/story/video-qc-85.md"
+    },
+    {
+      "path": "video/V4.mp4",
+      "purpose": "Optional motion cue V4",
+      "source": "Google Flow Omni 1.1 Flash, project-approved 360p export (#85), 2026-11-06",
+      "classification": "AI illustrative reconstruction, not archival footage",
+      "notArchival": true,
+      "lazy": true,
+      "bytes": 877529,
+      "sha256": "a37b64154dadfd3ec3f46fa80bf431ba0d466c890e997be32a5a8efb6e9acc58",
+      "review": "docs/story/video-qc-85.md"
+    },
+    {
+      "path": "video/V4.jpg",
+      "purpose": "Static fallback V4",
+      "source": "Google Flow Omni 1.1 Flash, project-approved 360p export (#85), 2026-11-06",
+      "classification": "AI illustrative reconstruction, not archival footage",
+      "notArchival": true,
+      "lazy": true,
+      "bytes": 44717,
+      "sha256": "e97fbfb4bed6955c97837e9e98cf3fe1d054cb8dde505fac72552661362bd814",
+      "review": "docs/story/video-qc-85.md"
+    }
+  ],
+  "textSources": [
+    {
+      "url": "https://docs.google.com/document/d/1fUhMiSfSkdkKEUU63s2gojF5Br6rqfdXyeVjsIb3zJw/edit",
+      "title": "鏡中之人 — supplied novel",
+      "readDate": "2026-11-06",
+      "scope": "Prologue, six exploration chapters and finale adaptation"
+    },
+    {
+      "url": "https://docs.google.com/document/d/1j7xtbVYcviIUwD9j2QQT0Lfze_Mq3iRZLdo3K3M0sgA/edit",
+      "title": "Narrative integration and Vertical Slice plan",
+      "readDate": "2026-11-06"
+    }
+  ],
+  "budgets": {
+    "initialBytes": 2097152,
+    "imageBytes": 1048576,
+    "totalMediaBytes": 8388608
+  },
+  "reviewRequired": [
+    "Cultural/religious depiction",
+    "Human pacing and emotional clarity",
+    "English adaptation"
+  ]
+}

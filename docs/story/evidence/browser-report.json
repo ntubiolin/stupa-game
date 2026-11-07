@@ -1,0 +1,229 @@
+{
+  "startedAt": "2026-11-06T12:08:00.033Z",
+  "browser": "157.0.8103.39",
+  "renderProfile": "Native quality/DPR: art and layout acceptance",
+  "scenarios": [
+    {
+      "name": "desktop",
+      "result": "PASS",
+      "mode": "complete user-facing flow, assisted navigation, no debug beat progression",
+      "language": "zh",
+      "gameElapsedSeconds": 3.932999999999995,
+      "automatedWallSeconds": 20.914,
+      "pacingNote": "Fast automated path with assist and skip; not a 15-minute human reading test"
+    },
+    {
+      "name": "mobile",
+      "result": "PASS",
+      "mode": "complete user-facing flow, assisted navigation, no debug beat progression",
+      "language": "en",
+      "gameElapsedSeconds": 4.316499999999993,
+      "automatedWallSeconds": 5.285,
+      "pacingNote": "Fast automated path with assist and skip; not a 15-minute human reading test"
+    },
+    {
+      "name": "resume-prologue",
+      "result": "PASS"
+    },
+    {
+      "name": "resume-arrival",
+      "result": "PASS"
+    },
+    {
+      "name": "resume-photography",
+      "result": "PASS"
+    },
+    {
+      "name": "resume-restoration",
+      "result": "PASS"
+    },
+    {
+      "name": "resume-losang",
+      "result": "PASS"
+    },
+    {
+      "name": "resume-map",
+      "result": "PASS"
+    },
+    {
+      "name": "resume-vision",
+      "result": "PASS"
+    },
+    {
+      "name": "resume-return",
+      "result": "PASS"
+    },
+    {
+      "name": "resume-complete",
+      "result": "PASS"
+    },
+    {
+      "name": "missing-media-fallback",
+      "result": "PASS"
+    },
+    {
+      "name": "adventure-equipment-skills-historical-maps",
+      "result": "PASS",
+      "checks": {
+        "item": true,
+        "equipped": 1,
+        "cast": true,
+        "mapLoaded": true,
+        "mapCount": 9,
+        "coopAvailable": true
+      }
+    },
+    {
+      "name": "adventure-bootstrap",
+      "result": "PASS"
+    }
+  ],
+  "errors": [],
+  "metrics": [
+    {
+      "averageFps": 57.724441743885784,
+      "drawCalls": 85,
+      "triangles": 229400,
+      "pointLights": 0,
+      "zone": "stupa",
+      "beat": "complete",
+      "modal": false,
+      "preset": "legacy",
+      "lighting": "dawn",
+      "quality": "high"
+    },
+    {
+      "averageFps": 60.00461573967224,
+      "drawCalls": 85,
+      "triangles": 229400,
+      "pointLights": 0,
+      "zone": "stupa",
+      "beat": "complete",
+      "modal": false,
+      "preset": "cinematic",
+      "lighting": "dawn",
+      "quality": "high"
+    },
+    {
+      "averageFps": 57.72444174388573,
+      "drawCalls": 50,
+      "triangles": 177348,
+      "pointLights": 0,
+      "zone": "stupa",
+      "beat": "complete",
+      "modal": false,
+      "preset": "legacy",
+      "lighting": "dawn",
+      "quality": "low"
+    },
+    {
+      "averageFps": 57.69674590353107,
+      "drawCalls": 50,
+      "triangles": 177348,
+      "pointLights": 0,
+      "zone": "stupa",
+      "beat": "complete",
+      "modal": false,
+      "preset": "cinematic",
+      "lighting": "dawn",
+      "quality": "low"
+    },
+    {
+      "averageFps": 57.75144378609467,
+      "drawCalls": 85,
+      "triangles": 229400,
+      "pointLights": 0,
+      "zone": "stupa",
+      "beat": "complete",
+      "modal": false,
+      "preset": "legacy",
+      "lighting": "day",
+      "quality": "high"
+    },
+    {
+      "averageFps": 58.48397387209473,
+      "drawCalls": 85,
+      "triangles": 229400,
+      "pointLights": 0,
+      "zone": "stupa",
+      "beat": "complete",
+      "modal": false,
+      "preset": "cinematic",
+      "lighting": "day",
+      "quality": "high"
+    },
+    {
+      "averageFps": 57.724441743885706,
+      "drawCalls": 50,
+      "triangles": 177348,
+      "pointLights": 0,
+      "zone": "stupa",
+      "beat": "complete",
+      "modal": false,
+      "preset": "legacy",
+      "lighting": "day",
+      "quality": "low"
+    },
+    {
+      "averageFps": 57.69230769230767,
+      "drawCalls": 50,
+      "triangles": 177348,
+      "pointLights": 0,
+      "zone": "stupa",
+      "beat": "complete",
+      "modal": false,
+      "preset": "cinematic",
+      "lighting": "day",
+      "quality": "low"
+    },
+    {
+      "averageFps": 58.46603584891143,
+      "drawCalls": 50,
+      "triangles": 177348,
+      "pointLights": 0,
+      "zone": "stupa",
+      "beat": "complete",
+      "modal": false,
+      "preset": "legacy",
+      "lighting": "dusk",
+      "quality": "high"
+    },
+    {
+      "averageFps": 60.006000600060005,
+      "drawCalls": 85,
+      "triangles": 229400,
+      "pointLights": 0,
+      "zone": "stupa",
+      "beat": "complete",
+      "modal": false,
+      "preset": "cinematic",
+      "lighting": "dusk",
+      "quality": "high"
+    },
+    {
+      "averageFps": 59.99848105111256,
+      "drawCalls": 50,
+      "triangles": 177348,
+      "pointLights": 0,
+      "zone": "stupa",
+      "beat": "complete",
+      "modal": false,
+      "preset": "legacy",
+      "lighting": "dusk",
+      "quality": "low"
+    },
+    {
+      "averageFps": 60.0030381285128,
+      "drawCalls": 50,
+      "triangles": 177348,
+      "pointLights": 0,
+      "zone": "stupa",
+      "beat": "complete",
+      "modal": false,
+      "preset": "cinematic",
+      "lighting": "dusk",
+      "quality": "low"
+    }
+  ],
+  "result": "PASS"
+}
