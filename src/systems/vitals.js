@@ -53,7 +53,7 @@ export function createVitals(ctx) {
       exp: 0,
       hp: null,
       mp: null,
-      permanent: { atk: 0, def: 0 },
+      permanent: { atk: 0, def: 0, maxHp: 0, maxMp: 0 },
     };
   }
 
@@ -82,6 +82,8 @@ export function createVitals(ctx) {
       permanent: {
         atk: p.permanent?.atk || 0,
         def: p.permanent?.def || 0,
+        maxHp: p.permanent?.maxHp || 0,
+        maxMp: p.permanent?.maxMp || 0,
       },
     };
     if (ctx.save) {
@@ -125,12 +127,13 @@ export function createVitals(ctx) {
       findBonus: 0,
     };
 
-    p.maxHp = V.baseHp + V.hpPerLevel * (lvl - 1) + (g.maxHp || 0);
-    p.maxMp = V.baseMp + V.mpPerLevel * (lvl - 1) + (g.maxMp || 0);
+    const perm = p.permanent || { atk: 0, def: 0, maxHp: 0, maxMp: 0 };
+
+    p.maxHp = V.baseHp + V.hpPerLevel * (lvl - 1) + (g.maxHp || 0) + (perm.maxHp || 0);
+    p.maxMp = V.baseMp + V.mpPerLevel * (lvl - 1) + (g.maxMp || 0) + (perm.maxMp || 0);
 
     const baseAtk = V.baseAtk + V.atkPerLevel * (lvl - 1);
     const baseDef = V.baseDef ?? 0;
-    const perm = p.permanent || { atk: 0, def: 0 };
 
     let atkMult = 1.0;
     let atkAdd = 0;
@@ -234,6 +237,8 @@ export function createVitals(ctx) {
   state.player.permanent = {
     atk: typeof saved?.permanent?.atk === 'number' ? saved.permanent.atk : 0,
     def: typeof saved?.permanent?.def === 'number' ? saved.permanent.def : 0,
+    maxHp: typeof saved?.permanent?.maxHp === 'number' ? saved.permanent.maxHp : 0,
+    maxMp: typeof saved?.permanent?.maxMp === 'number' ? saved.permanent.maxMp : 0,
   };
   state.player.buffs = [];
   state.player.invulnUntil = 0;
@@ -418,12 +423,18 @@ export function createVitals(ctx) {
     emitChanged();
   }
 
-  function addPermanent(stat, n) {
+  function addPermanent(statOrPatch, n) {
     const p = state.player;
-    if (!p.permanent) p.permanent = { atk: 0, def: 0 };
-    const cap = config.ITEMS?.permanentCap ?? 20;
-    const currentVal = p.permanent[stat] || 0;
-    p.permanent[stat] = Math.min(cap, currentVal + (Number(n) || 0));
+    if (!p.permanent) p.permanent = { atk: 0, def: 0, maxHp: 0, maxMp: 0 };
+    if (statOrPatch && typeof statOrPatch === 'object') {
+      for (const [k, v] of Object.entries(statOrPatch)) {
+        p.permanent[k] = (Number(p.permanent[k]) || 0) + (Number(v) || 0);
+      }
+    } else if (typeof statOrPatch === 'string') {
+      const cap = statOrPatch === 'maxHp' || statOrPatch === 'maxMp' ? 500 : (config.ITEMS?.permanentCap ?? 60);
+      const currentVal = p.permanent[statOrPatch] || 0;
+      p.permanent[statOrPatch] = Math.min(cap, currentVal + (Number(n) || 0));
+    }
     recalcDerived();
     save();
     emitChanged();

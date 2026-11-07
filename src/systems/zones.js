@@ -57,6 +57,9 @@ export function createZones(ctx) {
   }
 
   function isCombatZone(id = state.zone) {
+    if (ctx.termaCaves?.isCombatActiveInZone?.(id)) {
+      return true;
+    }
     if (id === state.zone && state.zoneType) {
       return state.zoneType === 'combat' || state.zoneType === 'dungeon';
     }

@@ -29,7 +29,7 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/world/maps/sandbox.js` | World | debug sandbox arena with flat ground, scattered rocks, trial stone circle, Mani cairn (lazy-loaded) |
 | `src/data/maps.js`, `src/data/maps/*.js` | Data | data-driven map registry (`MAPS`: `stupa`, `wild`, `pharping`, `mangyul`, `yarlung`, `samye`, `chimphu`, `terma`, `sandbox`) |
 | `src/data/npcs.js` | Data | data-driven NPC registry (`NPCS`) and 8 procedural look definitions (`NPC_LOOKS`) |
-| `src/data/itemBases.js`, `affixes.js`, `legendaries.js` | Data | 22 base equipment types across 8 slots, 16 affixes (T1–T4), 9 Terma legendary items (`powerId`) |
+| `src/data/itemBases.js`, `affixes.js`, `legendaries.js` | Data | 22 base equipment types across 8 slots, 16 affixes (T1–T4), 12 Terma legendary items (`powerId`) |
 | `src/data/eliteAffixes.js` | Data | 6 elite monster affixes (`molten`, `frozen`, `swift`, `armored`, `shielding`, `teleporter`) |
 | `src/data/skills.js` | Data | 7 player skills (`humBolt`, `mantra`, `phurba`, `lotusShield`, `vajraBell`, `protector`, `vajraGuru`) & Rank 1–5 / A-B enhancements |
 | `src/data/enemies/*.js` | Data | chapter enemy definitions (`pharping`, `mangyul`, `yarlung`, `samye`), auto-discovered via `import.meta.glob` |
@@ -45,7 +45,8 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/gameplay/allies.js` | Gameplay | 3 oath-bound Dharma Protectors (`tenma`, `whiteYak`, `pehar`) 3D procedural models, AI, and summons |
 | `src/gameplay/enemies.js`, `src/gameplay/enemyModels/*.js` | Gameplay | enemy models, AI state machine, elite packs & affixes, telegraphs, status effects (`root`/`stun`/`slow`/`vuln`), liberation VFX |
 | `src/gameplay/bosses/index.js`, `bossBase.js`, `patterns.js`, `<boss>.js` | Gameplay | multi-phase Boss framework, arena barriers, telegraphed patterns, and 6 Bosses (`migoiKing`, `droughtLord`, `tenmaStorm`, `yarlhaShampo`, `pehar`, `termaGuardian`) |
-| `src/gameplay/dungeon.js` | Gameplay | Terma procedural 3-floor dungeon generator (`mulberry32` PRNG), tier selector (Tier 1–10), floor gates, Terma crystals |
+| `src/gameplay/dungeon.js` | Gameplay | Terma procedural 3-floor dungeon generator (`mulberry32` PRNG), tier selector (Tier 1–10), floor gates, Terma crystals, Vault Room reliquary & Floor 3 Terma Chest |
+| `src/gameplay/termaCaves.js` | Gameplay | Ch1–Ch5 Terma Cave grottoes, cave guardian ambush trials, interactive Terma Caskets, Shogser scrolls, Mendrup pills, Tertön's Compass & Grand Empowerment |
 | `src/gameplay/projectiles.js` | Gameplay | object-pooled projectiles (`ghostfire`, `redArrow`, `boulder`, `frostRoar`), parabolic/homing flight, mantra dispel |
 | `src/gameplay/items.js`, `groundLoot.js` | Gameplay | monkey sacred artifacts + Diablo-style ground loot drops, rarity light beams, `Alt` label plate layout, auto-pickup |
 | `src/gameplay/potions.js`, `shrines.js`, `waypoints.js` | Gameplay | Amrita potion charges (`X`), 4 blessing shrine types, lotus waypoints & Recall portal (`B`) |
@@ -267,7 +268,7 @@ Maps are registered in `src/data/maps.js` (`MAPS`):
 - **Save Sections & Owners**:
   | Section | Owner | Contents |
   |---|---|---|
-  | `vitals` | `src/systems/vitals.js` | `{ level, exp, hp, mp, permanent: { atk, def } }` |
+  | `vitals` | `src/systems/vitals.js` | `{ level, exp, hp, mp, permanent: { atk, def, maxHp, maxMp } }` |
   | `merit` | `src/systems/merit.js` | `{ kora, prostration, lamp, monkey, wheel, preta, tsen, migoi, totalLiberated, mantraCasts, points, achievements }` |
   | `items` | `src/gameplay/items.js` | `{ pityCount }` |
   | `tutorial` | `src/systems/zones.js` | `{ [tutorialKey]: boolean }` |
@@ -279,6 +280,7 @@ Maps are registered in `src/data/maps.js` (`MAPS`):
   | `waypoints` | `src/gameplay/waypoints.js` | `{ unlocked: string[], returnPortal }` |
   | `protectors` | `src/gameplay/allies.js` | `{ unlocked: string[], active: string }` |
   | `dungeon` | `src/gameplay/dungeon.js` | `{ highestClearedTier: number }` |
+  | `termaCaves` | `src/gameplay/termaCaves.js` | `{ extractedCaves: string[], scrolls: string[], mendrup: string[], compassUnlocked: boolean, empowermentClaimed: boolean }` |
   | `community` | `src/systems/community.js` | `{ pilgrimName, ownStupa, myLamps, rejoicedLampIds, rejoicedStupaIds, samye }` |
 
 ### 4. Performance, Code Splitting & Audio Crossfade
