@@ -25,6 +25,29 @@ import {
 const TWO_PI = Math.PI * 2;
 const STEP_RAD = Math.PI / 4; // 45 degrees per crystal pillar rotation
 
+let _yarlungGlowTex = null;
+function getYarlungGlowTexture() {
+  if (_yarlungGlowTex) return _yarlungGlowTex;
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const c = canvas.getContext('2d');
+  if (c) {
+    const grad = c.createRadialGradient(32, 32, 2, 32, 32, 32);
+    grad.addColorStop(0.0, 'rgba(255, 255, 255, 1.0)');
+    grad.addColorStop(0.32, 'rgba(220, 248, 255, 0.72)');
+    grad.addColorStop(0.68, 'rgba(120, 220, 255, 0.24)');
+    grad.addColorStop(1.0, 'rgba(56, 189, 248, 0.0)');
+    c.fillStyle = grad;
+    c.fillRect(0, 0, 64, 64);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  _yarlungGlowTex = tex;
+  return tex;
+}
+
 function makeRiverTexture() {
   if (typeof document === 'undefined') return null;
   const canvas = document.createElement('canvas');
@@ -437,44 +460,235 @@ export function createMap(ctx) {
   caveGroup.position.set(caveX, caveY, caveZ);
   group.add(caveGroup);
 
-  const cliffMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.88 });
+  const glowTex = getYarlungGlowTexture();
+  const cliffMat = new THREE.MeshStandardMaterial({
+    color: 0x3b495e,
+    roughness: 0.88,
+    metalness: 0.08,
+  });
+  const innerVaultMat = new THREE.MeshStandardMaterial({
+    color: 0x131c2b,
+    roughness: 0.94,
+    metalness: 0.08,
+    emissive: 0x071521,
+    emissiveIntensity: 0.38,
+    side: THREE.DoubleSide,
+  });
+  const caveFloorMat = new THREE.MeshStandardMaterial({
+    color: 0x1b2536,
+    roughness: 0.86,
+    metalness: 0.14,
+  });
   const quartzMat = new THREE.MeshStandardMaterial({
     color: 0xa5f3fc,
-    roughness: 0.2,
+    roughness: 0.18,
     metalness: 0.45,
     emissive: new THREE.Color(0x0891b2),
-    emissiveIntensity: 0.65,
+    emissiveIntensity: 0.72,
     transparent: true,
-    opacity: 0.88,
+    opacity: 0.9,
   });
 
-  // Open rock arch & crystal-lined walls
-  const backWall = new THREE.Mesh(new THREE.DodecahedronGeometry(6.2, 1), cliffMat);
-  backWall.position.set(6.8, 3.2, 0);
-  backWall.scale.set(0.85, 1.2, 1.6);
-  const northWall = new THREE.Mesh(new THREE.DodecahedronGeometry(4.8, 1), cliffMat);
-  northWall.position.set(1.2, 2.8, -6.8);
-  northWall.scale.set(1.5, 1.1, 0.8);
-  const southWall = new THREE.Mesh(new THREE.DodecahedronGeometry(4.8, 1), cliffMat);
-  southWall.position.set(1.2, 2.8, 6.8);
-  southWall.scale.set(1.5, 1.1, 0.8);
-  const roofArch = new THREE.Mesh(new THREE.DodecahedronGeometry(6.5, 1), cliffMat);
-  roofArch.position.set(2.0, 6.4, 0);
-  roofArch.scale.set(1.3, 0.38, 1.4);
-  caveGroup.add(backWall, northWall, southWall, roofArch);
+  // 8a. Dark slate cavern floor & sacred refraction mandala rings
+  const caveFloor = new THREE.Mesh(new THREE.CircleGeometry(8.6, 28), caveFloorMat);
+  caveFloor.rotation.x = -Math.PI / 2;
+  caveFloor.position.set(0.8, 0.02, 0);
+  caveFloor.receiveShadow = true;
+  caveGroup.add(caveFloor);
 
-  // Decorative quartz crystals along the cave walls
+  const caveMandalaRing = new THREE.Mesh(
+    new THREE.RingGeometry(3.85, 4.12, 32).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      transparent: true,
+      opacity: 0.34,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }),
+  );
+  caveMandalaRing.position.set(-0.5, 0.035, 0);
+  caveGroup.add(caveMandalaRing);
+
+  // 8b. Seamless inner dark rock vault dome (open on the western entrance -X so zero sky leaks inside)
+  const innerDomeGeo = new THREE.SphereGeometry(
+    8.2,
+    24,
+    16,
+    -Math.PI * 0.56,
+    Math.PI * 1.12,
+    0,
+    Math.PI * 0.62,
+  );
+  const innerDome = new THREE.Mesh(innerDomeGeo, innerVaultMat);
+  innerDome.position.set(0.8, 0.2, 0);
+  innerDome.scale.set(1.18, 0.96, 1.12);
+  caveGroup.add(innerDome);
+
+  // Solid overhead cavern ceiling liner covering all 4 pillars & casket
+  const ceilingCap = new THREE.Mesh(new THREE.CylinderGeometry(8.2, 9.0, 1.8, 20), innerVaultMat);
+  ceilingCap.position.set(0.6, 6.95, 0);
+  ceilingCap.scale.set(1.16, 1.0, 1.08);
+  caveGroup.add(ceilingCap);
+
+  // 8c. Continuous horseshoe cliff walls (North, East back wall, and South) covering all 4 pillars
+  const wallPlacements = [
+    { x: -4.2, y: 3.4, z: -7.6, sx: 1.35, sy: 1.45, sz: 0.95 },
+    { x: 0.4, y: 3.6, z: -7.8, sx: 1.45, sy: 1.5, sz: 0.95 },
+    { x: 5.0, y: 3.5, z: -7.2, sx: 1.35, sy: 1.45, sz: 1.05 },
+    { x: 8.2, y: 3.8, z: -3.6, sx: 1.05, sy: 1.55, sz: 1.35 },
+    { x: 8.8, y: 4.0, z: 0.0, sx: 1.1, sy: 1.6, sz: 1.45 },
+    { x: 8.2, y: 3.8, z: 3.6, sx: 1.05, sy: 1.55, sz: 1.35 },
+    { x: 5.0, y: 3.5, z: 7.2, sx: 1.35, sy: 1.45, sz: 1.05 },
+    { x: 0.4, y: 3.6, z: 7.8, sx: 1.45, sy: 1.5, sz: 0.95 },
+    { x: -4.2, y: 3.4, z: 7.6, sx: 1.35, sy: 1.45, sz: 0.95 },
+  ];
+  for (let i = 0; i < wallPlacements.length; i++) {
+    const wp = wallPlacements[i];
+    const wMesh = new THREE.Mesh(new THREE.DodecahedronGeometry(3.4, 1), cliffMat);
+    wMesh.position.set(wp.x, wp.y, wp.z);
+    wMesh.scale.set(wp.sx, wp.sy, wp.sz);
+    wMesh.rotation.set(i * 0.28, i * 0.45, 0);
+    wMesh.castShadow = true;
+    wMesh.receiveShadow = true;
+    caveGroup.add(wMesh);
+  }
+
+  // Western entrance arch pillars, brow lintel & sunlight aperture ring at (-7.5, 1.45, -1.5)
+  const westLeftPillar = new THREE.Mesh(new THREE.DodecahedronGeometry(3.2, 1), cliffMat);
+  westLeftPillar.position.set(-7.2, 3.2, -5.6);
+  westLeftPillar.scale.set(1.05, 1.45, 1.15);
+  const westRightPillar = new THREE.Mesh(new THREE.DodecahedronGeometry(3.2, 1), cliffMat);
+  westRightPillar.position.set(-7.2, 3.2, 5.6);
+  westRightPillar.scale.set(1.05, 1.45, 1.15);
+  const westEntranceBrow = new THREE.Mesh(new THREE.DodecahedronGeometry(5.8, 1), cliffMat);
+  westEntranceBrow.position.set(-6.4, 6.85, 0);
+  westEntranceBrow.scale.set(0.76, 0.46, 1.58);
+  caveGroup.add(westLeftPillar, westRightPillar, westEntranceBrow);
+
+  // Multi-layered vaulted cave roof & snow-crowned Sheldrak mountain peak overhead
+  const roofVaultFront = new THREE.Mesh(new THREE.DodecahedronGeometry(7.5, 1), cliffMat);
+  roofVaultFront.position.set(-1.2, 7.8, 0);
+  roofVaultFront.scale.set(1.35, 0.46, 1.42);
+  const roofVaultRear = new THREE.Mesh(new THREE.DodecahedronGeometry(7.8, 1), cliffMat);
+  roofVaultRear.position.set(3.8, 8.4, 0);
+  roofVaultRear.scale.set(1.32, 0.58, 1.38);
+  const sheldrakPeak = new THREE.Mesh(new THREE.DodecahedronGeometry(6.6, 1), mtnBaseMat);
+  sheldrakPeak.position.set(2.5, 12.2, -0.5);
+  sheldrakPeak.scale.set(1.35, 1.05, 1.25);
+  const sheldrakSnowCap = new THREE.Mesh(new THREE.ConeGeometry(5.6, 4.2, 8), mtnSnowMat);
+  sheldrakSnowCap.position.set(2.5, 16.2, -0.5);
+  caveGroup.add(roofVaultFront, roofVaultRear, sheldrakPeak, sheldrakSnowCap);
+
+  // 8d. Decorative quartz crystal clusters along cave walls & hanging ceiling stalactites
   [
-    { x: 4.5, y: 1.4, z: -4.8, rz: 0.3 },
-    { x: 4.5, y: 1.5, z: 4.8, rz: -0.3 },
-    { x: -2.0, y: 1.3, z: -5.2, rz: 0.25 },
-    { x: -2.0, y: 1.3, z: 5.2, rz: -0.25 },
+    { x: 5.8, y: 1.4, z: -4.8, rz: 0.3, s: 1.15 },
+    { x: 5.8, y: 1.5, z: 4.8, rz: -0.3, s: 1.15 },
+    { x: -2.0, y: 1.3, z: -5.6, rz: 0.25, s: 1.0 },
+    { x: -2.0, y: 1.3, z: 5.6, rz: -0.25, s: 1.0 },
+    { x: 2.2, y: 1.4, z: -5.8, rz: 0.22, s: 1.1 },
+    { x: 2.2, y: 1.4, z: 5.8, rz: -0.22, s: 1.1 },
+    { x: 6.6, y: 1.6, z: -2.1, rz: 0.35, s: 1.25 },
+    { x: 6.6, y: 1.6, z: 2.1, rz: -0.35, s: 1.25 },
   ].forEach((q) => {
     const shard = new THREE.Mesh(new THREE.ConeGeometry(0.42, 1.85, 6), quartzMat);
     shard.position.set(q.x, q.y, q.z);
     shard.rotation.z = q.rz;
+    shard.scale.setScalar(q.s || 1);
     caveGroup.add(shard);
   });
+
+  // Hanging rock & glowing cyan quartz stalactites from the cavern ceiling
+  const stalGeo = new THREE.ConeGeometry(0.3, 1.6, 6);
+  for (let i = 0; i < 16; i++) {
+    const ang = (i / 16) * TWO_PI;
+    const sr = i % 3 === 0 ? 3.0 : 5.4;
+    const sx = 0.6 + Math.cos(ang) * sr;
+    const sz = Math.sin(ang) * sr;
+    const isQuartz = i % 2 === 0;
+    const stal = new THREE.Mesh(stalGeo, isQuartz ? quartzMat : cliffMat);
+    stal.position.set(sx, 5.95, sz);
+    stal.rotation.x = Math.PI;
+    stal.scale.set(0.75 + (i % 3) * 0.22, 0.85 + (i % 4) * 0.25, 0.75 + (i % 3) * 0.22);
+    caveGroup.add(stal);
+  }
+
+  // 8e. Cavern Interior Lighting — Sunlight Aperture Shaft, Pillar Refraction Pools & Dust Motes (0 PointLights)
+  const poolGeo = new THREE.PlaneGeometry(1, 1);
+  poolGeo.rotateX(-Math.PI / 2);
+
+  // Volumetric golden sunlight cone streaming from the western cave mouth (-7.5, 1.45, -1.5)
+  const sunShaftMat = new THREE.MeshBasicMaterial({
+    color: 0xffe484,
+    transparent: true,
+    opacity: 0.16,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const sunEntranceShaft = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.65, 1.85, 5.4, 14, 1, true),
+    sunShaftMat,
+  );
+  sunEntranceShaft.position.set(-5.35, 1.65, -2.15);
+  sunEntranceShaft.rotation.z = -1.32;
+  sunEntranceShaft.rotation.y = -0.28;
+  caveGroup.add(sunEntranceShaft);
+
+  // Ambient cyan-turquoise crystal bounce light across the cavern floor & ceiling
+  const cavernGlowMat = new THREE.MeshBasicMaterial({
+    map: glowTex,
+    color: 0x22d3ee,
+    transparent: true,
+    opacity: 0.22,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const cavernGlowPool = new THREE.Mesh(poolGeo, cavernGlowMat);
+  cavernGlowPool.position.set(0.6, 0.03, 0);
+  cavernGlowPool.scale.set(13.5, 1, 13.5);
+  caveGroup.add(cavernGlowPool);
+
+  const vaultCrystalGlowMat = new THREE.MeshBasicMaterial({
+    map: glowTex,
+    color: 0x38bdf8,
+    transparent: true,
+    opacity: 0.18,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    toneMapped: false,
+  });
+  const vaultCrystalGlow = new THREE.Mesh(poolGeo, vaultCrystalGlowMat);
+  vaultCrystalGlow.position.set(0.6, 5.85, 0);
+  vaultCrystalGlow.scale.set(11.5, 1, 11.5);
+  caveGroup.add(vaultCrystalGlow);
+
+  // Floating crystal dust motes inside Sheldrak Cave
+  const sheldrakDustCount = 48;
+  const sheldrakDustGeo = new THREE.BufferGeometry();
+  const sheldrakDustPos = new Float32Array(sheldrakDustCount * 3);
+  for (let i = 0; i < sheldrakDustCount; i++) {
+    const a = (i / sheldrakDustCount) * TWO_PI * 2.9;
+    const r = 0.9 + ((i * 19) % 12) * 0.52;
+    sheldrakDustPos[i * 3 + 0] = 0.5 + Math.cos(a) * r;
+    sheldrakDustPos[i * 3 + 1] = 0.45 + ((i * 11) % 10) * 0.48;
+    sheldrakDustPos[i * 3 + 2] = Math.sin(a) * r;
+  }
+  sheldrakDustGeo.setAttribute('position', new THREE.BufferAttribute(sheldrakDustPos, 3));
+  const sheldrakDustMat = new THREE.PointsMaterial({
+    color: 0xa5f3fc,
+    size: 0.14,
+    transparent: true,
+    opacity: 0.72,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const sheldrakDustPoints = new THREE.Points(sheldrakDustGeo, sheldrakDustMat);
+  sheldrakDustPoints.name = 'SheldrakCaveDust';
+  caveGroup.add(sheldrakDustPoints);
 
   // Puzzle Nodes (World Coordinates):
   // Sunlight mouth -> Pillar 0 -> Pillar 1 -> Pillar 2 -> Pillar 3 -> Terma Casket
@@ -512,7 +726,21 @@ export function createMap(ctx) {
   );
   casketScrollGlow.position.set(0, 1.18, 0);
   casketScrollGlow.visible = false;
-  casketGroup.add(casketPedestal, casketBase, casketLid, casketScrollGlow);
+
+  const casketPoolMat = new THREE.MeshBasicMaterial({
+    map: glowTex,
+    color: 0x38bdf8,
+    transparent: true,
+    opacity: 0.28,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const casketLightPool = new THREE.Mesh(poolGeo, casketPoolMat);
+  casketLightPool.position.y = 0.03;
+  casketLightPool.scale.set(4.2, 1, 4.2);
+
+  casketGroup.add(casketPedestal, casketBase, casketLid, casketScrollGlow, casketLightPool);
 
   // 4 Rotatable Crystal Pillars
   const pillars = [];
@@ -539,6 +767,21 @@ export function createMap(ctx) {
     finMesh.position.y = 0.1;
     crystalPivot.add(finMesh);
 
+    // Radial floor refraction pool beneath each crystal pillar
+    const pillarPoolMat = new THREE.MeshBasicMaterial({
+      map: glowTex,
+      color: 0x22d3ee,
+      transparent: true,
+      opacity: 0.3,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const pillarPool = new THREE.Mesh(poolGeo, pillarPoolMat);
+    pillarPool.position.y = 0.03;
+    pillarPool.scale.set(3.5, 1, 3.5);
+    pGrp.add(pillarPool);
+
     group.add(pGrp);
 
     // Deterministic initial orientation: 1 step (45°) before targetStep
@@ -560,6 +803,7 @@ export function createMap(ctx) {
       targetAngle: Number((ps.targetStep * STEP_RAD).toFixed(4)),
       crystalPivot,
       prismMat,
+      pillarPoolMat,
     });
   }
 
@@ -612,6 +856,8 @@ export function createMap(ctx) {
     casketLid.rotation.x = -1.1;
     casketLid.position.set(0, 1.15, 0.25);
     casketScrollGlow.visible = true;
+    casketPoolMat.color.setHex(0xfde047);
+    casketPoolMat.opacity = 0.72;
 
     ctx.quests?.setFlag?.('ch3.sheldrak.solved', true);
     ctx.codex?.unlock?.('sheldrak');
@@ -658,7 +904,12 @@ export function createMap(ctx) {
     for (let i = 0; i < 4; i++) {
       const p = pillars[i];
       const aligned = p.step === p.targetStep;
-      p.prismMat.emissiveIntensity = aligned ? 1.25 : 0.55;
+      const litByBeam = i === 0 || sequentialHits === i;
+      p.prismMat.emissiveIntensity = aligned && litByBeam ? 1.45 : litByBeam ? 0.85 : 0.52;
+      if (p.pillarPoolMat) {
+        p.pillarPoolMat.color.setHex(aligned && litByBeam ? 0xfde047 : 0x22d3ee);
+        p.pillarPoolMat.opacity = aligned && litByBeam ? 0.65 : litByBeam ? 0.42 : 0.26;
+      }
       if (aligned && sequentialHits === i) {
         sequentialHits = i + 1;
         beamSegments[i + 1].visible = true;
@@ -667,8 +918,15 @@ export function createMap(ctx) {
       }
     }
     beamHits = sequentialHits;
-    if (beamHits === 4 && !sheldrakSolved) {
-      grantSheldrakRewards();
+    const progress = beamHits / 4;
+    cavernGlowMat.opacity = 0.22 + progress * 0.34;
+    vaultCrystalGlowMat.opacity = 0.18 + progress * 0.28;
+    if (beamHits === 4) {
+      casketPoolMat.color.setHex(0xfde047);
+      casketPoolMat.opacity = 0.72;
+      if (!sheldrakSolved) {
+        grantSheldrakRewards();
+      }
     }
     return beamHits;
   }
@@ -837,11 +1095,24 @@ export function createMap(ctx) {
       villageYakHeads[i].rotation.x = 0.52 + Math.sin(animTime * 2.5 + i) * 0.08;
     }
 
-    // 6. Pulse Sheldrak light beam & casket scroll glow
+    // 6. Pulse Sheldrak light beam, entrance sunlight shaft & casket scroll glow
     beamMatActive.opacity = 0.78 + Math.sin(animTime * 5.0) * 0.12;
+    sunShaftMat.opacity = 0.14 + Math.sin(animTime * 2.2) * 0.035;
     if (casketScrollGlow.visible) {
       casketScrollGlow.rotation.y += dt * 2.2;
     }
+
+    // 7. Gentle upward drift for Sheldrak Crystal Cave dust motes
+    const dustArr = sheldrakDustGeo.attributes.position.array;
+    for (let i = 0; i < sheldrakDustCount; i++) {
+      const idx = i * 3;
+      dustArr[idx + 1] += dt * (0.14 + (i % 3) * 0.04);
+      dustArr[idx + 0] += Math.sin(animTime * 1.1 + i) * dt * 0.04;
+      if (dustArr[idx + 1] > 5.4) {
+        dustArr[idx + 1] = 0.45;
+      }
+    }
+    sheldrakDustGeo.attributes.position.needsUpdate = true;
   }
 
   return {

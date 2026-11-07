@@ -11,14 +11,16 @@ export function createSky(ctx) {
   const { scene, camera, renderer, state, config } = ctx;
 
   // ---------------------------------------------------------------- PMREM environment for metallic gold
-  const pmremGenerator = new THREE.PMREMGenerator(renderer);
-  pmremGenerator.compileEquirectangularShader();
-  const roomEnv = new RoomEnvironment();
-  const envTarget = pmremGenerator.fromScene(roomEnv, 0.04);
-  scene.environment = envTarget.texture;
-  scene.environmentIntensity = 0.75;
-  roomEnv.dispose();
-  pmremGenerator.dispose();
+  if (renderer && typeof renderer.compile === 'function') {
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    pmremGenerator.compileEquirectangularShader();
+    const roomEnv = new RoomEnvironment();
+    const envTarget = pmremGenerator.fromScene(roomEnv, 0.04);
+    scene.environment = envTarget.texture;
+    scene.environmentIntensity = 0.75;
+    roomEnv.dispose();
+    pmremGenerator.dispose();
+  }
 
   // ---------------------------------------------------------------- Fog
   const fogColor = new THREE.Color(0x9ec7eb);
@@ -61,6 +63,8 @@ export function createSky(ctx) {
     uSunColor: { value: new THREE.Color(0xffe6b8) },
     uNightFactor: { value: 0.0 },
     uTwilightFactor: { value: 0.0 },
+    uCaveFactor: { value: 0.0 },
+    uSubterranean: { value: 0.0 },
     uTime: { value: 0.0 },
   };
 
@@ -87,6 +91,8 @@ export function createSky(ctx) {
       uniform vec3 uSunColor;
       uniform float uNightFactor;
       uniform float uTwilightFactor;
+      uniform float uCaveFactor;
+      uniform float uSubterranean;
       uniform float uTime;
 
       varying vec3 vWorldDir;
@@ -163,15 +169,17 @@ export function createSky(ctx) {
           skyCol = mix(uHorizonColor, uGroundColor, smoothstep(0.0, -0.25, y));
         }
 
+        float outdoorVis = clamp(1.0 - max(uSubterranean, uCaveFactor * 0.92), 0.0, 1.0);
+
         // Directional sunset/sunrise horizon glow toward the sun azimuth
         vec2 sunHoriz = normalize(uSunDir.xz + vec2(1e-5));
         vec2 dirHoriz = normalize(dir.xz + vec2(1e-5));
         float azimDot = max(0.0, dot(dirHoriz, sunHoriz));
         float horizonBand = exp(-abs(y) * 5.5);
-        skyCol += uSunColor * pow(azimDot, 2.2) * horizonBand * (0.28 + 0.45 * uTwilightFactor) * (1.0 - 0.85 * uNightFactor);
+        skyCol += uSunColor * pow(azimDot, 2.2) * horizonBand * (0.28 + 0.45 * uTwilightFactor) * (1.0 - 0.85 * uNightFactor) * outdoorVis;
 
         // Subtle high-altitude wispy clouds
-        if (y > 0.02) {
+        if (y > 0.02 && outdoorVis > 0.01) {
           vec3 cloudCoord = vec3(dir.xz / (y + 0.18) * 1.4, 0.0);
           cloudCoord.x += uTime * 0.008;
           cloudCoord.y += uTime * 0.003;
@@ -179,11 +187,11 @@ export function createSky(ctx) {
           float cloudMask = smoothstep(0.52, 0.78, c) * smoothstep(0.02, 0.22, y) * smoothstep(0.95, 0.35, y);
           vec3 cloudLit = mix(vec3(0.96, 0.95, 0.94), uSunColor * 1.05, uTwilightFactor * 0.75);
           cloudLit = mix(cloudLit, vec3(0.16, 0.22, 0.36), uNightFactor * 0.85);
-          skyCol = mix(skyCol, cloudLit, cloudMask * 0.28);
+          skyCol = mix(skyCol, cloudLit, cloudMask * 0.28 * outdoorVis);
         }
 
         // Stars (visible at night above the horizon)
-        if (uNightFactor > 0.01 && y > 0.0) {
+        if (uNightFactor > 0.01 && y > 0.0 && outdoorVis > 0.01) {
           float horizonFade = smoothstep(0.02, 0.28, y);
           float s1 = starLayer(dir, 95.0, 0.91, uTime);
           float s2 = starLayer(dir, 165.0, 0.94, uTime * 1.2);
@@ -192,12 +200,12 @@ export function createSky(ctx) {
           float mwCoord = abs( dir.x * 0.65 + dir.z * 0.55 - dir.y * 0.35 );
           float mw = smoothstep(0.38, 0.0, mwCoord) * fbm(dir * 6.0) * 0.12 * horizonFade * uNightFactor;
           vec3 starCol = mix(vec3(0.82, 0.90, 1.0), vec3(1.0, 0.92, 0.80), hash31(floor(dir * 95.0)));
-          skyCol += starCol * stars + vec3(0.35, 0.48, 0.78) * mw;
+          skyCol += (starCol * stars + vec3(0.35, 0.48, 0.78) * mw) * outdoorVis;
         }
 
         // Sun disc and corona
         float sunCos = dot(dir, uSunDir);
-        float sunVis = smoothstep(-0.08, 0.04, uSunDir.y);
+        float sunVis = smoothstep(-0.08, 0.04, uSunDir.y) * outdoorVis;
         if (sunVis > 0.0) {
           float sunHalo = pow(max(0.0, sunCos), 10.0) * 0.28 + pow(max(0.0, sunCos), 64.0) * 0.42;
           float sunDisc = smoothstep(0.9982, 0.9991, sunCos);
@@ -207,13 +215,27 @@ export function createSky(ctx) {
 
         // Moon disc and cool lunar glow
         float moonCos = dot(dir, uMoonDir);
-        float moonVis = smoothstep(-0.06, 0.08, uMoonDir.y) * (0.25 + 0.75 * uNightFactor);
+        float moonVis = smoothstep(-0.06, 0.08, uMoonDir.y) * (0.25 + 0.75 * uNightFactor) * outdoorVis;
         if (moonVis > 0.0) {
           float moonHalo = pow(max(0.0, moonCos), 28.0) * 0.22 + pow(max(0.0, moonCos), 140.0) * 0.25;
           float moonDisc = smoothstep(0.9987, 0.9993, moonCos);
           float craters = 0.84 + 0.16 * fbm(dir * 70.0);
           vec3 moonCol = vec3(0.78, 0.87, 1.0) * craters;
           skyCol += (vec3(0.40, 0.56, 0.88) * moonHalo + moonCol * moonDisc * 0.95) * moonVis * smoothstep(-0.03, 0.02, y);
+        }
+
+        // Subterranean cavern rock vault & glowing mineral veins when inside Terma or deep cave
+        float caveMix = max(uSubterranean, uCaveFactor * 0.78);
+        if (caveMix > 0.01) {
+          float rockNoise = fbm(dir * 11.5 + vec3(0.0, 1.7, 0.0));
+          float ridgeNoise = abs(fbm(dir * 23.0) - 0.5) * 2.0;
+          vec3 darkRock = mix(vec3(0.028, 0.024, 0.048), vec3(0.075, 0.068, 0.115), rockNoise);
+          // Subtle glowing turquoise & amber mineral veins along rock fissures overhead
+          float veinMask = smoothstep(0.14, 0.02, ridgeNoise) * smoothstep(-0.05, 0.45, y);
+          float pulse = 0.75 + 0.25 * sin(uTime * 1.6 + dir.x * 6.0 + dir.z * 6.0);
+          vec3 veinCol = mix(vec3(0.08, 0.58, 0.54), vec3(0.78, 0.48, 0.12), smoothstep(0.35, 0.68, rockNoise));
+          vec3 cavernCol = darkRock + veinCol * veinMask * 0.42 * pulse * uSubterranean;
+          skyCol = mix(skyCol, cavernCol, caveMix);
         }
 
         gl_FragColor = vec4(skyCol, 1.0);
@@ -277,6 +299,85 @@ export function createSky(ctx) {
 
   let currentShadowFrustumD = 46;
   let timeOverride = null;
+  let smoothedCaveFactor = 0;
+
+  const tmpColA = new THREE.Color();
+  const tmpColB = new THREE.Color();
+
+  function computeCaveProfile() {
+    const zone = state.zone || 'stupa';
+    const pPos = state.player?.position;
+    const px = pPos ? pPos.x : 0;
+    const pz = pPos ? pPos.z : 0;
+
+    if (zone === 'terma') {
+      return {
+        subterranean: 1.0,
+        factor: 1.0,
+        ceilingY: 5.5,
+        kind: 'terma',
+        lightCenter: { x: px || 7000, z: pz || 0 },
+      };
+    }
+
+    if (zone === 'pharping') {
+      const dYanglesho = Math.hypot(px - 2020, (pz - -46.2) * 1.12);
+      const fYanglesho = 1.0 - smoothstep(5.8, 11.5, dYanglesho);
+      const dAsura = Math.hypot(px - 1990, (pz - -91.5) * 1.1);
+      const fAsura = 1.0 - smoothstep(5.5, 11.0, dAsura);
+      if (fYanglesho >= fAsura && fYanglesho > 0.001) {
+        return {
+          subterranean: 0.0,
+          factor: fYanglesho,
+          ceilingY: 6.0,
+          kind: 'lampCave',
+          lightCenter: { x: 2020, z: -45.5 },
+        };
+      }
+      if (fAsura > 0.001) {
+        return {
+          subterranean: 0.0,
+          factor: fAsura,
+          ceilingY: 7.4,
+          kind: 'asuraCave',
+          lightCenter: { x: 1990, z: -88 },
+        };
+      }
+    } else if (zone === 'yarlung') {
+      const dSheldrak = Math.hypot((px - 4061.0) * 0.9, (pz - -30.0) * 1.05);
+      const fSheldrak = 1.0 - smoothstep(6.2, 11.8, dSheldrak);
+      if (fSheldrak > 0.001) {
+        return {
+          subterranean: 0.0,
+          factor: fSheldrak,
+          ceilingY: 6.4,
+          kind: 'crystalCave',
+          lightCenter: { x: 4060, z: -30 },
+        };
+      }
+    } else if (zone === 'chimphu') {
+      const zFactor = smoothstep(-18.5, -26.5, pz);
+      const xFactor = 1.0 - smoothstep(16.0, 24.0, Math.abs(px - 6000));
+      const fChimphu = zFactor * xFactor;
+      if (fChimphu > 0.001) {
+        return {
+          subterranean: 0.0,
+          factor: fChimphu,
+          ceilingY: 8.2,
+          kind: 'hermitageCave',
+          lightCenter: { x: 6000, z: -32 },
+        };
+      }
+    }
+
+    return {
+      subterranean: 0.0,
+      factor: 0.0,
+      ceilingY: null,
+      kind: 'none',
+      lightCenter: null,
+    };
+  }
 
   function setTimeOverride({ t = 0.38, speed = 0, transitionSec = 0 } = {}) {
     const targetT = ((Number(t) % 1) + 1) % 1;
@@ -382,9 +483,9 @@ export function createSky(ctx) {
     hemiLight.groundColor.lerpColors(pA.hemiGround, pB.hemiGround, blend);
     hemiLight.intensity = THREE.MathUtils.lerp(0.65, 0.42, nightFactor);
 
-    // Fog color & density per map (map.sky overrides default)
+    // Fog color & density per map (map.sky or map.atmosphere overrides default)
     const mapDef = ctx.world?.getMap(state.zone);
-    const skyCfg = mapDef?.sky;
+    const skyCfg = mapDef?.sky || mapDef?.atmosphere;
     if (skyCfg?.fogColor != null) {
       scene.fog.color.set(skyCfg.fogColor);
     } else {
@@ -392,50 +493,163 @@ export function createSky(ctx) {
     }
     scene.fog.density = skyCfg?.fogDensity ?? 0.0022;
 
+    // Evaluate cave interior profile (Terma subterranean dungeon or chapter caves)
+    const caveProfile = computeCaveProfile();
+    const lerpRate = dt > 0 ? Math.min(1, dt * 6.5) : 1;
+    if (caveProfile.subterranean > 0.5) {
+      smoothedCaveFactor = 1.0;
+    } else {
+      smoothedCaveFactor += (caveProfile.factor - smoothedCaveFactor) * lerpRate;
+      if (smoothedCaveFactor < 0.001) smoothedCaveFactor = 0;
+    }
+    state.caveFactor = smoothedCaveFactor;
+    state.caveCeilingY = caveProfile.ceilingY;
+    uniforms.uSubterranean.value = caveProfile.subterranean;
+    uniforms.uCaveFactor.value = smoothedCaveFactor;
+
     // Sun directional light & target placement per zone
     const isStupa = (state.zone === 'stupa');
     const mapOrigin = mapDef?.origin || config.WILD?.origin || { x: 1000, z: 0 };
     const centerX = isStupa ? 0 : mapOrigin.x;
     const centerZ = isStupa ? 0 : mapOrigin.z;
 
-    const targetD = isStupa ? 46 : 72;
-    if (targetD !== currentShadowFrustumD) {
-      currentShadowFrustumD = targetD;
-      sunLight.shadow.camera.left = -targetD;
-      sunLight.shadow.camera.right = targetD;
-      sunLight.shadow.camera.top = targetD;
-      sunLight.shadow.camera.bottom = -targetD;
-      sunLight.shadow.camera.updateProjectionMatrix();
+    if (caveProfile.subterranean > 0.5) {
+      // Subterranean Terma Cavern Lighting: zero sky, player-centered crisp shadow key + warm/cool dual rim
+      const pPos = state.player?.position;
+      const lx = pPos ? pPos.x : centerX;
+      const lz = pPos ? pPos.z : centerZ;
+
+      const targetD = 30;
+      if (targetD !== currentShadowFrustumD) {
+        currentShadowFrustumD = targetD;
+        sunLight.shadow.camera.left = -targetD;
+        sunLight.shadow.camera.right = targetD;
+        sunLight.shadow.camera.top = targetD;
+        sunLight.shadow.camera.bottom = -targetD;
+        sunLight.shadow.camera.updateProjectionMatrix();
+      }
+
+      uniforms.uZenithColor.value.setHex(0x06050c);
+      uniforms.uMidColor.value.setHex(0x0a0814);
+      uniforms.uHorizonColor.value.setHex(0x100d1e);
+      uniforms.uGroundColor.value.setHex(0x050409);
+
+      scene.fog.color.setHex(0x0b0916);
+      scene.fog.density = 0.0135;
+
+      hemiLight.position.set(lx, 28, lz);
+      hemiLight.color.setHex(0x2d6e7e);       // Cool mineral turquoise from ceiling veins
+      hemiLight.groundColor.setHex(0x523018); // Warm butter-lamp amber bounce from stone floor
+      hemiLight.intensity = 0.68;
+
+      sunLight.color.setHex(0xffdfa8);        // Warm golden butter-lamp & mandala key light
+      sunLight.intensity = 1.15;
+      sunLight.target.position.set(lx, 0, lz);
+      sunLight.position.set(lx + 11, 24, lz + 9);
+      sunLight.visible = true;
+
+      moonLight.color.setHex(0x38bdf8);       // Secondary cool cyan-teal crystal rim light
+      moonLight.intensity = 0.58;
+      moonLight.target.position.set(lx, 0, lz);
+      moonLight.position.set(lx - 12, 16, lz - 10);
+      moonLight.visible = true;
+
+      scene.environmentIntensity = 0.34;
+      renderer.toneMappingExposure = 0.96;
+    } else {
+      const targetD = isStupa ? 46 : (smoothedCaveFactor > 0.35 ? 36 : 72);
+      if (targetD !== currentShadowFrustumD) {
+        currentShadowFrustumD = targetD;
+        sunLight.shadow.camera.left = -targetD;
+        sunLight.shadow.camera.right = targetD;
+        sunLight.shadow.camera.top = targetD;
+        sunLight.shadow.camera.bottom = -targetD;
+        sunLight.shadow.camera.updateProjectionMatrix();
+      }
+
+      hemiLight.position.set(centerX, 50, centerZ);
+
+      const dayStrength = smoothstep(-0.04, 0.25, sunY);
+      sunLight.intensity = dayStrength * 1.65;
+      sunLight.color.copy(uniforms.uSunColor.value);
+      sunLight.target.position.set(centerX, 0, centerZ);
+      const sunDist = 75;
+      sunLight.position.set(
+        centerX + state.time.sunDir.x * sunDist,
+        Math.max(6, state.time.sunDir.y * sunDist),
+        centerZ + state.time.sunDir.z * sunDist
+      );
+
+      // Moon directional light (readable cool blue at night)
+      const moonDir = uniforms.uMoonDir.value;
+      moonLight.color.setHex(0x7ca4ff);
+      moonLight.intensity = nightFactor * 0.62;
+      moonLight.target.position.set(centerX, 0, centerZ);
+      moonLight.position.set(
+        centerX + moonDir.x * 60,
+        Math.max(22, moonDir.y * 60),
+        centerZ + moonDir.z * 60
+      );
+
+      scene.environmentIntensity = THREE.MathUtils.lerp(0.55, 0.22, nightFactor);
+      renderer.toneMappingExposure = skyCfg?.exposure ?? THREE.MathUtils.lerp(0.88, 0.90, nightFactor);
+
+      // Smoothly blend into atmospheric Cave Interior Lighting when entering chapter caves
+      if (smoothedCaveFactor > 0.005) {
+        const cf = smoothedCaveFactor;
+        const isCrystal = caveProfile.kind === 'crystalCave';
+        const isAsura = caveProfile.kind === 'asuraCave';
+        const pPos = state.player?.position;
+        const cx = pPos ? pPos.x : (caveProfile.lightCenter?.x ?? centerX);
+        const cz = pPos ? pPos.z : (caveProfile.lightCenter?.z ?? centerZ);
+
+        // Darken sky backdrop & shift fog to deep cave mist
+        tmpColA.setHex(isCrystal ? 0x0b1622 : isAsura ? 0x180d0a : 0x120e0b);
+        uniforms.uZenithColor.value.lerp(tmpColA, cf * 0.88);
+        uniforms.uMidColor.value.lerp(tmpColA, cf * 0.85);
+        uniforms.uHorizonColor.value.lerp(tmpColA, cf * 0.82);
+        scene.fog.color.lerp(tmpColA, cf * 0.78);
+        scene.fog.density = THREE.MathUtils.lerp(scene.fog.density, 0.0068, cf);
+
+        // Shift hemisphere light to cave stone roof & warm butter-lamp/crystal floor bounce
+        tmpColA.setHex(isCrystal ? 0x2c6478 : isAsura ? 0x4a2418 : 0x3b322c);
+        tmpColB.setHex(isCrystal ? 0x5c4822 : isAsura ? 0x7c2d12 : 0x6e4219);
+        hemiLight.color.lerp(tmpColA, cf);
+        hemiLight.groundColor.lerp(tmpColB, cf);
+        hemiLight.intensity = THREE.MathUtils.lerp(hemiLight.intensity, 0.56, cf);
+
+        // Angle primary shadow light from cave mouth & warm up tone
+        tmpColA.setHex(isCrystal ? 0xffe8a3 : isAsura ? 0xff944d : 0xffcf78);
+        sunLight.color.lerp(tmpColA, cf * 0.75);
+        sunLight.intensity = THREE.MathUtils.lerp(
+          sunLight.intensity,
+          Math.max(0.78, sunLight.intensity * 0.55),
+          cf,
+        );
+        sunLight.target.position.lerp(new THREE.Vector3(cx, 0, cz), cf);
+        sunLight.position.lerp(
+          new THREE.Vector3(
+            cx + (isCrystal ? -18 : 6),
+            20,
+            cz + (isCrystal ? -4 : 18),
+          ),
+          cf,
+        );
+
+        // Use moonLight as warm butter-lamp / crystal interior fill light inside the cave
+        tmpColB.setHex(isCrystal ? 0x38bdf8 : isAsura ? 0xf97316 : 0xffa938);
+        moonLight.color.lerp(tmpColB, cf);
+        moonLight.intensity = THREE.MathUtils.lerp(moonLight.intensity, 0.68, cf);
+        moonLight.target.position.lerp(new THREE.Vector3(cx, 1.0, cz), cf);
+        moonLight.position.lerp(new THREE.Vector3(cx, 8.5, cz - 4), cf);
+
+        scene.environmentIntensity = THREE.MathUtils.lerp(scene.environmentIntensity, 0.30, cf);
+        renderer.toneMappingExposure = THREE.MathUtils.lerp(renderer.toneMappingExposure, 0.95, cf);
+      }
+
+      sunLight.visible = sunLight.intensity > 0.01;
+      moonLight.visible = moonLight.intensity > 0.01;
     }
-
-    hemiLight.position.set(centerX, 50, centerZ);
-
-    const dayStrength = smoothstep(-0.04, 0.25, sunY);
-    sunLight.intensity = dayStrength * 1.65;
-    sunLight.color.copy(uniforms.uSunColor.value);
-    sunLight.target.position.set(centerX, 0, centerZ);
-    const sunDist = 75;
-    sunLight.position.set(
-      centerX + state.time.sunDir.x * sunDist,
-      Math.max(6, state.time.sunDir.y * sunDist),
-      centerZ + state.time.sunDir.z * sunDist
-    );
-    sunLight.visible = sunLight.intensity > 0.01;
-
-    // Moon directional light (readable cool blue at night)
-    const moonDir = uniforms.uMoonDir.value;
-    moonLight.intensity = nightFactor * 0.62;
-    moonLight.target.position.set(centerX, 0, centerZ);
-    moonLight.position.set(
-      centerX + moonDir.x * 60,
-      Math.max(22, moonDir.y * 60),
-      centerZ + moonDir.z * 60
-    );
-    moonLight.visible = moonLight.intensity > 0.01;
-
-    // Scale metallic environment map & toneMappingExposure
-    scene.environmentIntensity = THREE.MathUtils.lerp(0.55, 0.22, nightFactor);
-    renderer.toneMappingExposure = skyCfg?.exposure ?? THREE.MathUtils.lerp(0.88, 0.90, nightFactor);
 
     // Keep sky dome centered on camera
     skyMesh.position.copy(camera.position);

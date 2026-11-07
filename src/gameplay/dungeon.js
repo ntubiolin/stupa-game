@@ -26,6 +26,7 @@ import { i18n } from '../i18n.js';
 export const GRID_W = 6;
 export const GRID_H = 6;
 export const CELL_SIZE = 16;
+export const DOOR_WIDTH = 5.8;
 export const TERMA_ORIGIN = { x: 7000, z: 0 };
 
 export const ROOM_TEMPLATES = [
@@ -267,10 +268,12 @@ export function generateFloorLayout(floorSeed, floorNum = 1) {
 }
 
 function makeWallSyllableTexture() {
+  if (typeof document === 'undefined') return null;
   const canvas = document.createElement('canvas');
   canvas.width = 256;
   canvas.height = 256;
   const g = canvas.getContext('2d');
+  if (!g) return null;
   g.fillStyle = '#121926';
   g.fillRect(0, 0, 256, 256);
   g.strokeStyle = '#fbbf24';
@@ -286,6 +289,59 @@ function makeWallSyllableTexture() {
   g.fillStyle = '#5eead4';
   g.font = 'bold 46px "Noto Serif Tibetan", serif';
   g.fillText('གཏེར་མ', 128, 182);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function makeCavernStoneTexture() {
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const g = canvas.getContext('2d');
+  if (!g) return null;
+  g.fillStyle = '#3b374d';
+  g.fillRect(0, 0, 256, 256);
+
+  // Stratified Himalayan cavern stone bands & mineral flecks
+  for (let i = 0; i < 42; i++) {
+    const y = (i * 19) % 256;
+    const h = 4 + (i % 5) * 3;
+    g.fillStyle = i % 2 === 0 ? 'rgba(24, 21, 36, 0.36)' : 'rgba(92, 82, 110, 0.24)';
+    g.fillRect(0, y, 256, h);
+  }
+  for (let i = 0; i < 90; i++) {
+    const x = (i * 53) % 256;
+    const y = (i * 89) % 256;
+    const w = 12 + (i % 4) * 8;
+    const h = 8 + (i % 3) * 6;
+    g.fillStyle = i % 3 === 0 ? 'rgba(180, 140, 88, 0.14)' : 'rgba(18, 16, 28, 0.28)';
+    g.fillRect(x, y, w, h);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(3, 3);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function makeRadialGlowTexture(innerStop, midStop, outerStop = 'rgba(0,0,0,0)') {
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const g = canvas.getContext('2d');
+  if (!g) return null;
+  const grad = g.createRadialGradient(64, 64, 4, 64, 64, 62);
+  grad.addColorStop(0.0, innerStop);
+  grad.addColorStop(0.45, midStop);
+  grad.addColorStop(1.0, outerStop);
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.needsUpdate = true;
@@ -352,27 +408,114 @@ export function createDungeon(ctx) {
   let gateRingMat = null;
   let chestMeshGroup = null;
   let returnGateGroup = null;
+  let dustPointsMesh = null;
 
   // Shared Geometries & Materials for InstancedMeshes (Zero PointLights)
-  const floorTileGeo = new THREE.BoxGeometry(15.2, 0.4, 15.2);
+  const stoneTex = makeCavernStoneTexture();
+  const warmGlowTex = makeRadialGlowTexture(
+    'rgba(255, 198, 92, 0.85)',
+    'rgba(217, 119, 6, 0.34)',
+    'rgba(120, 53, 15, 0.0)',
+  );
+  const coolGlowTex = makeRadialGlowTexture(
+    'rgba(94, 234, 212, 0.82)',
+    'rgba(13, 148, 136, 0.32)',
+    'rgba(15, 118, 110, 0.0)',
+  );
+
+  const floorTileGeo = new THREE.BoxGeometry(15.4, 0.45, 15.4);
   const floorTileMat = new THREE.MeshStandardMaterial({
-    color: 0x262438,
-    roughness: 0.88,
-    metalness: 0.12,
+    color: 0x38334c,
+    map: stoneTex || null,
+    roughness: 0.84,
+    metalness: 0.14,
   });
 
-  const wallSegGeo = new THREE.BoxGeometry(1.0, 4.2, 1.0);
+  const wallSegGeo = new THREE.BoxGeometry(1.0, 1.0, 1.0);
   const wallSegMat = new THREE.MeshStandardMaterial({
-    color: 0x33304a,
-    roughness: 0.86,
-    metalness: 0.15,
+    color: 0x463f5e,
+    map: stoneTex || null,
+    roughness: 0.82,
+    metalness: 0.16,
   });
 
-  const pillarGeo = new THREE.CylinderGeometry(0.48, 0.56, 4.2, 8);
+  const pillarGeo = new THREE.CylinderGeometry(0.54, 0.66, 7.6, 8);
   const pillarMat = new THREE.MeshStandardMaterial({
-    color: 0x474366,
-    roughness: 0.78,
-    metalness: 0.22,
+    color: 0x584f78,
+    map: stoneTex || null,
+    roughness: 0.74,
+    metalness: 0.24,
+  });
+
+  // Craggy subterranean rock formations & vaulted cavern ceiling
+  const rockCragGeo = new THREE.DodecahedronGeometry(1.25, 1);
+  const rockCragMat = new THREE.MeshStandardMaterial({
+    color: 0x2e2942,
+    map: stoneTex || null,
+    roughness: 0.90,
+    metalness: 0.10,
+  });
+
+  const ceilingVaultGeo = new THREE.BoxGeometry(16.8, 1.4, 16.8);
+  const ceilingArchGeo = new THREE.CylinderGeometry(6.4, 8.6, 1.9, 8);
+  const ceilingVaultMat = new THREE.MeshStandardMaterial({
+    color: 0x211d30,
+    map: stoneTex || null,
+    roughness: 0.92,
+    metalness: 0.08,
+  });
+
+  const stalactiteGeo = new THREE.ConeGeometry(0.46, 2.35, 6);
+  stalactiteGeo.rotateX(Math.PI); // Point downward from ceiling
+  const stalactiteMat = new THREE.MeshStandardMaterial({
+    color: 0x352f4b,
+    roughness: 0.86,
+    metalness: 0.14,
+  });
+
+  // Sacred Butter-Lamp Braziers & Radial Light Pools (0 PointLights)
+  const brazierStandGeo = new THREE.CylinderGeometry(0.36, 0.48, 0.92, 8);
+  const brazierStandMat = new THREE.MeshStandardMaterial({
+    color: 0xd97706,
+    roughness: 0.34,
+    metalness: 0.72,
+    emissive: 0x92400e,
+    emissiveIntensity: 0.65,
+  });
+
+  const brazierFlameGeo = new THREE.ConeGeometry(0.18, 0.48, 8);
+  const brazierFlameMat = new THREE.MeshBasicMaterial({
+    color: 0xffdf7a,
+    toneMapped: false,
+  });
+
+  const lightPoolGeo = new THREE.PlaneGeometry(1.0, 1.0);
+  lightPoolGeo.rotateX(-Math.PI / 2);
+  const warmPoolMat = new THREE.MeshBasicMaterial({
+    map: warmGlowTex || null,
+    color: 0xffb74d,
+    transparent: true,
+    opacity: 0.78,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const coolPoolMat = new THREE.MeshBasicMaterial({
+    map: coolGlowTex || null,
+    color: 0x5eead4,
+    transparent: true,
+    opacity: 0.72,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+
+  const lightShaftGeo = new THREE.ConeGeometry(3.4, 7.6, 16, 1, true);
+  const lightShaftMat = new THREE.MeshBasicMaterial({
+    color: 0x5eead4,
+    transparent: true,
+    opacity: 0.13,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    depthWrite: false,
   });
 
   const syllableTex = makeWallSyllableTexture();
@@ -489,6 +632,7 @@ export function createDungeon(ctx) {
     gateMeshGroup = null;
     chestMeshGroup = null;
     returnGateGroup = null;
+    dustPointsMesh = null;
 
     // Remove registered colliders from ctx.colliders
     if (Array.isArray(ctx.colliders) && floorColliders.length > 0) {
@@ -544,69 +688,193 @@ export function createDungeon(ctx) {
   function buildFloorScene(layout) {
     clearFloorEntities();
 
+    // 0. Outer Subterranean Cavern Shell & Abyssal Floor (100% sky-proof enclosure)
+    const abyssGeo = new THREE.PlaneGeometry(210, 210);
+    abyssGeo.rotateX(-Math.PI / 2);
+    const abyssMat = new THREE.MeshStandardMaterial({
+      color: 0x0b0914,
+      roughness: 0.96,
+      metalness: 0.04,
+    });
+    const abyssFloor = new THREE.Mesh(abyssGeo, abyssMat);
+    abyssFloor.name = 'TermaAbyssFloor';
+    abyssFloor.position.set(TERMA_ORIGIN.x, -0.55, TERMA_ORIGIN.z);
+    abyssFloor.receiveShadow = true;
+    dungeonGroup.add(abyssFloor);
+
+    const cavernShellGeo = new THREE.SphereGeometry(122, 32, 20, 0, Math.PI * 2, 0, Math.PI * 0.62);
+    const cavernShellMat = new THREE.MeshStandardMaterial({
+      color: 0x120f20,
+      map: stoneTex || null,
+      roughness: 0.95,
+      metalness: 0.06,
+      side: THREE.BackSide,
+    });
+    const cavernShell = new THREE.Mesh(cavernShellGeo, cavernShellMat);
+    cavernShell.name = 'TermaCavernOuterShell';
+    cavernShell.position.set(TERMA_ORIGIN.x, -6, TERMA_ORIGIN.z);
+    dungeonGroup.add(cavernShell);
+
     const floorMatrices = [];
     const wallMatrices = [];
     const pillarMatrices = [];
     const plaqueMatrices = [];
     const veinMatrices = [];
     const decorMatrices = [];
+    const ceilingVaultMatrices = [];
+    const ceilingArchMatrices = [];
+    const rockCragMatrices = [];
+    const stalactiteMatrices = [];
+    const brazierMatrices = [];
+    const flameMatrices = [];
+    const warmPoolMatrices = [];
+    const coolPoolMatrices = [];
+    const lightShaftMatrices = [];
 
     const dummy = new THREE.Object3D();
     const halfCell = CELL_SIZE * 0.5; // 8m
-    const wallThick = 0.8;
-    const doorGap = 5.8; // Wide 5.8m doorway opening so player & enemies walk freely
+    const wallThick = 1.05;
+    const wallHeight = 7.6;
+    const wallCenterY = wallHeight * 0.5; // 3.8m
+    const doorGap = DOOR_WIDTH; // Wide 5.8m doorway opening so player & enemies walk freely
+    const doorHeight = 4.35;
+    const lintelHeight = wallHeight - doorHeight; // 3.25m stone arch lintel over every doorway
+    const lintelCenterY = doorHeight + lintelHeight * 0.5;
     const sideSegLen = (CELL_SIZE - doorGap) * 0.5; // 5.1m on each side of doorway
 
+    let roomIndex = 0;
     for (const room of layout.rooms) {
       const { wx, wz, doors, template, role } = room;
+      roomIndex += 1;
 
       // 1. Floor slab for the room
-      dummy.position.set(wx, -0.2, wz);
+      dummy.position.set(wx, -0.22, wz);
       dummy.rotation.set(0, 0, 0);
       dummy.scale.set(1, 1, 1);
       dummy.updateMatrix();
       floorMatrices.push(dummy.matrix.clone());
 
-      // Bridge slabs on East and South doorways
+      // Vaulted cavern ceiling slab & coffered rock arch completely covering the room overhead
+      dummy.position.set(wx, 8.15, wz);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      ceilingVaultMatrices.push(dummy.matrix.clone());
+
+      dummy.position.set(wx, 7.15, wz);
+      dummy.rotation.set(0, (roomIndex % 4) * (Math.PI * 0.25), 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      ceilingArchMatrices.push(dummy.matrix.clone());
+
+      // Hanging limestone & crystal stalactites around the upper ceiling perimeter
+      const stalCount = template === 'vein' ? 12 : 8;
+      for (let st = 0; st < stalCount; st++) {
+        const sAng = (st / stalCount) * Math.PI * 2 + roomIndex * 0.37;
+        const sRad = 4.6 + (st % 3) * 1.15;
+        const sScale = 0.78 + ((st + roomIndex) % 3) * 0.26;
+        dummy.position.set(
+          wx + Math.cos(sAng) * sRad,
+          7.1 - sScale * 0.55,
+          wz + Math.sin(sAng) * sRad,
+        );
+        dummy.rotation.set(0, sAng, 0);
+        dummy.scale.set(sScale, sScale, sScale);
+        dummy.updateMatrix();
+        stalactiteMatrices.push(dummy.matrix.clone());
+      }
+
+      // Bridge slabs & tunnel ceiling slabs on East and South doorways
       if (doors.E) {
         dummy.position.set(wx + halfCell, -0.19, wz);
-        dummy.scale.set(0.18, 1, 0.38);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(0.20, 1, 0.42);
         dummy.updateMatrix();
         floorMatrices.push(dummy.matrix.clone());
+
+        dummy.position.set(wx + halfCell, 7.85, wz);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(0.28, 1.1, 0.52);
+        dummy.updateMatrix();
+        ceilingVaultMatrices.push(dummy.matrix.clone());
       }
       if (doors.S) {
         dummy.position.set(wx, -0.19, wz + halfCell);
-        dummy.scale.set(0.38, 1, 0.18);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(0.42, 1, 0.20);
         dummy.updateMatrix();
         floorMatrices.push(dummy.matrix.clone());
+
+        dummy.position.set(wx, 7.85, wz + halfCell);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(0.52, 1.1, 0.28);
+        dummy.updateMatrix();
+        ceilingVaultMatrices.push(dummy.matrix.clone());
       }
 
-      // 2. Four Corner Pillars per room
+      // 2. Four Corner Pillars + Sacred Butter-Lamp Braziers & Warm Floor Light Pools per room
       for (const [cx, cz] of [
-        [-halfCell + 0.6, -halfCell + 0.6],
-        [halfCell - 0.6, -halfCell + 0.6],
-        [-halfCell + 0.6, halfCell - 0.6],
-        [halfCell - 0.6, halfCell - 0.6],
+        [-halfCell + 0.7, -halfCell + 0.7],
+        [halfCell - 0.7, -halfCell + 0.7],
+        [-halfCell + 0.7, halfCell - 0.7],
+        [halfCell - 0.7, halfCell - 0.7],
       ]) {
-        dummy.position.set(wx + cx, 2.1, wz + cz);
+        dummy.position.set(wx + cx, 3.8, wz + cz);
         dummy.rotation.set(0, 0, 0);
         dummy.scale.set(1, 1, 1);
         dummy.updateMatrix();
         pillarMatrices.push(dummy.matrix.clone());
+
+        // Corner rock bolster at upper wall-ceiling junction
+        dummy.position.set(wx + cx * 0.94, 6.2, wz + cz * 0.94);
+        dummy.rotation.set(0.3, cx * cz, 0.2);
+        dummy.scale.set(1.45, 1.35, 1.45);
+        dummy.updateMatrix();
+        rockCragMatrices.push(dummy.matrix.clone());
+
+        // Sacred Butter-Lamp Brazier inset from each corner pillar
+        const bx = wx + cx * 0.76;
+        const bz = wz + cz * 0.76;
+        dummy.position.set(bx, 0.46, bz);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        brazierMatrices.push(dummy.matrix.clone());
+
+        dummy.position.set(bx, 1.14, bz);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        flameMatrices.push(dummy.matrix.clone());
+
+        // Warm golden butter-lamp light pool on the stone floor
+        dummy.position.set(bx, 0.03, bz);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(5.6, 5.6, 1);
+        dummy.updateMatrix();
+        warmPoolMatrices.push(dummy.matrix.clone());
       }
 
-      // 3. Outer Walls & Colliders
+      // 3. Outer Cavern Walls, Doorway Stone Lintels, Craggy Rock Faces & Colliders
       // North wall (z = wz - halfCell)
       if (!doors.N) {
-        dummy.position.set(wx, 2.1, wz - halfCell);
+        dummy.position.set(wx, wallCenterY, wz - halfCell);
         dummy.rotation.set(0, 0, 0);
-        dummy.scale.set(CELL_SIZE, 1, wallThick);
+        dummy.scale.set(CELL_SIZE, wallHeight, wallThick);
         dummy.updateMatrix();
         wallMatrices.push(dummy.matrix.clone());
-        addDungeonCollider({ type: 'box', x: wx, z: wz - halfCell, hx: halfCell, hz: 0.6 });
+        addDungeonCollider({ type: 'box', x: wx, z: wz - halfCell, hx: halfCell, hz: 0.65 });
+
+        for (const s of [-1, 1]) {
+          dummy.position.set(wx + s * 4.2, 3.2, wz - halfCell + 0.55);
+          dummy.rotation.set(0.2, s * 0.6, 0.1);
+          dummy.scale.set(1.5, 2.5, 0.95);
+          dummy.updateMatrix();
+          rockCragMatrices.push(dummy.matrix.clone());
+        }
 
         // Glowing Tibetan syllable plaque on closed North wall
-        dummy.position.set(wx, 2.35, wz - halfCell + 0.45);
+        dummy.position.set(wx, 2.55, wz - halfCell + 0.58);
         dummy.rotation.set(0, 0, 0);
         dummy.scale.set(1, 1, 1);
         dummy.updateMatrix();
@@ -614,9 +882,9 @@ export function createDungeon(ctx) {
       } else {
         const offset = doorGap * 0.5 + sideSegLen * 0.5;
         for (const s of [-1, 1]) {
-          dummy.position.set(wx + s * offset, 2.1, wz - halfCell);
+          dummy.position.set(wx + s * offset, wallCenterY, wz - halfCell);
           dummy.rotation.set(0, 0, 0);
-          dummy.scale.set(sideSegLen, 1, wallThick);
+          dummy.scale.set(sideSegLen, wallHeight, wallThick);
           dummy.updateMatrix();
           wallMatrices.push(dummy.matrix.clone());
           addDungeonCollider({
@@ -624,25 +892,39 @@ export function createDungeon(ctx) {
             x: wx + s * offset,
             z: wz - halfCell,
             hx: sideSegLen * 0.5,
-            hz: 0.55,
+            hz: 0.58,
           });
         }
+        // Solid stone arch lintel over North doorway
+        dummy.position.set(wx, lintelCenterY, wz - halfCell);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(doorGap + 0.4, lintelHeight, wallThick * 1.15);
+        dummy.updateMatrix();
+        wallMatrices.push(dummy.matrix.clone());
       }
 
       // South wall (z = wz + halfCell)
       if (!doors.S) {
-        dummy.position.set(wx, 2.1, wz + halfCell);
+        dummy.position.set(wx, wallCenterY, wz + halfCell);
         dummy.rotation.set(0, 0, 0);
-        dummy.scale.set(CELL_SIZE, 1, wallThick);
+        dummy.scale.set(CELL_SIZE, wallHeight, wallThick);
         dummy.updateMatrix();
         wallMatrices.push(dummy.matrix.clone());
-        addDungeonCollider({ type: 'box', x: wx, z: wz + halfCell, hx: halfCell, hz: 0.6 });
+        addDungeonCollider({ type: 'box', x: wx, z: wz + halfCell, hx: halfCell, hz: 0.65 });
+
+        for (const s of [-1, 1]) {
+          dummy.position.set(wx + s * 4.2, 3.2, wz + halfCell - 0.55);
+          dummy.rotation.set(-0.2, s * 0.5, 0.1);
+          dummy.scale.set(1.5, 2.5, 0.95);
+          dummy.updateMatrix();
+          rockCragMatrices.push(dummy.matrix.clone());
+        }
       } else {
         const offset = doorGap * 0.5 + sideSegLen * 0.5;
         for (const s of [-1, 1]) {
-          dummy.position.set(wx + s * offset, 2.1, wz + halfCell);
+          dummy.position.set(wx + s * offset, wallCenterY, wz + halfCell);
           dummy.rotation.set(0, 0, 0);
-          dummy.scale.set(sideSegLen, 1, wallThick);
+          dummy.scale.set(sideSegLen, wallHeight, wallThick);
           dummy.updateMatrix();
           wallMatrices.push(dummy.matrix.clone());
           addDungeonCollider({
@@ -650,61 +932,95 @@ export function createDungeon(ctx) {
             x: wx + s * offset,
             z: wz + halfCell,
             hx: sideSegLen * 0.5,
-            hz: 0.55,
+            hz: 0.58,
           });
         }
+        // Solid stone arch lintel over South doorway
+        dummy.position.set(wx, lintelCenterY, wz + halfCell);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(doorGap + 0.4, lintelHeight, wallThick * 1.15);
+        dummy.updateMatrix();
+        wallMatrices.push(dummy.matrix.clone());
       }
 
       // West wall (x = wx - halfCell)
       if (!doors.W) {
-        dummy.position.set(wx - halfCell, 2.1, wz);
+        dummy.position.set(wx - halfCell, wallCenterY, wz);
         dummy.rotation.set(0, 0, 0);
-        dummy.scale.set(wallThick, 1, CELL_SIZE);
+        dummy.scale.set(wallThick, wallHeight, CELL_SIZE);
         dummy.updateMatrix();
         wallMatrices.push(dummy.matrix.clone());
-        addDungeonCollider({ type: 'box', x: wx - halfCell, z: wz, hx: 0.6, hz: halfCell });
+        addDungeonCollider({ type: 'box', x: wx - halfCell, z: wz, hx: 0.65, hz: halfCell });
+
+        for (const s of [-1, 1]) {
+          dummy.position.set(wx - halfCell + 0.55, 3.2, wz + s * 4.2);
+          dummy.rotation.set(0.1, s * 0.7, 0.2);
+          dummy.scale.set(0.95, 2.5, 1.5);
+          dummy.updateMatrix();
+          rockCragMatrices.push(dummy.matrix.clone());
+        }
       } else {
         const offset = doorGap * 0.5 + sideSegLen * 0.5;
         for (const s of [-1, 1]) {
-          dummy.position.set(wx - halfCell, 2.1, wz + s * offset);
+          dummy.position.set(wx - halfCell, wallCenterY, wz + s * offset);
           dummy.rotation.set(0, 0, 0);
-          dummy.scale.set(wallThick, 1, sideSegLen);
+          dummy.scale.set(wallThick, wallHeight, sideSegLen);
           dummy.updateMatrix();
           wallMatrices.push(dummy.matrix.clone());
           addDungeonCollider({
             type: 'box',
             x: wx - halfCell,
             z: wz + s * offset,
-            hx: 0.55,
+            hx: 0.58,
             hz: sideSegLen * 0.5,
           });
         }
+        // Solid stone arch lintel over West doorway
+        dummy.position.set(wx - halfCell, lintelCenterY, wz);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(wallThick * 1.15, lintelHeight, doorGap + 0.4);
+        dummy.updateMatrix();
+        wallMatrices.push(dummy.matrix.clone());
       }
 
       // East wall (x = wx + halfCell)
       if (!doors.E) {
-        dummy.position.set(wx + halfCell, 2.1, wz);
+        dummy.position.set(wx + halfCell, wallCenterY, wz);
         dummy.rotation.set(0, 0, 0);
-        dummy.scale.set(wallThick, 1, CELL_SIZE);
+        dummy.scale.set(wallThick, wallHeight, CELL_SIZE);
         dummy.updateMatrix();
         wallMatrices.push(dummy.matrix.clone());
-        addDungeonCollider({ type: 'box', x: wx + halfCell, z: wz, hx: 0.6, hz: halfCell });
+        addDungeonCollider({ type: 'box', x: wx + halfCell, z: wz, hx: 0.65, hz: halfCell });
+
+        for (const s of [-1, 1]) {
+          dummy.position.set(wx + halfCell - 0.55, 3.2, wz + s * 4.2);
+          dummy.rotation.set(-0.1, s * 0.7, -0.2);
+          dummy.scale.set(0.95, 2.5, 1.5);
+          dummy.updateMatrix();
+          rockCragMatrices.push(dummy.matrix.clone());
+        }
       } else {
         const offset = doorGap * 0.5 + sideSegLen * 0.5;
         for (const s of [-1, 1]) {
-          dummy.position.set(wx + halfCell, 2.1, wz + s * offset);
+          dummy.position.set(wx + halfCell, wallCenterY, wz + s * offset);
           dummy.rotation.set(0, 0, 0);
-          dummy.scale.set(wallThick, 1, sideSegLen);
+          dummy.scale.set(wallThick, wallHeight, sideSegLen);
           dummy.updateMatrix();
           wallMatrices.push(dummy.matrix.clone());
           addDungeonCollider({
             type: 'box',
             x: wx + halfCell,
             z: wz + s * offset,
-            hx: 0.55,
+            hx: 0.58,
             hz: sideSegLen * 0.5,
           });
         }
+        // Solid stone arch lintel over East doorway
+        dummy.position.set(wx + halfCell, lintelCenterY, wz);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(wallThick * 1.15, lintelHeight, doorGap + 0.4);
+        dummy.updateMatrix();
+        wallMatrices.push(dummy.matrix.clone());
       }
 
       // 4. Room Template Interior Features (only for non-boss rooms so Boss Arena is open)
@@ -716,7 +1032,7 @@ export function createDungeon(ctx) {
             [-3.6, 3.6],
             [3.6, 3.6],
           ]) {
-            dummy.position.set(wx + px, 2.1, wz + pz);
+            dummy.position.set(wx + px, 3.8, wz + pz);
             dummy.rotation.set(0, 0, 0);
             dummy.scale.set(0.85, 1, 0.85);
             dummy.updateMatrix();
@@ -728,9 +1044,28 @@ export function createDungeon(ctx) {
           dummy.scale.set(template === 'pool' ? 1.2 : 1.0, 1, template === 'pool' ? 1.2 : 1.0);
           dummy.updateMatrix();
           decorMatrices.push(dummy.matrix.clone());
+
+          // Center radial light pool & subtle overhead cavern light shaft
+          dummy.position.set(wx, 0.04, wz);
+          dummy.rotation.set(0, 0, 0);
+          dummy.scale.set(6.8, 6.8, 1);
+          dummy.updateMatrix();
+          if (template === 'pool') {
+            coolPoolMatrices.push(dummy.matrix.clone());
+          } else {
+            warmPoolMatrices.push(dummy.matrix.clone());
+          }
+
+          if (role === 'start' || role === 'exit' || template === 'mandala' || template === 'pool') {
+            dummy.position.set(wx, 3.8, wz);
+            dummy.rotation.set(0, 0, 0.06);
+            dummy.scale.set(1, 1, 1);
+            dummy.updateMatrix();
+            lightShaftMatrices.push(dummy.matrix.clone());
+          }
         } else if (template === 'corridor') {
           for (const s of [-1, 1]) {
-            dummy.position.set(wx + s * 4.8, 2.1, wz);
+            dummy.position.set(wx + s * 4.8, 3.8, wz);
             dummy.rotation.set(0, 0, 0);
             dummy.scale.set(0.8, 1, 0.8);
             dummy.updateMatrix();
@@ -738,31 +1073,75 @@ export function createDungeon(ctx) {
           }
         }
 
-        // Mineral Crystal Veins along walls (extra dense in 'vein' template rooms)
-        const veinCount = template === 'vein' ? 6 : 2;
+        // Mineral Crystal Veins along walls & upper vault ribs (extra dense in 'vein' template rooms)
+        const veinCount = template === 'vein' ? 6 : 3;
         for (let v = 0; v < veinCount; v++) {
           const ang = (v / veinCount) * Math.PI * 2 + 0.4;
-          const rad = template === 'vein' ? 5.6 : 6.4;
-          dummy.position.set(wx + Math.cos(ang) * rad, 0.65 + (v % 2) * 0.35, wz + Math.sin(ang) * rad);
+          const rad = template === 'vein' ? 5.6 : 6.3;
+          const vx = wx + Math.cos(ang) * rad;
+          const vz = wz + Math.sin(ang) * rad;
+          dummy.position.set(vx, 0.85 + (v % 2) * 0.45, vz);
           dummy.rotation.set(0.2 * v, ang, 0.15);
-          dummy.scale.set(0.9, 1.85, 0.9);
+          dummy.scale.set(0.95, 1.95, 0.95);
           dummy.updateMatrix();
           veinMatrices.push(dummy.matrix.clone());
+
+          // Upper ceiling mineral crystal cluster
+          dummy.position.set(
+            wx + Math.cos(ang + 0.35) * 4.8,
+            6.35,
+            wz + Math.sin(ang + 0.35) * 4.8,
+          );
+          dummy.rotation.set(Math.PI + 0.25, ang, 0.2);
+          dummy.scale.set(0.85, 1.65, 0.85);
+          dummy.updateMatrix();
+          veinMatrices.push(dummy.matrix.clone());
+
+          if (v % 2 === 0 || template === 'vein') {
+            dummy.position.set(vx, 0.035, vz);
+            dummy.rotation.set(0, 0, 0);
+            dummy.scale.set(4.6, 4.6, 1);
+            dummy.updateMatrix();
+            coolPoolMatrices.push(dummy.matrix.clone());
+          }
         }
       } else {
-        // Boss Room grand mandala centerpiece
+        // Boss Room grand mandala centerpiece & dramatic cavern light shaft
         dummy.position.set(wx, 0.06, wz);
         dummy.rotation.set(0, 0, 0);
         dummy.scale.set(1.8, 1, 1.8);
         dummy.updateMatrix();
         decorMatrices.push(dummy.matrix.clone());
+
+        dummy.position.set(wx, 0.04, wz);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(10.5, 10.5, 1);
+        dummy.updateMatrix();
+        warmPoolMatrices.push(dummy.matrix.clone());
+
+        dummy.position.set(wx, 3.8, wz);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1.45, 1, 1.45);
+        dummy.updateMatrix();
+        lightShaftMatrices.push(dummy.matrix.clone());
       }
     }
 
-    function addInstanced(geo, mat, matrices, name) {
+    // Add turquoise floor light pools under Terma Crystal nodes
+    for (const c of layout.crystals) {
+      dummy.position.set(c.x, 0.04, c.z);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(5.4, 5.4, 1);
+      dummy.updateMatrix();
+      coolPoolMatrices.push(dummy.matrix.clone());
+    }
+
+    function addInstanced(geo, mat, matrices, name, { castShadow = false, receiveShadow = false } = {}) {
       if (matrices.length === 0) return null;
       const inst = new THREE.InstancedMesh(geo, mat, matrices.length);
       inst.name = name;
+      inst.castShadow = castShadow;
+      inst.receiveShadow = receiveShadow;
       for (let i = 0; i < matrices.length; i++) {
         inst.setMatrixAt(i, matrices[i]);
       }
@@ -771,12 +1150,57 @@ export function createDungeon(ctx) {
       return inst;
     }
 
-    addInstanced(floorTileGeo, floorTileMat, floorMatrices, 'TermaFloorsInst');
-    addInstanced(wallSegGeo, wallSegMat, wallMatrices, 'TermaWallsInst');
-    addInstanced(pillarGeo, pillarMat, pillarMatrices, 'TermaPillarsInst');
+    addInstanced(floorTileGeo, floorTileMat, floorMatrices, 'TermaFloorsInst', { receiveShadow: true });
+    addInstanced(wallSegGeo, wallSegMat, wallMatrices, 'TermaWallsInst', { castShadow: true, receiveShadow: true });
+    addInstanced(pillarGeo, pillarMat, pillarMatrices, 'TermaPillarsInst', { castShadow: true, receiveShadow: true });
+    addInstanced(ceilingVaultGeo, ceilingVaultMat, ceilingVaultMatrices, 'TermaCeilingVaultInst', { receiveShadow: true });
+    addInstanced(ceilingArchGeo, ceilingVaultMat, ceilingArchMatrices, 'TermaCeilingArchInst', { receiveShadow: true });
+    addInstanced(rockCragGeo, rockCragMat, rockCragMatrices, 'TermaRockCragsInst', { castShadow: true, receiveShadow: true });
+    addInstanced(stalactiteGeo, stalactiteMat, stalactiteMatrices, 'TermaStalactitesInst');
+    addInstanced(brazierStandGeo, brazierStandMat, brazierMatrices, 'TermaBraziersInst');
+    addInstanced(brazierFlameGeo, brazierFlameMat, flameMatrices, 'TermaBrazierFlamesInst');
+    addInstanced(lightPoolGeo, warmPoolMat, warmPoolMatrices, 'TermaWarmPoolsInst');
+    addInstanced(lightPoolGeo, coolPoolMat, coolPoolMatrices, 'TermaCoolPoolsInst');
+    addInstanced(lightShaftGeo, lightShaftMat, lightShaftMatrices, 'TermaLightShaftsInst');
     addInstanced(plaqueGeo, plaqueMat, plaqueMatrices, 'TermaPlaquesInst');
     addInstanced(veinGeo, veinMat, veinMatrices, 'TermaVeinsInst');
     addInstanced(decorRingGeo, decorRingMat, decorMatrices, 'TermaDecorInst');
+
+    // Drifting Subterranean Prana & Crystal Dust Motes across the rooms
+    if (layout.rooms.length > 0) {
+      const motePerRoom = 22;
+      const moteTotal = layout.rooms.length * motePerRoom;
+      const moteGeo = new THREE.BufferGeometry();
+      const motePos = new Float32Array(moteTotal * 3);
+      const moteCol = new Float32Array(moteTotal * 3);
+      const mRng = mulberry32(layout.seed + 777);
+      let idx = 0;
+      for (const r of layout.rooms) {
+        for (let m = 0; m < motePerRoom; m++) {
+          motePos[idx * 3 + 0] = r.wx + (mRng() - 0.5) * 13.0;
+          motePos[idx * 3 + 1] = 0.6 + mRng() * 5.6;
+          motePos[idx * 3 + 2] = r.wz + (mRng() - 0.5) * 13.0;
+          const isWarm = m % 2 === 0;
+          moteCol[idx * 3 + 0] = isWarm ? 1.0 : 0.37;
+          moteCol[idx * 3 + 1] = isWarm ? 0.82 : 0.92;
+          moteCol[idx * 3 + 2] = isWarm ? 0.38 : 0.83;
+          idx += 1;
+        }
+      }
+      moteGeo.setAttribute('position', new THREE.BufferAttribute(motePos, 3));
+      moteGeo.setAttribute('color', new THREE.BufferAttribute(moteCol, 3));
+      const moteMat = new THREE.PointsMaterial({
+        size: 0.16,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.68,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      dustPointsMesh = new THREE.Points(moteGeo, moteMat);
+      dustPointsMesh.name = 'TermaCavernDustMotes';
+      dungeonGroup.add(dustPointsMesh);
+    }
 
     // 5. Terma Crystal Nodes (`伏藏晶石`, 3–4 per floor)
     for (const c of layout.crystals) {
@@ -1923,15 +2347,29 @@ export function createDungeon(ctx) {
     if (tierSelectOpen && ctx.input?.pressed?.('closeUi')) {
       closeTierSelect();
     }
-    if (state.zone !== 'terma') {
+    const inTerma = state.zone === 'terma';
+    if (dungeonGroup.visible !== inTerma) {
+      dungeonGroup.visible = inTerma;
+    }
+    if (!inTerma) {
       if (hudEl && hudEl.style.display !== 'none') {
         hudEl.style.display = 'none';
       }
       return;
     }
+    if (!active) {
+      enter(1);
+    }
 
-    // Animate crystals & portals
+    // Animate crystals, butter-lamp light pools & portals
     const elapsed = state.elapsed || 0;
+    warmPoolMat.opacity = 0.72 + Math.sin(elapsed * 5.2) * 0.08 + Math.cos(elapsed * 8.7) * 0.04;
+    coolPoolMat.opacity = 0.66 + Math.sin(elapsed * 2.4) * 0.10;
+    lightShaftMat.opacity = 0.11 + Math.sin(elapsed * 1.6) * 0.03;
+    if (dustPointsMesh) {
+      dustPointsMesh.position.y = Math.sin(elapsed * 0.9) * 0.22;
+    }
+
     for (const cGrp of crystalMeshes.values()) {
       const shards = cGrp.userData?.shardsGroup;
       if (shards && shards.visible) {

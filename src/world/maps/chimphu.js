@@ -59,7 +59,31 @@ function createPrayerFlagString(startVec, endVec, { count = 12, sag = 0.55 } = {
   return grp;
 }
 
+let _chimphuGlowTex = null;
+function getChimphuGlowTexture() {
+  if (_chimphuGlowTex) return _chimphuGlowTex;
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const c = canvas.getContext('2d');
+  if (c) {
+    const grad = c.createRadialGradient(32, 32, 2, 32, 32, 32);
+    grad.addColorStop(0.0, 'rgba(255, 255, 255, 1.0)');
+    grad.addColorStop(0.32, 'rgba(255, 236, 190, 0.72)');
+    grad.addColorStop(0.68, 'rgba(180, 235, 225, 0.24)');
+    grad.addColorStop(1.0, 'rgba(45, 212, 191, 0.0)');
+    c.fillStyle = grad;
+    c.fillRect(0, 0, 64, 64);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  _chimphuGlowTex = tex;
+  return tex;
+}
+
 function makeSyllablePlaqueTexture(text, subText = '') {
+  if (typeof document === 'undefined') return null;
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 256;
@@ -291,6 +315,17 @@ export function buildChimphuMap(ctx) {
   group.add(tableGroup);
 
   // ---------------------------------------------------------------- 2. Northern Cliffside & Retreat Caves (`巖洞`)
+  const glowTex = getChimphuGlowTexture();
+  const innerVaultMat = new THREE.MeshStandardMaterial({
+    color: 0x162126,
+    roughness: 0.94,
+    metalness: 0.06,
+    emissive: 0x0a1418,
+    emissiveIntensity: 0.35,
+    side: THREE.DoubleSide,
+  });
+  disposables.push(innerVaultMat);
+
   const cliffPlacements = [
     { lx: -34, lz: -38, rx: 12, ry: 18, rz: 10 },
     { lx: -20, lz: -44, rx: 11, ry: 22, rz: 11 },
@@ -317,20 +352,195 @@ export function buildChimphuMap(ctx) {
     }
   }
 
-  // Secondary meditation cave alcoves flanking the central gate
+  // Grand Overhanging Northern Cavern Vault (`青朴大巖窟穹頂`) covering Guru Cave (lz = -24),
+  // flanking meditation alcoves (lz = -36), and the Terma Stone Gate (lz = -40)
+  const cavernVaultGroup = new THREE.Group();
+  cavernVaultGroup.name = 'ChimphuNorthernCavernVault';
+  const vaultBaseY = getTerrainHeight(ox, oz - 34);
+  cavernVaultGroup.position.set(ox, vaultBaseY, oz - 34);
+  group.add(cavernVaultGroup);
+
+  const vaultInnerDome = new THREE.Mesh(
+    new THREE.SphereGeometry(22.5, 24, 14, Math.PI * 0.94, Math.PI * 1.12, 0, Math.PI * 0.56),
+    innerVaultMat,
+  );
+  vaultInnerDome.position.set(0, 0.5, 2.0);
+  vaultInnerDome.scale.set(1.22, 0.52, 0.85);
+  cavernVaultGroup.add(vaultInnerDome);
+
+  // Overlapping rock ceiling slabs forming the cliff overhang from lz = -19 to lz = -48
+  const roofSlabs = [
+    { x: 0, y: 10.6, z: 3.5, sx: 18.5, sy: 2.6, sz: 9.8 },
+    { x: -13.5, y: 10.2, z: 2.0, sx: 11.5, sy: 2.5, sz: 8.8 },
+    { x: 13.5, y: 10.2, z: 2.0, sx: 11.5, sy: 2.5, sz: 8.8 },
+    { x: 0, y: 12.8, z: -3.5, sx: 21.0, sy: 3.4, sz: 9.5 },
+    { x: 0, y: 16.5, z: -8.5, sx: 18.0, sy: 4.8, sz: 8.5 },
+  ];
+  for (let i = 0; i < roofSlabs.length; i++) {
+    const rs = roofSlabs[i];
+    const slab = new THREE.Mesh(cliffGeo, cliffRockMat);
+    slab.position.set(rs.x, rs.y, rs.z);
+    slab.scale.set(rs.sx, rs.sy, rs.sz);
+    slab.rotation.y = i * 0.28;
+    slab.castShadow = true;
+    slab.receiveShadow = true;
+    cavernVaultGroup.add(slab);
+  }
+
+  // Hanging limestone & glowing turquoise crystal stalactites under the northern cavern vault
+  const stalGeo = new THREE.ConeGeometry(0.35, 1.85, 6);
+  disposables.push(stalGeo);
+  for (let i = 0; i < 18; i++) {
+    const sx = -18 + (i / 17) * 36 + ((i % 3) - 1) * 0.9;
+    const sz = -4.5 + (i % 4) * 3.2;
+    const isCrystal = i % 3 === 1;
+    const stal = new THREE.Mesh(stalGeo, isCrystal ? termaCrystalMat : mossRockMat);
+    stal.position.set(sx, 8.2 - Math.abs(sx) * 0.04, sz);
+    stal.rotation.x = Math.PI;
+    stal.scale.set(0.8 + (i % 3) * 0.25, 0.85 + (i % 4) * 0.3, 0.8 + (i % 3) * 0.25);
+    cavernVaultGroup.add(stal);
+  }
+
+  // Secondary 3D meditation cave grottoes flanking the central gate (`(±15, -36)`)
+  const poolGeo = new THREE.PlaneGeometry(1, 1);
+  poolGeo.rotateX(-Math.PI / 2);
+  const lampFlameMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(2.2, 1.65, 0.55),
+    toneMapped: false,
+  });
+  const lampHaloMat = new THREE.MeshBasicMaterial({
+    color: 0xffa834,
+    transparent: true,
+    opacity: 0.52,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const alcoveLampFlames = [];
+  disposables.push(poolGeo, lampFlameMat, lampHaloMat);
+
   for (const side of [-1, 1]) {
     const caveX = ox + side * 15;
     const caveZ = oz - 36;
     const caveY = getTerrainHeight(caveX, caveZ);
-    const arch = new THREE.Mesh(new THREE.TorusGeometry(2.6, 0.75, 8, 16, Math.PI), mossRockMat);
-    arch.position.set(caveX, caveY + 0.2, caveZ);
-    const darkInterior = new THREE.Mesh(
-      new THREE.CircleGeometry(2.4, 16),
-      new THREE.MeshBasicMaterial({ color: 0x0d1518 }),
+    const alcoveGrp = new THREE.Group();
+    alcoveGrp.position.set(caveX, caveY, caveZ);
+
+    const arch = new THREE.Mesh(new THREE.TorusGeometry(2.8, 0.82, 10, 18, Math.PI), mossRockMat);
+    arch.position.set(0, 0.2, 0);
+    const grottoShell = new THREE.Mesh(
+      new THREE.SphereGeometry(2.75, 14, 10, Math.PI * 0.95, Math.PI * 1.1, 0, Math.PI * 0.58),
+      innerVaultMat,
     );
-    darkInterior.position.set(caveX, caveY + 1.2, caveZ - 0.3);
-    group.add(arch, darkInterior);
+    grottoShell.position.set(0, 0.1, -0.2);
+    const grottoRoof = new THREE.Mesh(cliffGeo, mossRockMat);
+    grottoRoof.position.set(0, 3.6, -1.2);
+    grottoRoof.scale.set(3.8, 1.4, 2.8);
+
+    // Stone meditation seat & lit butter lamp inside each alcove
+    const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.98, 0.32, 12), stepStoneMat);
+    seat.position.set(0, 0.16, -0.9);
+    const lampBowl = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.12, 0.16, 10), goldTrimMat);
+    lampBowl.position.set(side * -0.95, 0.42, -0.45);
+    const flameGrp = new THREE.Group();
+    flameGrp.position.set(side * -0.95, 0.62, -0.45);
+    const fCone = new THREE.Mesh(new THREE.ConeGeometry(0.085, 0.25, 8), lampFlameMat);
+    const fHalo = new THREE.Mesh(new THREE.SphereGeometry(0.24, 8, 8), lampHaloMat);
+    flameGrp.add(fCone, fHalo);
+    alcoveLampFlames.push(flameGrp);
+
+    const alcovePool = new THREE.Mesh(
+      poolGeo,
+      new THREE.MeshBasicMaterial({
+        map: glowTex,
+        color: 0xffb347,
+        transparent: true,
+        opacity: 0.54,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      }),
+    );
+    alcovePool.position.set(0, 0.04, -0.5);
+    alcovePool.scale.set(4.8, 1, 4.8);
+
+    alcoveGrp.add(arch, grottoShell, grottoRoof, seat, lampBowl, flameGrp, alcovePool);
+    group.add(alcoveGrp);
   }
+
+  // Sacred Cavern Lighting Pools & Crepuscular Light Shafts under the Northern Cliff Vault (0 PointLights)
+  const guruSanctumPoolMat = new THREE.MeshBasicMaterial({
+    map: glowTex,
+    color: 0xffbe55,
+    transparent: true,
+    opacity: 0.48,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const guruSanctumPool = new THREE.Mesh(poolGeo, guruSanctumPoolMat);
+  guruSanctumPool.position.set(ox, getTerrainHeight(ox, oz - 24) + 0.04, oz - 24);
+  guruSanctumPool.scale.set(7.5, 1, 7.5);
+  group.add(guruSanctumPool);
+
+  const gateThresholdPoolMat = new THREE.MeshBasicMaterial({
+    map: glowTex,
+    color: 0x2dd4bf,
+    transparent: true,
+    opacity: 0.52,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const gateThresholdPool = new THREE.Mesh(poolGeo, gateThresholdPoolMat);
+  gateThresholdPool.position.set(ox, getTerrainHeight(ox, oz - 38.5) + 0.05, oz - 38.5);
+  gateThresholdPool.scale.set(9.5, 1, 8.0);
+  group.add(gateThresholdPool);
+
+  const cavernShaftMat = new THREE.MeshBasicMaterial({
+    color: 0xffe4a0,
+    transparent: true,
+    opacity: 0.1,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  for (const side of [-1, 1]) {
+    const shaft = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.2, 2.6, 8.2, 14, 1, true),
+      cavernShaftMat,
+    );
+    shaft.position.set(ox + side * 6.5, vaultBaseY + 4.2, oz - 25.5);
+    shaft.rotation.x = -0.28;
+    shaft.rotation.z = side * 0.14;
+    group.add(shaft);
+  }
+  disposables.push(guruSanctumPoolMat, gateThresholdPoolMat, cavernShaftMat);
+
+  // Floating golden-turquoise prana dust motes beneath the Northern Cavern Vault
+  const chimphuDustCount = 44;
+  const chimphuDustGeo = new THREE.BufferGeometry();
+  const chimphuDustPos = new Float32Array(chimphuDustCount * 3);
+  for (let i = 0; i < chimphuDustCount; i++) {
+    chimphuDustPos[i * 3 + 0] = ox + (((i * 29) % 36) - 18);
+    chimphuDustPos[i * 3 + 1] = vaultBaseY + 0.6 + ((i * 13) % 12) * 0.52;
+    chimphuDustPos[i * 3 + 2] = oz - 22 - ((i * 17) % 18);
+  }
+  chimphuDustGeo.setAttribute('position', new THREE.BufferAttribute(chimphuDustPos, 3));
+  const chimphuDustMat = new THREE.PointsMaterial({
+    color: 0x99f6e4,
+    size: 0.15,
+    transparent: true,
+    opacity: 0.68,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const chimphuDustPoints = new THREE.Points(chimphuDustGeo, chimphuDustMat);
+  chimphuDustPoints.name = 'ChimphuCavernDust';
+  group.add(chimphuDustPoints);
+  disposables.push(chimphuDustGeo, chimphuDustMat);
 
   // ---------------------------------------------------------------- 3. Terma Realm Stone Gate (`伏藏秘境石門`) at (6000, -40)
   const gateX = ox;
@@ -681,6 +891,26 @@ export function buildChimphuMap(ctx) {
     portalGlowMat.opacity = 0.35 + pulse * 0.25;
     springHalo.rotation.z = elapsed * 0.45;
     springHaloMat.opacity = 0.4 + Math.sin(elapsed * 3.1) * 0.18;
+
+    // Animate alcove butter lamps & northern cavern light pools
+    for (let i = 0; i < alcoveLampFlames.length; i++) {
+      const s = 0.92 + Math.sin(elapsed * 8.5 + i * 1.9) * 0.14;
+      alcoveLampFlames[i].scale.set(s, s, s);
+    }
+    guruSanctumPoolMat.opacity = 0.44 + Math.sin(elapsed * 3.0) * 0.06;
+    gateThresholdPoolMat.opacity = 0.48 + Math.cos(elapsed * 2.6) * 0.07;
+    cavernShaftMat.opacity = 0.09 + Math.sin(elapsed * 1.8) * 0.025;
+
+    // Gentle upward drift for Chimphu northern cavern dust motes
+    const dustArr = chimphuDustGeo.attributes.position.array;
+    for (let i = 0; i < chimphuDustCount; i++) {
+      const idx = i * 3;
+      dustArr[idx + 1] += dt * (0.14 + (i % 3) * 0.04);
+      if (dustArr[idx + 1] > vaultBaseY + 7.2) {
+        dustArr[idx + 1] = vaultBaseY + 0.6;
+      }
+    }
+    chimphuDustGeo.attributes.position.needsUpdate = true;
   }
 
   return {

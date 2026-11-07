@@ -320,6 +320,10 @@ export function createCameraRig(ctx) {
       }
       const terrainY = ctx.world ? ctx.world.getHeight(desiredPos.x, desiredPos.z) : 0;
       desiredPos.y = Math.max(terrainY + 0.55, desiredPos.y);
+      if (state.caveCeilingY != null && (state.caveFactor || 0) > 0.1) {
+        const maxCaveY = Math.max(terrainY + 2.2, state.caveCeilingY);
+        desiredPos.y = Math.min(desiredPos.y, maxCaveY);
+      }
     }
 
     // 5. Smooth damping (and blend from intro orbit right after game:start)
@@ -358,6 +362,10 @@ export function createCameraRig(ctx) {
       }
       const curTerrainY = ctx.world ? ctx.world.getHeight(currentPos.x, currentPos.z) : 0;
       if (currentPos.y < curTerrainY + 0.55) currentPos.y = curTerrainY + 0.55;
+      if (state.caveCeilingY != null && (state.caveFactor || 0) > 0.1) {
+        const maxCaveY = Math.max(curTerrainY + 2.2, state.caveCeilingY);
+        if (currentPos.y > maxCaveY) currentPos.y = maxCaveY;
+      }
     }
 
     camera.position.copy(currentPos);

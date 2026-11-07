@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "check:i18n": "node scripts/check-i18n.mjs",
     "check:links": "node scripts/check-links.mjs",
-    "test:combat-settings": "node scripts/combat-settings-test.mjs"
+    "test:combat-settings": "node scripts/combat-settings-test.mjs",
+    "test:cave-lighting": "node scripts/cave-lighting-test.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"
