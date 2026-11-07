@@ -16,18 +16,46 @@ for(const mobile of [false,true])for(const id of selected){
  await context.addInitScript(previous=>{sessionStorage.setItem('stupa.debug.unlocked','1');if(!localStorage.getItem('stupa.save.v2'))localStorage.setItem('stupa.save.v2',JSON.stringify({version:2,sections:{story:{version:2,beat:'complete',evidence:[],choices:{},flags:{},clipsSeen:[],journey:{activeChapterId:null,chapters:previous}},preserve:{value:93}}}));},previous);
  const page=await context.newPage();page.setDefaultTimeout(45000);page.on('pageerror',error=>report.errors.push({id,error:error.message}));
  const click=async selector=>mobile?page.locator(selector).tap():page.locator(selector).click();
+ const finishPhone=async()=>{await page.locator('.story-phone[open]').waitFor();while(await page.locator('.story-phone[open]').isVisible())await click('.story-phone__actions .story-phone__action--primary');};
  const wait=checkpoint=>page.waitForFunction(checkpoint=>window.__stupa?.chapterScene?.getCheckpoint()===checkpoint,checkpoint);
  await page.goto(base+'/?mode=story&debug=1');await click('[data-card="continue"]');await click('[data-action="journal"]');await click('[data-chapter-action="start-'+id+'"]');
+ await wait(def.entryCheckpoint);if(await page.locator('[data-card="continue"]').isVisible())await click('[data-card="continue"]');
  for(const [index,step] of def.checkpoints.entries()){
   await wait(step.id);console.log(mobile?'mobile':'desktop',id,step.id);
   assert(!/mirror\.chapter\./.test(await page.locator('.story-objective').innerText()),'localized HUD');
-  if(!step.signal)break;
-  if(await page.locator('[data-action="guide"]').isVisible())await click('[data-action="guide"]');
-  if(index===0||['release','rebuild','light','flags'].includes(step.id))await page.screenshot({path:`${out}/${mobile?'mobile':'desktop'}-${id}-${step.id}.jpg`,quality:85});
-  await click('.story-objective [data-action="interact"]');
-  if(step.id==='diary')await click('[data-chapter-action="read-diary"]');
-  else if(step.choices)await click('[data-card-choice="'+(mobile?'retain':'end')+'"]');
-  else if(step.presentation==='card'||step.id.startsWith('altar'))await click('[data-card="continue"]');
+  if(!step.signal){
+   if(id==='finale')await click('[data-card="close"]');
+   break;
+  }
+  if(id==='finale'&&step.id==='response'){
+   await finishPhone();
+  }else{
+   if(await page.locator('[data-action="guide"]').isVisible())await click('[data-action="guide"]');
+   if(index===0||['release','rebuild','light','flags'].includes(step.id))await page.screenshot({path:`${out}/${mobile?'mobile':'desktop'}-${id}-${step.id}.jpg`,quality:85});
+   await click('.story-objective [data-action="interact"]');
+   if(step.id==='diary')await click('[data-chapter-action="read-diary"]');
+   else if(id==='finale'&&step.id==='decision'){
+    await click('.story-phone__actions .story-phone__action--primary');
+    const choiceButton=page.locator('.story-phone__actions button').nth(mobile?1:0);
+    await (mobile?choiceButton.tap():choiceButton.click());
+   }else if(id==='yarlung'&&step.id==='memory'){
+    await click('[data-card="continue"]');
+    await page.locator('.story-documentary[open]').waitFor();
+    await click('.story-documentary-controls [data-action="skip"]');
+   }else if((id==='mangyul'&&step.id==='message')||(id==='chimphu'&&step.id==='descent')){
+    await click('[data-card="continue"]');
+    await finishPhone();
+   }else if((id==='yarlung'&&step.id==='boundary')||(id==='samye'&&step.id==='rebuild')){
+    await finishPhone();
+    await click('[data-card="continue"]');
+   }else if(step.phoneThreadId){
+    await finishPhone();
+   }else if(step.choices){
+    await click(`[data-card-choice="${step.choices[0]}"]`);
+   }else if(step.presentation==='card'||step.id.startsWith('altar')||(id==='mangyul'&&step.id==='clearing')||(id==='yarlung'&&['pause','release'].includes(step.id))||(id==='chimphu'&&['cave','light'].includes(step.id))){
+    await click('[data-card="continue"]');
+   }
+  }
   await wait(def.checkpoints[index+1].id);await page.waitForTimeout(1600);
   // Reload genuine checkpoint, without debug advancement.
   await page.reload();await wait(def.checkpoints[index+1].id);
@@ -39,6 +67,7 @@ for(const mobile of [false,true])for(const id of selected){
  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('stupa.save.v2')).sections);assert.equal(saved.preserve.value,93);assert.equal(saved.story.journey.chapters[id].completed,true);
  if(id==='finale')assert.equal(saved.story.journey.chapters.finale.choices.decision,mobile?'retain':'end');
  await click('[data-action="journal"]');await click('[data-chapter-action="replay-'+id+'"]');await wait(def.entryCheckpoint);
+ if(await page.locator('[data-card="continue"]').isVisible())await click('[data-card="continue"]');
  await click('[data-action="journal"]');await click('[data-chapter-action="exit"]');await click('[data-card="continue"]');
  assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('stupa.save.v2')).sections.story.journey),saved.story.journey);
  report.scenarios.push({id,mobile,checkpoints:def.checkpoints.length,result:'PASS'});await context.close();
