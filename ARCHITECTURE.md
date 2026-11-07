@@ -564,3 +564,9 @@ preserved.
 - Persistence: existing `settings` section gains `difficulty: 'easy' | 'normal' | 'hard'`; writes merge with existing settings via `ctx.save`, flush immediately, and preserve audio/language preferences. Old saves default to normal without migration.
 - `vitals.applyDamage`: multiply mitigated incoming damage by 0.6 / 1 / 1.4 (minimum 1), once before shield absorption; invulnerability/god mode still short-circuit. Changes apply to the next hit, including active boss fights, without resetting HP or changing enemy HP, loot, experience or quest progress.
 - Regression: `npm run test:combat-settings` checks actual vitals damage, defense, shields, invulnerability, live difficulty changes, invalid settings and flat terrain across the expanded arena.
+
+## Terma Caves & Interactive Extraction (#137 #140)
+
+- `src/gameplay/termaCaves.js`: 5 Chapter Terma Caves (`pharping`, `mangyul`, `yarlung`, `samye`, `chimphu`) with `DORMANT -> GUARDED -> UNSEALED -> EXTRACTED` state machine, Yeshe Tsogyal's Shogser Scroll Table in `chimphu`, and `0` PointLights.
+- `src/gameplay/dungeon.js`: procedural Vault Room (`AncientTermaVaultReliquary`) on every floor and interactive Floor 3 `TermaTreasureChest`.
+- Regression: `npm run test:terma-caves` (`scripts/terma-caves-test.mjs` and `tests/termaCaves.test.mjs`) verifies all 12 Terma Legendaries (`thokchaVajra`, `dakiniMirror`, `uddiyanaLotusHat`), Ch1–Ch5 Terma Cave trials & extraction, Mendrup permanent stats, Shogser Grand Empowerment, Tertön's Compass, Dungeon Vault Room, Floor 3 Terma Chest, `stupa.save.v2` persistence, and strict `0` PointLight budget.
