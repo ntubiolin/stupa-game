@@ -93,7 +93,8 @@ const hud = document.createElement('section'); hud.className = 'story-hud';
 hud.innerHTML = `<header class="story-header"><a href="?mode=home" class="story-wordmark">${t('title')}<small>THE PERSON IN THE MIRROR</small></a><nav><button data-action="phone">${t('phone')}</button><button data-action="settings" aria-label="${t('settings')}">☷</button></nav></header><div class="story-waypoint" aria-hidden="true"><span>◇</span><small></small></div><section class="story-objective"><p class="story-category"></p><h2></h2><p class="story-hint"></p><div class="story-objective-actions"><button data-action="interact" class="story-action"></button><button data-action="guide" class="story-guide">${t('guide')}</button></div></section><footer class="story-footer"><span class="story-controls"></span><span class="story-save">${t('saved')}</span></footer>`;
 root.append(hud);
 const journalButton = document.createElement('button'); journalButton.dataset.action='journal'; hud.querySelector('nav').prepend(journalButton);
-const modeSwitch = createModeSwitch(ctx, 'story', hud.querySelector('nav'));
+const modeSwitchMount = document.createElement('div');
+const modeSwitch = createModeSwitch(ctx, 'story', modeSwitchMount, { onBeforeOpen: closeModal });
 const modal = document.createElement('section'); modal.className = 'story-modal'; modal.hidden = true; modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true'); root.append(modal);
 let modalCallback = null, modalKeys = null, previousFocus = null;
 let arrivalCount = 0, visionCount = 0, losangLine = 0;
@@ -318,6 +319,11 @@ function showSettings() {
   modal.querySelector('[data-setting="language"]').onchange = e => { i18n.setLang(e.target.value); closeModal(); showSettings(); };
   modal.querySelector('[data-setting="sound"]').onchange = e => { soundOn = e.target.checked; storyAudio.setEnabled(soundOn); };
   modal.querySelector('[data-settings="close"]').onclick = closeModal;
+  const actionsWrap = modal.querySelector('.story-card-actions');
+  const debugBtn = modal.querySelector('[data-settings="debug"]');
+  if (actionsWrap && modeSwitch?.button) {
+    actionsWrap.insertBefore(modeSwitch.button, debugBtn || null);
+  }
   modal.querySelector('[data-settings="debug"]').onclick = () => { closeModal(); debugPanel.open(); };
   const visionVideo = modal.querySelector('[data-settings="vision-video"]');
   if (visionVideo) visionVideo.onclick = () => { closeModal(); documentary.play('vision-cutaway'); };
