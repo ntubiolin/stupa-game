@@ -36,6 +36,7 @@ export function createAudio(ctx) {
   let music = null;
   let musicEnabled = true;
   let musicVolume = MUSIC_CFG.defaultMusicVolume;
+  let mantraVoiceStyle = 'natural';
   let musicRefreshTimer = 0;
   let musicForced = null; // debug override: { id, vars }
   const bossMusic = { active: false, id: null, phase: 1 };
@@ -44,6 +45,7 @@ export function createAudio(ctx) {
 
   if (ctx.save) {
     const settings = ctx.save.get('settings', { muted: false, volume: 0.75 });
+    mantraVoiceStyle = settings.mantraVoiceStyle === 'instrumental' ? 'instrumental' : 'natural';
     muted = Boolean(settings.muted);
     if (typeof settings.volume === 'number' && !Number.isNaN(settings.volume)) {
       volume = Math.max(0, Math.min(1, settings.volume));
@@ -123,6 +125,7 @@ export function createAudio(ctx) {
   }
 
   function ensureContext() {
+    getMantraVoiceStyle();
     unlockMobileAudioSession();
 
     if (ac) {
@@ -202,7 +205,7 @@ export function createAudio(ctx) {
         destination: masterGain,
         tracks: MUSIC_TRACKS,
         stingers: MUSIC_STINGERS,
-        config: { ...MUSIC_CFG, volume: musicEnabled ? MUSIC_CFG.volume * musicVolume : 0 },
+        config: { ...MUSIC_CFG, volume: musicEnabled ? MUSIC_CFG.volume * musicVolume : 0, voiceStyle: mantraVoiceStyle },
       });
     } catch (err) {
       console.warn('[audio] music engine unavailable', err);
@@ -476,18 +479,39 @@ export function createAudio(ctx) {
     const context = ensureContext();
     if (!context || muted) return;
     const now = context.currentTime;
+    const style = getMantraVoiceStyle();
+    const step = CHANT_STEP_NOTES[chantStepIdx % CHANT_STEP_NOTES.length];
+    chantStepIdx = (chantStepIdx + 1) % CHANT_STEP_NOTES.length;
+    const note = step.m + currentKeyOffset();
 
-    // Sing the next syllable of the 12-syllable Vajra Guru Mantra with the real human vocal choir
+    // Advance the same mantra melody in either human or instrumental voice mode.
     if (music?.instruments?.mantraVoice) {
-      const step = CHANT_STEP_NOTES[chantStepIdx % CHANT_STEP_NOTES.length];
-      chantStepIdx = (chantStepIdx + 1) % CHANT_STEP_NOTES.length;
-      const tr = currentKeyOffset();
       const bus = { dry: masterGain, wet: masterGain };
-      music.instruments.mantraVoice(bus, now + 0.01, step.m + tr, step.d, 0.82, {
+      music.instruments.mantraVoice(bus, now + 0.01, note, step.d, 0.82, {
         syllable: step.syl,
         voice: 'choir',
+        voiceStyle: style,
         send: 0,
       });
+    } else if (style === 'instrumental') {
+      // Keep the mantra audible even when the score engine could not initialize.
+      const f = MUSIC_CFG.tuningA4 * 2 ** ((note - 69) / 12);
+      const lp = context.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 1800;
+      lp.connect(masterGain);
+      // Soft bowl fundamental/partial, then a breath-like flute octave and fifth.
+      for (const [ratio, amp, attack, decay] of [[1, 0.09, 0.02, 1.1], [2.756, 0.025, 0.02, 0.8], [2, 0.065, 0.09, step.d], [3, 0.018, 0.09, step.d]]) {
+        const tone = context.createOscillator();
+        const env = context.createGain();
+        tone.type = 'sine';
+        tone.frequency.setValueAtTime(f * ratio, now);
+        env.gain.setValueAtTime(0.0001, now);
+        env.gain.linearRampToValueAtTime(amp, now + attack);
+        env.gain.exponentialRampToValueAtTime(0.0001, now + decay);
+        tone.connect(env); env.connect(lp);
+        tone.start(now); tone.stop(now + decay + 0.05);
+      }
     }
 
     // Soft singing-bowl harmonic shimmer
@@ -496,7 +520,8 @@ export function createAudio(ctx) {
     shimmerGain.gain.linearRampToValueAtTime(0.06, now + 0.04);
     shimmerGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.72);
 
-    const shimmerFreqs = [432, 648, 864];
+    const shimmerRoot = style === 'instrumental' ? MUSIC_CFG.tuningA4 * 2 ** ((note + 12 - 69) / 12) : 432;
+    const shimmerFreqs = [shimmerRoot, shimmerRoot * 1.5, shimmerRoot * 2];
     for (const f of shimmerFreqs) {
       const osc = context.createOscillator();
       osc.type = 'sine';
@@ -1243,7 +1268,7 @@ export function createAudio(ctx) {
     for (let i = 0; i < chord.length; i++) {
       const osc = context.createOscillator();
       const g = context.createGain();
-      osc.type = i < 2 ? 'sawtooth' : 'sine';
+      osc.type = i < 2 ? 'triangle' : 'sine';
       osc.frequency.setValueAtTime(chord[i], now);
       g.gain.setValueAtTime(0.0001, now);
       g.gain.linearRampToValueAtTime(0.12 / (1 + i * 0.35), now + 0.18);
@@ -1323,6 +1348,7 @@ export function createAudio(ctx) {
   }
 
   function refreshMusic(fade) {
+    getMantraVoiceStyle();
     if (!music) return;
     if (!canPlayMusic()) {
       if (music.getCurrent()) music.stop(1.0);
@@ -1339,6 +1365,7 @@ export function createAudio(ctx) {
   }
 
   function playMusicStinger(id, extra = {}) {
+    getMantraVoiceStyle();
     if (!music || !canPlayMusic()) return;
     music.stinger(id, { tr: currentKeyOffset(), ...extra });
   }
@@ -1635,6 +1662,7 @@ export function createAudio(ctx) {
   let stupaBellTimer = 10 + Math.random() * 10; // ~10–20s initial chime in stupa plaza
 
   function update(dt) {
+    getMantraVoiceStyle();
     if (!ac || !started) return;
 
     // Periodically re-resolve the score track (day/night, quest-flag variants)
@@ -1697,13 +1725,14 @@ export function createAudio(ctx) {
     }
   }
 
-  function saveAudioSettings() {
+  function saveAudioSettings(style = getMantraVoiceStyle()) {
     if (ctx.save) {
       const settings = ctx.save.get('settings', {});
       settings.muted = muted;
       settings.volume = volume;
       settings.music = musicEnabled;
       settings.musicVolume = musicVolume;
+      settings.mantraVoiceStyle = style;
       ctx.save.set('settings', settings);
     } else {
       try {
@@ -1714,7 +1743,22 @@ export function createAudio(ctx) {
   }
 
   function emitAudioChange() {
-    bus.emit('audio:change', { muted, volume, music: musicEnabled, musicVolume });
+    bus.emit('audio:change', { muted, volume, music: musicEnabled, musicVolume, mantraVoiceStyle });
+  }
+
+  /** Synchronize settings changed by callers or restored saves with the score. */
+  function getMantraVoiceStyle() {
+    const saved = ctx.save?.get?.('settings', {})?.mantraVoiceStyle || mantraVoiceStyle;
+    mantraVoiceStyle = saved === 'instrumental' ? 'instrumental' : 'natural';
+    music?.setVoiceStyle(mantraVoiceStyle);
+    return mantraVoiceStyle;
+  }
+
+  function setMantraVoiceStyle(style) {
+    mantraVoiceStyle = style === 'instrumental' ? 'instrumental' : 'natural';
+    music?.setVoiceStyle(mantraVoiceStyle);
+    saveAudioSettings(mantraVoiceStyle);
+    emitAudioChange();
   }
 
   function setMuted(nextMuted) {
@@ -1766,6 +1810,8 @@ export function createAudio(ctx) {
     toggleMusic() { setMusicEnabled(!musicEnabled); return musicEnabled; },
     getMusicVolume() { return musicVolume; },
     setMusicVolume,
+    getMantraVoiceStyle,
+    setMantraVoiceStyle,
     /** Current score track `{ id, vars, root }` or null. */
     getMusicTrack() { return music?.getCurrent() ?? null; },
     /** Debug: force a score track (`null` restores automatic selection). */

@@ -30,6 +30,7 @@ const DEFAULTS = {
 export function createMusicEngine({ ac, destination, noiseBuffer = null, tracks = {}, stingers = {}, config = {}, onSyllable = null }) {
   const cfg = { ...DEFAULTS, ...config };
   let vocalBoost = cfg.vocalBoost ?? 1.0;
+  let voiceStyle = cfg.voiceStyle === 'instrumental' ? 'instrumental' : 'natural';
   const mtof = (m) => cfg.tuningA4 * 2 ** ((m - 69) / 12);
   const rand = (a, b) => a + Math.random() * (b - a);
 
@@ -479,6 +480,11 @@ export function createMusicEngine({ ac, destination, noiseBuffer = null, tracks 
   };
   /** 低音誦經 Gyuke chant — deep monastic voice with formant filters. Vowel 'om' closes o→m. */
   function chant(bus, t, m, dur, vel = 0.6, vowel = 'om') {
+    if (voiceStyle === 'instrumental') {
+      bowl(bus, t, m, vel * 0.5, { decay: Math.min(3, Math.max(0.8, dur * 0.65)), send: 0.55 });
+      flute(bus, t, m + 19, dur * 0.92, vel * 0.25, { attack: 0.28, breath: 0.4, send: 0.55 });
+      return;
+    }
     const f = mtof(m);
     const end = t + dur + 0.9;
     const env = gainNode();
@@ -486,12 +492,14 @@ export function createMusicEngine({ ac, destination, noiseBuffer = null, tracks 
     const start = VOWELS[vowel === 'om' ? 'o' : vowel] || VOWELS.o;
     const target = vowel === 'om' ? VOWELS.m : start;
     const src = gainNode(1);
-    for (const [ratio, type, amp] of [[1, 'sawtooth', 0.5], [1.003, 'sawtooth', 0.4], [0.5, 'sine', 0.5]]) {
+    for (const [ratio, type, amp] of [[1, 'triangle', 0.45], [1.002, 'sine', 0.35], [0.5, 'sine', 0.55], [1.5, 'sine', 0.12]]) {
       const o1 = osc(type, f * ratio, t);
       const g = gainNode(amp);
       o1.connect(g); g.connect(src);
       o1.start(t); o1.stop(end);
     }
+    const lp = biquad('lowpass', 1400, 0.7);
+    src.connect(lp);
     const q = [7, 9, 10];
     const amps = [1, 0.55, 0.18];
     for (let i = 0; i < 3; i++) {
@@ -501,7 +509,7 @@ export function createMusicEngine({ ac, destination, noiseBuffer = null, tracks 
         bp.frequency.linearRampToValueAtTime(target[i], t + dur * 0.8);
       }
       const g = gainNode(amps[i]);
-      src.connect(bp); bp.connect(g); g.connect(env);
+      lp.connect(bp); bp.connect(g); g.connect(env);
     }
     route(bus, env, 0.55);
   }
@@ -527,36 +535,15 @@ export function createMusicEngine({ ac, destination, noiseBuffer = null, tracks 
     dhi: { f0: [310, 2240, 2940], f1: [300, 2180, 2880], lp0: 3800, lp1: 3600, split: 0.7,  attack: 0.035, onset: 'h', vot: 0.028 },
   };
 
-  // Cached Rosenberg-style glottal pulse PeriodicWaves for natural human vocal cord timbre
-  const glottalWaves = {};
-  function getGlottalWave(voice) {
-    if (glottalWaves[voice]) return glottalWaves[voice];
-    const N = 48;
-    const real = new Float32Array(N + 1);
-    const imag = new Float32Array(N + 1);
-    // Open quotient shapes brightness: umdze = rich overtones, choir = warm baritone, dakini = clear lyric
-    const rolloff = voice === 'umdze' ? 1.12 : voice === 'dakini' ? 1.32 : 1.22;
-    for (let k = 1; k <= N; k++) {
-      const amp = (1 / k ** rolloff) * (1 + 0.35 * Math.cos(k * 0.45));
-      real[k] = amp * Math.sin(k * 0.7);
-      imag[k] = amp * Math.cos(k * 0.7);
-    }
-    try {
-      glottalWaves[voice] = ac.createPeriodicWave(real, imag, { disableNormalization: false });
-    } catch {
-      glottalWaves[voice] = null;
-    }
-    return glottalWaves[voice];
-  }
-
   /**
-   * 蓮師心咒十二音節梵音合成 — Klatt-inspired cascade vocal tract (F1→F2→F3→Singer's Formant→Mouth Aperture)
-   * driven by a Rosenberg glottal pulse wave with consonant pre-onset & nasal closure.
+   * 蓮師心咒十二音節 — human syllables with a sine cushion, or instrumental resonance.
+   * Missing samples fall back to a rounded triangle-driven vocal tract with consonant onsets.
    */
   function mantraVoice(bus, t, m, dur, vel = 0.75, o = {}) {
     const sylKey = o.syllable || 'om';
     const syl = MANTRA_SYLLABLES[sylKey] || MANTRA_SYLLABLES.om;
     const voice = o.voice || 'choir'; // 'umdze' | 'choir' | 'dakini'
+    const style = o.voiceStyle || voiceStyle || 'natural';
 
     // Keep each vocal part in its natural human vocal tract octave (male: D3..B3, female: D4..B4)
     let effM = m;
@@ -575,6 +562,21 @@ export function createMusicEngine({ ac, destination, noiseBuffer = null, tracks 
     const rel = o.release ?? (voice === 'dakini' ? 0.14 : 0.18);
     const end = t + vDur + rel + 0.15;
 
+    if (style === 'instrumental') {
+      const octave = voice === 'dakini' ? 0 : 12;
+      flute(bus, t, effM + octave, Math.max(0.18, dur * 0.92), vel * 0.58, {
+        legato: o.legato,
+        grace: o.grace,
+        glideFrom: o.glideFrom != null ? o.glideFrom + octave : undefined,
+        glideTime: o.glideTime ?? 0.06,
+        send: o.send ?? 0.55,
+      });
+      bowl(bus, t, effM, vel * 0.34, { decay: Math.min(1.1, Math.max(0.45, dur * 0.65)), send: o.send ?? 0.5 });
+      if (sylKey === 'om' || sylKey === 'hum') chime(bus, t, effM + 24, vel * 0.16);
+      onSyllable?.({ syllable: sylKey, voice, style: 'instrumental', t, dur: vDur, m });
+      return;
+    }
+
     // 1) Real human TD-PSOLA vocal syllable playback (within +-2 semitones of reference bank)
     const bank =
       voice === 'dakini'
@@ -585,31 +587,50 @@ export function createMusicEngine({ ac, destination, noiseBuffer = null, tracks 
       const sampleEnv = gainNode();
       const sampleGain = (voice === 'dakini' ? 0.78 : voice === 'umdze' ? 0.82 : 0.80) * vocalBoost;
       susEnv(sampleEnv, t, vDur, vel * sampleGain, 0.015, rel, 0.92);
-      const bodyLp = biquad('lowpass', voice === 'umdze' ? 3600 : 5400, 0.7);
-      const layers = voice === 'dakini' ? [[0, 0.75], [5, 0.45]] : [[-5, 0.65], [5, 0.60]];
-      for (const [cents, w] of layers) {
+      const presence = biquad('peaking', 3400, 1.4);
+      presence.gain.value = 3.5;
+      const bodyLp = biquad('lowpass', voice === 'umdze' ? 5600 : voice === 'dakini' ? 7800 : 7200, 0.7);
+      // Preserve the consonant transient; the quiet chorus arrives 22 ms later.
+      for (const [cents, w, delay] of [[0, 0.92, 0], [4, 0.22, 0.022]]) {
+        const startAt = t + delay;
         const sNode = ac.createBufferSource();
         sNode.buffer = vBuf;
         const rate = 2 ** ((effM - bank.midi + cents / 100) / 12);
-        sNode.playbackRate.setValueAtTime(rate, t);
+        sNode.playbackRate.setValueAtTime(rate, startAt);
         const lg = gainNode(w);
         sNode.connect(lg);
-        lg.connect(bodyLp);
-        sNode.start(t);
-        sNode.stop(Math.min(t + vBuf.duration / rate + 0.05, end));
+        lg.connect(presence);
+        sNode.start(startAt);
+        sNode.stop(Math.max(startAt, Math.min(startAt + vBuf.duration / rate + 0.05, end)));
       }
+      presence.connect(bodyLp);
       bodyLp.connect(sampleEnv);
       route(bus, sampleEnv, o.send ?? 0.48);
+
+      // Pure bowl-like support only: no synthetic vocal tract over the recording.
+      const cushion = gainNode();
+      const peakScale = 0.08 * (voice === 'umdze' ? 1.25 : 1.0) * vocalBoost;
+      susEnv(cushion, t, vDur, vel * peakScale, 0.08, rel, 0.88);
+      const cushionLp = biquad('lowpass', 900, 0.7);
+      for (const [ratio, amp] of [[1, 1], [voice === 'umdze' ? 0.5 : 2, 0.4]]) {
+        const tone = osc('sine', f * ratio, t);
+        const g = gainNode(amp);
+        tone.connect(g); g.connect(cushionLp);
+        tone.start(t); tone.stop(end);
+      }
+      cushionLp.connect(cushion);
+      route(bus, cushion, o.send ?? 0.55);
+      onSyllable?.({ syllable: sylKey, voice, style: 'natural', t, dur: vDur, m });
+      return;
     }
 
     // 2) Warm harmonic choir & throat-singing sub-octave support cushion
     const env = gainNode();
-    const peakScale = (vBuf ? 0.14 : 0.42) * (voice === 'umdze' ? 1.35 : 1.0) * vocalBoost;
+    const peakScale = 0.28 * (voice === 'umdze' ? 1.35 : 1.0) * vocalBoost;
     susEnv(env, tVoice, vDur, vel * peakScale, o.attack ?? syl.attack ?? 0.045, rel, 0.88);
 
     // Multi-singer glottal source with natural human vibrato (5.2–5.8 Hz)
     const src = gainNode(0.45);
-    const gWave = getGlottalWave(voice);
     const detunes =
       voice === 'dakini'
         ? [[1, 0, 0.65], [1, 7, 0.45], [2, -4, 0.18]]
@@ -626,8 +647,7 @@ export function createMusicEngine({ ac, destination, noiseBuffer = null, tracks 
     lfo.start(tVoice); lfo.stop(end);
 
     for (const [ratio, detCents, amp] of detunes) {
-      const o1 = osc('sawtooth', f * ratio, tVoice);
-      if (gWave) o1.setPeriodicWave(gWave);
+      const o1 = osc('triangle', f * ratio, tVoice);
       o1.detune.value = detCents;
       // Syllables re-articulate cleanly with a subtle human vocal scoop instead of a wide flute portamento
       applyPitch(o1.frequency, tVoice, f * ratio, {
@@ -676,8 +696,8 @@ export function createMusicEngine({ ac, destination, noiseBuffer = null, tracks 
     chain.connect(singerFormant);
 
     // Dynamic mouth-aperture lowpass filter (opens on 'a'/'e'/'i', closes into nasal 'm'/'n')
-    const lp0 = syl.lp0 ?? 3600;
-    const lp1 = syl.lp1 ?? 3200;
+    const lp0 = (syl.lp0 ?? 3600) * 0.8;
+    const lp1 = (syl.lp1 ?? 3200) * 0.8;
     const mouthLp = biquad('lowpass', lp0, 0.9);
     mouthLp.frequency.setValueAtTime(lp0, tVoice);
     if (Math.abs(lp1 - lp0) > 10) {
@@ -687,7 +707,7 @@ export function createMusicEngine({ ac, destination, noiseBuffer = null, tracks 
     if (syl.lp2) {
       const tSplit2 = tVoice + vDur * (syl.split2 ?? 0.75);
       mouthLp.frequency.setValueAtTime(lp1, Math.max(tGlideEnd + 0.01, tSplit2));
-      mouthLp.frequency.linearRampToValueAtTime(syl.lp2, Math.max(tSplit2 + 0.02, tVoice + vDur * 0.95));
+      mouthLp.frequency.linearRampToValueAtTime(syl.lp2 * 0.8, Math.max(tSplit2 + 0.02, tVoice + vDur * 0.95));
     }
     singerFormant.connect(mouthLp);
     mouthLp.connect(env);
@@ -712,7 +732,7 @@ export function createMusicEngine({ ac, destination, noiseBuffer = null, tracks 
     }
 
     route(bus, env, o.send ?? 0.55);
-    onSyllable?.({ syllable: o.syllable || 'om', voice, t: tVoice, dur: vDur, m });
+    onSyllable?.({ syllable: sylKey, voice, style: 'natural', t: tVoice, dur: vDur, m });
   }
 
   /** 雨滴 Rain drop blip. */
@@ -1023,6 +1043,8 @@ export function createMusicEngine({ ac, destination, noiseBuffer = null, tracks 
     duck,
     setVolume,
     setVocalBoost: (v) => { vocalBoost = Math.max(0.2, Math.min(2.5, Number(v) || 1)); },
+    setVoiceStyle: (style) => { voiceStyle = style === 'instrumental' ? 'instrumental' : 'natural'; },
+    getVoiceStyle: () => voiceStyle,
     dispose,
     tick,
     getCurrent: () => (current ? { id: current.id, vars: { ...current.vars }, root: current.def.root } : null),

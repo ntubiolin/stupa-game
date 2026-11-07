@@ -82,8 +82,16 @@ const VG_WRATH_B = phrase('A3:2 C4:1 D4:3 F4:1 E4:1 D4:1 C4:1 A3:1 G3:1 A3:1 F3:
 const VG_DZOGCHEN = phrase('D5:2 E5:1 G5:3 E5:1 D5:1 B4:1 A4:1 B4:1 D5:1 B4:1 A4:1 G4:4');
 
 const STUPA_ANSWER = phrase('B4:1.5 A4:0.5 F#4:1 E4:1 D4:2 E4:1 F#4:1 A4:3 B4:0.5 A4:0.5 F#4:2 E4:1 D4:1');
+// Quiet D-major-pentatonic lute answers leave space around the main melody.
+const STUPA_ORNAMENT_A = phrase('-:1 D3:1 A3:0.5 B3:0.5 -:1 F#3:1 A3:1 -:2 E3:1 A3:1 D4:1 -:1');
+const STUPA_ORNAMENT_B = phrase('-:1 B3:0.5 A3:0.5 F#3:1 -:1 D3:1 A3:1 E4:1 -:1 A3:1 B3:0.5 D4:0.5 -:2 F#3:1 E3:1 D3:1 -:1');
+const STUPA_DESCANT = phrase('-:1 A5:1 B5:0.5 A5:0.5 F#5:1 E5:1 D5:2 -:1');
 const WILD_A = phrase('A4:2 C5:1 D5:3^2 C5:1 A4:1 G4:2 F4:2 D4:4');
 const WILD_B = phrase('D5:2 F5:1 D5:3 C5:0.5 A4:0.5 G4:0.5 A4:0.5 F4:2 D4:4 -:2');
+// Alternate D-minor-pentatonic echoes and a sparse dranyen response (16/8 beats).
+const WILD_ECHO_A = phrase('-:1 A4:1 C5:0.5 D5:1.5 F5:1 D5:1 -:2 C5:1 A4:1 G4:1 A4:1 F4:1 D4:2 -:1');
+const WILD_ECHO_B = phrase('D5:2 -:1 C5:0.5 A4:0.5 G4:1 A4:1 C5:1 D5:1 F5:1 D5:1 C5:1 A4:1 G4:1 F4:1 D4:2');
+const WILD_DRANYEN_ARP = phrase('-:1 D3:1 A3:0.5 C4:0.5 -:1 G3:1 F3:0.5 A3:0.5 D4:1 -:1');
 // Pharping drought — Bhairav-like colour (D Eb F# G A Bb C#)
 const PH_A = phrase('A4:1 Bb4:0.5 A4:0.5 F#4:2 G4:1 F#4:0.5 Eb4:0.5 D4:2 F#4:1 G4:1 A4:2^1 Bb4:0.5 A4:0.5 G4:1 F#4:2');
 const PH_B = phrase('D5:2 C#5:1 D5:1 Eb5:1.5^-1 D5:0.5 C#5:1 Bb4:1 A4:3 G4:1 F#4:1 G4:1 A4:1 -:1');
@@ -151,6 +159,8 @@ export const MUSIC_TRACKS = {
       const night = Boolean(v.night);
       const tr = night ? 0 : 12;
       const fv = night ? 0.55 : 0.72;
+      const cycle = a.loop % 3;
+      const ornamentVel = night ? 0.16 : 0.23;
       tanpuraCycle(a, 62, night ? 0.32 : 0.42);
       if (B % 8 === 0) a.bowl(0, n('A3'), 0.5);
       // Bar 0–2: Immediately intone the 12-syllable Vajra Guru Mantra upon entering the Stupa plaza
@@ -164,6 +174,7 @@ export const MUSIC_TRACKS = {
       if (B >= 3 && B <= 5) {
         if (a.loop % 2 === 0) a.line(MOTIFS.vow, 3, 'flute', fv, { tr, legato: true });
         else a.line(MOTIFS.vow, 3, 'pluck', 0.45, { tr: 12 });
+        a.line(STUPA_ORNAMENT_A, 3, 'pluck', ornamentVel, { tr: cycle === 2 ? 12 : 0, cutoff: 2200, send: 0.4 });
       }
       if (B >= 6 && B <= 8) {
         a.line(MOTIFS.vajraGuru, 6, 'mantraVoice', night ? 0.72 : 0.68, {
@@ -173,7 +184,15 @@ export const MUSIC_TRACKS = {
         });
         a.line(MOTIFS.vajraGuru, 6, 'flute', fv * 0.42, { tr, legato: true, glideTime: 0.06 });
       }
-      if (B >= 10 && B <= 13) a.line(STUPA_ANSWER, 10, 'flute', fv * 0.9, { tr, legato: true, glideTime: 0.06 });
+      if (B >= 10 && B <= 13) {
+        a.line(STUPA_ANSWER, 10, 'flute', fv * 0.9, { tr, legato: true, glideTime: 0.06 });
+        if (cycle !== 0) a.line(STUPA_ORNAMENT_B, 10, 'pluck', ornamentVel, { cutoff: 2200, send: 0.4 });
+      }
+      if (B >= 14 && a.loop % 2 === 1) {
+        a.line(STUPA_DESCANT, 14, 'flute', fv * 0.32, { tr: night ? -12 : 0, legato: true, glideTime: 0.08 });
+      }
+      if (cycle === 1 && B === 9) a.bowl(2, n('D4'), night ? 0.16 : 0.22, { decay: 1.8 });
+      if (cycle === 2 && B === 14) a.chime(2.5, n('A6'), 0.16);
       if (!night && B >= 8) {
         dranyenLilt(a, B % 2 === 0 ? [n('D3'), n('A3'), n('D4'), n('F#4')] : [n('E3'), n('B3'), n('E4'), n('A3')], 0.32);
       }
@@ -193,11 +212,19 @@ export const MUSIC_TRACKS = {
     pads: [{ notes: [n('D2'), n('A2')], cutoff: 320, gain: 0.04, lfoRate: 0.045, lfoDepth: 0.4, sub: 0.35 }],
     bar(a) {
       const B = a.bar;
+      const alternate = a.loop % 2 === 1;
       if (B % 2 === 0) { a.nga(0, 0.42, { pitch: 58 }); a.nga(0.33, 0.26, { pitch: 58 }); }
       if (B === 0 || B === 8) a.dungchen(0, n('D2'), 6, 0.5);
       if (B === 8) a.cymbal(0, 0.35, 'silnyen');
-      if (B >= 4 && B <= 7) a.line(WILD_A, 4, 'flute', 0.58, { legato: true, breath: 1.4 });
-      if (B >= 12) a.line(WILD_B, 12, 'flute', 0.55, { legato: true, breath: 1.4 });
+      if ((B >= 2 && B <= 3) || (B >= 8 && B <= 9)) {
+        a.line(WILD_DRANYEN_ARP, B < 4 ? 2 : 8, 'pluck', alternate ? 0.24 : 0.19, {
+          tr: alternate && B >= 8 ? 12 : 0, cutoff: 1900, send: 0.45,
+        });
+      }
+      if (B >= 4 && B <= 7) a.line(alternate ? WILD_ECHO_A : WILD_A, 4, 'flute', 0.58, { legato: true, breath: 1.4 });
+      if (B >= 12) a.line(alternate ? WILD_ECHO_B : WILD_B, 12, 'flute', 0.55, { legato: true, breath: 1.4 });
+      if (B === (alternate ? 7 : 15)) a.chime(3, alternate ? n('C6') : n('A5'), 0.15);
+      if (alternate && B === 11) a.bowl(2, n('D4'), 0.2, { decay: 1.7 });
       if (B === 10 || B === 11) for (let k = 0; k < 4; k++) a.damaru(k, 0.2);
     },
   },
