@@ -15,8 +15,8 @@ export const WORLD_ROUTE_NODES = [
   {
     id: 'stupa',
     chapter: 0,
-    nx: 0.14,
-    ny: 0.76,
+    nx: 0.15,
+    ny: 0.56,
     nameKey: 'worldNode.stupa.name',
     levelKey: 'worldNode.stupa.level',
     descKey: 'worldNode.stupa.desc',
@@ -26,8 +26,8 @@ export const WORLD_ROUTE_NODES = [
   {
     id: 'grove',
     chapter: 0,
-    nx: 0.08,
-    ny: 0.84,
+    nx: 0.13,
+    ny: 0.85,
     nameKey: 'worldNode.grove.name',
     levelKey: 'worldNode.grove.level',
     descKey: 'worldNode.grove.desc',
@@ -37,8 +37,8 @@ export const WORLD_ROUTE_NODES = [
   {
     id: 'wild',
     chapter: 0,
-    nx: 0.22,
-    ny: 0.48,
+    nx: 0.31,
+    ny: 0.34,
     nameKey: 'worldNode.wild.name',
     levelKey: 'worldNode.wild.level',
     descKey: 'worldNode.wild.desc',
@@ -48,8 +48,8 @@ export const WORLD_ROUTE_NODES = [
   {
     id: 'pharping',
     chapter: 1,
-    nx: 0.31,
-    ny: 0.68,
+    nx: 0.43,
+    ny: 0.84,
     nameKey: 'worldNode.pharping.name',
     levelKey: 'worldNode.pharping.level',
     descKey: 'worldNode.pharping.desc',
@@ -59,8 +59,8 @@ export const WORLD_ROUTE_NODES = [
   {
     id: 'mangyul',
     chapter: 2,
-    nx: 0.44,
-    ny: 0.42,
+    nx: 0.5,
+    ny: 0.56,
     nameKey: 'worldNode.mangyul.name',
     levelKey: 'worldNode.mangyul.level',
     descKey: 'worldNode.mangyul.desc',
@@ -70,8 +70,8 @@ export const WORLD_ROUTE_NODES = [
   {
     id: 'yarlung',
     chapter: 3,
-    nx: 0.58,
-    ny: 0.56,
+    nx: 0.72,
+    ny: 0.84,
     nameKey: 'worldNode.yarlung.name',
     levelKey: 'worldNode.yarlung.level',
     descKey: 'worldNode.yarlung.desc',
@@ -81,8 +81,8 @@ export const WORLD_ROUTE_NODES = [
   {
     id: 'samye',
     chapter: 4,
-    nx: 0.72,
-    ny: 0.38,
+    nx: 0.68,
+    ny: 0.34,
     nameKey: 'worldNode.samye.name',
     levelKey: 'worldNode.samye.level',
     descKey: 'worldNode.samye.desc',
@@ -93,8 +93,8 @@ export const WORLD_ROUTE_NODES = [
     id: 'chimphu',
     aliasId: 'chimpu',
     chapter: 5,
-    nx: 0.85,
-    ny: 0.24,
+    nx: 0.84,
+    ny: 0.13,
     nameKey: 'worldNode.chimpu.name',
     levelKey: 'worldNode.chimpu.level',
     descKey: 'worldNode.chimpu.desc',
@@ -105,8 +105,8 @@ export const WORLD_ROUTE_NODES = [
     id: 'terma',
     aliasId: 'zangdokPalri',
     chapter: 5,
-    nx: 0.88,
-    ny: 0.66,
+    nx: 0.84,
+    ny: 0.6,
     nameKey: 'worldNode.zangdokPalri.name',
     levelKey: 'worldNode.zangdokPalri.level',
     descKey: 'worldNode.zangdokPalri.desc',
@@ -116,8 +116,8 @@ export const WORLD_ROUTE_NODES = [
   {
     id: 'sandbox',
     chapter: 0,
-    nx: 0.12,
-    ny: 0.24,
+    nx: 0.13,
+    ny: 0.13,
     debugOnly: true,
     nameKey: 'worldNode.sandbox.name',
     levelKey: 'worldNode.sandbox.level',
@@ -920,19 +920,28 @@ export function createWorldMap(ctx) {
 
     // Render connecting SVG paths on parchment
     const pathsHtml = [];
+    const seenEdges = new Set();
     for (const n of nodes) {
-      const x1 = (n.nx * 800).toFixed(1);
-      const y1 = (n.ny * 420).toFixed(1);
+      const n1x = n.nx * 800;
+      const n1y = n.ny * 420;
+      const x1 = n1x.toFixed(1);
+      const y1 = n1y.toFixed(1);
       for (const targetId of n.connectsTo || []) {
         const target = nodeById[targetId];
         if (!target) continue;
-        const x2 = (target.nx * 800).toFixed(1);
-        const y2 = (target.ny * 420).toFixed(1);
-        const mx = ((Number(x1) + Number(x2)) * 0.5).toFixed(1);
-        const my = ((Number(y1) + Number(y2)) * 0.5 - 18).toFixed(1);
+        const edgeKey = [n.id, target.id].sort().join('--');
+        if (seenEdges.has(edgeKey)) continue;
+        seenEdges.add(edgeKey);
+        const n2x = target.nx * 800;
+        const n2y = target.ny * 420;
+        const x2 = n2x.toFixed(1);
+        const y2 = n2y.toFixed(1);
+        const isMostlyVertical = Math.abs(n1x - n2x) < 40;
+        const mx = ((n1x + n2x) * 0.5 + (isMostlyVertical ? -14 : 0)).toFixed(1);
+        const my = ((n1y + n2y) * 0.5 + (isMostlyVertical ? 0 : -16)).toFixed(1);
         const bothUnlocked =
-          Boolean(ctx.waypoints?.isUnlocked?.(n.id)) &&
-          Boolean(ctx.waypoints?.isUnlocked?.(target.id));
+          (Boolean(ctx.waypoints?.isUnlocked?.(n.id)) || n.id === 'stupa') &&
+          (Boolean(ctx.waypoints?.isUnlocked?.(target.id)) || target.id === 'stupa');
         pathsHtml.push(
           `<path d="M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}" class="route-edge ${bothUnlocked ? 'is-unlocked' : ''}" />`,
         );
