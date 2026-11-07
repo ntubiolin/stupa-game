@@ -611,17 +611,17 @@ export function createPlayer(ctx) {
       }
     } else {
       // Base hair cap covering back and crown
-      const capGeo = new THREE.SphereGeometry(0.161, 14, 10, 0, TWO_PI, 0, Math.PI * 0.58);
+      const capGeo = new THREE.SphereGeometry(0.160, 14, 10, 0, TWO_PI, 0, Math.PI * 0.45);
       const cap = new THREE.Mesh(capGeo, hairMat);
-      cap.position.y = 0.15;
-      cap.rotation.x = 0.34;
+      cap.position.y = 0.168;
+      cap.rotation.x = 0.46;
       hairGroup.add(cap);
 
       // Subtle front temple wisps so hair is visible from the front
       for (const side of [-1, 1]) {
-        const wispGeo = new THREE.BoxGeometry(0.036, 0.075, 0.035);
+        const wispGeo = new THREE.BoxGeometry(0.032, 0.068, 0.032);
         const wisp = new THREE.Mesh(wispGeo, hairMat);
-        wisp.position.set(side * 0.128, 0.175, -0.095);
+        wisp.position.set(side * 0.142, 0.172, -0.075);
         wisp.rotation.z = side * 0.18;
         hairGroup.add(wisp);
       }
@@ -630,12 +630,12 @@ export function createPlayer(ctx) {
         // Khampa braided crown + red silk cord wrapped around head
         const braidRing = new THREE.Mesh(new THREE.TorusGeometry(0.156, 0.024, 8, 18), hairMat);
         braidRing.rotation.x = Math.PI / 2;
-        braidRing.position.y = 0.215;
+        braidRing.position.y = 0.228;
         hairGroup.add(braidRing);
 
         const redCord = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.014, 6, 18), coralMat);
         redCord.rotation.x = Math.PI / 2 + 0.08;
-        redCord.position.y = 0.225;
+        redCord.position.y = 0.236;
         hairGroup.add(redCord);
 
         // Side red tassel
