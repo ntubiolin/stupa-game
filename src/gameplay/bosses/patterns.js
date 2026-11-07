@@ -895,11 +895,17 @@ export function createPatternRunner(ctx, parentGroup) {
   function update(dt) {
     // 1. Update active pattern tasks
     for (let i = activeTasks.length - 1; i >= 0; i--) {
+      if (i >= activeTasks.length) i = activeTasks.length - 1;
+      if (i < 0) break;
       const task = activeTasks[i];
+      if (!task) continue;
       const done = task.update(dt);
       if (done) {
-        task.cleanup?.();
-        activeTasks.splice(i, 1);
+        const idx = activeTasks.indexOf(task);
+        if (idx !== -1) {
+          task.cleanup?.();
+          activeTasks.splice(idx, 1);
+        }
       }
     }
 
@@ -907,7 +913,10 @@ export function createPatternRunner(ctx, parentGroup) {
     const pPos = state.player?.position;
     const pRadius = ctx.config.PLAYER?.radius || 0.4;
     for (let i = activeProjectiles.length - 1; i >= 0; i--) {
+      if (i >= activeProjectiles.length) i = activeProjectiles.length - 1;
+      if (i < 0) break;
       const proj = activeProjectiles[i];
+      if (!proj) continue;
       const stepX = proj.vx * dt;
       const stepZ = proj.vz * dt;
       proj.x += stepX;
@@ -944,8 +953,11 @@ export function createPatternRunner(ctx, parentGroup) {
         }
       }
       if (hit || proj.traveled >= proj.maxDist) {
-        telegraphGroup.remove(proj.mesh);
-        activeProjectiles.splice(i, 1);
+        const idx = activeProjectiles.indexOf(proj);
+        if (idx !== -1) {
+          telegraphGroup.remove(proj.mesh);
+          activeProjectiles.splice(idx, 1);
+        }
       }
     }
 
