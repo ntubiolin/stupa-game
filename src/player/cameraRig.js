@@ -540,8 +540,14 @@ export function createCameraRig(ctx) {
     pos.y = Math.max(minFloorY, Math.min(maxCeilY, pos.y));
   }
 
+  function hasActiveDungeonGeometry() {
+    if (state.zone !== 'terma') return false;
+    if (ctx.dungeon?.getLayout?.()?.rooms?.length) return true;
+    return Array.isArray(ctx.colliders) && ctx.colliders.some((c) => c && c.zone === 'terma');
+  }
+
   function clampWildCamera(pos, look, mapDef, dt = 0.016, isPostLerp = false) {
-    if (state.zone === 'terma') {
+    if (hasActiveDungeonGeometry()) {
       clampDungeonCamera(pos, look, dt, isPostLerp);
       return;
     }
@@ -634,7 +640,7 @@ export function createCameraRig(ctx) {
     dungeonRayScale = 1;
     if (isStupa) {
       clampStupaCamera(desiredPos, desiredLook);
-    } else if (state.zone === 'terma') {
+    } else if (hasActiveDungeonGeometry()) {
       clampDungeonCamera(desiredPos, desiredLook, 1, false);
     } else {
       const terrainY = ctx.world ? ctx.world.getHeight(desiredPos.x, desiredPos.z) : 0;
