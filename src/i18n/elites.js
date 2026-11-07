@@ -9,7 +9,8 @@ export const ELITE_NAME_COUNT = 16;
 export const ELITE_STRINGS = {
   'zh-Hant': {
     // Short enemy kind names for elite nameplates
-    'enemyShort.preta': '餓鬼',
+    'enemyShort.preta': '餓鬼靈球',
+    'enemy.preta': '餓鬼靈球',
     'enemyShort.tsen': '贊',
     'enemyShort.migoi': '雪人',
 
@@ -71,6 +72,10 @@ export const ELITE_STRINGS = {
     'toast.potionPickup': '拾取甘露丸 +1',
     'toast.potionRefill': '甘露丸已補滿',
 
+    'toast.eliteLevelWarning': '⚠ 前方魔障強悍！建議先在南側草坡修習、淨化業障靈球升至 Lv.3 以上並裝備法器後再深入北境',
+    'toast.shrineSanctuaryEnter': '☸ 踏入神龕護身結界：結界內不受魔障侵擾，並持續恢復氣血與心力（按 E 可額外祈請神龕加持）',
+    'toast.shrineSanctuaryRest': '☸ 靜心休息：持續恢復氣血與心力；困難模式下結界不會阻擋敵人',
+
     // Shrines (神龕)
     'prompt.shrine': '祈請{name}',
     'toast.shrineActivate': '祈請{name}：{effect}',
@@ -94,7 +99,8 @@ export const ELITE_STRINGS = {
   },
   en: {
     // Short enemy kind names for elite nameplates
-    'enemyShort.preta': 'Preta',
+    'enemyShort.preta': 'Spirit Orb',
+    'enemy.preta': 'Karmic Spirit Orb',
     'enemyShort.tsen': 'Tsen',
     'enemyShort.migoi': 'Migoi',
 
@@ -155,6 +161,10 @@ export const ELITE_STRINGS = {
     'toast.potionEmpty': 'No Amrita Pills left (refill at Stupa or from monsters)',
     'toast.potionPickup': 'Amrita Pill +1',
     'toast.potionRefill': 'Amrita Pills refilled',
+
+    'toast.eliteLevelWarning': '⚠ Powerful foes ahead! Train on the southern meadow Spirit Orbs to reach Lv.3+ and equip gear before venturing north',
+    'toast.shrineSanctuaryEnter': '☸ Entered Shrine Sanctuary: Protected from enemy attacks while regenerating HP & MP (Press E for Shrine Blessing)',
+    'toast.shrineSanctuaryRest': '☸ Resting here restores HP & MP; wards do not block enemies on Hard difficulty',
 
     // Shrines (神龕)
     'prompt.shrine': 'Pray at {name}',
