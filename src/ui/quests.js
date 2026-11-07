@@ -242,6 +242,10 @@ export function createQuestUi(ctx) {
 
     if (trackedList.length === 0) {
       trackerBodyEl.innerHTML = `<div class="quest-tracker__empty">${escapeHtml(i18n.t('quest.tracker.empty'))}</div>`;
+      if (typeof window !== 'undefined' && window.innerWidth <= 720 && !trackerCollapsed) {
+        trackerCollapsed = true;
+        applyTrackerCollapsedState();
+      }
       return;
     }
 
@@ -801,7 +805,8 @@ export function createQuestUi(ctx) {
   trackerPillBtn.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (window.innerWidth <= 720 || trackerCollapsed) {
+    const trackedCount = (ctx.quests?.getActiveQuestsDetailed?.() || []).filter((q) => q.tracked).length;
+    if ((window.innerWidth <= 720 || trackerCollapsed) && trackedCount > 0) {
       trackerCollapsed = !trackerCollapsed;
       applyTrackerCollapsedState();
     } else {

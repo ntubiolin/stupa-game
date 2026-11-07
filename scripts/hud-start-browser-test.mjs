@@ -24,6 +24,8 @@ try {
   await activate('#btn-hud-restore');
   assert.equal(await p.locator('#play-hud').evaluate(el=>el.inert),false);
   await p.screenshot({path:`${output}/hud-${width}.png`});
+  await activate('#top-controls [data-settings-open]');
+  await p.locator('#game-settings[open]').waitFor();
   await activate('[data-mode-menu]');await activate('[data-mode-target="story"]');
   await p.locator('.story-phone[open]').waitFor();
   console.log(JSON.stringify({width,centerStart:'PASS',hudRestore:'PASS',chapterSwitch:'PASS'}));

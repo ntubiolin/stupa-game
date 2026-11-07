@@ -164,6 +164,19 @@ export function createInput(ctx) {
     window.addEventListener('resize', () => {
       if (window.innerWidth <= 820) setTouchDeviceMode(true);
     });
+    // Prevent iOS Safari native pinch-zoom and double-tap zoom during dual-thumb combat
+    for (const evt of ['gesturestart', 'gesturechange', 'gestureend', 'dblclick']) {
+      document.addEventListener(evt, (e) => e.preventDefault(), { passive: false });
+    }
+    document.addEventListener(
+      'touchmove',
+      (e) => {
+        if ((e.touches && e.touches.length > 1) || (typeof e.scale === 'number' && e.scale !== 1)) {
+          e.preventDefault();
+        }
+      },
+      { passive: false }
+    );
   }
 
   // ------------------------------------------------------------ keyboard

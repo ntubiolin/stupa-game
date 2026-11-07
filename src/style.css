@@ -43,6 +43,34 @@ body {
   font-family: var(--font-sans);
   user-select: none;
   -webkit-user-select: none;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+button,
+a,
+input,
+select,
+label,
+[role="button"] {
+  touch-action: manipulation;
+}
+
+.modal-body,
+.quest-journal__content,
+.inv-body,
+.world-route-board,
+.codex-list,
+.codex-reader,
+.shop-body,
+.crafting-pane,
+.game-settings,
+.mode-switch-dialog,
+.app-drawer__body,
+.coop-body,
+.stupa-builder__body,
+.lamp-offering__body {
+  touch-action: pan-y;
 }
 
 #app {
@@ -373,12 +401,15 @@ kbd {
   font-weight: 700;
   font-size: 0.95rem;
   color: var(--col-gold);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .vitals-combat-stats {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .vitals-stat-chip {
@@ -391,6 +422,14 @@ kbd {
   border: 1px solid rgba(238, 195, 108, 0.16);
   font-size: 0.75rem;
   color: var(--col-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.merit-toggle-chevron,
+.time-toggle-chevron,
+.utility-bar .utility-more-btn {
+  display: none;
 }
 
 .vitals-stat-val {
@@ -1356,13 +1395,54 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
   .hud-left-stack {
     top: 8px;
     left: 8px;
-    width: min(176px, calc(50vw - 12px));
+    width: min(156px, calc(50vw - 14px));
     gap: 5px;
   }
 
   .vitals-panel {
-    padding: 8px 10px;
-    border-radius: 14px;
+    padding: 6px 8px;
+    border-radius: 12px;
+  }
+
+  .vitals-header {
+    margin-bottom: 5px;
+    padding-bottom: 4px;
+    gap: 3px;
+  }
+
+  .vitals-level-wrap {
+    font-size: 0.76rem;
+    gap: 2px;
+  }
+
+  .vitals-combat-stats {
+    gap: 3px;
+  }
+
+  .vitals-stat-chip {
+    padding: 1px 4px;
+    font-size: 0.65rem;
+    gap: 2px;
+  }
+
+  .vitals-stat-chip .vitals-stat-label {
+    display: none;
+  }
+
+  .vitals-stat-chip:has(#stat-atk)::before {
+    content: '⚔';
+    font-size: 0.62rem;
+    opacity: 0.85;
+  }
+
+  .vitals-stat-chip:has(#stat-def)::before {
+    content: '🛡';
+    font-size: 0.62rem;
+    opacity: 0.85;
+  }
+
+  .vitals-bars {
+    gap: 3px;
   }
 
   .vitals-bar-track {
@@ -1374,74 +1454,244 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
   }
 
   .vitals-bar-meta {
-    font-size: 0.65rem;
+    font-size: 0.6rem;
+    line-height: 1.05;
+  }
+
+  .vitals-bar-wrap--exp .vitals-bar-meta {
+    display: none;
+  }
+
+  .potion-pip {
+    width: 6px;
+    height: 6px;
+  }
+
+  .vitals-buffs {
+    margin-top: 4px;
+    padding-top: 3px;
+    gap: 3px;
+  }
+
+  .vitals-buff-chip {
+    font-size: 0.58rem;
+    padding: 1px 5px;
+    max-width: 100%;
+  }
+
+  .vitals-buff-name {
+    max-width: 82px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .merit-panel {
     width: 100%;
-    padding: 8px 10px;
-    border-radius: 14px;
+    padding: 6px 8px;
+    border-radius: 12px;
+    cursor: pointer;
+  }
+
+  .play-hud[data-zone]:not([data-zone="stupa"]) .merit-panel {
+    display: none;
+  }
+
+  .merit-toggle-chevron {
+    display: inline-block;
+    margin-left: auto;
+    font-size: 0.72rem;
+    color: var(--col-gold);
+    opacity: 0.8;
+    transition: transform 0.2s ease;
+  }
+
+  .merit-panel.is-mobile-expanded .merit-toggle-chevron {
+    transform: rotate(180deg);
+  }
+
+  .merit-panel:not(.is-mobile-expanded) .merit-header {
+    padding-bottom: 0;
+    margin-bottom: 0;
+    border-bottom: none;
+    gap: 8px;
+  }
+
+  .merit-panel:not(.is-mobile-expanded) .merit-grid {
+    display: none;
   }
 
   .kora-ring-wrap {
-    width: 48px;
-    height: 48px;
+    width: 36px;
+    height: 36px;
   }
 
   .kora-ring {
-    width: 48px;
-    height: 48px;
+    width: 36px;
+    height: 36px;
+  }
+
+  .kora-ring__laps {
+    font-size: 0.9rem;
+  }
+
+  .kora-ring__unit {
+    font-size: 0.54rem;
+  }
+
+  .merit-summary__label {
+    font-size: 0.6rem;
   }
 
   .merit-summary__points {
-    font-size: 1.25rem;
+    font-size: 1rem;
+    line-height: 1.05;
+  }
+
+  .merit-summary__sub {
+    font-size: 0.6rem;
+  }
+
+  .merit-grid {
+    gap: 5px;
+  }
+
+  .merit-item {
+    padding: 4px 6px;
+    gap: 5px;
+    border-radius: 9px;
+  }
+
+  .merit-item__icon {
+    font-size: 0.88rem;
+  }
+
+  .merit-item__label {
+    font-size: 0.58rem;
+  }
+
+  .merit-item__value {
+    font-size: 0.8rem;
   }
 
   .top-controls {
     top: 8px;
     right: 8px;
+    gap: 5px;
+    z-index: 15;
+  }
+
+  .time-panel {
+    min-width: 0;
+    padding: 5px 9px;
+    border-radius: 12px;
+  }
+
+  .time-row {
+    gap: 5px;
+    cursor: pointer;
+  }
+
+  .clock-display {
+    font-size: 0.86rem;
+  }
+
+  .clock-phase {
+    font-size: 0.66rem;
+  }
+
+  .time-toggle-chevron {
+    display: inline-block;
+    font-size: 0.68rem;
+    color: var(--col-gold);
+    opacity: 0.8;
+    transition: transform 0.2s ease;
+  }
+
+  .time-panel.is-mobile-expanded .time-toggle-chevron {
+    transform: rotate(180deg);
+  }
+
+  .time-panel:not(.is-mobile-expanded) {
+    border-radius: 999px;
+  }
+
+  .time-panel:not(.is-mobile-expanded) .time-row {
+    margin-bottom: 0;
+  }
+
+  .time-panel:not(.is-mobile-expanded) .speed-group,
+  .time-panel:not(.is-mobile-expanded) .time-slider {
+    display: none;
   }
 
   .utility-bar {
-    max-width: min(176px, calc(50vw - 12px));
-    flex-wrap: nowrap;
-    justify-content: flex-start;
-    overflow-x: auto;
-    scrollbar-width: thin;
+    max-width: min(172px, calc(50vw - 12px));
+    gap: 4px;
+    padding: 4px 5px;
+    border-radius: 12px;
   }
 
-  .utility-bar .icon-btn { flex-shrink: 0; }
+  .utility-bar .icon-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    font-size: 0.76rem;
+    flex-shrink: 0;
+  }
 
-  .time-panel {
-    min-width: 162px;
-    padding: 6px 8px;
+  .utility-bar .utility-more-btn {
+    display: inline-flex;
+  }
+
+  #btn-map-codex-toggle {
+    display: none !important;
+  }
+
+  .utility-bar:not(.is-mobile-expanded) {
+    flex-wrap: nowrap;
+  }
+
+  .utility-bar:not(.is-mobile-expanded) > .icon-btn:not([data-settings-open]):not(#btn-inventory-toggle):not(#btn-hud-hide):not(#btn-utility-more) {
+    display: none;
+  }
+
+  .utility-bar.is-mobile-expanded {
+    display: grid;
+    grid-template-columns: repeat(4, 28px);
+    justify-content: end;
   }
 
   .prompt-wrap {
-    bottom: 96px;
+    bottom: 84px;
+  }
+
+  .prompt-pill__key {
+    display: none;
   }
 
   .mobile-actions {
-    right: 14px;
-    bottom: 16px;
+    right: 12px;
+    bottom: 14px;
     display: grid;
-    grid-template-columns: repeat(2, 56px);
-    grid-template-rows: repeat(2, 56px);
-    gap: 8px;
+    grid-template-columns: repeat(2, 52px);
+    grid-template-rows: repeat(2, 52px);
+    gap: 7px;
     align-items: center;
     justify-items: center;
+    touch-action: none;
   }
 
   .action-fab {
-    width: 56px;
-    height: 56px;
-    border-radius: 16px;
+    width: 52px;
+    height: 52px;
+    border-radius: 15px;
   }
 
   .action-fab--chant,
   #btn-chant {
-    width: 62px;
-    height: 62px;
+    width: 56px;
+    height: 56px;
     grid-column: 2;
     grid-row: 2;
   }
@@ -1459,6 +1709,10 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
   #btn-mobile-interact {
     grid-column: 1;
     grid-row: 2;
+  }
+
+  #btn-mobile-potion {
+    display: none;
   }
 
   .action-fab__key {
@@ -3358,18 +3612,34 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
 
 @media (max-width: 720px) {
   .minimap-wrap {
-    top: 168px;
+    top: 82px;
     right: 8px;
+    gap: 4px;
   }
 
   .play-hud.has-boss-bar .minimap-wrap {
-    top: 224px;
+    top: 138px;
   }
 
   .minimap-ring-frame,
   .minimap-canvas {
-    width: 112px;
-    height: 112px;
+    width: 90px;
+    height: 90px;
+  }
+
+  .minimap-zone-tag {
+    font-size: 0.6rem;
+    padding: 1px 6px;
+  }
+
+  .minimap-bar kbd,
+  #minimap-btn-open {
+    display: none;
+  }
+
+  .minimap-pill {
+    padding: 2px 7px;
+    font-size: 0.68rem;
   }
 
   .zone-map-layout,
@@ -4343,6 +4613,8 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
   font-weight: 700;
   padding: 2px 4px;
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .quest-tracker__count {
@@ -4782,20 +5054,34 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
   }
 
   .quest-tracker {
-    top: 340px;
+    top: 204px;
     right: 8px;
-    width: 210px;
-    padding: 7px 10px;
+    width: min(188px, 48vw);
+    padding: 6px 8px;
   }
 
   body:has(.play-hud.has-boss-bar) .quest-tracker {
-    top: 396px;
+    top: 260px;
+  }
+
+  .quest-tracker__pill-btn {
+    font-size: 0.76rem;
+    gap: 4px;
+  }
+
+  #quest-tracker-journal-btn {
+    display: none;
   }
 
   .quest-tracker.is-collapsed {
     width: auto;
+    max-width: 150px;
     border-radius: 999px;
-    padding: 5px 10px;
+    padding: 4px 8px;
+  }
+
+  .quest-tracker.is-collapsed #quest-tracker-mural-btn {
+    display: none;
   }
 }
 
@@ -5600,24 +5886,35 @@ body.is-touch-device .mobile-skill-pad {
 
 @media (max-width: 720px) {
   .skill-bar {
-    bottom: 8px;
-    padding: 5px 8px;
-    gap: 5px;
-    transform: translateX(-50%) scale(0.86);
-    transform-origin: bottom center;
-  }
-
-  /* When combat mobile arc skill pad is active on narrow screens, dock only the K modal button */
-  .play-hud:has(#mobile-skill-pad:not(.is-hidden)) .skill-bar {
-    left: 158px;
-    bottom: 16px;
+    left: auto;
+    right: 12px;
+    bottom: 132px;
     transform: none;
     padding: 3px;
     border-radius: 14px;
   }
 
-  .play-hud:has(#mobile-skill-pad:not(.is-hidden)) .skill-bar .skill-slot {
+  .skill-bar .skill-slot,
+  .skill-bar__panel-key {
     display: none;
+  }
+
+  .skill-bar__panel-btn {
+    width: 40px;
+    height: 40px;
+    min-height: 40px;
+    padding: 0;
+    border-radius: 11px;
+  }
+
+  /* When combat mobile arc skill pad is active on narrow screens, dock only the K modal button */
+  .play-hud:has(#mobile-skill-pad:not(.is-hidden)) .skill-bar {
+    left: auto;
+    right: 162px;
+    bottom: 14px;
+    transform: none;
+    padding: 3px;
+    border-radius: 14px;
   }
 }
 
