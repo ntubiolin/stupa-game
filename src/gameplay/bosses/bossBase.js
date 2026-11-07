@@ -1145,7 +1145,9 @@ export function createBoss(ctx, def) {
 
     // 4. Update active pattern telegraphs, projectiles, and hazards
     patternRunner.update(dt);
+    if (!bossState.active) return;
     def.onUpdate?.(dt, bossState, ctx, patternRunner, built);
+    if (!bossState.active) return;
 
     if (pPos && bossState.active) {
       const dx = pPos.x - arena.x;

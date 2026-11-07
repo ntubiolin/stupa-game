@@ -409,6 +409,10 @@ export const TENMA_STORM_BOSS = {
     return this.onSpawn(boss, ctx, patternRunner, built);
   },
 
+  onReset(boss, ctx, patternRunner, built) {
+    return this.onSpawn(boss, ctx, patternRunner, built);
+  },
+
   onSpawn(boss, _ctx, _patternRunner, built) {
     boss.phase2ToastShown = false;
     boss.subdueElapsed = 0;
@@ -608,7 +612,7 @@ export const TENMA_STORM_BOSS = {
       orb.haloMesh.rotation.y += dt * 3.5;
       orb.haloMesh.rotation.x += dt * 2.2;
 
-      if (orb.detached && boss.phase === 2) {
+      if (orb.detached && (boss.active ?? true) && boss.phase === 2) {
         // World corner target -> local relative to boss.pos
         const targetLx = ARENA_X + orb.cornerDx - boss.pos.x;
         const targetLz = ARENA_Z + orb.cornerDz - boss.pos.z;
@@ -617,14 +621,16 @@ export const TENMA_STORM_BOSS = {
         orb.curLz += (targetLz - orb.curLz) * Math.min(1, dt * 5.0);
         orb.curLy += (targetLy - orb.curLy) * Math.min(1, dt * 5.0);
         // Counter-rotate by -boss.heading because boss.group is rotated by boss.heading
-        const cosH = Math.cos(-boss.heading);
-        const sinH = Math.sin(-boss.heading);
+        const heading = boss.heading ?? 0;
+        const cosH = Math.cos(-heading);
+        const sinH = Math.sin(-heading);
         const rx = orb.curLx * cosH - orb.curLz * sinH;
         const rz = orb.curLx * sinH + orb.curLz * cosH;
         orb.group.position.set(rx, orb.curLy, rz);
         orb.groundRing.visible = true;
 
         // Cast mini weather hazard from this active corner orb
+        if (!boss.active && !boss.subdued && boss.active !== undefined) continue;
         orb.hazardTimer -= dt;
         if (orb.hazardTimer <= 0 && pPos) {
           if (orb.weatherType === 'hail') {
