@@ -172,6 +172,30 @@ export function createCameraRig(ctx) {
     pos.y = Math.max(0.55, pos.y);
   }
 
+  function clampWildCamera(pos, look, mapDef) {
+    const wOrigin = mapDef?.origin || config.WILD?.origin || { x: 1000, z: 0 };
+    const maxR = ((mapDef?.walkRadius ?? config.WILD?.walkRadius) || 70) + 15;
+    const cdx = pos.x - wOrigin.x;
+    const cdz = pos.z - wOrigin.z;
+    const radius = Math.hypot(cdx, cdz);
+    const rayLength = Math.hypot(pos.x - look.x, pos.z - look.z);
+    if (rayLength > 1e-4 && radius > maxR) {
+      const ldx = look.x - wOrigin.x;
+      const ldz = look.z - wOrigin.z;
+      const dx = (pos.x - look.x) / rayLength;
+      const dz = (pos.z - look.z) / rayLength;
+      const dot = ldx * dx + ldz * dz;
+      const discriminant = dot * dot + maxR * maxR - ldx * ldx - ldz * ldz;
+      if (discriminant >= 0) {
+        const length = Math.max(0.5, -dot + Math.sqrt(discriminant));
+        pos.x = look.x + dx * length;
+        pos.z = look.z + dz * length;
+      }
+    }
+    const terrainY = ctx.world ? ctx.world.getHeight(pos.x, pos.z) : 0;
+    pos.y = Math.max(terrainY + 0.55, pos.y);
+  }
+
   function setFrontCam(active, silent = false) {
     const next = Boolean(active);
     if (frontCamActive === next) return frontCamActive;
@@ -360,23 +384,26 @@ export function createCameraRig(ctx) {
 
     distance += (targetDistance - distance) * Math.min(1, dt * 10);
 
-    // 2. Gentle auto-follow behind (or in front of) moving player when user hasn't dragged camera recently
+    // 2. Horizontal yaw stability:
+    // - In 'off' and default 'smart' modes (when not in frontCam portrait mode), NEVER auto-rotate
+    //   horizontal yaw during play movement. The camera angle stays strictly where the player
+    //   placed it with mouse/touch so movement never spins the camera or overrides mouse look.
+    // - In 'on' mode, gently follow behind the player ONLY when moving straight forward outside
+    //   combat and dense object clusters after 4.0s without manual camera input.
     const timeSinceLook = (performance.now() - (input?.lastLookTime ?? -1e9)) * 0.001;
     const moveX = Math.abs(input?.move?.x || 0);
-    const moveY = input?.move?.y || 0;
+    const moveY = input?.move?.y ?? 1;
     const headingDelta = Math.abs(wrapAngle((state.player.heading || 0) - yaw));
-    const unsafeFollow = moveY < -0.05 || moveX > Math.abs(moveY)
-      || (moveX > 0.15 && Math.abs(moveY) < 0.5) || headingDelta > Math.PI * 0.58;
-    const smartStupa = autoFollowMode === 'smart' && state.zone === 'stupa' && !frontCamActive;
-    const followAllowed = (frontCamActive || autoFollowMode !== 'off')
-      && (autoFollowMode !== 'smart' || (!isInCombatOrTargeted()
-        && (frontCamActive || (!unsafeFollow && !isNearDenseCluster()))));
-    const followDelay = frontCamActive ? 1.4 : (smartStupa ? 3.5 : 2.2);
-    if (state.player.isMoving && followAllowed && timeSinceLook > followDelay) {
+    const isForwardOnly = moveY > 0.5 && moveX < 0.15 && headingDelta <= Math.PI * 0.58;
+    const combatLocked = isInCombatOrTargeted();
+    const canAutoFollow = frontCamActive
+      ? ((autoFollowMode !== 'smart' || !combatLocked) && timeSinceLook > 1.4)
+      : (autoFollowMode === 'on' && !combatLocked && !isNearDenseCluster() && isForwardOnly && timeSinceLook > 4.0);
+    if (state.player.isMoving && canAutoFollow) {
       const targetYaw = frontCamActive
         ? wrapAngle((state.player.heading || 0) + Math.PI)
         : (state.player.heading || 0);
-      yaw = lerpAngle(yaw, targetYaw, dt * (frontCamActive ? 3.2 : (smartStupa ? 0.45 : 1.35)));
+      yaw = lerpAngle(yaw, targetYaw, dt * (frontCamActive ? 3.2 : 0.85));
     }
 
     // 3. Optional side-angle framing during prostration so full-body bow + stupa are visible
@@ -436,18 +463,7 @@ export function createCameraRig(ctx) {
       // 4. Keep camera outside stupa collider (r > ~20.1) and above plaza ground
       clampStupaCamera(desiredPos, desiredLook);
     } else {
-      const wOrigin = mapDef?.origin || config.WILD?.origin || { x: 1000, z: 0 };
-      const cdx = desiredPos.x - wOrigin.x;
-      const cdz = desiredPos.z - wOrigin.z;
-      const camWildDist = Math.hypot(cdx, cdz);
-      const maxCamWildDist = ((mapDef?.walkRadius ?? config.WILD?.walkRadius) || 70) + 10;
-      if (camWildDist > maxCamWildDist) {
-        const s = maxCamWildDist / (camWildDist || 1);
-        desiredPos.x = wOrigin.x + cdx * s;
-        desiredPos.z = wOrigin.z + cdz * s;
-      }
-      const terrainY = ctx.world ? ctx.world.getHeight(desiredPos.x, desiredPos.z) : 0;
-      desiredPos.y = Math.max(terrainY + 0.55, desiredPos.y);
+      clampWildCamera(desiredPos, desiredLook, mapDef);
     }
 
     // 5. Smooth damping (and blend from intro orbit right after game:start)
@@ -467,18 +483,11 @@ export function createCameraRig(ctx) {
       if (introBlend >= 0.99) clampStupaCamera(currentPos, currentLook);
       if (currentPos.y < 0.55) currentPos.y = 0.55;
     } else {
-      const wOrigin = mapDef?.origin || config.WILD?.origin || { x: 1000, z: 0 };
-      const cdx = currentPos.x - wOrigin.x;
-      const cdz = currentPos.z - wOrigin.z;
-      const curWildDist = Math.hypot(cdx, cdz);
-      const maxCamWildDist = ((mapDef?.walkRadius ?? config.WILD?.walkRadius) || 70) + 10;
-      if (curWildDist > maxCamWildDist) {
-        const s = maxCamWildDist / (curWildDist || 1);
-        currentPos.x = wOrigin.x + cdx * s;
-        currentPos.z = wOrigin.z + cdz * s;
+      if (introBlend >= 0.99) clampWildCamera(currentPos, currentLook, mapDef);
+      else {
+        const curTerrainY = ctx.world ? ctx.world.getHeight(currentPos.x, currentPos.z) : 0;
+        if (currentPos.y < curTerrainY + 0.55) currentPos.y = curTerrainY + 0.55;
       }
-      const curTerrainY = ctx.world ? ctx.world.getHeight(currentPos.x, currentPos.z) : 0;
-      if (currentPos.y < curTerrainY + 0.55) currentPos.y = curTerrainY + 0.55;
     }
 
     camera.position.copy(currentPos);

@@ -56,11 +56,14 @@ function harness({ zone = 'wild', radius = 35, settings = {}, stateMode, save = 
   return { ctx, rig, events, writes, advance };
 }
 
-test('defaults to smart, persists merged settings and exposes the camera API', () => {
+test('defaults to smart, persists merged settings, and keeps yaw locked in smart and off modes', () => {
   const { ctx, rig, writes, events, advance } = harness();
   assert.equal(ctx.cameraRig, rig);
   assert.equal(rig.getAutoFollowMode(), 'smart');
   assert.equal(ctx.state.cameraAutoFollow, 'smart');
+  // In default 'smart' mode, normal movement in wilderness never overrides yaw
+  advance(5);
+  assert.equal(rig.getYaw(), 0);
   assert.equal(rig.setAutoFollowMode('off'), 'off');
   assert.equal(ctx.state.cameraAutoFollow, 'off');
   assert.deepEqual(writes.at(-1), { key: 'settings', value: { musicVolume: 0.4, cameraAutoFollow: 'off' } });
@@ -69,8 +72,6 @@ test('defaults to smart, persists merged settings and exposes the camera API', (
   assert.equal(rig.getYaw(), 0);
   assert.equal(rig.toggleAutoFollow(), 'smart');
   assert.equal(ctx.save.get().cameraAutoFollow, 'smart');
-  advance();
-  assert.ok(rig.getYaw() > 0);
   rig.setYaw(0.4);
   assert.ok(Math.abs(rig.getYaw() - 0.4) < 1e-12);
   rig.setAutoFollowMode('on', true);
@@ -134,7 +135,7 @@ test('smart locks for nearby living enemies and distant alerted enemies through 
 });
 
 test('dead, liberated, calmed and distant idle enemies do not lock the camera', () => {
-  const { ctx, rig, advance } = harness();
+  const { ctx, rig, advance } = harness({ stateMode: 'on' });
   ctx.state.enemies = [null,
     { state: 'chase', hp: 0, x: 35, z: 0 },
     { state: 'liberated', hp: 10, x: 35, z: 0 },
@@ -148,7 +149,7 @@ test('dead, liberated, calmed and distant idle enemies do not lock the camera', 
 
 test('every combat event locks for four seconds, refreshes the timer and records combat time', () => {
   for (const event of ['player:attack', 'player:chant', 'mantra:cast', 'skill:cast', 'vitals:damage']) {
-    const { ctx, rig, advance } = harness();
+    const { ctx, rig, advance } = harness({ stateMode: 'on' });
     ctx.bus.emit(event);
     assert.equal(ctx.state.lastCombatTime, ctx.state.elapsed);
     assert.equal(rig.isCombatLocked(), true);
@@ -205,23 +206,27 @@ test('backward, strafe and large heading differences never feed back into smart 
   }
 });
 
-test('classic follows while smart combat and off remain locked; manual orbit remains available', () => {
+test('classic on mode follows only when out of combat, forward-only, and >4s after mouse look; smart and off keep mouse angle', () => {
   const { ctx, rig, advance } = harness();
-  ctx.bus.emit('player:attack');
-  rig.setAutoFollowMode('on', true);
-  advance();
-  assert.ok(rig.getYaw() > 0);
-  rig.setAutoFollowMode('off', true);
-  const yaw = rig.getYaw();
+  // In 'smart' mode, manual mouse orbit sets yaw and subsequent movement never resets it
   ctx.input.look.dx = 10;
+  ctx.input.lastLookTime = performance.now() - 10000;
   rig.update(1 / 60);
-  assert.ok(Math.abs(rig.getYaw() - (yaw - 0.048)) < 1e-12);
-  ctx.input.look.dx = 0;
-  rig.setAutoFollowMode('smart', true);
-  ctx.input.lastLookTime = performance.now();
   const manualYaw = rig.getYaw();
-  advance();
+  assert.ok(Math.abs(manualYaw - (-0.048)) < 1e-12);
+  ctx.input.look.dx = 0;
+  advance(10);
   assert.equal(rig.getYaw(), manualYaw);
+
+  // Switch to 'on' mode: while combat-locked, yaw stays locked
+  rig.setAutoFollowMode('on', true);
+  ctx.bus.emit('player:attack');
+  advance(2);
+  assert.equal(rig.getYaw(), manualYaw);
+
+  // Once combat lock expires (>4s), 'on' mode gently follows forward movement
+  advance(3);
+  assert.ok(rig.getYaw() > manualYaw);
 });
 
 test('smart holds yaw around the stupa base and lamp ring', () => {
@@ -237,32 +242,32 @@ test('smart holds yaw around the stupa base and lamp ring', () => {
   }
 });
 
-test('nearby interactables and pairs of colliders stabilize smart follow', () => {
+test('nearby interactables and pairs of colliders stabilize on-mode follow', () => {
   for (const objects of [
     { interactables: [{ x: 38.8, z: 0 }] },
     { interactables: [{ position: { x: 35, z: 3 } }] },
     { colliders: [{ x: 36, z: 0 }, { position: { x: 34, z: 0 } }] },
   ]) {
-    const { ctx, rig, advance } = harness();
+    const { ctx, rig, advance } = harness({ stateMode: 'on' });
     Object.assign(ctx, objects);
     advance(5);
     assert.equal(rig.getYaw(), 0);
   }
-  const { ctx, rig, advance } = harness();
+  const { ctx, rig, advance } = harness({ stateMode: 'on' });
   ctx.colliders = [{ x: 36, z: 0 }];
   ctx.interactables = [{ x: 35, z: 0, zone: 'stupa' }];
   advance();
   assert.ok(rig.getYaw() > 0);
 });
 
-test('outside the plaza cluster, smart waits longer and follows gently', () => {
-  const { ctx, rig } = harness({ zone: 'stupa' });
-  ctx.input.lastLookTime = performance.now() - 3000;
+test('outside dense clusters, on mode waits 4s after mouse look and follows gently', () => {
+  const { ctx, rig } = harness({ zone: 'stupa', stateMode: 'on' });
+  ctx.input.lastLookTime = performance.now() - 3500;
   rig.update(0.1);
   assert.equal(rig.getYaw(), 0);
-  ctx.input.lastLookTime = performance.now() - 4000;
+  ctx.input.lastLookTime = performance.now() - 4500;
   rig.update(0.1);
-  assert.ok(Math.abs(rig.getYaw() - 0.8 * 0.1 * 0.45) < 1e-12);
+  assert.ok(Math.abs(rig.getYaw() - 0.8 * 0.1 * 0.85) < 1e-12);
 });
 
 test('stupa clearance preserves actual horizontal viewing direction, including after damping', () => {
