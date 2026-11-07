@@ -110,7 +110,7 @@ const ZH_HANT = {
   'toast.allyFainted': '道友「{name}」力竭倒下！靠近按 [E] 或施放六字大明咒施予甘露救援',
   'toast.coopTeleported': '已隨順緣起傳送至隊長所在區域',
   'toast.coopTermaSynced': '隊長已開啟伏藏秘境（Tier {tier} · 第 {floor} 層），全隊同步踏入！',
-  'toast.sharedKoraCommunion': '☸ 十方共修繞塔加持！與行者「{name}」同行繞塔，恢復氣血氣力並增上功德',
+  'toast.sharedKoraCommunion': '☸ 十方共修加持！與行者「{name}」同行共修，恢復氣血氣力並獲共修功德',
   'toast.emoteSent': '已發送法語祈願：{text}',
 
   // ---------------------------------------------------------------- Terma Tier Select Co-op Banner
@@ -218,7 +218,7 @@ const EN = {
   'toast.allyFainted': 'Companion "{name}" has fainted! Press [E] nearby or chant the Mantra to revive them.',
   'toast.coopTeleported': "Teleported to Party Leader's zone",
   'toast.coopTermaSynced': 'Party Leader entered Terma Realm (Tier {tier} · Floor {floor}) — syncing party!',
-  'toast.sharedKoraCommunion': '☸ Shared Kora Communion with "{name}"! Restored 5% HP, 8% MP & gained Kora merit',
+  'toast.sharedKoraCommunion': '☸ Shared Kora Communion with "{name}"! Restored 5% HP, 8% MP & gained communion merit',
   'toast.emoteSent': 'Sent Dharma prayer: {text}',
 
   // ---------------------------------------------------------------- Terma Tier Select Co-op Banner

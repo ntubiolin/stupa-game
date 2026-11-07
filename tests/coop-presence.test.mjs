@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as THREE from 'three';
+import { CONFIG } from '../src/config.js';
 import { createCoop } from '../src/systems/coop.js';
+import { createMerit } from '../src/systems/merit.js';
+import { createQuests } from '../src/systems/quests.js';
 
 // Mock BroadcastChannel for multi-instance synchronous relay in Node tests
 const channelsByName = new Map();
@@ -217,22 +221,128 @@ test('Dharma emotes broadcast across zone presence and Shared Kora Communion tri
   peerA.state.player.hp = 60;
   peerA.state.player.mp = 20;
 
-  let koraMeritAwarded = 0;
+  let koraCommunionAwarded = 0;
+  let koraLapAwarded = 0;
   let communionToast = null;
   peerA.bus.on('merit', (m) => {
-    if (m.type === 'kora') koraMeritAwarded += m.count;
+    if (m.type === 'koraCommunion' && m.source === 'sharedKoraCommunion') {
+      koraCommunionAwarded += m.count;
+    }
+    if (m.type === 'kora') {
+      koraLapAwarded += m.count;
+    }
   });
   peerA.bus.on('toast', (t) => {
     if (t.key === 'toast.sharedKoraCommunion') communionToast = t;
   });
 
   peerA.coop.update(4.0);
-  assert.equal(koraMeritAwarded, 0);
+  assert.equal(koraCommunionAwarded, 0);
   peerA.coop.update(4.2);
 
-  assert.equal(koraMeritAwarded, 1);
+  assert.equal(koraCommunionAwarded, 1);
+  assert.equal(koraLapAwarded, 0);
   assert.ok(communionToast);
   assert.equal(peerA.coop.getState().koraCommunionCount, 1);
   assert.ok(peerA.state.player.hp > 60);
   assert.ok(peerA.state.player.mp > 20);
+});
+
+test('Shared Kora Communion with AI or peer in straight-line walking grants communion merit & HP/MP without inflating actual Kora laps or Kora quests, and persists across save/load', () => {
+  channelsByName.clear();
+  const savedStore = {};
+  const mockSave = {
+    get(key, fallback) {
+      return key in savedStore ? JSON.parse(JSON.stringify(savedStore[key])) : fallback;
+    },
+    set(key, val) {
+      savedStore[key] = JSON.parse(JSON.stringify(val));
+    },
+    reset() {
+      for (const k of Object.keys(savedStore)) delete savedStore[k];
+    },
+  };
+
+  const peerA = createPeerCtx({ name: '行者甲', zone: 'stupa', x: 0, z: 25 });
+  peerA.ctx.config = CONFIG;
+  peerA.ctx.save = mockSave;
+  peerA.ctx.scene = new THREE.Group();
+  peerA.ctx.i18n = { t: (k) => k };
+
+  const merit = createMerit(peerA.ctx);
+  const quests = createQuests(peerA.ctx);
+  quests.register({
+    id: 'test_kora_quest',
+    titleKey: 'quest.test.title',
+    descKey: 'quest.test.desc',
+    steps: [{ type: 'kora', count: 1 }],
+  });
+  quests.start('test_kora_quest');
+
+  const koraLapToasts = [];
+  peerA.bus.on('toast', (t) => {
+    if (t.key === 'toast.koraLap') koraLapToasts.push(t);
+  });
+
+  // 1. Solo walking in a straight line (no AI, no peer): neither communion nor kora triggers
+  peerA.state.player.action = 'walk';
+  peerA.state.player.hp = 50;
+  peerA.state.player.mp = 20;
+  peerA.state.player.position.set(5, 0, 25);
+  peerA.coop.update(8.5);
+  assert.equal(merit.getStats().kora, 0);
+  assert.equal(merit.getStats().koraCommunion, 0);
+  assert.equal(merit.getStats().points, 0);
+  assert.equal(peerA.state.player.hp, 50);
+
+  // 2. Summon AI companion and walk in a straight line for 8.2s -> communion triggers, kora lap stays 0
+  const ai = peerA.coop.addAiCompanion(0);
+  assert.ok(ai);
+  peerA.state.player.position.set(10, 0, 25);
+  peerA.coop.update(8.2);
+
+  assert.equal(merit.getStats().koraCommunion, 1);
+  assert.equal(merit.getStats().kora, 0);
+  assert.equal(merit.getStats().points, CONFIG.MERIT.weights.koraCommunion);
+  assert.ok(peerA.state.player.hp > 50);
+  assert.ok(peerA.state.player.mp > 20);
+  assert.equal(koraLapToasts.length, 0);
+  assert.equal(peerA.state.quests.active.test_kora_quest.progress, 0);
+  assert.equal(merit.getStats().achievements.includes('firstKora'), false);
+
+  // 3. Dismiss AI, bring human peer nearby, walk in a straight line for another 8.2s -> communion becomes 2, kora lap still 0
+  peerA.coop.leaveRoom();
+  const peerB = createPeerCtx({ name: '行者乙', zone: 'stupa', x: 12, z: 25 });
+  peerB.coop.update(0.2);
+  peerA.coop.update(0.2);
+
+  peerA.state.player.position.set(14, 0, 25);
+  peerA.coop.update(8.2);
+  assert.equal(merit.getStats().koraCommunion, 2);
+  assert.equal(merit.getStats().kora, 0);
+  assert.equal(merit.getStats().points, CONFIG.MERIT.weights.koraCommunion * 2);
+  assert.equal(koraLapToasts.length, 0);
+  assert.equal(peerA.state.quests.active.test_kora_quest.progress, 0);
+
+  // 4. Complete an actual full Kora lap -> kora becomes 1 (not double-counted), quest completes, firstKora unlocks
+  peerA.bus.emit('merit', { type: 'kora', count: 1 });
+  assert.equal(merit.getStats().kora, 1);
+  assert.equal(merit.getStats().koraCommunion, 2);
+  assert.equal(
+    merit.getStats().points,
+    CONFIG.MERIT.weights.koraCommunion * 2 + CONFIG.MERIT.weights.kora,
+  );
+  assert.equal(koraLapToasts.length, 1);
+  assert.equal(koraLapToasts[0].params.n, 1);
+  assert.ok(merit.getStats().achievements.includes('firstKora'));
+  assert.ok(peerA.state.quests.done.includes('test_kora_quest'));
+
+  // 5. Save/Load roundtrip preserves both actual kora laps (1) and koraCommunion (2) separately
+  const reloadedPeer = createPeerCtx({ name: '行者甲重載', zone: 'stupa', x: 0, z: 25 });
+  reloadedPeer.ctx.config = CONFIG;
+  reloadedPeer.ctx.save = mockSave;
+  const reloadedMerit = createMerit(reloadedPeer.ctx);
+  assert.equal(reloadedMerit.getStats().kora, 1);
+  assert.equal(reloadedMerit.getStats().koraCommunion, 2);
+  assert.equal(reloadedPeer.coop.getState().koraCommunionCount, 2);
 });

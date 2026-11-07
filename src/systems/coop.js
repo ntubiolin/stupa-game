@@ -75,7 +75,10 @@ export function createCoop(ctx) {
   let isHost = false;
   let roomPublic = true;
   let resonanceCount = 0;
-  let koraCommunionCount = 0;
+  let koraCommunionCount =
+    Number(ctx.merit?.getStats?.()?.koraCommunion) ||
+    Number(ctx.save?.get?.('merit', {})?.koraCommunion) ||
+    0;
   let koraCommunionTimer = 0;
 
   // Map<peerId, memberSnapshot> for 4-player Co-op Party
@@ -578,6 +581,10 @@ export function createCoop(ctx) {
     const partySize = active ? Math.min(4, 1 + members.length) : 1;
     const currentZone = state.zone || 'stupa';
     const currentShard = shardId && shardId.startsWith(currentZone) ? shardId : `${currentZone}#1`;
+    const meritCommunion = Number(ctx.merit?.getStats?.()?.koraCommunion) || 0;
+    if (meritCommunion > koraCommunionCount) {
+      koraCommunionCount = meritCommunion;
+    }
     return {
       active,
       roomCode,
@@ -2160,6 +2167,12 @@ export function createCoop(ctx) {
   });
 
   // ---------------------------------------------------------------- Shared Kora Communion
+  bus?.on('merit:reset', () => {
+    koraCommunionCount = 0;
+    koraCommunionTimer = 0;
+    syncStateOnCtx();
+  });
+
   function updateSharedKoraCommunion(dt) {
     const currentZone = state.zone || 'stupa';
     if (!KORA_ZONES.has(currentZone)) {
@@ -2193,7 +2206,8 @@ export function createCoop(ctx) {
     koraCommunionTimer += dt;
     if (koraCommunionTimer >= 8.0) {
       koraCommunionTimer -= 8.0;
-      koraCommunionCount += 1;
+      const meritCommunion = Number(ctx.merit?.getStats?.()?.koraCommunion) || 0;
+      koraCommunionCount = Math.max(koraCommunionCount, meritCommunion) + 1;
 
       const maxHp = Math.max(1, Number(p.maxHp) || 100);
       const maxMp = Math.max(1, Number(p.maxMp) || 60);
@@ -2213,7 +2227,7 @@ export function createCoop(ctx) {
         source: 'sharedKoraCommunion',
       });
       bus?.emit('merit', {
-        type: 'kora',
+        type: 'koraCommunion',
         count: 1,
         source: 'sharedKoraCommunion',
       });
