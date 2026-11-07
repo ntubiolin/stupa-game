@@ -104,6 +104,17 @@ async function unfinishedDemo() {
   await page.locator('.story-objective').getByText('Test mode · Chapter progress and choices are never saved').waitFor();
   await page.screenshot({ path: join(output, 'desktop-chimphu-preview.png') });
   await ui.click('[data-action="interact"]');
+  await ui.click('[data-card="continue"]');
+  for (const step of ['starlight1', 'starlight2', 'starlight3']) {
+    await waitForPreview(ui, step);
+    await ui.click('[data-action="interact"]');
+    await ui.click('[data-card="continue"]');
+  }
+  await waitForPreview(ui, 'descent');
+  await ui.click('[data-action="interact"]');
+  await ui.click('[data-card="continue"]');
+  await page.locator('.story-phone[open]').waitFor();
+  for (let i = 0; i < 4; i++) await ui.click('.story-phone__actions .story-phone__action--primary');
   await waitForPreview(ui, 'diary');
   await ui.click('[data-action="interact"]');
   await ui.click('[data-chapter-action="read-diary"]');
@@ -145,16 +156,16 @@ async function canonicalChapter() {
   await ui.field('choice').selectOption('retain');
   await ui.click('[data-story-debug="preview"]');
   await waitForPreview(ui, 'response');
-  await ui.click('[data-action="interact"]');
-  await page.getByText(/offline page has kept the link/i).waitFor();
-  await ui.click('[data-card="close"]');
+  await page.locator('.story-phone[open]').waitFor();
+  await page.getByText(/Silent archive · No proactive messages/i).waitFor();
+  await ui.click('.story-phone__close');
 
   await openPanel(ui);
   await selectPreview(ui, 'finale', 'response', 'end');
   await waitForPreview(ui, 'response');
-  await ui.click('[data-action="interact"]');
-  await page.getByText(/She did not leave the following message/i).waitFor();
-  await ui.click('[data-card="close"]');
+  await page.locator('.story-phone[open]').waitFor();
+  await page.getByText(/Account deactivated/i).waitFor();
+  await ui.click('.story-phone__close');
   assert.equal(await ui.raw(), before);
   await openPanel(ui);
   await ui.click('[data-story-debug="exit"]');
