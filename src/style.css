@@ -2955,7 +2955,7 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
 
 .world-route-board {
   position: relative;
-  height: 380px;
+  height: 410px;
   border-radius: 14px;
   background:
     radial-gradient(circle at 30% 35%, rgba(245, 222, 179, 0.16), transparent 65%),
@@ -2997,11 +2997,14 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 5px 9px;
+  gap: 1px;
+  max-width: 142px;
+  padding: 4px 8px;
   border-radius: 10px;
   background: rgba(24, 18, 12, 0.88);
   border: 1.5px solid rgba(214, 190, 145, 0.35);
   color: #e7dcc6;
+  text-align: center;
   cursor: pointer;
   transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
@@ -3029,20 +3032,23 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
 }
 
 .world-node__pin {
-  font-size: 0.95rem;
+  font-size: 0.86rem;
   line-height: 1;
 }
 
 .world-node__name {
   font-family: var(--font-serif);
-  font-size: 0.76rem;
+  font-size: 0.74rem;
+  line-height: 1.15;
   font-weight: 700;
-  white-space: nowrap;
+  white-space: normal;
+  text-wrap: balance;
   color: #fff6e0;
 }
 
 .world-node__lvl {
   font-size: 0.64rem;
+  line-height: 1.12;
   color: #cbd5e1;
   white-space: nowrap;
 }
@@ -3310,6 +3316,16 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
   margin-bottom: 8px;
 }
 
+@media (max-width: 860px) {
+  .world-route-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .world-route-board {
+    height: 390px;
+  }
+}
+
 @media (max-width: 720px) {
   .minimap-wrap {
     top: 168px;
@@ -3335,6 +3351,30 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
   .zone-map-canvas {
     width: 240px;
     height: 240px;
+  }
+}
+
+@media (max-width: 600px) {
+  .world-route-board {
+    height: 370px;
+  }
+
+  .world-node {
+    max-width: 108px;
+    padding: 3px 6px;
+    border-radius: 8px;
+  }
+
+  .world-node__pin {
+    font-size: 0.78rem;
+  }
+
+  .world-node__name {
+    font-size: 0.68rem;
+  }
+
+  .world-node__lvl {
+    font-size: 0.58rem;
   }
 }
 
