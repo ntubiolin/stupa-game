@@ -11,6 +11,7 @@
  *  - Oath dialogue ('boss.migoiKing.oath') registered in ctx.dialogue
  */
 import '../..//i18n/bosses.js';
+import { MIGOI_ARENA_RADIUS } from '../../data/combatSettings.js';
 
 const PRAYER_SASH_COLORS = [
   0x1a5fb4, // Blue
@@ -231,7 +232,7 @@ export const MIGOI_KING_DEF = {
   ccResist: 0.75,
   radius: 1.35,
   height: 3.8,
-  arena: { map: 'wild', x: 1000, z: -48, r: 14 },
+  arena: { map: 'wild', x: 1000, z: -48, r: MIGOI_ARENA_RADIUS },
   buildModel: buildMigoiKingModel,
   phases: [
     {

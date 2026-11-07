@@ -150,13 +150,22 @@ export function createSkills(ctx) {
     return false;
   }
 
+  function getRequiredUltCharge(def) {
+    const baseMax = def?.maxCharge || ULT_MAX_CHARGE;
+    if (ctx.powers?.has?.('uddiyanaLotusHat')) {
+      return Math.max(10, baseMax - 5);
+    }
+    return baseMax;
+  }
+
   function getEffectiveCooldown(slotOrId) {
     const def = getSkillDef(slotOrId);
     if (!def) return 0;
     const baseCd = Number(def.cooldown) || 0;
     if (baseCd <= 0) return 0;
     const rawCdr = Number(state.player?.cdr || 0);
-    const cdrFrac = Math.min(0.40, Math.max(0, rawCdr > 1 ? rawCdr / 100 : rawCdr));
+    const hatBonus = ctx.powers?.has?.('uddiyanaLotusHat') ? 0.10 : 0;
+    const cdrFrac = Math.min(0.45, Math.max(0, (rawCdr > 1 ? rawCdr / 100 : rawCdr) + hatBonus));
     const rawShrine = Number(state.player?.shrineCdr || 0);
     const shrineFrac = Math.max(0, rawShrine > 1 ? rawShrine / 100 : rawShrine);
     const mult = Math.max(0.2, 1 - cdrFrac - shrineFrac);
@@ -168,7 +177,8 @@ export function createSkills(ctx) {
     if (!def) return 0;
     if (def.maxCharge) {
       if (noCooldownFlag) return 0;
-      return Math.max(0, Math.min(1, 1 - ultCharge / def.maxCharge));
+      const req = getRequiredUltCharge(def);
+      return Math.max(0, Math.min(1, 1 - ultCharge / req));
     }
     if (noCooldownFlag) return 0;
     const st = skillStates[def.id];
@@ -182,13 +192,14 @@ export function createSkills(ctx) {
     const add = Math.max(0, Number(delta) || 0);
     if (add <= 0) return ultCharge;
     const prev = ultCharge;
+    const reqMax = getRequiredUltCharge(getSkillDef('vajraGuru'));
     ultCharge = Math.min(ULT_MAX_CHARGE, ultCharge + add);
     if (ultCharge !== prev) {
       persist();
       bus?.emit('skill:ultCharge', {
         charge: ultCharge,
-        maxCharge: ULT_MAX_CHARGE,
-        ready: ultCharge >= ULT_MAX_CHARGE,
+        maxCharge: reqMax,
+        ready: ultCharge >= reqMax,
       });
     }
     return ultCharge;
@@ -251,7 +262,7 @@ export function createSkills(ctx) {
     if (!isUnlocked(def.id)) return false;
     const st = skillStates[def.id];
     if (def.maxCharge) {
-      if (!noCooldownFlag && ultCharge < def.maxCharge) return false;
+      if (!noCooldownFlag && ultCharge < getRequiredUltCharge(def)) return false;
     } else if (!noCooldownFlag && st.cooldownRemaining > 0) {
       return false;
     }
@@ -278,7 +289,7 @@ export function createSkills(ctx) {
 
     // Check Ultimate Charge requirement for vajraGuru
     if (def.maxCharge) {
-      if (!noCooldownFlag && ultCharge < def.maxCharge) {
+      if (!noCooldownFlag && ultCharge < getRequiredUltCharge(def)) {
         bus?.emit('toast', { key: 'toast.ultNotReady', kind: 'warning' });
         return false;
       }

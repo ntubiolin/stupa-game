@@ -29,7 +29,7 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/world/maps/sandbox.js` | World | debug sandbox arena with flat ground, scattered rocks, trial stone circle, Mani cairn (lazy-loaded) |
 | `src/data/maps.js`, `src/data/maps/*.js` | Data | data-driven map registry (`MAPS`: `stupa`, `wild`, `pharping`, `mangyul`, `yarlung`, `samye`, `chimphu`, `terma`, `sandbox`) |
 | `src/data/npcs.js` | Data | data-driven NPC registry (`NPCS`) and 8 procedural look definitions (`NPC_LOOKS`) |
-| `src/data/itemBases.js`, `affixes.js`, `legendaries.js` | Data | 22 base equipment types across 8 slots, 16 affixes (T1–T4), 9 Terma legendary items (`powerId`) |
+| `src/data/itemBases.js`, `affixes.js`, `legendaries.js` | Data | 22 base equipment types across 8 slots, 16 affixes (T1–T4), 12 Terma legendary items (`powerId`) |
 | `src/data/eliteAffixes.js` | Data | 6 elite monster affixes (`molten`, `frozen`, `swift`, `armored`, `shielding`, `teleporter`) |
 | `src/data/skills.js` | Data | 7 player skills (`humBolt`, `mantra`, `phurba`, `lotusShield`, `vajraBell`, `protector`, `vajraGuru`) & Rank 1–5 / A-B enhancements |
 | `src/data/enemies/*.js` | Data | chapter enemy definitions (`pharping`, `mangyul`, `yarlung`, `samye`), auto-discovered via `import.meta.glob` |
@@ -45,7 +45,8 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/gameplay/allies.js` | Gameplay | 3 oath-bound Dharma Protectors (`tenma`, `whiteYak`, `pehar`) 3D procedural models, AI, and summons |
 | `src/gameplay/enemies.js`, `src/gameplay/enemyModels/*.js` | Gameplay | enemy models, AI state machine, elite packs & affixes, telegraphs, status effects (`root`/`stun`/`slow`/`vuln`), liberation VFX |
 | `src/gameplay/bosses/index.js`, `bossBase.js`, `patterns.js`, `<boss>.js` | Gameplay | multi-phase Boss framework, arena barriers, telegraphed patterns, and 6 Bosses (`migoiKing`, `droughtLord`, `tenmaStorm`, `yarlhaShampo`, `pehar`, `termaGuardian`) |
-| `src/gameplay/dungeon.js` | Gameplay | Terma procedural 3-floor dungeon generator (`mulberry32` PRNG), tier selector (Tier 1–10), floor gates, Terma crystals |
+| `src/gameplay/dungeon.js` | Gameplay | Terma procedural 3-floor dungeon generator (`mulberry32` PRNG), tier selector (Tier 1–10), floor gates, Terma crystals, Vault Room reliquary & Floor 3 Terma Chest |
+| `src/gameplay/termaCaves.js` | Gameplay | Ch1–Ch5 Terma Cave grottoes, cave guardian ambush trials, interactive Terma Caskets, Shogser scrolls, Mendrup pills, Tertön's Compass & Grand Empowerment |
 | `src/gameplay/projectiles.js` | Gameplay | object-pooled projectiles (`ghostfire`, `redArrow`, `boulder`, `frostRoar`), parabolic/homing flight, mantra dispel |
 | `src/gameplay/items.js`, `groundLoot.js` | Gameplay | monkey sacred artifacts + Diablo-style ground loot drops, rarity light beams, `Alt` label plate layout, auto-pickup |
 | `src/gameplay/potions.js`, `shrines.js`, `waypoints.js` | Gameplay | Amrita potion charges (`X`), 4 blessing shrine types, lotus waypoints & Recall portal (`B`) |
@@ -267,7 +268,7 @@ Maps are registered in `src/data/maps.js` (`MAPS`):
 - **Save Sections & Owners**:
   | Section | Owner | Contents |
   |---|---|---|
-  | `vitals` | `src/systems/vitals.js` | `{ level, exp, hp, mp, permanent: { atk, def } }` |
+  | `vitals` | `src/systems/vitals.js` | `{ level, exp, hp, mp, permanent: { atk, def, maxHp, maxMp } }` |
   | `merit` | `src/systems/merit.js` | `{ kora, prostration, lamp, monkey, wheel, preta, tsen, migoi, totalLiberated, mantraCasts, points, achievements }` |
   | `items` | `src/gameplay/items.js` | `{ pityCount }` |
   | `tutorial` | `src/systems/zones.js` | `{ [tutorialKey]: boolean }` |
@@ -279,6 +280,7 @@ Maps are registered in `src/data/maps.js` (`MAPS`):
   | `waypoints` | `src/gameplay/waypoints.js` | `{ unlocked: string[], returnPortal }` |
   | `protectors` | `src/gameplay/allies.js` | `{ unlocked: string[], active: string }` |
   | `dungeon` | `src/gameplay/dungeon.js` | `{ highestClearedTier: number }` |
+  | `termaCaves` | `src/gameplay/termaCaves.js` | `{ extractedCaves: string[], scrolls: string[], mendrup: string[], compassUnlocked: boolean, empowermentClaimed: boolean }` |
   | `community` | `src/systems/community.js` | `{ pilgrimName, ownStupa, myLamps, rejoicedLampIds, rejoicedStupaIds, samye }` |
 
 ### 4. Performance, Code Splitting & Audio Crossfade
@@ -554,3 +556,11 @@ footage is unavailable. Text fallback and source labels remain readable offline.
 the current memory checkpoint. All new chapter props use emissive meshes with
 zero new PointLights. The existing #135 score implementation and score data are
 preserved.
+
+## Adventure difficulty and settings (#120)
+
+- `src/data/combatSettings.js`: shared `MIGOI_ARENA_RADIUS` (20 m) for the snow king barrier/player clamp, wilderness flattening and boulder exclusion. Difficulty presets resolve unknown/missing values to `normal`.
+- `src/ui/settings.js`: `ctx.settingsUi.open()`, `close()`, `isOpen()`; native modal dialog with title/HUD entries, keyboard focus containment and bilingual radio options. Restores prior `state.uiOpen` on close. No new bus events or update loop.
+- Persistence: existing `settings` section gains `difficulty: 'easy' | 'normal' | 'hard'`; writes merge with existing settings via `ctx.save`, flush immediately, and preserve audio/language preferences. Old saves default to normal without migration.
+- `vitals.applyDamage`: multiply mitigated incoming damage by 0.6 / 1 / 1.4 (minimum 1), once before shield absorption; invulnerability/god mode still short-circuit. Changes apply to the next hit, including active boss fights, without resetting HP or changing enemy HP, loot, experience or quest progress.
+- Regression: `npm run test:combat-settings` checks actual vitals damage, defense, shields, invulnerability, live difficulty changes, invalid settings and flat terrain across the expanded arena.

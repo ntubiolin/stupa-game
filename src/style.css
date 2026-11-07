@@ -797,6 +797,9 @@ kbd {
 
 .utility-bar {
   display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: calc(100vw - 36px);
   gap: 6px;
   padding: 5px;
   border-radius: 14px;
@@ -1323,7 +1326,7 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
   .hud-left-stack {
     top: 8px;
     left: 8px;
-    width: 176px;
+    width: min(176px, calc(50vw - 12px));
     gap: 5px;
   }
 
@@ -1368,6 +1371,16 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
     top: 8px;
     right: 8px;
   }
+
+  .utility-bar {
+    max-width: min(176px, calc(50vw - 12px));
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .utility-bar .icon-btn { flex-shrink: 0; }
 
   .time-panel {
     min-width: 162px;
@@ -2058,6 +2071,7 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
 }
 
 .inv-modal {
+  pointer-events: auto;
   position: fixed;
   inset: 0;
   z-index: 650;
@@ -3298,8 +3312,12 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
 
 @media (max-width: 720px) {
   .minimap-wrap {
-    top: 146px;
+    top: 168px;
     right: 8px;
+  }
+
+  .play-hud.has-boss-bar .minimap-wrap {
+    top: 224px;
   }
 
   .minimap-ring-frame,
@@ -4687,10 +4705,14 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
   }
 
   .quest-tracker {
-    top: 296px;
+    top: 340px;
     right: 8px;
     width: 210px;
     padding: 7px 10px;
+  }
+
+  body:has(.play-hud.has-boss-bar) .quest-tracker {
+    top: 396px;
   }
 
   .quest-tracker.is-collapsed {
@@ -6326,3 +6348,33 @@ body.is-touch-device .mobile-skill-pad {
   }
 }
 
+
+/* Game settings: native modal keeps focus and pointer input inside the dialog. */
+.game-settings {
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  padding: 24px;
+  border-radius: 18px;
+  color: var(--col-text);
+  background: rgba(24, 18, 32, 0.98);
+}
+.game-settings::backdrop { background: rgba(8, 6, 14, 0.7); }
+.game-settings h2 { margin: 0 0 20px; }
+.game-settings fieldset { margin: 0; padding: 0; border: 0; }
+.game-settings legend { margin-bottom: 12px; }
+.difficulty-options { display: flex; gap: 8px; }
+.difficulty-options label {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  flex: 1; min-height: 48px; padding: 8px;
+  border: 1px solid var(--border-gold); border-radius: 10px; cursor: pointer;
+}
+.difficulty-options label:has(input:checked) { background: rgba(238, 195, 108, 0.22); }
+.difficulty-options label:focus-within { outline: 2px solid #fde68a; outline-offset: 2px; }
+.game-settings p { line-height: 1.7; }
+.game-settings .settings-note { font-size: 0.88rem; opacity: 0.8; }
+.btn-title-settings {
+  min-height: 44px; padding: 8px 16px; border-radius: 12px;
+  border: 1px solid var(--border-gold); background: rgba(24, 18, 32, 0.8);
+  color: var(--col-text); cursor: pointer;
+}

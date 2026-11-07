@@ -36,6 +36,7 @@ export function createPowers(ctx) {
   const mandalaRings = [];
 
   let tenmaOathCd = 0;
+  let dakiniMirrorCd = 0;
   let stillTimer = 0;
   let samathaActive = false;
   let mantraCastCount = 0;
@@ -167,6 +168,89 @@ export function createPowers(ctx) {
     return false;
   }
 
+  // ---------------------------------------------------------------- 10. dakiniMirror (空行母秘密明鏡)
+  function checkDakiniMirror() {
+    if (!has('dakiniMirror') || dakiniMirrorCd > 0) return false;
+    const hp = Number(state.player?.hp ?? 100);
+    const maxHp = Math.max(1, Number(state.player?.maxHp) || 100);
+    if (hp > 0 && hp / maxHp <= 0.30) {
+      dakiniMirrorCd = 60.0;
+      const healAmt = Math.max(1, Math.round(maxHp * 0.40));
+      ctx.vitals?.addBuff?.('dakiniMirrorRainbow', { invuln: true }, 2.5);
+      bus?.emit('vitals:restore', { hp: healAmt, source: 'dakiniMirror' });
+
+      const origin = state.player?.position || { x: 0, y: 0, z: 0 };
+      const ringMesh = new THREE.Mesh(
+        new THREE.RingGeometry(0.5, 1.4, 48),
+        new THREE.MeshBasicMaterial({
+          color: 0x38bdf8,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.9,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        })
+      );
+      ringMesh.rotation.x = -Math.PI * 0.5;
+      ringMesh.position.set(origin.x, (origin.y || 0) + 0.2, origin.z);
+      group.add(ringMesh);
+      mandalaRings.push({
+        mesh: ringMesh,
+        maxRadius: 4.5,
+        elapsed: 0,
+        duration: 1.1,
+      });
+
+      bus?.emit('sfx', { name: 'bell' });
+      bus?.emit('toast', { key: 'toast.dakiniMirrorProc', kind: 'merit' });
+      bus?.emit('power:dakiniMirror', { heal: healAmt, invulnDuration: 2.5 });
+      return true;
+    }
+    return false;
+  }
+
+  // ---------------------------------------------------------------- 11. thokchaVajra (蓮師天鐵九股杵)
+  function triggerThokchaVajra(origin) {
+    const radius = 6.5;
+    const atk = Math.max(1, Number(state.player?.atk) || 10);
+    const skillBonus = 1 + (Number(state.player?.skillDamage) || 0) / 100;
+    const dmg = Math.max(1, Math.round(atk * 1.1 * skillBonus));
+
+    const mesh = new THREE.Mesh(
+      new THREE.RingGeometry(0.35, 0.95, 36),
+      new THREE.MeshBasicMaterial({
+        color: 0x38bdf8,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.95,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    );
+    mesh.rotation.x = -Math.PI * 0.5;
+    mesh.position.set(origin.x, (origin.y || 0) + 0.18, origin.z);
+    group.add(mesh);
+
+    mandalaRings.push({
+      mesh,
+      maxRadius: radius,
+      elapsed: 0,
+      duration: 0.5,
+    });
+
+    const targets = ctx.enemies?.queryCircle?.(origin, radius) || [];
+    for (const e of targets) {
+      ctx.enemies?.applyStatus?.(e, { type: 'stun', duration: 1.5 });
+      ctx.enemies?.damageEnemy?.(e, dmg, {
+        type: 'magic',
+        origin,
+        source: 'terma:thokchaVajra',
+      });
+    }
+
+    bus?.emit('power:thokchaVajra', { radius, damage: dmg, hitCount: targets.length });
+  }
+
   // ---------------------------------------------------------------- 4. bellReset (靜命論師金剛鈴)
   bus?.on('vajraBell:resolved', ({ hitCount = 0, dispelledCount = 0, totalAffected = 0 } = {}) => {
     if (!has('bellReset')) return;
@@ -245,6 +329,11 @@ export function createPowers(ctx) {
       tsogyalNextHumReady = true;
       if (state.player) state.player.tsogyalNextHum = true;
     }
+
+    // 11. thokchaVajra (蓮師天鐵九股杵): casting mantra calls down a 6.5m Thokcha thunderbolt (110% ATK + 1.5s stun)
+    if (has('thokchaVajra')) {
+      triggerThokchaVajra(origin);
+    }
   });
 
   // 9. retreatShield (青朴閉關法衣): when Lotus Shield ends, reduce remaining cooldown by 50%
@@ -263,16 +352,21 @@ export function createPowers(ctx) {
 
   bus?.on('player:hurt', () => {
     checkTenmaOath();
+    checkDakiniMirror();
   });
 
   bus?.on('vitals:changed', () => {
     checkTenmaOath();
+    checkDakiniMirror();
   });
 
   // ---------------------------------------------------------------- Per-Frame Update
   function update(dt) {
     if (tenmaOathCd > 0) {
       tenmaOathCd = Math.max(0, tenmaOathCd - dt);
+    }
+    if (dakiniMirrorCd > 0) {
+      dakiniMirrorCd = Math.max(0, dakiniMirrorCd - dt);
     }
 
     // 5. chimphuStill (青朴靜慮念珠): standing still for 1.5s grants Samatha (+25% skillDamage, +5 MP/s)
@@ -347,6 +441,7 @@ export function createPowers(ctx) {
   bus?.on('merit:reset', () => {
     manualPowers.clear();
     tenmaOathCd = 0;
+    dakiniMirrorCd = 0;
     stillTimer = 0;
     samathaActive = false;
     mantraCastCount = 0;
