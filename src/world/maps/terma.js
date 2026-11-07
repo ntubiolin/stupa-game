@@ -26,25 +26,25 @@ export function buildTermaMap(ctx) {
   }
 
   // Subtle ambient cave dome overhead & base floor plane (2 meshes, 0 PointLights)
-  const floorGeo = new THREE.PlaneGeometry(180, 180);
+  const floorGeo = new THREE.PlaneGeometry(240, 240);
   floorGeo.rotateX(-Math.PI / 2);
   const floorMat = new THREE.MeshStandardMaterial({
-    color: 0x151324,
-    roughness: 0.94,
+    color: 0x0b0a14,
+    roughness: 0.96,
     metalness: 0.05,
   });
   const baseFloor = new THREE.Mesh(floorGeo, floorMat);
-  baseFloor.position.set(TERMA_MAP.origin.x, -0.25, TERMA_MAP.origin.z);
+  baseFloor.position.set(TERMA_MAP.origin.x, -0.3, TERMA_MAP.origin.z);
   baseFloor.receiveShadow = true;
   group.add(baseFloor);
 
-  const domeGeo = new THREE.SphereGeometry(95, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.5);
+  const domeGeo = new THREE.SphereGeometry(126, 20, 14, 0, Math.PI * 2, 0, Math.PI * 0.62);
   const domeMat = new THREE.MeshBasicMaterial({
-    color: 0x0b0a16,
+    color: 0x08070f,
     side: THREE.BackSide,
   });
   const dome = new THREE.Mesh(domeGeo, domeMat);
-  dome.position.set(TERMA_MAP.origin.x, -2, TERMA_MAP.origin.z);
+  dome.position.set(TERMA_MAP.origin.x, -4, TERMA_MAP.origin.z);
   group.add(dome);
 
   // If player enters 'terma' directly via zone teleport without an active dungeon floor,

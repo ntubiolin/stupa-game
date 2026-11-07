@@ -315,24 +315,111 @@ export function createTermaCaves(ctx) {
       emissiveIntensity: 0.75,
     });
 
-    // Cave overhang arch (left wall, right wall, back cliff wall, roof)
-    const backWall = new THREE.Mesh(new THREE.DodecahedronGeometry(4.2, 1), rockMat);
-    backWall.position.set(0, 2.3, -3.2);
-    backWall.scale.set(1.5, 1.15, 0.72);
+    // 1. Dark stone cave floor slab & inner dark rock vault dome (zero sky leaks inside)
+    const innerVaultMat = new THREE.MeshStandardMaterial({
+      color: 0x161922,
+      roughness: 0.94,
+      metalness: 0.06,
+      emissive: 0x0b0e14,
+      emissiveIntensity: 0.35,
+      side: THREE.DoubleSide,
+    });
+    const caveFloor = new THREE.Mesh(
+      new THREE.CircleGeometry(5.8, 24).rotateX(-Math.PI / 2),
+      innerVaultMat,
+    );
+    caveFloor.position.set(0, 0.02, -1.2);
+    caveFloor.receiveShadow = true;
+    root.add(caveFloor);
 
-    const leftWall = new THREE.Mesh(new THREE.DodecahedronGeometry(3.0, 1), rockMat);
-    leftWall.position.set(-3.8, 2.1, -1.0);
-    leftWall.scale.set(0.85, 1.2, 1.15);
+    const innerDome = new THREE.Mesh(
+      new THREE.SphereGeometry(5.6, 20, 14, Math.PI * 0.92, Math.PI * 1.16, 0, Math.PI * 0.62),
+      innerVaultMat,
+    );
+    innerDome.position.set(0, 0.15, -1.2);
+    innerDome.scale.set(1.12, 0.96, 1.14);
+    root.add(innerDome);
 
-    const rightWall = new THREE.Mesh(new THREE.DodecahedronGeometry(3.0, 1), rockMat);
-    rightWall.position.set(3.8, 2.1, -1.0);
-    rightWall.scale.set(0.85, 1.2, 1.15);
+    const ceilingCap = new THREE.Mesh(
+      new THREE.CylinderGeometry(5.5, 6.2, 1.4, 16),
+      innerVaultMat,
+    );
+    ceilingCap.position.set(0, 5.4, -1.3);
+    root.add(ceilingCap);
 
-    const roofArch = new THREE.Mesh(new THREE.DodecahedronGeometry(4.5, 1), rockMat);
-    roofArch.position.set(0, 4.6, -1.4);
-    roofArch.scale.set(1.35, 0.42, 1.05);
+    // 2. Continuous horseshoe cliff walls & multi-layered vaulted cave roof
+    for (let i = 0; i < 7; i++) {
+      const ang = -0.05 * Math.PI + (i / 6) * 1.1 * Math.PI;
+      const r = 6.1;
+      const crag = new THREE.Mesh(new THREE.DodecahedronGeometry(2.7, 1), rockMat);
+      crag.position.set(Math.cos(ang) * r, 2.7 + (i % 2) * 0.35, -1.1 - Math.sin(ang) * r);
+      crag.scale.set(1.22, 1.42, 1.15);
+      crag.rotation.set(i * 0.3, ang, 0);
+      crag.castShadow = true;
+      crag.receiveShadow = true;
+      root.add(crag);
+    }
 
-    root.add(backWall, leftWall, rightWall, roofArch);
+    const leftWall = new THREE.Mesh(new THREE.DodecahedronGeometry(2.8, 1), rockMat);
+    leftWall.position.set(-4.6, 2.5, 1.2);
+    leftWall.scale.set(0.95, 1.35, 1.15);
+
+    const rightWall = new THREE.Mesh(new THREE.DodecahedronGeometry(2.8, 1), rockMat);
+    rightWall.position.set(4.6, 2.5, 1.2);
+    rightWall.scale.set(0.95, 1.35, 1.15);
+
+    const roofArch = new THREE.Mesh(new THREE.DodecahedronGeometry(5.6, 1), rockMat);
+    roofArch.position.set(0, 6.1, -1.6);
+    roofArch.scale.set(1.42, 0.46, 1.32);
+
+    const upperPeak = new THREE.Mesh(new THREE.DodecahedronGeometry(4.8, 1), rockMat);
+    upperPeak.position.set(0, 8.8, -3.4);
+    upperPeak.scale.set(1.32, 0.88, 1.12);
+
+    root.add(leftWall, rightWall, roofArch, upperPeak);
+
+    // 3. Hanging rock & glowing crystal stalactites from the cave ceiling
+    const stalGeo = new THREE.ConeGeometry(0.26, 1.35, 6);
+    for (let i = 0; i < 10; i++) {
+      const ang = (i / 10) * Math.PI * 1.4 - Math.PI * 0.2;
+      const sr = i % 2 === 0 ? 4.2 : 2.5;
+      const stal = new THREE.Mesh(stalGeo, i % 3 === 0 ? accentMat : rockMat);
+      stal.position.set(Math.cos(ang) * sr, 4.75, -1.2 - Math.abs(Math.sin(ang)) * sr);
+      stal.rotation.x = Math.PI;
+      stal.scale.setScalar(0.75 + (i % 3) * 0.22);
+      root.add(stal);
+    }
+
+    // 4. Interior floor light pool & slanted entrance light shaft (0 PointLights)
+    const caveGlowPool = new THREE.Mesh(
+      new THREE.CircleGeometry(4.6, 24).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({
+        color: def.accentColor || 0xf59e0b,
+        transparent: true,
+        opacity: 0.24,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      }),
+    );
+    caveGlowPool.position.set(0, 0.035, -1.2);
+    root.add(caveGlowPool);
+
+    const entranceShaft = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.0, 2.1, 5.4, 14, 1, true),
+      new THREE.MeshBasicMaterial({
+        color: 0xffe4a0,
+        transparent: true,
+        opacity: 0.11,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        toneMapped: false,
+      }),
+    );
+    entranceShaft.position.set(0, 2.5, 0.6);
+    entranceShaft.rotation.x = -0.32;
+    root.add(entranceShaft);
 
     // Decorative crystal/ice/obsidian spires flanking cave entrance
     for (const side of [-1, 1]) {
