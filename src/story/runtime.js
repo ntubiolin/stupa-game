@@ -17,6 +17,7 @@ import { createNarrativeCamera } from './narrativeCamera.js';
 import { createCinematicArt } from './cinematicArt.js';
 import './narrativeCamera.css';
 import '../i18n/storyArt.js';
+import { HANDOVER_QR_SVG, unreadPhoneThreads } from '../data/story/phoneThreads.js';
 import { createPhone } from '../ui/story/phone.js';
 import { createDocumentary } from '../ui/story/documentary.js';
 import { DOCUMENTARY_CLIPS } from '../data/story/documentary.js';
@@ -56,6 +57,7 @@ createDebug(ctx); createSave(ctx, { writableSections: ['story'] }); // Deliberat
 const mapInstances = {};
 let chapterScene = null, stagedScene = null, activeChapter = null, chapterCheckpoint = null, prepareToken = 0;
 let testingChapter = false, previewLoading = false;
+const notifiedThreads = new Set();
 ctx.world = {
   getMap: (id = state.zone) => getMapDef(id),
   getHeight: (x, z, id = state.zone) => (activeChapter && id === getChapter(activeChapter)?.mapId ? chapterScene?.getHeight(x,z) : mapInstances[id]?.getHeight(x, z)) || 0,
@@ -106,7 +108,9 @@ function showCard(titleKey, bodyKey, actionKey, callback, category = 'fiction', 
 }
 function renderCard() {
   const { titleKey, bodyKey, actionKey, category, extra, choices } = modalKeys;
-  modal.innerHTML = `<div class="story-card"><p class="story-category">${t(category)}</p><h2 id="story-card-title">${t(titleKey)}</h2>${extra}<p class="story-prose">${t(bodyKey)}</p><div class="story-card-actions">${choices ? choices.map((id,index)=>`<button class="${index ? '' : 'story-primary'}" data-card-choice="${id}">${t(`chapter.${activeChapter}.${chapterCheckpoint}.${id}`)}</button>`).join('') : `<button class="story-primary" data-card="continue">${t(actionKey)}</button>`}<button data-card="close">${t('close')}</button></div></div>`;
+  const letterCode = titleKey.startsWith('chapter.finale.letter') ? extra : '';
+  const illustration = letterCode ? '' : extra;
+  modal.innerHTML = `<div class="story-card"><p class="story-category">${t(category)}</p><h2 id="story-card-title">${t(titleKey)}</h2>${illustration}<p class="story-prose">${t(bodyKey)}</p>${letterCode}<div class="story-card-actions">${choices ? choices.map((id,index)=>`<button class="${index ? '' : 'story-primary'}" data-card-choice="${id}">${t(`chapter.${activeChapter}.${chapterCheckpoint}.${id}`)}</button>`).join('') : `<button class="story-primary" data-card="continue">${t(actionKey)}</button>`}<button data-card="close">${t('close')}</button></div></div>`;
   modal.setAttribute('aria-labelledby', 'story-card-title');
   const nextButton=modal.querySelector('[data-card="continue"]');
   if(nextButton)nextButton.onclick = () => { const cb = modalCallback; closeModal(); cb?.(); };
@@ -182,7 +186,14 @@ function refreshHud() {
   const act = hud.querySelector('[data-action="interact"]'); act.textContent = activeChapter ? chapterText('action') : currentLabel ? t(currentLabel) : t('phone'); act.hidden = !currentAction;
   hud.querySelector('[data-action="guide"]').hidden = !currentTarget;
   const phoneButton = hud.querySelector('[data-action="phone"]');
-  phoneButton.textContent = t('phone');
+  const unread = unreadPhoneThreads(story.getState());
+  phoneButton.textContent = t('phone') + (unread.length ? ` (${unread.length})` : '');
+  phoneButton.setAttribute('aria-label', t('phone') + (unread.length ? ' · ' + i18n.t('phone.unread', { count: unread.length }) : ''));
+  if (!testingChapter) for (const thread of unread) {
+    if (notifiedThreads.has(thread.id)) continue;
+    notifiedThreads.add(thread.id);
+    ctx.bus.emit('story:phone-open', { tab: 'messages', threadId: thread.id, notification: true });
+  }
   phoneButton.disabled = testingChapter;
   hud.querySelector('[data-action="settings"]').setAttribute('aria-label', t('settings'));
   hud.querySelector('.story-wordmark').firstChild.textContent = t('title');
@@ -212,7 +223,7 @@ function mapDrawing() {
 }
 function showMap() {
   showCard('map.title', 'map.body', 'map.hotel', () => {
-    showCard('map.title', 'map.night', 'vision.enter', () => story.signal('map:opened'));
+    showCard('map.title', 'map.night', 'map.phone', () => phone.open('messages', { threadId: 'hotel', onComplete: () => story.signal('map:opened') }));
   }, 'fiction', mapDrawing());
 }
 function showVisionStop() {
@@ -395,13 +406,64 @@ function chapterInteract(){
   const checkpoint=getChapter(activeChapter)?.checkpoints.find(c=>c.id===chapterCheckpoint);
   if(!checkpoint)return;
   const current=chapterCheckpoint;
-  const advance=choice=>{if(!chapters.signal(checkpoint.signal,{checkpointId:current,choice}))showCard('chapter.'+activeChapter+'.title','chapter.saveError','retry',()=>{});};
+  const chapterId=activeChapter;
+  const advance = choice => {
+    if (activeChapter !== chapterId || chapterCheckpoint !== current) return;
+    if (!chapters.signal(checkpoint.signal, { checkpointId: current, choice })) {
+      showCard(`chapter.${chapterId}.title`, 'chapter.saveError', 'retry', () => {});
+    }
+  };
+  const transient = chapters.getState().replaying || testingChapter;
+  const openThread = (threadId, onComplete = advance) => phone.open('messages', { threadId, onComplete, transient });
+  if (chapterId === 'finale' && ['decision', 'response'].includes(current)) {
+    phone.open('messages', { handover: true, scanned: current === 'response', onComplete: advance });
+    return;
+  }
+  if (chapterId === 'pharping' && current === 'phone') { openThread('pharping'); return; }
+  if (chapterId === 'mangyul' && current === 'phone') { openThread('mangyul-snow'); return; }
+  if (chapterId === 'mangyul' && current === 'message') {
+    showCard('chapter.mangyul.message.title', 'chapter.mangyul.message.body', 'chapter.mangyul.message.action', () => openThread('mangyul'));
+    return;
+  }
+  if (chapterId === 'yarlung' && current === 'memory') {
+    showCard('chapter.yarlung.memory.title', 'chapter.yarlung.memory.body', 'chapter.yarlung.memory.action', () => {
+      const unsubscribe = ctx.bus.on('story:clip-end', ({ id, reason }) => {
+        if (id !== 'dorm-memory') return;
+        unsubscribe();
+        if (reason === 'complete' || reason === 'skip') advance();
+      });
+      if (!documentary.play('dorm-memory')) unsubscribe();
+    });
+    return;
+  }
+  if (chapterId === 'yarlung' && current === 'boundary') {
+    openThread('yarlung', () => showCard('chapter.yarlung.boundary.title', 'chapter.yarlung.boundary.body', 'chapter.yarlung.boundary.action', advance));
+    return;
+  }
+  if (chapterId === 'samye' && current === 'rebuild') {
+    openThread('samye', () => showCard('chapter.samye.rebuild.title', 'chapter.samye.rebuild.body', 'chapter.samye.rebuild.action', advance));
+    return;
+  }
+  if (chapterId === 'chimphu' && current === 'descent') {
+    showCard('chapter.chimphu.descent.title', 'chapter.chimphu.descent.body', 'chapter.chimphu.descent.action', () => openThread('chimphu'));
+    return;
+  }
   if(current==='diary'){journal.open('diary');return;}
-  if(current==='complete'){journal.open();return;}
-  if(checkpoint.presentation==='card'||(activeChapter==='pharping'&&['shadow','release'].includes(current))||current.startsWith('altar')){
-    const prefix='chapter.'+activeChapter+'.'+current;
-    const response=activeChapter==='finale'&&current==='response';
-    showCard(prefix+'.title',prefix+'.body'+(response?'.'+chapters.getChoices('finale').decision:''),prefix+'.action',advance,activeChapter==='finale'&&current.startsWith('letter')?'chapter.finale.letterSource':'fiction','',checkpoint.choices);
+  if (current === 'complete') {
+    if (chapterId === 'finale') showCard('chapter.finale.complete.title', 'chapter.finale.complete.body', 'chapter.finale.complete.action', () => journal.open());
+    else journal.open();
+    return;
+  }
+  if(checkpoint.presentation==='card'||(activeChapter==='pharping'&&['shadow','release','settle','wait','lamp'].includes(current))
+    ||(activeChapter==='mangyul'&&current==='clearing')
+    ||(activeChapter==='yarlung'&&['pause','release'].includes(current))
+    ||(activeChapter==='chimphu'&&['cave','light'].includes(current))||current.startsWith('altar')){
+    const prefix = `chapter.${chapterId}.${current}`;
+    const category = chapterId === 'finale' && current.startsWith('letter')
+      ? 'chapter.finale.letterSource' : 'fiction';
+    const extra = chapterId === 'finale' && current === 'letter6'
+      ? `<figure class="story-letter-qr">${HANDOVER_QR_SVG}<figcaption>${i18n.t('phone.handover.code')}</figcaption></figure>` : '';
+    showCard(`${prefix}.title`, `${prefix}.body`, `${prefix}.action`, advance, category, extra, checkpoint.choices);
   }
   else advance();
 }
@@ -421,11 +483,18 @@ ctx.bus.on('story:chapter-change',({chapterId,checkpointId,replaying,testing=fal
   else if(fresh){
     const entryPoint=point||(chapterId==='chimphu'&&checkpointId==='diary'?chapterScene.getTarget('light'):null)||(finale&&['diary','complete'].includes(checkpointId)?chapterScene.getTarget('lamp'):null)||getChapter(chapterId).checkpoints.map(c=>chapterScene.getTarget(c.id)).find(Boolean);
     if(entryPoint){storyCamera.setPose({x:entryPoint.x,y:chapterScene.getHeight(entryPoint.x,entryPoint.z)+1.68,z:entryPoint.z,fov:55});if(entryPoint.lookAt)faceTarget(entryPoint.lookAt);}
-    art.setLighting(finale?'dusk':'dawn');
+    art.setLighting('dawn');
   }
+  if (finale) art.setLighting('dawn');
   setTarget(point,'chapter.'+chapterId+'.'+checkpointId+'.action',chapterInteract);
   if (replaying) hud.querySelector('.story-category').textContent=t('chapter.replaying');
-  if(fresh&&checkpointId==='spring1')showCard('chapter.pharping.title','chapter.pharping.intro','chapter.close',()=>{});
+  if (finale && ['response', 'complete'].includes(checkpointId)) queueMicrotask(() => {
+    if (activeChapter === 'finale' && chapterCheckpoint === checkpointId) chapterInteract();
+  });
+  const introKey = `chapter.${chapterId}.intro`;
+  if (fresh && checkpointId === getChapter(chapterId).entryCheckpoint && t(introKey) !== `mirror.${introKey}`) {
+    showCard(`chapter.${chapterId}.title`, introKey, 'chapter.close', () => {});
+  }
 });
 ctx.bus.on('story:chapter-exit', ({ testing }) => {
   ++prepareToken;
@@ -447,6 +516,7 @@ ctx.bus.on('story:chapter-exit', ({ testing }) => {
 journalButton.onclick=()=>{if(!isAnyModalOpen())journal.open();};
 ctx.debug?.register('chapters',chapters);
 ctx.debug?.register('chapterScene',{getSnapshot:()=>chapterScene?.getSnapshot(),getCheckpoint:()=>chapterCheckpoint});
+ctx.bus.on('story:phone-change', refreshHud);
 ctx.bus.on('story:beat-start', event => { if (!chapters.getState().activeChapterId) enterBeat(event); });
 const samples = [];
 ctx.debug?.register('storyRuntime', { ctx, resetMetrics: () => { samples.length = 0; }, getMetrics: () => ({ averageFps: samples.length / (samples.reduce((a, b) => a + b, 0) || 1), drawCalls: renderer.info.render.calls, triangles: renderer.info.render.triangles, pointLights: (() => { let n = 0; scene.traverse(o => { if (o.isPointLight && o.visible) n++; }); return n; })(), zone: state.zone, beat: currentBeat, modal: isAnyModalOpen(), ...art.getState() }), guide, getTarget: () => currentTarget, getArrivalCount: () => arrivalCount, getVisionCount: () => visionCount });

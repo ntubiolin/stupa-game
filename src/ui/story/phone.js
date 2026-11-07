@@ -4,6 +4,7 @@ import {
   identityStep, openingMessage, prologueRecordingReadFlag, prologueTurns,
   readPrologueReplies, selectPrologueReply,
 } from '../../data/story/phonePrologue.js';
+import { HANDOVER_QR_SVG, phoneThreads, visiblePhoneThreads, unreadPhoneThreads, readThreadReplies, phoneSignal, phoneReplyKey } from '../../data/story/phoneThreads.js';
 import { canReadReturnDiary, visiblePhoneRecords } from '../../data/story/phoneRecords.js';
 
 const TAB_ICONS = {
@@ -116,6 +117,10 @@ export function createPhone(ctx) {
 
   let tab = 'messages';
   let selectedRecord = null;
+  let selectedThread = null;
+  let threadSession = null;
+  let handover = false;
+  let scanned = false;
   let replay = null;
   let opener = null;
   let audio = null;
@@ -319,6 +324,10 @@ export function createPhone(ctx) {
       else if (record.art !== 'diary') article.append(artwork(record.art));
       article.append(element('p', 'story-phone__context', t(record.bodyKey)));
       if (record.textKey) article.append(element('blockquote', 'story-phone__paper', t(record.textKey)));
+      if (record.clipId) article.append(action('phone.record.playMemory', () => {
+        close();
+        ctx.documentary.play(record.clipId);
+      }));
       if (record.id === 'restoration-record' && story.clipsSeen.includes('restoration')
         && story.beat !== 'restoration') {
         article.append(action('phone.record.replayClip', () => {
@@ -364,6 +373,110 @@ export function createPhone(ctx) {
     }
   }
 
+  function threadSnapshot() {
+    return threadSession?.snapshot ?? snapshot();
+  }
+
+  function finishThread() {
+    const callback = handover || threadSession?.threadId === selectedThread ? threadSession?.onComplete : undefined;
+    close();
+    callback?.();
+  }
+
+  function renderThread(moveFocus) {
+    const thread = phoneThreads.find(entry => entry.id === selectedThread);
+    if (!thread) return;
+    const story = threadSnapshot();
+    const replies = readThreadReplies(story, thread.id);
+    const heading = element('h3', 'story-phone__section-title', t(thread.titleKey));
+    pane.append(action('phone.thread.back', () => {
+      selectedThread = null;
+      render(true);
+    }, 'story-phone__action--back'), heading);
+    const content = element('div', 'story-phone__thread');
+    for (const turn of replies) {
+      content.append(message(turn.replyKey, 'phone.player', 'outgoing'));
+      for (const key of turn.messages) content.append(message(key, 'phone.proxy', 'incoming'));
+    }
+    pane.append(content);
+    const next = thread.turns[replies.length];
+    const completed = Boolean(snapshot().journey?.chapters?.finale?.choices?.decision);
+    if (next && (!completed || threadSession?.snapshot)) {
+      actions.append(action(next.replyKey, () => {
+        if (threadSession?.snapshot) {
+          threadSession.snapshot.choices[phoneReplyKey(thread.id, next.id)] = next.id;
+        } else if (!ctx.story.recordPhoneReply(thread.id, next.id)) {
+          actions.append(element('p', 'story-phone__note', t('phone.savedError')));
+          return;
+        }
+        render(true);
+      }, 'story-phone__action--primary'));
+    } else {
+      if (thread.id === 'mangyul') pane.append(element('p', 'story-phone__note', t('phone.thread.interrupted')));
+      if (thread.id === 'mangyul-snow') pane.append(element('p', 'story-phone__note', t('phone.signal.sending')));
+      if (thread.id === 'samye') pane.append(element('p', 'story-phone__note', t('phone.thread.silence')));
+      actions.append(action('phone.thread.finish', () => {
+        if (!threadSession?.snapshot && replies.length === thread.turns.length
+          && !snapshot().flags?.[`phone.read.${thread.id}`]
+          && !ctx.story.acknowledgePhoneThread(thread.id)) {
+          actions.append(element('p', 'story-phone__note', t('phone.savedError')));
+          return;
+        }
+        finishThread();
+      }, 'story-phone__action--primary'));
+    }
+    if (moveFocus) focusLatest(content.lastElementChild ?? heading);
+  }
+
+  function renderThreads(story, moveFocus) {
+    const available = visiblePhoneThreads(story);
+    const unread = new Set(unreadPhoneThreads(story).map(thread => thread.id));
+    const heading = element('h3', 'story-phone__section-title', t('phone.messages'));
+    pane.append(heading);
+    for (const thread of available) {
+      const button = action(thread.titleKey, () => {
+        selectedThread = thread.id;
+        render(true);
+      }, 'story-phone__record-link');
+      if (unread.has(thread.id)) {
+        button.classList.add('story-phone__tab--unread');
+        button.setAttribute('aria-label', `${t(thread.titleKey)} · ${i18n.t('phone.unread', { count: 1 })}`);
+      }
+      pane.append(button);
+    }
+    // The original prologue archive and its transient replay remain available.
+    renderArchive(story, readPrologueReplies(story.choices), moveFocus);
+  }
+
+  function renderHandover() {
+    const chapterState = ctx.chapters.getState();
+    const checkpoint = chapterState.chapters.finale?.checkpointId;
+    const decision = ctx.chapters.getChoices('finale').decision;
+    const terminal = element('article', 'story-phone__terminal');
+    terminal.append(element('h3', 'story-phone__section-title', t('phone.handover.title')));
+    if (i18n.lang !== 'en') terminal.append(element('p', 'story-phone__note', i18n.getStrings().en['phone.handover.title']));
+    if (!scanned && checkpoint === 'decision') {
+      const code = element('div', 'story-phone__qr');
+      code.innerHTML = HANDOVER_QR_SVG; // Fixed locally generated SVG, no user input.
+      terminal.append(code, element('p', 'story-phone__context', t('phone.handover.code')));
+      actions.append(action('phone.handover.scan', () => { scanned = true; render(true); }, 'story-phone__action--primary'));
+    } else {
+      for (const key of ['arrived', 'stone', 'letter']) terminal.append(element('p', 'story-phone__check', t(`phone.handover.${key}`)));
+      if (checkpoint === 'decision') {
+        terminal.append(element('p', 'story-phone__context', t('phone.handover.confirm')));
+        for (const choice of ['end', 'retain']) actions.append(action(`phone.handover.${choice}`, () => {
+          if (ctx.chapters.signal('proxy:decide', { checkpointId: 'decision', choice })) return;
+          terminal.append(element('p', 'story-phone__note', t('phone.savedError')));
+        }));
+      } else if (decision) {
+        terminal.append(element('p', 'story-phone__paper', t(`phone.handover.${decision}Reply`)),
+          element('p', 'story-phone__account', t(decision === 'end' ? 'phone.handover.disabled' : 'phone.handover.archived')));
+        actions.append(action('phone.thread.finish', finishThread, 'story-phone__action--primary'));
+      }
+    }
+    pane.append(terminal);
+  }
+
   function render(moveFocus = false) {
     stopAudio();
     const story = snapshot();
@@ -373,8 +486,9 @@ export function createPhone(ctx) {
     stage.classList.toggle('story-phone__stage--prologue', showScene);
     scene.hidden = !showScene;
     scene.replaceChildren(intro(Boolean(replay)), element('p', 'story-phone__edition', t('phone.edition')));
-    status.textContent = t(showScene && replies.length < identityStep ? 'phone.unknown'
-      : tab === 'messages' ? 'phone.proxy' : 'phone.offline');
+    status.textContent = t(`phone.signal.${handover && ctx.chapters.getChoices('finale').decision ? 'completed' : phoneSignal(threadSnapshot(), selectedThread)}`);
+    status.setAttribute('role', 'status');
+    handset.classList.toggle('story-phone__handset--terminal', handover);
     title.textContent = t('phone.title');
     closeButton.setAttribute('aria-label', t('phone.close'));
     nav.setAttribute('aria-label', t('phone.sections'));
@@ -383,16 +497,19 @@ export function createPhone(ctx) {
       label.textContent = t(`phone.${id}`);
       if (id === tab) button.setAttribute('aria-current', 'page');
       else button.removeAttribute('aria-current');
-      button.classList.toggle('story-phone__tab--unread', id === 'diary' && canReadReturnDiary(story, 'new-diary'));
+      button.classList.toggle('story-phone__tab--unread', id === 'diary' && canReadReturnDiary(story, 'new-diary')
+        || id === 'messages' && unreadPhoneThreads(story).length > 0);
     }
     pane.replaceChildren();
     pane.scrollTop = 0;
     actions.replaceChildren();
-    if (tab !== 'messages') renderLibrary(story, moveFocus);
+    if (handover) renderHandover();
+    else if (tab !== 'messages') renderLibrary(story, moveFocus);
+    else if (selectedThread) renderThread(moveFocus);
     else if (conversation) {
       const recordingRead = replay?.recordingRead ?? story.flags[prologueRecordingReadFlag];
       renderConversation(replies, recordingRead, moveFocus);
-    } else renderArchive(story, replies, moveFocus);
+    } else renderThreads(story, moveFocus);
   }
 
   function switchTab(requestedTab) {
@@ -402,8 +519,21 @@ export function createPhone(ctx) {
     render();
   }
 
-  function open(requestedTab = 'messages') {
+  function open(requestedTab = 'messages', options = {}) {
     if (disposed || (!modal.open && state.uiOpen)) return;
+    selectedThread = options.threadId ?? null;
+    handover = options.handover === true;
+    scanned = options.scanned === true;
+    threadSession = { threadId: selectedThread, onComplete: options.onComplete };
+    if (options.transient) {
+      threadSession.snapshot = snapshot();
+      threadSession.snapshot.choices = {};
+      const chapterState = ctx.chapters.getState();
+      threadSession.snapshot.journey = {
+        activeChapterId: chapterState.activeChapterId,
+        chapters: { ...threadSession.snapshot.journey.chapters, ...chapterState.chapters },
+      };
+    }
     const opening = !modal.open;
     if (opening) {
       opener = document.activeElement;
@@ -420,6 +550,9 @@ export function createPhone(ctx) {
   function release() {
     stopAudio();
     replay = null;
+    selectedThread = null;
+    threadSession = null;
+    handover = false;
     state.uiOpen = Boolean(ctx.documentary?.isOpen() || ctx.memory?.isOpen());
     const target = opener;
     opener = null;
@@ -463,6 +596,7 @@ export function createPhone(ctx) {
 
   const unsubscribers = [
     bus.on('story:evidence', refresh),
+    bus.on('story:chapter-change', refresh),
     bus.on('story:beat-start', () => {
       replay = null;
       refresh();

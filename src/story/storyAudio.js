@@ -45,6 +45,12 @@ export function resolveChapterAudio(chapterId, checkpointId) {
       if (checkpointId === 'rain') {
         return { trackId: 'pharping.rain', vars: {}, wind: 0.09, windFreq: 300, stinger: 'chapterComplete', sfx: 'water' };
       }
+      if (checkpointId === 'lamp') {
+        return { trackId: 'pharping.rain', vars: {}, wind: 0.07, windFreq: 290, stinger: null, sfx: 'lamp' };
+      }
+      if (checkpointId === 'phone') {
+        return { trackId: 'story.mirror', vars: { night: true }, wind: 0.06, windFreq: 280, stinger: null, sfx: 'phone' };
+      }
       if (checkpointId === 'diary') {
         return { trackId: 'story.memory', vars: {}, wind: 0.05, windFreq: 280, stinger: null, sfx: 'page' };
       }
@@ -86,6 +92,9 @@ export function resolveChapterAudio(chapterId, checkpointId) {
           stinger: checkpointId === 'flags' ? 'chapterComplete' : null,
           sfx: 'windhorse',
         };
+      }
+      if (checkpointId === 'phone') {
+        return { trackId: 'story.mirror', vars: { night: true }, wind: 0.09, windFreq: 310, stinger: null, sfx: 'phone' };
       }
       if (checkpointId === 'diary') {
         return { trackId: 'story.memory', vars: {}, wind: 0.06, windFreq: 290, stinger: null, sfx: 'page' };
@@ -142,11 +151,14 @@ export function resolveChapterAudio(chapterId, checkpointId) {
     }
 
     case 'samye': {
+      if (checkpointId === 'photo') {
+        return { trackId: 'story.memory', vars: {}, wind: 0.07, windFreq: 290, stinger: null, sfx: 'page' };
+      }
       if (checkpointId === 'night') {
         return { trackId: 'samye.night', vars: {}, wind: 0.24, windFreq: 440, stinger: 'phaseShift', sfx: 'stone' };
       }
       if (checkpointId === 'rebuild') {
-        return { trackId: 'samye.day', vars: {}, wind: 0.12, windFreq: 330, stinger: null, sfx: 'stone' };
+        return { trackId: 'samye.day', vars: {}, wind: 0.12, windFreq: 330, stinger: null, sfx: 'phone' };
       }
       if (checkpointId === 'hepori') {
         return { trackId: 'samye.complete', vars: {}, wind: 0.11, windFreq: 320, stinger: 'vajraGuruChant', sfx: 'bowl' };
@@ -178,14 +190,24 @@ export function resolveChapterAudio(chapterId, checkpointId) {
           sfx: 'phone',
         };
       }
-      if (checkpointId === 'cave' || checkpointId === 'light') {
+      if (checkpointId === 'cave' || checkpointId === 'light' || (checkpointId && checkpointId.startsWith('starlight'))) {
         return {
           trackId: 'story.terma',
           vars: {},
           wind: 0.06,
           windFreq: 270,
-          stinger: checkpointId === 'light' ? 'guru' : null,
+          stinger: checkpointId === 'light' ? 'guru' : checkpointId === 'starlight3' ? 'subdued' : null,
           sfx: 'starlight',
+        };
+      }
+      if (checkpointId === 'descent') {
+        return {
+          trackId: 'story.mirror',
+          vars: { night: true },
+          wind: 0.09,
+          windFreq: 310,
+          stinger: null,
+          sfx: 'phone',
         };
       }
       if (checkpointId === 'diary') {
@@ -225,14 +247,14 @@ export function resolveChapterAudio(chapterId, checkpointId) {
           sfx: 'phone',
         };
       }
-      if (checkpointId === 'lamp') {
+      if (checkpointId === 'lamp' || checkpointId === 'lampPrayer') {
         return {
           trackId: 'story.finale',
           vars: { intimate: false },
           wind: 0.07,
           windFreq: 300,
-          stinger: 'vajraGuruChant',
-          sfx: 'lamp',
+          stinger: checkpointId === 'lamp' ? 'vajraGuruChant' : null,
+          sfx: checkpointId === 'lamp' ? 'lamp' : 'bowl',
         };
       }
       if (checkpointId === 'diary' || checkpointId === 'complete') {

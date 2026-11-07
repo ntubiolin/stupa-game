@@ -29,8 +29,20 @@ test('the chapter uses a complete bilingual route and existing sacred-site ident
   assert.match(i18n.t(prefix + 'altar1.body'), /lose his job/);
   assert.match(i18n.t(prefix + 'altar2.body'), /replace humanity/);
   assert.match(i18n.t(prefix + 'altar3.body'), /world is leaving him behind/);
-  assert.match(i18n.t(prefix + 'altar4.body'), /Scene adaptation/);
-  assert.match(i18n.t(prefix + 'altar12.body'), /still have loved her/);
+  assert.match(i18n.t(prefix + 'altar4.body'), /sleet/);
+  assert.match(i18n.t(prefix + 'altar12.body'), /Twelve figures/);
+  assert.deepEqual(MANGYUL_CHAPTER.checkpoints.find(step => step.id === 'answer').choices, ['yes']);
+  for (const language of ['zh', 'en']) {
+    i18n.setLang(language);
+    for (const key of keys) assert.doesNotMatch(i18n.t(prefix + key), /原作小說對話節選|原作情節改編|場景改編|Scene adaptation|Selected dialogue adapted/);
+  }
+  i18n.setLang('zh');
+  for (const [id, question] of [
+    ['question1', '你為什麼還在走？'],
+    ['question2', '你以為走到終點，就能找回失去的人嗎？'],
+    ['question3', '如果那只是機器呢？'],
+    ['answer', '如果她已經不在了，你還會繼續走嗎？'],
+  ]) assert.ok(i18n.t(prefix + id + '.body').includes(question));
 });
 
 test('all Mangyul action targets have a walkable route on terrain and no new lights', async t => {
@@ -86,8 +98,16 @@ test('visual restoration is reversible and animates a tied flag and falling stor
     assert.equal(scene.getSnapshot().altarsObserved, index - 1);
   }
   assert.equal(altarFlag.material.color.getHex(), 0x2563eb);
-  scene.restore('flags');
+  for (const id of ['question1', 'question2', 'question3', 'answer']) {
+    scene.restore(id);
+    assert.equal(scene.getSnapshot().storm, true, `${id} must retain the storm until the final answer`);
+  }
+  scene.restore('flags', { animate: true });
   assert.deepEqual(scene.getSnapshot(), { checkpointId: 'flags', altarsObserved: 12, flagsTied: false, storm: true });
+  scene.update(0.5);
+  assert.ok(snow.material.opacity > 0 && snow.material.opacity < 0.92);
+  scene.update(0.4);
+  assert.equal(snow.visible, false, 'the accepted answer calms the snow before flag tying');
   assert.equal(cloth.filter(object => object.visible).length, 1);
 
   scene.restore('clearing', { animate: true });
@@ -107,7 +127,11 @@ test('visual restoration is reversible and animates a tied flag and falling stor
   assert.equal(altarFlag.material.color.getHex(), 0x8b8e92);
   assert.equal(cloth.filter(object => object.visible).length, 1);
   assert.equal(snow.visible, true);
-  scene.restore('flags', { reducedMotion: true });
+  scene.restore('answer', { reducedMotion: true });
+  assert.equal(snow.visible, true);
+  scene.restore('flags', { animate: true, reducedMotion: true });
+  assert.equal(snow.visible, false);
+  assert.equal(cloth.filter(object => object.visible).length, 1);
   scene.restore('clearing', { animate: true, reducedMotion: true });
   assert.equal(cloth[0].scale.y, 1);
   assert.equal(snow.visible, false);

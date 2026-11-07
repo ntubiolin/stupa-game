@@ -29,12 +29,17 @@ test('Samye animates the placed stone, raised beam, night collapse and rebuild',
   const laid = stone.position.clone();
   assert.deepEqual(timber.position, stackedBeam);
 
-  scene.restore('night', { animate: true });
+  scene.restore('photo', { animate: true });
   scene.update(0.65);
   assert.ok(timber.position.distanceTo(stackedBeam) > 1);
   scene.update(1);
   const raised = timber.position.clone();
   assert.equal(scene.getSnapshot().stage, 2);
+  assert.equal(sky.visible, false);
+
+  // Reading the photo leaves the completed day construction intact.
+  scene.restore('night', { animate: true });
+  assert.deepEqual(timber.position, raised);
   assert.equal(sky.visible, false);
 
   scene.restore('rebuild', { animate: true });
@@ -64,7 +69,7 @@ test('Samye animates the placed stone, raised beam, night collapse and rebuild',
 test('Samye restores each checkpoint directly and in replay, including reduced motion', async () => {
   const first = await createSamyeScene({ colliders: [] });
   const second = await createSamyeScene({ colliders: [] });
-  const states = [0, 1, 2, 0, 3, 3, 3, 3];
+  const states = { stone: 0, wood: 1, photo: 2, night: 2, rebuild: 0, hepori: 3, memory: 3, diary: 3, complete: 3 };
 
   function visibleState(scene) {
     const object = name => scene.group.getObjectByName(name);
@@ -79,12 +84,13 @@ test('Samye restores each checkpoint directly and in replay, including reduced m
     };
   }
 
-  for (const [index, { id }] of SAMYE_CHAPTER.checkpoints.entries()) {
+  for (const { id } of SAMYE_CHAPTER.checkpoints) {
     first.restore(id, { animate: true, reducedMotion: true });
     second.restore('complete');
     second.restore(id);
     const expected = visibleState(second);
-    assert.equal(expected.stage, states[index]);
+    assert.equal(expected.stage, states[id], id);
+    assert.equal(expected.checkpointId, id);
     assert.deepEqual(visibleState(first), expected);
     first.update(10);
     assert.deepEqual(visibleState(first), expected);
@@ -185,4 +191,24 @@ test('Samye checkpoint labels are bilingual and sacred-site IDs reference origin
   for (const id of SAMYE_CHAPTER.siteIds) {
     assert.ok(CH4_CODEX_ENTRIES.some(record => record.id === id));
   }
+});
+
+
+test('Samye photograph precedes the storm and remembrance keeps the source distinction', () => {
+  const ids = SAMYE_CHAPTER.checkpoints.map(({ id }) => id);
+  assert.ok(ids.indexOf('wood') < ids.indexOf('photo'));
+  assert.ok(ids.indexOf('photo') < ids.indexOf('night'));
+  const { zh, en } = i18n.getStrings();
+  for (const strings of [zh, en]) {
+    for (const id of ['photo', 'rebuild', 'hepori', 'memory']) {
+      const body = strings[`mirror.chapter.samye.${id}.body`];
+      assert.ok(body.length > 50);
+      assert.doesNotMatch(body, /【小說回憶】|\[Fictional memory\]/);
+    }
+  }
+  assert.match(zh['mirror.chapter.samye.photo.body'], /加班修 bug/);
+  assert.match(zh['mirror.chapter.samye.photo.body'], /無常/);
+  assert.match(zh['mirror.chapter.samye.rebuild.body'], /石頭會裂，木頭會朽，壁畫會退色/);
+  assert.match(zh['mirror.chapter.samye.hepori.body'], /沒有留下姓名/);
+  assert.match(zh['mirror.chapter.samye.hepori.body'], /讓沙粒隨風散去/);
 });

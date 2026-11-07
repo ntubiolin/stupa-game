@@ -8,3 +8,5 @@ body.story-quality-low .story-phone::backdrop { backdrop-filter: none; }
 @media(max-width:650px){.story-header{gap:10px;flex-wrap:wrap}.story-header nav{flex-wrap:wrap}.story-header button{min-height:40px}}
 
 .story-card{max-height:calc(100dvh - 60px);overflow:auto}
+.story-letter-qr { width: 10rem; margin: 1.25rem auto; text-align: center; font-size: .8rem; }
+.story-letter-qr svg { display: block; width: 100%; }

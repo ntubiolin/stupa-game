@@ -3,6 +3,7 @@ import test from 'node:test';
 import * as THREE from 'three';
 import { CHIMPHU_CHAPTER } from '../src/data/story/chapters/chimphu.js';
 import { createChimphuScene } from '../src/story/world/chimphuScene.js';
+import { i18n } from '../src/i18n.js';
 
 test('custody papers appear before the verified bundle, which visibly leaves the table', async () => {
   const scene = await createChimphuScene({ colliders: [] });
@@ -25,6 +26,14 @@ test('custody papers appear before the verified bundle, which visibly leaves the
   assert.equal(bundle.visible, true);
   const tableHeight = bundle.position.y;
   scene.restore('cave', { animate: true });
+  scene.update(0.7);
+  assert.equal(bundle.position.y, tableHeight);
+  assert.equal(bundle.visible, true);
+  for (const id of ['light', 'starlight1', 'starlight2', 'starlight3']) {
+    scene.restore(id);
+    assert.equal(bundle.visible, true, id);
+  }
+  scene.restore('descent', { animate: true });
   scene.update(0.3);
   assert.ok(bundle.position.y > tableHeight);
   assert.equal(bundle.visible, true);
@@ -48,19 +57,28 @@ test('abstract cave lights appear and disperse, and checkpoints restore either s
   const scene = await createChimphuScene({ colliders: [] });
   const lights = scene.group.getObjectByName('ChimphuCaveLights');
   const positions = lights.geometry.getAttribute('position');
+  const crack = scene.group.getObjectByName('ChimphuGoldenCrack');
+  assert.ok(crack);
+  assert.ok(scene.group.getObjectByName('ChimphuDigitalDisk'));
   scene.restore('cave');
   assert.equal(lights.visible, false);
+  assert.equal(crack.visible, true);
   scene.restore('light', { animate: true });
   scene.update(0.9);
   assert.equal(lights.visible, true);
   const initialZ = positions.getZ(0);
   const initialOpacity = lights.material.opacity;
-  scene.restore('diary', { animate: true });
+  for (const id of ['starlight1', 'starlight2', 'starlight3']) {
+    scene.restore(id);
+    assert.equal(lights.visible, true, id);
+  }
+  scene.restore('descent', { animate: true });
   scene.update(0.5);
   assert.ok(positions.getZ(0) > initialZ);
   assert.ok(lights.material.opacity < initialOpacity);
   scene.update(0.7);
   assert.equal(lights.visible, false);
+  assert.equal(crack.visible, false);
   scene.restore('light', { reducedMotion: true });
   const staticPositions = positions.array.slice();
   assert.equal(lights.visible, true);
@@ -85,10 +103,10 @@ test('the story map is isolated, all world approaches are clear, and scene resou
   assert.equal(scene.group.parent, null);
   assert.equal(scene.group.getObjectByName('TermaRealmStoneGate').visible, false);
   assert.deepEqual(CHIMPHU_CHAPTER.checkpoints.filter(({ presentation }) => presentation === 'card')
-    .map(({ id }) => id), ['message', 'custody', 'records', 'bundle', 'diary']);
+    .map(({ id }) => id), ['road', 'message', 'custody', 'records', 'bundle', 'starlight1', 'starlight2', 'starlight3', 'descent', 'diary']);
   for (const { id, signal, presentation } of CHIMPHU_CHAPTER.checkpoints) {
     const target = scene.getTarget(id);
-    if (['message', 'records', 'diary'].includes(id) || !signal) {
+    if (['message', 'records', 'starlight1', 'starlight2', 'starlight3', 'descent', 'diary'].includes(id) || !signal) {
       assert.equal(target, null);
       continue;
     }
@@ -153,4 +171,26 @@ test('the Adventure gate still builds its plaque and opens the dungeon selector'
     if (previousDocument === undefined) delete globalThis.document;
     else globalThis.document = previousDocument;
   }
+});
+
+
+test('starlight dialogue precedes retrieval and the descent, with bilingual fixed prose', () => {
+  const ids = CHIMPHU_CHAPTER.checkpoints.map(({ id }) => id);
+  assert.deepEqual(ids.slice(ids.indexOf('light'), ids.indexOf('diary') + 1),
+    ['light', 'starlight1', 'starlight2', 'starlight3', 'descent', 'diary']);
+  const { zh, en } = i18n.getStrings();
+  const key = (id, suffix = 'body') => `mirror.chapter.chimphu.${id}.${suffix}`;
+  for (const id of ['starlight1', 'starlight2', 'starlight3', 'descent']) {
+    for (const suffix of ['title', 'body', 'action']) {
+      assert.ok(zh[key(id, suffix)]?.trim() && en[key(id, suffix)]?.trim(), key(id, suffix));
+    }
+  }
+  assert.match(zh[key('custody')], /她知道你一定會來。/);
+  assert.match(zh[key('road')], /半年前[\s\S]*數位硬碟/);
+  assert.match(zh[key('custody')], /不要因為害怕死亡，就忘了自己仍然活著。/);
+  assert.match(zh[key('records')], /數位硬碟清單/);
+  assert.match(zh[key('cave')], /關掉手電筒/);
+  assert.match(zh[key('starlight1')], /你留住的，是她，還是你自己的恐懼？/);
+  assert.match(zh[key('starlight2')], /不是把寶物藏在石頭裡。而是在心還沒有準備好之前，替它保存一段真理。/);
+  assert.match(zh[key('starlight3')], /當心準備好時，石頭自然會打開。[\s\S]*領取空行文字石板與泛黃的信封/);
 });

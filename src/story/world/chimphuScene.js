@@ -51,6 +51,13 @@ function createCustody(group, getHeight, box) {
   const wax = new THREE.MeshStandardMaterial({ color: 0x8f342a, roughness: 0.82 });
   const stone = new THREE.MeshStandardMaterial({ color: 0x4e4b4d, roughness: 0.94 });
 
+  // A narrow custody room, open toward the player's approach. Plain surfaces avoid invented script.
+  mesh(station, box, paper, [0, 1.25, -1.1], [3, 2.5, 0.12]);
+  for (const x of [-1.45, 1.45]) mesh(station, box, paper, [x, 1.25, -0.25], [0.12, 2.5, 1.8]);
+  mesh(station, box, wood, [-0.83, 0.4, -0.73], [0.65, 0.8, 0.48]);
+  const disk = mesh(station, box, stone, [0.47, 0.88, 0.2], [0.22, 0.025, 0.29]);
+  disk.name = 'ChimphuDigitalDisk';
+  mesh(station, box, paper, [0.47, 0.897, 0.2], [0.14, 0.008, 0.1]);
   mesh(station, box, boards, [0, 0.8, 0], [2, 0.12, 0.96]);
   for (const x of [-0.81, 0.81]) {
     for (const z of [-0.34, 0.34]) mesh(station, box, wood, [x, 0.37, z], [0.12, 0.74, 0.12]);
@@ -160,6 +167,10 @@ export async function createChimphuScene(ctx) {
   createRoadside(group, getHeight, box);
   const { lid, documents, bundle } = createCustody(group, getHeight, box);
   const { lights, render: renderLights } = createCaveLights(group, getHeight);
+  const crack = mesh(group, box, new THREE.MeshBasicMaterial({
+    color: 0xffd593, transparent: true, opacity: 0.75, toneMapped: false,
+  }), [5985, getHeight(5985, -35.1) + 2, -35.4], [0.035, 2.1, 0.025]);
+  crack.name = 'ChimphuGoldenCrack';
   colliders.push(
     { type: 'circle', x: 6003, z: 19.2, r: 0.28, zone: 'chimphu' },
     { type: 'circle', x: 5985.6, z: -3.6, r: 1.04, zone: 'chimphu' },
@@ -184,15 +195,17 @@ export async function createChimphuScene(ctx) {
     documents.scale.setScalar(0.82 + open * 0.18);
 
     const offer = id === 'bundle' ? progress(0.55) : Number(checkpoint > checkpoints.indexOf('bundle'));
-    const take = id === 'cave' ? progress(0.64) : Number(checkpoint > checkpoints.indexOf('cave'));
+    const take = id === 'descent' ? progress(0.64) : Number(checkpoint > checkpoints.indexOf('descent'));
     bundle.visible = offer > 0 && take < 1;
     bundle.position.set(THREE.MathUtils.lerp(-0.32, 0.6, offer),
       0.87 + Math.sin(offer * Math.PI) * 0.22 + take * 0.73,
       -0.16 + offer * 0.31 + take * 0.51);
     bundle.scale.setScalar(1 - take * 0.65);
 
-    const appear = id === 'light' ? progress(0.85) : Number(id === 'diary');
-    const scatter = id === 'diary' ? progress(1.15) : Number(id === 'complete');
+    const inVision = checkpoint >= checkpoints.indexOf('light') && checkpoint <= checkpoints.indexOf('starlight3');
+    const appear = id === 'light' ? progress(0.85) : Number(inVision || id === 'descent');
+    const scatter = id === 'descent' ? progress(1.15) : Number(checkpoint > checkpoints.indexOf('descent'));
+    crack.visible = checkpoint >= checkpoints.indexOf('cave') && checkpoint <= checkpoints.indexOf('starlight3');
     renderLights(appear, scatter, ambient);
   }
 

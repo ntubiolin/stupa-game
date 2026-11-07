@@ -6,6 +6,8 @@ import {
   readPrologueReplies, selectPrologueReply,
 } from '../data/story/phonePrologue.js';
 
+import { phoneThreads, phoneReplyKey, phoneReadFlag, readThreadReplies, isThreadUnlocked } from '../data/story/phoneThreads.js';
+
 const SAVE_SECTION = 'story';
 const SAVE_VERSION = STORY_SAVE_VERSION;
 const BEAT_INDEX = new Map(STORY_BEATS.map((beat, index) => [beat.id, index]));
@@ -55,7 +57,12 @@ function readJourney(value) {
     const checkpoint = chapter.checkpoints.find(entry => entry.id === record?.checkpointId);
     if (!checkpoint || record.completed !== (checkpoint.signal === null)) continue;
     const checkpointIndex = chapter.checkpoints.indexOf(checkpoint);
-    if (chapter.checkpoints.slice(0, checkpointIndex).some(step => step.choices && !step.choices.includes(record.choices?.[step.id]))) continue;
+    const invalidChoice = chapter.checkpoints.slice(0, checkpointIndex).some(step => {
+      const legacyWindAnswer = chapter.id === 'mangyul' && step.id === 'answer'
+        && !record.flags?.windAnswerRequired && record.choices?.[step.id] === undefined;
+      return step.choices && !legacyWindAnswer && !step.choices.includes(record.choices?.[step.id]);
+    });
+    if (invalidChoice) continue;
     chapters[chapter.id] = {
       checkpointId: checkpoint.id,
       completed: record.completed,
@@ -77,6 +84,20 @@ function readState(saved) {
     // Drop orphaned replies so recording a missing turn cannot skip the following one.
     for (const turn of prologueTurns.slice(replies.length)) delete choices[prologueChoiceKey(turn)];
     if (replies.length < prologueTurns.length) delete flags[prologueRecordingReadFlag];
+  }
+  // Phone choices share the v2 store while rejecting orphaned or unknown turns.
+  const phoneKeys = new Set();
+  for (const thread of phoneThreads) {
+    const replies = readThreadReplies({ choices }, thread.id);
+    for (const turn of replies) phoneKeys.add(phoneReplyKey(thread.id, turn.id));
+    if (replies.length !== thread.turns.length) delete flags[phoneReadFlag(thread.id)];
+  }
+  for (const key of Object.keys(choices)) {
+    if (key.startsWith('phone.') && !phoneKeys.has(key)) delete choices[key];
+  }
+  const readFlags = new Set(phoneThreads.map(thread => phoneReadFlag(thread.id)));
+  for (const key of Object.keys(flags)) {
+    if (key.startsWith('phone.') && !readFlags.has(key)) delete flags[key];
   }
   return {
     version: SAVE_VERSION,
@@ -183,6 +204,36 @@ export function createStoryDirector(ctx) {
     return true;
   }
 
+  function commitPhoneChange(next, threadId) {
+    if (!started || publishingBeat || isReadOnly()) return false;
+    if (!save.commitSection(SAVE_SECTION, next).ok) return false;
+    state = next;
+    bus.emit('story:phone-change', { threadId });
+    return true;
+  }
+
+  function recordPhoneReply(threadId, replyId) {
+    const thread = phoneThreads.find(entry => entry.id === threadId);
+    if (!thread || !isThreadUnlocked(state, thread)) return false;
+    // Task completion silences the proxy and freezes all earlier exchanges.
+    if (state.journey.chapters.finale?.choices?.decision) return false;
+    const replies = readThreadReplies(state, threadId);
+    const turn = thread.turns[replies.length];
+    if (!turn || turn.id !== replyId) return false;
+    const next = getState();
+    next.choices[phoneReplyKey(threadId, turn.id)] = replyId;
+    return commitPhoneChange(next, threadId);
+  }
+
+  function acknowledgePhoneThread(threadId) {
+    const thread = phoneThreads.find(entry => entry.id === threadId);
+    if (!thread || !isThreadUnlocked(state, thread) || state.flags[phoneReadFlag(threadId)]) return false;
+    if (readThreadReplies(state, threadId).length !== thread.turns.length) return false;
+    const next = getState();
+    next.flags[phoneReadFlag(threadId)] = true;
+    return commitPhoneChange(next, threadId);
+  }
+
   function signal(name, payload = {}) {
     if (!started || publishingBeat) return false;
     const index = BEAT_INDEX.get(state.beat);
@@ -262,6 +313,7 @@ export function createStoryDirector(ctx) {
 
   const api = {
     start, signal, getState, recordPrologueReply, acknowledgePrologueRecording,
+    recordPhoneReply, acknowledgePhoneThread,
     grantEvidence, reset, skipTo, playClip, update, getJourney, commitJourney, isReadOnly,
   };
   ctx.story = api;

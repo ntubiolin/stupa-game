@@ -1,3 +1,4 @@
+import { phoneReadFlag } from '../data/story/phoneThreads.js';
 import { getChapter } from '../data/story/chapters.js';
 
 export function createChapterDirector(ctx) {
@@ -80,7 +81,7 @@ export function createChapterDirector(ctx) {
         transient = { chapterId: id, checkpointId, completed: false, choices: {} };
       } else {
         latest.activeChapterId = id;
-        latest.chapters[id] ??= { checkpointId, completed: false, choices: {}, flags: {} };
+        latest.chapters[id] ??= { checkpointId, completed: false, choices: {}, flags: id === 'mangyul' ? { windAnswerRequired: true } : {} };
         if (!story.commitJourney(latest)) return false;
       }
       publishChange(id, checkpointId);
@@ -142,6 +143,8 @@ export function createChapterDirector(ctx) {
     const { checkpoints } = getChapter(chapterId);
     const index = checkpoints.findIndex(checkpoint => checkpoint.id === checkpointId);
     if (!checkpoints[index]?.signal || checkpoints[index].signal !== name) return false;
+    const threadId = checkpoints[index].phoneThreadId;
+    if (!transient && threadId && !story.getState().flags[phoneReadFlag(threadId)]) return false;
     const choices = checkpoints[index].choices;
     if (choices && !choices.includes(payload.choice)) return false;
     if (!choices && payload.choice !== undefined) return false;

@@ -85,7 +85,7 @@ test('Pharping approach points are walkable and disposal only removes owned scen
   assert.equal(ctx.zoneGroups.pharping.children.length, 0);
   assert.deepEqual(ctx.interactables, []);
   const checkpoints = ['spring1', 'spring2', 'channel1', 'channel2', 'manuscript',
-    'cave', 'shadow', 'release', 'rain'];
+    'cave', 'shadow', 'release', 'rain', 'settle', 'wait', 'lamp'];
   for (const checkpoint of checkpoints) {
     scene.restore(checkpoint);
     const { x, z, lookAt } = scene.getTarget(checkpoint);
@@ -110,4 +110,33 @@ test('Pharping approach points are walkable and disposal only removes owned scen
   assert.equal(disposed, resources.size);
   assert.equal(scene.group.parent, null);
   assert.deepEqual(ctx.colliders, [retained]);
+});
+
+
+test('Pharping water observation and lamp lighting restore across checkpoints and replay', async t => {
+  const scene = await createPharpingScene({ colliders: [] });
+  t.after(() => scene.dispose());
+  const seep = scene.group.getObjectByName('UncoveredSeep');
+  scene.restore('settle');
+  assert.equal(seep.visible, true);
+  assert.equal(seep.material.color.getHex(), 0x8b7250);
+  assert.equal(scene.getSnapshot().waterSettled, false);
+  scene.restore('wait');
+  assert.equal(seep.material.color.getHex(), 0x8b7250);
+  assert.equal(scene.getSnapshot().waterSettled, false);
+  scene.restore('manuscript');
+  assert.equal(seep.material.color.getHex(), 0x49847e);
+  assert.equal(scene.getSnapshot().waterSettled, true);
+  scene.restore('lamp');
+  assert.equal(scene.getSnapshot().lampLit, false);
+  scene.restore('phone', { reducedMotion: true });
+  assert.equal(scene.getSnapshot().lampLit, true);
+  scene.restore('diary');
+  assert.equal(scene.getSnapshot().lampLit, true);
+  scene.restore('lamp');
+  assert.equal(scene.getSnapshot().lampLit, false);
+  scene.restore('backup');
+  assert.equal(scene.getSnapshot().raining, false);
+  assert.equal(scene.getSnapshot().waterSettled, false);
+  assert.equal(scene.getSnapshot().lampLit, false);
 });

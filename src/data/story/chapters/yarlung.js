@@ -15,10 +15,10 @@ export const YARLUNG_CHAPTER = Object.freeze({
     ['release', 'yak:release'],
     ['guardian', 'yak:touch', 'card'],
     ['memory', 'memory:read', 'card'],
-    ['boundary', 'boundary:read', 'card'],
+    ['boundary', 'boundary:read', 'card', 'yarlung'],
     ['diary', 'diary:read', 'card'],
     ['complete', null],
-  ].map(([id, signal, presentation]) => Object.freeze(
-    presentation ? { id, signal, presentation } : { id, signal },
+  ].map(([id, signal, presentation, phoneThreadId]) => Object.freeze(
+    presentation ? { id, signal, presentation, ...(phoneThreadId && { phoneThreadId }) } : { id, signal },
   ))),
 });

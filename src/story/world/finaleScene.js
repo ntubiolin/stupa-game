@@ -12,7 +12,7 @@ const targets = {
 const checkpoints = FINALE_CHAPTER.checkpoints.map(({ id }) => id);
 const custodyIndex = checkpoints.indexOf('custody');
 const koraIndex = checkpoints.indexOf('kora1');
-const diaryIndex = checkpoints.indexOf('diary');
+const diaryIndex = checkpoints.indexOf('lampPrayer');
 
 function addBox(group, material, width, height, depth, x, y, z) {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);

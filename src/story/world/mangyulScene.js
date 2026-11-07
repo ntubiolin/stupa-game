@@ -8,6 +8,7 @@ const colors = [0x2563eb, 0xf8fafc, 0xdc2626, 0x16a34a, 0xeab308];
 const checkpoints = MANGYUL_CHAPTER.checkpoints.map(({ id }) => id);
 const firstAltar = checkpoints.indexOf('altar1');
 const flagsIndex = checkpoints.indexOf('flags');
+const calmIndex = checkpoints.indexOf('answer');
 const altarIds = MANGYUL_CHAPTER.checkpoints
   .filter(step => step.signal === 'altar:observe').map(step => step.id);
 const flagColors = colors.map(color => new THREE.Color(color));
@@ -170,7 +171,8 @@ export async function createMangyulScene(ctx) {
     const ease = transitioning ? THREE.MathUtils.smoothstep(elapsed, 0, 0.8) : 1;
     const tied = checkpoint > flagsIndex;
     const tying = checkpoint === flagsIndex + 1;
-    const storm = tied ? (tying ? 1 - ease : 0) : 1;
+    const answered = checkpoint > calmIndex;
+    const storm = answered ? (checkpoint === calmIndex + 1 ? 1 - ease : 0) : 1;
     if (refreshAltarFlags) {
       const justObserved = checkpoint > firstAltar && checkpoint <= firstAltar + altars.length;
       altars.forEach((flags, index) => {

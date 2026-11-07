@@ -36,21 +36,52 @@ test('the first exchange preserves the original sequence and separates the proxy
 test('the library follows director evidence across tabs, and only return permits diary acknowledgment', () => {
   const story = { beat: 'prologue', evidence: [] };
   for (const tab of ['photos', 'diary', 'evidence']) {
-    assert.deepEqual(visiblePhoneRecords(story, tab), []);
+    assert.deepEqual(visiblePhoneRecords(story, tab).map(record => record.id), tab === 'photos' ? [] : ['blank-notebook']);
   }
   story.beat = 'restoration';
   story.evidence.push('train-recording', 'restoration-record', 'stone-record');
   const ids = (tab) => visiblePhoneRecords(story, tab).map(({ id }) => id);
-  assert.deepEqual(ids('photos'), ['restoration-record', 'stone-record']);
-  assert.deepEqual(ids('diary'), []);
-  assert.deepEqual(ids('evidence'), ['train-recording', 'restoration-record', 'stone-record']);
+  assert.deepEqual(ids('photos'), ['volunteer-photo', 'restoration-record', 'stone-record']);
+  assert.deepEqual(ids('diary'), ['blank-notebook']);
+  assert.deepEqual(ids('evidence'), ['blank-notebook', 'volunteer-photo', 'handover-archive', 'train-recording', 'restoration-record', 'stone-record']);
   story.beat = 'return';
   assert.equal(canReadReturnDiary(story, 'new-diary'), false);
   story.evidence.push('old-map', 'new-diary');
-  assert.deepEqual(ids('diary'), ['new-diary']);
+  assert.deepEqual(ids('diary'), ['blank-notebook', 'new-diary']);
   assert.equal(canReadReturnDiary(story, 'old-map'), false);
   assert.equal(canReadReturnDiary(story, 'new-diary'), true);
   story.beat = 'complete';
-  assert.deepEqual(ids('diary'), ['new-diary']);
+  assert.deepEqual(ids('diary'), ['blank-notebook', 'new-diary']);
   assert.equal(canReadReturnDiary(story, 'new-diary'), false);
+});
+
+test('chapter signal phases and unread threads follow canonical progress, with no post-handover notification', async () => {
+  const { phoneSignal, visiblePhoneThreads, unreadPhoneThreads, isThreadUnlocked } = await import('../src/data/story/phoneThreads.js');
+  const story = { beat: 'complete', choices: {}, flags: {}, journey: { activeChapterId: 'pharping', chapters: {} } };
+  assert.equal(phoneSignal(story), 'delayed');
+  story.journey.chapters.pharping = { checkpointId: 'phone' };
+  assert.deepEqual(visiblePhoneThreads(story).map(thread => thread.id), ['hotel', 'pharping']);
+  story.flags['phone.read.hotel'] = true;
+  assert.deepEqual(unreadPhoneThreads(story).map(thread => thread.id), ['pharping']);
+  story.journey.activeChapterId = 'mangyul';
+  story.journey.chapters.mangyul = { checkpointId: 'phone' };
+  assert.equal(phoneSignal(story), 'weak');
+  assert.equal(phoneSignal(story, 'mangyul-snow'), 'sending');
+  story.journey.activeChapterId = 'chimphu';
+  assert.equal(phoneSignal(story), 'offline');
+  story.journey.chapters.finale = { choices: { decision: 'retain' } };
+  assert.equal(phoneSignal(story), 'completed');
+  assert.deepEqual(unreadPhoneThreads(story), []);
+  assert.equal(isThreadUnlocked(story, { chapterId: 'pharping', checkpointId: 'missing' }), false);
+});
+
+test('the pilgrimage notebook stays blank until the finale diary has been explicitly completed', () => {
+  const story = { beat: 'complete', evidence: [], journey: { chapters: { finale: { checkpointId: 'diary', completed: false } } } };
+  const notebook = () => visiblePhoneRecords(story, 'diary').find(record => record.id === 'blank-notebook');
+  assert.equal(notebook().bodyKey, 'phone.notebook.blank');
+  story.journey.chapters.finale = { checkpointId: 'complete', completed: true };
+  assert.equal(notebook().bodyKey, 'phone.notebook.written');
+  assert.equal(visiblePhoneRecords(story, 'photos').some(record => record.id === 'dorm-memory'), false);
+  story.journey.chapters.yarlung = { checkpointId: 'memory' };
+  assert.equal(visiblePhoneRecords(story, 'photos').find(record => record.id === 'dorm-memory').clipId, 'dorm-memory');
 });

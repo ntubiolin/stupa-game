@@ -1,6 +1,370 @@
 import { i18n } from '../i18n.js';
 
 const lines = [
+  ['phone.record.dorm', '十七秒宿舍影片', 'Seventeen seconds in the dormitory'],
+  ['phone.record.dormBody', '大學宿舍裡，映真指著自己剪壞的短髮笑了。這段私人回憶以十七秒字幕視聽卡呈現，原始影音尚未提供。', 'In her university dormitory, Yingzhen laughs at her botched short haircut. This private recollection is a seventeen-second subtitle card. Original footage and audio are unavailable.'],
+  ['phone.record.playMemory', '播放回憶字幕卡', 'Play the memory subtitle card'],
+  [
+    "phone.thread.back",
+    "所有對話",
+    "All conversations"
+  ],
+  [
+    "phone.thread.finish",
+    "讀完，收起手機",
+    "Finish reading and put away"
+  ],
+  [
+    "phone.unread",
+    "未讀訊息 {count}",
+    "{count} unread conversations"
+  ],
+  [
+    "phone.savedError",
+    "保存失敗，請重試。",
+    "Saving failed. Please retry."
+  ],
+  [
+    "phone.signal.online",
+    "訊號穩定",
+    "Signal stable"
+  ],
+  [
+    "phone.signal.delayed",
+    "訊號偶爾延遲",
+    "Occasional signal delays"
+  ],
+  [
+    "phone.signal.weak",
+    "訊號微弱",
+    "Weak signal"
+  ],
+  [
+    "phone.signal.sending",
+    "傳送中……",
+    "Sending…"
+  ],
+  [
+    "phone.signal.offline",
+    "無訊號 · 離線模式",
+    "No signal · Offline mode"
+  ],
+  [
+    "phone.signal.completed",
+    "任務已結束 · 數位代理離線",
+    "Task ended · Digital proxy offline"
+  ],
+  [
+    "phone.thread.interrupted",
+    "訊號中斷。後續訊息暫時無法送達。",
+    "The signal has dropped. Further messages cannot be delivered."
+  ],
+  [
+    "phone.thread.silence",
+    "對方沒有再傳來訊息。",
+    "No further message arrives."
+  ],
+  [
+    "phone.notebook.title",
+    "林澈的朝聖筆記本",
+    "Lin Che’s pilgrimage notebook"
+  ],
+  [
+    "phone.notebook.blank",
+    "第一頁還沒有寫字。\n\n映真喜歡記車站名、路邊小狗、賣花老太太。林澈一直帶著這本空白筆記本，卻不知道該從哪一件小事開始。",
+    "The first page has no writing yet.\n\nYingzhen liked recording station names, roadside dogs and the old woman selling flowers. Lin Che has carried this blank notebook all along, unsure which small thing to begin with."
+  ],
+  [
+    "phone.notebook.written",
+    "微雨停了，博達哈的清晨仍帶著涼意。林澈走進佛塔旁的小茶館，點了一杯熱奶茶，在第一頁寫下：\n\n博達哈的清晨，風很輕。",
+    "The drizzle has stopped. In the cool Boudha morning, Lin Che enters the tea shop beside the stupa, orders hot milk tea, and writes on the first page.\n\nThe morning wind in Boudha is gentle."
+  ],
+  [
+    "phone.record.volunteers",
+    "2015 年博達哈修塔志工合照",
+    "Boudha restoration volunteers, 2015"
+  ],
+  [
+    "phone.record.volunteersBody",
+    "許映真站在鷹架旁，手裡拿著一塊刻有藏文字母的石板拓片。照片裡的人還不知道，這段旅程會在多年後交到林澈手中。",
+    "Xu Yingzhen stands beside the scaffolding, holding a rubbing of Tibetan letters carved on a stone. No one in the photograph knows that years later this journey will pass into Lin Che’s hands."
+  ],
+  [
+    "phone.record.handover",
+    "半年前的轉交檔案紀錄",
+    "The archive handover six months ago"
+  ],
+  [
+    "phone.record.handoverBody",
+    "半年前車禍後，林澈收到她託付轉交的數位硬碟與檔案清單：照片、日記、語音、聊天紀錄。每個資料夾都還在，卻無法回答他最想問的問題。",
+    "After the accident six months ago, Lin Che received the digital drive entrusted for him, with an inventory of photographs, diaries, voice recordings and chats. Every folder remains, but none can answer the question he most wants to ask."
+  ],
+  [
+    "phone.source.private",
+    "私人回憶・文字紀錄",
+    "PRIVATE MEMORY / TEXT RECORD"
+  ],
+  [
+    "phone.handover.scan",
+    "掃描信末 QR Code",
+    "Scan the QR code on the letter"
+  ],
+  [
+    "phone.handover.code",
+    "信末的現代 QR Code · 本機離線頁面",
+    "A modern QR code on the letter · Local offline page"
+  ],
+  [
+    "phone.handover.title",
+    "任務交付確認",
+    "Task Handover Confirmation"
+  ],
+  [
+    "phone.handover.arrived",
+    "✓ 指定對象已抵達目的地",
+    "✓ Designated recipient has arrived"
+  ],
+  [
+    "phone.handover.stone",
+    "✓ 石板已尋獲",
+    "✓ Stone recovered"
+  ],
+  [
+    "phone.handover.letter",
+    "✓ 最後信件已開啟",
+    "✓ Final letter opened"
+  ],
+  [
+    "phone.handover.confirm",
+    "最後確認：是否結束數位代理任務？",
+    "Final confirmation — End the digital proxy task?"
+  ],
+  [
+    "phone.handover.end",
+    "結束任務",
+    "End task"
+  ],
+  [
+    "phone.handover.retain",
+    "保留連結",
+    "Keep connection"
+  ],
+  [
+    "phone.handover.disabled",
+    "帳號已停用",
+    "Account deactivated"
+  ],
+  [
+    "phone.handover.archived",
+    "靜默封存模式 · 不再主動傳送訊息",
+    "Silent archive · No proactive messages"
+  ],
+  [
+    "phone.handover.endReply",
+    "謝謝你陪我走完這段路。\n\n再見，林澈。",
+    "Thank you for walking this road with me.\n\nGoodbye, Lin Che."
+  ],
+  [
+    "phone.handover.retainReply",
+    "我會把這些記憶留在這裡。\n\n但接下來的路，你要自己走了。",
+    "I will keep these memories here.\n\nBut you must walk the road ahead yourself."
+  ],
+  [
+    "phone.thread.hotel.title",
+    "旅館的夜晚",
+    "Hotel at night"
+  ],
+  [
+    "phone.thread.hotel.0.reply",
+    "今天謝謝你陪我走這一趟。",
+    "Thank you for walking with me today."
+  ],
+  [
+    "phone.thread.hotel.0.0",
+    "你不用謝我。這本來就是我的任務。",
+    "You do not need to thank me. This is my task."
+  ],
+  [
+    "phone.thread.hotel.1.reply",
+    "那如果任務結束了呢？",
+    "What happens when the task ends?"
+  ],
+  [
+    "phone.thread.hotel.1.0",
+    "那我就沒有存在的必要了。",
+    "Then there will be no reason for me to exist."
+  ],
+  [
+    "phone.thread.pharping.title",
+    "揚列雪的燈",
+    "The lamps of Yangleshö"
+  ],
+  [
+    "phone.thread.pharping.0.reply",
+    "我在揚列雪點了一盞燈。",
+    "I lit a lamp at Yangleshö."
+  ],
+  [
+    "phone.thread.pharping.0.0",
+    "她以前也很喜歡看燈。",
+    "She used to love watching lamps, too."
+  ],
+  [
+    "phone.thread.pharping.0.1",
+    "她說，黑暗裡只要有一點光，人就不會那麼害怕。",
+    "She said that with even a little light in the dark, people would feel less afraid."
+  ],
+  [
+    "phone.thread.pharping.1.reply",
+    "你真的很像她。",
+    "You really are like her."
+  ],
+  [
+    "phone.thread.pharping.1.0",
+    "像她不好嗎？",
+    "Is being like her a bad thing?"
+  ],
+  [
+    "phone.thread.pharping.1.1",
+    "那就把我當作一個認識她的人吧。",
+    "Then think of me as someone who knew her."
+  ],
+  [
+    "phone.thread.mangyul.title",
+    "搖晃的吉普車",
+    "The swaying jeep"
+  ],
+  [
+    "phone.thread.mangyul.0.reply",
+    "你是不是一直在引導我去某個地方？",
+    "Have you been guiding me somewhere all along?"
+  ],
+  [
+    "phone.thread.mangyul.0.0",
+    "是。",
+    "Yes."
+  ],
+  [
+    "phone.thread.mangyul.1.reply",
+    "為什麼？",
+    "Why?"
+  ],
+  [
+    "phone.thread.mangyul.1.0",
+    "因為我有一件事情必須完成。",
+    "Because there is something I must finish."
+  ],
+  [
+    "phone.thread.mangyul.2.reply",
+    "什麼事情？",
+    "What is it?"
+  ],
+  [
+    "phone.thread.mangyul.2.0",
+    "等你找到那封信，你就會知道。",
+    "When you find the letter, you will know."
+  ],
+  [
+    "phone.thread.mangyul-snow.title",
+    "山口未送出的訊息",
+    "An unsent message at the pass"
+  ],
+  [
+    "phone.thread.mangyul-snow.0.reply",
+    "我今天看到雪山了。",
+    "I saw the snowy mountains today."
+  ],
+  [
+    "phone.thread.yarlung.title",
+    "辨認真實",
+    "Recognizing what is real"
+  ],
+  [
+    "phone.thread.yarlung.0.reply",
+    "你知道嗎？我有時候會忘記你不是她。",
+    "Sometimes I forget you are not her."
+  ],
+  [
+    "phone.thread.yarlung.0.0",
+    "那你希望我是她嗎？",
+    "Do you wish I were her?"
+  ],
+  [
+    "phone.thread.yarlung.1.reply",
+    "我不知道。",
+    "I do not know."
+  ],
+  [
+    "phone.thread.yarlung.1.0",
+    "我也不知道。",
+    "Neither do I."
+  ],
+  [
+    "phone.thread.yarlung.1.1",
+    "但我知道，她希望你走完這段路。",
+    "But I know she wanted you to finish this journey."
+  ],
+  [
+    "phone.thread.samye.title",
+    "風沙之後的沉默",
+    "Silence after the sandstorm"
+  ],
+  [
+    "phone.thread.samye.0.reply",
+    "如果我找到石板，你就會消失嗎？",
+    "Will you disappear if I find the stone?"
+  ],
+  [
+    "phone.thread.samye.0.0",
+    "那是任務的最後一步。",
+    "That is the final step of the task."
+  ],
+  [
+    "phone.thread.samye.1.reply",
+    "所以你一直跟我聊天，只是為了讓我去找石板？",
+    "Have you only been talking to me to make me find the stone?"
+  ],
+  [
+    "phone.thread.samye.1.0",
+    "……",
+    "…"
+  ],
+  [
+    "phone.thread.chimphu.title",
+    "下山後的最後對話",
+    "The last exchange on the descent"
+  ],
+  [
+    "phone.thread.chimphu.0.reply",
+    "我找到了。",
+    "I found it."
+  ],
+  [
+    "phone.thread.chimphu.0.0",
+    "太好了。",
+    "That is wonderful."
+  ],
+  [
+    "phone.thread.chimphu.1.reply",
+    "你早就知道信裡寫了什麼，對嗎？",
+    "You knew what the letter said all along, did you not?"
+  ],
+  [
+    "phone.thread.chimphu.1.0",
+    "我只知道一部分。",
+    "I only knew part of it."
+  ],
+  [
+    "phone.thread.chimphu.2.reply",
+    "她交代了什麼？",
+    "What did she ask you to do?"
+  ],
+  [
+    "phone.thread.chimphu.2.0",
+    "那封信，她沒有讓我讀完。她只告訴我，等你拿到石板時，把最後的選擇交給你。",
+    "She did not let me read the whole letter. She only told me to leave the final choice to you once you had the stone."
+  ]
+,
   ['phone.title', '林澈的手機', 'Lin Che’s phone'],
   ['phone.close', '收起手機', 'Put the phone away'],
   ['phone.sections', '手機內容', 'Phone sections'],
@@ -68,7 +432,7 @@ const lines = [
   ['phone.record.restoration', '博達哈・2015 震後修復', 'Boudha / After the 2015 earthquake'],
   ['phone.record.restorationBody', '地震重創博達哈大佛塔的上部。塔頂拆下修復時，人們仍繞著塔走。在小說裡，映真來到這裡，協助整理物資與資料。', 'The earthquake badly damaged the upper structure of Boudhanath Stupa. While its crown was dismantled for repairs, people continued to circle the stupa. In the novel, Yingzhen comes here as a volunteer to help sort supplies and records.'],
   ['phone.record.stone', '石板與保管紀錄', 'Stone and custody record'],
-  ['phone.record.stoneBody', '映真在一批來源未明的舊物裡發現這塊石板。它未列入佛塔修復工程。經寺方同意暫時保管，等候進一步研究。', 'Yingzhen found the stone among objects of uncertain origin. It was outside the stupa’s restoration inventory. The monastery agreed to hold it for further study.'],
+  ['phone.record.stoneBody', '映真在一批來源未明的舊物裡發現這塊石板。它未列入佛塔修復工程。經寺方同意暫時保管，等候進一步研究。洛桑辨認拓片上流傳的話：「當鐵鳥在天空飛翔，當馬匹在輪子上奔跑，藏人將如螞蟻般散落世界各地，佛法將傳入紅人之地。那時，人們會在鏡子中看見自己的心。」「你手裡拿著的那個小盒子，不就是一面鏡子嗎？」', 'Yingzhen found the stone among objects of uncertain origin. It was outside the stupa’s restoration inventory. The monastery agreed to hold it for further study. Losang reads the circulating prophecy about iron birds, horses on wheels, Tibetans scattering like ants, and Dharma reaching the land of the red people. People will see their hearts in mirrors. He asks whether the little box in Lin Che’s hand is itself a mirror.'],
   ['phone.record.map', '六處紅墨標記', 'Six marks in red ink'],
   ['phone.record.mapBody', '洛桑保存的副本。六處紅墨標記連成一條路，第一站指向帕平。映真的筆跡留在地圖背面。', 'The copy Losang kept. Six marks in red ink trace a journey, beginning in Pharping. Yingzhen’s handwriting is on the reverse.'],
   ['phone.record.mapNote', '林澈，如果有一天你走到這裡，希望你不要只為了找我。\n\n我希望你能看看，我曾經看見的世界。', 'Lin Che, if you ever come this far, I hope finding me isn’t your only reason.\n\nI hope you’ll see the world I once saw.'],

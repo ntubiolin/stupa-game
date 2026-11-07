@@ -33,7 +33,7 @@ test('the tablet travels from the custody record into the chapel niche, and the 
   assert.equal(flame.visible, false);
 
   scene.restore('lamp');
-  scene.restore('diary', { animate: true });
+  scene.restore('lampPrayer', { animate: true });
   assert.equal(flame.visible, false);
   scene.update(0.26);
   assert.equal(flame.visible, true);
@@ -53,7 +53,7 @@ test('the finale restores all checkpoints and resets tablet and lamp for replay'
     reloaded.restore('complete');
     reloaded.restore(id);
     const stored = ids.indexOf(id) >= ids.indexOf('kora1');
-    const lit = id === 'diary' || id === 'complete';
+    const lit = ids.indexOf(id) >= ids.indexOf('lampPrayer');
     assert.deepEqual(staged.getSnapshot(), reloaded.getSnapshot());
     assert.equal(staged.getSnapshot().tabletStored, stored, id);
     assert.equal(staged.getSnapshot().lampLit, lit, id);
@@ -145,7 +145,20 @@ test('the six fixed letter pages and explicit proxy branches have bilingual text
   }
   assert.match(zh[`${prefix}.letter1.body`], /^親愛的林澈/);
   assert.match(zh[`${prefix}.letter6.body`], /映真$/);
-  assert.match(zh[`${prefix}.response.body.retain`], /遊戲改編分支/);
-  assert.match(en[`${prefix}.response.body.retain`], /Game adaptation/);
+  assert.match(zh[`${prefix}.response.body.end`], /謝謝你陪我走完這段路。/);
+  assert.match(zh[`${prefix}.response.body.end`], /再見，林澈。/);
+  assert.match(zh[`${prefix}.response.body.end`], /帳號已停用/);
+  assert.match(zh[`${prefix}.response.body.retain`], /我會把這些記憶留在這裡。/);
+  assert.match(zh[`${prefix}.response.body.retain`], /但接下來的路，你要自己走了。/);
+  assert.match(en[`${prefix}.response.body.retain`], /quiet archive/);
+  assert.doesNotMatch(zh[`${prefix}.response.body.retain`], /【/);
+  assert.match(zh[`${prefix}.lampPrayer.body`], /雙手合十/);
+  assert.match(zh[`${prefix}.lampPrayer.body`], /「我到了。」[\s\S]*「你可以放心了。」/);
+  assert.match(zh[`${prefix}.diary.body`], /熱奶茶[\s\S]*博達哈的清晨，風很輕。/);
+  assert.match(zh[`${prefix}.complete.body`], /有些人留下能夠思考的機器。/);
+  assert.match(zh[`${prefix}.complete.body`], /他沒有忘記她。[\s\S]*帶著那份記憶繼續生活。/);
+  const ids = FINALE_CHAPTER.checkpoints.map(({ id }) => id);
+  assert.equal(ids.indexOf('lampPrayer'), ids.indexOf('lamp') + 1);
+  assert.equal(ids.indexOf('diary'), ids.indexOf('lampPrayer') + 1);
   assert.ok(FINALE_CHAPTER.siteIds.every(id => CH5_CODEX.some(record => record.id === id)));
 });

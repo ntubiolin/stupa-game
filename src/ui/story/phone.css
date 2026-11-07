@@ -650,3 +650,20 @@
     display: none;
   }
 }
+
+.story-phone__handset--terminal { background: #101b1a; color: #d3e6d5; }
+.story-phone__handset--terminal .story-phone__pane { background: #101b1a; }
+.story-phone__terminal { font-family: ui-monospace, monospace; line-height: 1.8; }
+.story-phone__check { color: #a8d6b0; }
+.story-phone__account { border-top: 1px solid #77937b; padding-top: 1rem; }
+.story-phone__handset--terminal .story-phone__action { background: #24372c; color: #e6f0e7; }
+.story-phone__handset--terminal .story-phone__section-title,
+.story-phone__handset--terminal .story-phone__context,
+.story-phone__handset--terminal .story-phone__note,
+.story-phone__handset--terminal .story-phone__paper { color: #d3e6d5; }
+.story-phone__handset--terminal .story-phone__paper { background: transparent; }
+.story-phone__handset--terminal .story-phone__nav { display: none; }
+.story-phone__status { max-width: calc(100% - 3rem); white-space: normal; }
+.story-phone__terminal .story-phone__paper { white-space: pre-line; }
+.story-phone__qr { width: 9rem; margin: 1rem auto; }
+.story-phone__qr svg { display: block; width: 100%; }

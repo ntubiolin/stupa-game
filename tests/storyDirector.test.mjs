@@ -334,3 +334,49 @@ test('elapsed time, debug evidence and reset preserve pre-story adventure sectio
   reloaded.save.flush();
   assert.deepEqual(load().save.dump().sections, { ...adventure, story: freshState });
 });
+
+test('cross-chapter phone replies commit sequentially and read status survives v1 migration and reload', t => {
+  const load = harness(t, { story: {
+    version: 1, beat: 'map', choices: { 'prologue.opening': 'hello', 'phone.hotel.1': '1' },
+    flags: { 'phone.read.hotel': true }, evidence: [], clipsSeen: [], elapsedSeconds: 12,
+  } });
+  let { director } = load();
+  director.start();
+  assert.equal(director.getState().version, 2);
+  assert.equal(director.getState().choices['prologue.opening'], 'hello');
+  assert.equal(director.getState().choices['phone.hotel.1'], undefined, 'orphaned reply removed');
+  assert.equal(director.getState().flags['phone.read.hotel'], undefined);
+  assert.equal(director.recordPhoneReply('pharping', '0'), false, 'locked chapter');
+  assert.equal(director.recordPhoneReply('hotel', '1'), false, 'out of sequence');
+  assert.equal(director.acknowledgePhoneThread('hotel'), false, 'unread incoming replies');
+  assert.equal(director.recordPhoneReply('hotel', '0'), true);
+  director = load().director;
+  director.start();
+  assert.equal(director.recordPhoneReply('hotel', '0'), false, 'duplicate reply');
+  assert.equal(director.recordPhoneReply('hotel', '1'), true);
+  assert.equal(director.acknowledgePhoneThread('hotel'), true);
+  assert.equal(director.acknowledgePhoneThread('hotel'), false);
+  director = load().director;
+  assert.equal(director.getState().flags['phone.read.hotel'], true);
+  assert.equal(director.getState().choices['phone.hotel.1'], '1');
+});
+
+test('failed phone writes keep reply and read state retryable and preserve unrelated sections', t => {
+  const load = harness(t, { story: { version: 2, beat: 'map' }, vitals: { level: 21 } });
+  const { director, save } = load();
+  director.start();
+  const before = director.getState();
+  const write = globalThis.localStorage.setItem;
+  globalThis.localStorage.setItem = () => { throw new DOMException('full', 'QuotaExceededError'); };
+  assert.equal(director.recordPhoneReply('hotel', '0'), false);
+  assert.deepEqual(director.getState(), before);
+  globalThis.localStorage.setItem = write;
+  assert.equal(director.recordPhoneReply('hotel', '0'), true);
+  assert.equal(director.recordPhoneReply('hotel', '1'), true);
+  globalThis.localStorage.setItem = () => { throw new DOMException('blocked', 'SecurityError'); };
+  assert.equal(director.acknowledgePhoneThread('hotel'), false);
+  assert.equal(director.getState().flags['phone.read.hotel'], undefined);
+  globalThis.localStorage.setItem = write;
+  assert.equal(director.acknowledgePhoneThread('hotel'), true);
+  assert.deepEqual(save.get('vitals'), { level: 21 });
+});

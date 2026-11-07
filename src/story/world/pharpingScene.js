@@ -3,7 +3,7 @@ import { createMap } from '../../world/maps/pharping.js';
 import { seededRandom } from '../../world/mapBase.js';
 import { createWellShadow } from './wellShadow.js';
 
-const checkpoints = ['spring1', 'spring2', 'channel1', 'channel2', 'manuscript',
+const visualCheckpoints = ['spring1', 'spring2', 'channel1', 'channel2', 'manuscript',
   'cave', 'shadow', 'release', 'rain', 'diary', 'complete'];
 const approaches = {
   spring1: [2041.8, 32.85, 2040.6, 30.1, 0.45],
@@ -14,6 +14,9 @@ const approaches = {
   cave: [2020, -41.3, 2020, -44.5, 0.92],
   shadow: [1970, 56.5, 1970, 52.6, 1.52],
   release: [1970, 56.5, 1970, 52.6, 1.52],
+  settle: [2038, 32.5, 2039.5, 29.4, 0.5],
+  wait: [2035.8, 22, 2034.4, 22.8, 0.28],
+  lamp: [2020, -41.3, 2020, -45.9, 1.0],
   rain: [1970, 56.5, 1970, 52.6, 0.78],
 };
 
@@ -400,6 +403,8 @@ export async function createPharpingScene(ctx) {
 
   const well = { x: 1970, z: 53 };
   let checkpoint = -1;
+  let currentId = 'spring1';
+  const visualStages = { backup: 0, settle: 2, wait: 4, lamp: 9, phone: 9, diary: 9, complete: 10 };
   let elapsed = 0;
   let ambient = 0;
   let transition = false;
@@ -433,19 +438,25 @@ export async function createPharpingScene(ctx) {
     });
     const cleared = Math.max(0, Math.min(2, checkpoint - 2 - Number(transition && elapsed < 0.27)));
     channel.set(cleared, raining, ambient);
+    const seep = group.getObjectByName('UncoveredSeep');
+    if (['settle', 'wait'].includes(currentId)) seep.visible = true;
+    seep.material.color.setHex(['spring2', 'settle', 'wait'].includes(currentId) ? 0x8b7250 : 0x49847e);
     const manuscriptState = checkpoint >= 6 ? 'returned' : checkpoint >= 5 ? 'carried' : 'trail';
     manuscript.set(manuscriptState, checkpoint === 5 || checkpoint === 6 ? easing(0.48) : 1);
     shadow.set(checkpoint >= 6, checkpoint >= 8 ? easing(1.58) : 0, ambient);
+    const lit = ['phone', 'diary', 'complete'].includes(currentId);
+    base.map.lampNiches.forEach((lamp, index) => { lamp.flameGrp.visible = index > 0 || lit; });
     valley.set(raining, ambient);
     rain.set(raining, ambient, ctx.state?.player?.position || well);
   }
 
   function restore(checkpointId, { animate = false, reducedMotion = false } = {}) {
-    const next = checkpoints.indexOf(checkpointId);
+    const next = Object.hasOwn(visualStages, checkpointId) ? visualStages[checkpointId] : visualCheckpoints.indexOf(checkpointId);
     if (disposed || next < 0) return;
     transition = animate && !reducedMotion && next === checkpoint + 1 && checkpoint >= 0;
     reduced = reducedMotion;
     checkpoint = next;
+    currentId = checkpointId;
     elapsed = 0;
     if (!transition) ambient = 0;
     renderState();
@@ -469,7 +480,8 @@ export async function createPharpingScene(ctx) {
     },
     getSnapshot() {
       return {
-        checkpointId: checkpoints[checkpoint], raining: base.map.isRaining(),
+        checkpointId: currentId, lampLit: ['phone', 'diary', 'complete'].includes(currentId),
+        waterSettled: checkpoint >= 4 && currentId !== 'wait', raining: base.map.isRaining(),
         springStonesCleared: Math.max(0, Math.min(2, checkpoint)),
         channelDebrisCleared: Math.max(0, Math.min(2, checkpoint - 2)),
         manuscript: checkpoint >= 6 ? 'returned' : checkpoint >= 5 ? 'carried' : 'trail',

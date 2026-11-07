@@ -36,6 +36,7 @@ export const STORY_BEATS = Object.freeze([
   },
   {
     id: 'map',
+    phoneThreadId: 'hotel',
     signal: 'map:opened',
     titleKey: 'story.beat.map.title',
     hintKey: 'story.beat.map.hint',

@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { createMap } from '../../world/maps/samye.js';
 import { seededRandom } from '../../world/mapBase.js';
-import { SAMYE_CHAPTER } from '../../data/story/chapters/samye.js';
 
 const approaches = {
   stone: [5008, 38, 5008, 35, 0.6],
   wood: [5016, 38, 5017, 35, 0.8],
+  photo: [5012, 39.5, 5012, 34, 1.3],
   night: [5012, 39.5, 5012, 34, 1.3],
   rebuild: [5004, 34, 5010, 34, 0.7],
   hepori: [5063, 5, 5075, -10, 1.0],
@@ -203,6 +203,7 @@ export async function createSamyeScene(ctx) {
   ctx.colliders.push(...colliders);
 
   let checkpoint = 0;
+  let currentCheckpoint = 'stone';
   let previous = 0;
   let progress = 1;
   let visibleStage = -1;
@@ -226,11 +227,14 @@ export async function createSamyeScene(ctx) {
   }
 
   function restore(checkpointId, { animate = false, reducedMotion = false } = {}) {
-    const next = SAMYE_CHAPTER.checkpoints.findIndex(({ id }) => id === checkpointId);
+    // Keep visual phases keyed to the original checkpoints for old saves.
+    const next = ['stone', 'wood', 'night', 'rebuild', 'hepori', 'memory', 'diary', 'complete']
+      .indexOf(checkpointId === 'photo' ? 'night' : checkpointId);
     if (disposed || next === -1) return;
     const transition = animate && !reducedMotion && next === checkpoint + 1 && next <= 4;
     previous = transition ? checkpoint : next;
     checkpoint = next;
+    currentCheckpoint = checkpointId;
     progress = transition ? 0 : 1;
     render();
   }
@@ -250,7 +254,7 @@ export async function createSamyeScene(ctx) {
     },
     getSnapshot() {
       return {
-        checkpointId: SAMYE_CHAPTER.checkpoints[checkpoint].id,
+        checkpointId: currentCheckpoint,
         stage: visibleStage,
         site: ['supplies', 'stone-laid', 'timber-raised', 'ruins'][checkpoint] ?? 'rebuilt',
         phase: checkpoint === 3 ? 'night' : checkpoint >= 4 ? 'dawn' : 'day',

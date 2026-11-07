@@ -12,10 +12,12 @@ const legacy = {
 };
 
 const flow = [
-  ['spring1', 'spring:clear'], ['spring2', 'spring:clear'], ['channel1', 'channel:clear'],
-  ['channel2', 'channel:clear'], ['manuscript', 'manuscript:take'], ['cave', 'manuscript:return'],
+  ['backup', 'backup:read'],
+  ['spring1', 'spring:clear'], ['spring2', 'spring:clear'], ['settle', 'spring:settle'],
+  ['channel1', 'channel:clear'], ['channel2', 'channel:clear'], ['wait', 'water:observe'],
+  ['manuscript', 'manuscript:take'], ['cave', 'manuscript:return'],
   ['shadow', 'shadow:observe'], ['release', 'shadow:release'], ['rain', 'rain:return'],
-  ['diary', 'diary:read'], ['complete', null],
+  ['lamp', 'lamp:light'], ['phone', 'phone:read'], ['diary', 'diary:read'], ['complete', null],
 ];
 
 function harness(t, story = legacy) {
@@ -87,6 +89,11 @@ test('migrates terminal Demo on explicit Continue, reloads every checkpoint and 
     assert.equal(chapters.signal('unregistered', { checkpointId }), false);
     if (!signal) break;
 
+    if (checkpointId === 'phone') {
+      assert.equal(current.story.recordPhoneReply('pharping', '0'), true);
+      assert.equal(current.story.recordPhoneReply('pharping', '1'), true);
+      assert.equal(current.story.acknowledgePhoneThread('pharping'), true);
+    }
     const [nextId, nextSignal] = flow[index + 1];
     bus.on('story:chapter-change', ({ checkpointId }) => {
       assert.equal(saved().journey.chapters.pharping.checkpointId, checkpointId);
@@ -142,6 +149,7 @@ test('failed preparation, stale async success and disposal preserve the durable 
 
   prepare = async () => true;
   assert.equal(await ctx.chapters.start('pharping'), true);
+  assert.equal(ctx.chapters.signal('backup:read', { checkpointId: 'backup' }), true);
   assert.equal(ctx.chapters.signal('spring:clear', { checkpointId: 'spring1' }), true);
   const retry = load(() => prepare());
   prepare = async () => false;
@@ -182,13 +190,14 @@ test('start, checkpoint and exit publish only after acknowledged writes and allo
   assert.equal(await ctx.chapters.start('pharping'), true);
   assert.deepEqual(ctx.save.getStatus(), { ok: true });
 
+  assert.equal(ctx.chapters.signal('backup:read', { checkpointId: 'backup' }), true);
   const committed = raw();
   fail('SecurityError');
   assert.equal(ctx.chapters.signal('spring:clear', { checkpointId: 'spring1' }), false);
   assert.equal(ctx.chapters.exit(), false);
   assert.equal(ctx.chapters.getState().chapters.pharping.checkpointId, 'spring1');
   assert.equal(ctx.chapters.getState().activeChapterId, 'pharping');
-  assert.equal(ctx.events.length, 1);
+  assert.equal(ctx.events.length, 2);
   assert.equal(raw(), committed);
   fail(null);
   assert.equal(ctx.chapters.signal('spring:clear', { checkpointId: 'spring1' }), true);
@@ -219,6 +228,7 @@ test('a stale story instance cannot overwrite another instance’s completed wri
   const first = load();
   const stale = load();
   assert.equal(await first.chapters.start('pharping'), true);
+  assert.equal(first.chapters.signal('backup:read', { checkpointId: 'backup' }), true);
   assert.equal(first.chapters.signal('spring:clear', { checkpointId: 'spring1' }), true);
   const saved = raw();
   assert.equal(await stale.chapters.start('pharping'), false);
@@ -275,6 +285,8 @@ test('password-gated preview jumps from prologue without committing progress', a
     chapterId: 'chimphu', checkpointId: 'light', replaying: false, testing: true,
   }]);
   assert.equal(ctx.chapters.signal('light:touch', { checkpointId: 'light' }), true);
+  for (const id of ['starlight1', 'starlight2', 'starlight3']) assert.equal(ctx.chapters.signal('starlight:read', { checkpointId: id }), true);
+  assert.equal(ctx.chapters.signal('descent:read', { checkpointId: 'descent' }), true);
   assert.equal(ctx.chapters.signal('diary:read', { checkpointId: 'diary' }), true);
   assert.equal(ctx.chapters.getState().chapters.chimphu.completed, true);
   assert.equal(raw(), before);
@@ -323,7 +335,7 @@ test('preview supersedes pending work and rejected or cancelled loads keep canon
   const before = raw();
 
   const canonical = ctx.chapters.start('pharping');
-  const preview = ctx.chapters.preview('mangyul', 'clearing');
+  const preview = ctx.chapters.preview('mangyul', 'clearing', { choice: 'yes' });
   pending[0].resolve(true);
   assert.equal(await canonical, false);
   pending[1].resolve(true);

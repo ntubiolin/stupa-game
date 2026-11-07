@@ -1,3 +1,4 @@
+import { PHARPING_CHAPTER } from './chapters/pharping.js';
 import { FINALE_CHAPTER } from './chapters/finale.js';
 import { SAMYE_CHAPTER } from './chapters/samye.js';
 import { CHIMPHU_CHAPTER } from './chapters/chimphu.js';
@@ -5,26 +6,7 @@ import { MANGYUL_CHAPTER } from './chapters/mangyul.js';
 import { YARLUNG_CHAPTER } from './chapters/yarlung.js';
 // Add enabled chapters here only after their runtime and scene are validated.
 export const CHAPTERS = Object.freeze([
-  Object.freeze({
-    id: 'pharping',
-    mapId: 'pharping',
-    previousId: null,
-    entryCheckpoint: 'spring1',
-    siteIds: Object.freeze(['pharping', 'yangleshoCave', 'asuraCave', 'vajrakilaya', 'phurba', 'droughtLegend']),
-    checkpoints: Object.freeze([
-      ['spring1', 'spring:clear'],
-      ['spring2', 'spring:clear'],
-      ['channel1', 'channel:clear'],
-      ['channel2', 'channel:clear'],
-      ['manuscript', 'manuscript:take'],
-      ['cave', 'manuscript:return'],
-      ['shadow', 'shadow:observe'],
-      ['release', 'shadow:release'],
-      ['rain', 'rain:return'],
-      ['diary', 'diary:read'],
-      ['complete', null],
-    ].map(([id, signal]) => Object.freeze({ id, signal }))),
-  }),
+  PHARPING_CHAPTER,
   MANGYUL_CHAPTER, YARLUNG_CHAPTER, SAMYE_CHAPTER, CHIMPHU_CHAPTER, FINALE_CHAPTER,
 ]);
 

@@ -511,3 +511,46 @@ tracks, stingers, resonant pink-noise wind and procedural SFX (`bowl`, `phoneChi
 `pageTurn`, `stone`, `water`, `windhorse`, `starlight`, `lamp`) on `story:chapter-change`,
 `story:chapter-exit`, `story:phone-open`, and `story:clip-play`/`story:clip-end` without
 external audio files or save writes.
+
+### Three-thread narrative and offline handover (#127–#134)
+
+`data/story/phoneThreads.js` owns fixed authored exchanges for the hotel, Pharping,
+Mangyul, Yarlung, Samye and Chimphu, alongside the existing prologue conversation.
+The finale uses the phone's local handover screen. No external dialogue service is
+involved. `story.recordPhoneReply(threadId, replyId)` accepts only the next unlocked
+turn. `story.acknowledgePhoneThread(threadId)` acknowledges a completed thread.
+Both use `save.commitSection('story', snapshot)` before publishing
+`story:phone-change {threadId}`. Failed writes retain the previous reply/read state.
+
+Story save version remains 2. Replies use `choices['phone.<threadId>.<turnId>']`,
+and read receipts use `flags['phone.read.<threadId>']`. Old v1/v2 fields and chapter
+checkpoint IDs are retained. Orphaned phone turns are removed on resume. The new
+Mangyul record marks `flags.windAnswerRequired`; its fourth wind question requires
+an explicit `yes` choice. Older advanced v2 records without that marker retain
+progress and do not receive an invented answer.
+
+Chapter checkpoints can declare `phoneThreadId`. The chapter director requires
+its saved read receipt before committing the normal transition. Replay and preview
+keep their phone exchanges transient. The phone binds a completion callback to its
+requested thread, so finishing an archived conversation cannot complete another
+checkpoint. Runtime derives unread counts from canonical progress and emits
+`story:phone-open {tab:'messages', threadId, notification:true}` once per newly
+available thread in a session. The existing #135 controller supplies its chime.
+Signal labels resolve from chapter/thread state, including delayed, weak, sending,
+offline and completed states.
+
+`phone.open('messages', {threadId, onComplete, transient})` presents a chapter
+exchange. `{handover:true, scanned, onComplete}` opens the finale QR screen.
+The static QR encodes `stupa:task-handover` and is generated locally with qrcode
+8.2 (MIT). Its in-game scan opens bundled UI. Both allowlisted choices persist
+through `chapters.signal`, then immediately show their account response. The
+completed proxy does not accept more replies or publish unread notifications.
+The notebook becomes written only after the finale diary is explicitly completed.
+
+The Yarlung `dorm-memory` cue provides a 17-second subtitle recollection through
+`createDocumentary`, including pause, next, skip, replay and cancel. Original
+footage is unavailable. Text fallback and source labels remain readable offline.
+`provenanceKey` and `fallbackKey` optionally customize these labels. Cancel keeps
+the current memory checkpoint. All new chapter props use emissive meshes with
+zero new PointLights. The existing #135 score implementation and score data are
+preserved.

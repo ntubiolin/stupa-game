@@ -77,9 +77,9 @@ export function createDocumentary(ctx) {
     const nextCaption = i18n.t(cue.subtitleKey);
     if (source.textContent !== nextSource) source.textContent = nextSource;
     if (caption.textContent !== nextCaption) caption.textContent = nextCaption;
-    provenance.textContent = t(still.dataset.playing === 'true' ? 'visual.video'
+    provenance.textContent = cue.provenanceKey ? i18n.t(cue.provenanceKey) : t(still.dataset.playing === 'true' ? 'visual.video'
       : cue.image || cue.video?.poster ? 'visual.generated' : 'visual.diagram');
-    fallback.textContent = t('visual.missing');
+    fallback.textContent = cue.fallbackKey ? i18n.t(cue.fallbackKey) : t('visual.missing');
     progress.textContent = t('progress', { current: index + 1, total: clip.cues.length });
     toggleButton.textContent = t(paused ? 'resume' : 'pause');
     replayButton.textContent = t('replay');
@@ -162,7 +162,7 @@ export function createDocumentary(ctx) {
     still.dataset.frame = cue.frame;
     still.dataset.video = String(Boolean(cue.video?.src));
     showStill(cue.image, cue.video?.poster);
-    if (cue.video?.src && !image) fallback.hidden = false;
+    if ((cue.video?.src || cue.fallbackKey) && !image) fallback.hidden = false;
     if (dialog.open && !session.paused && !session.staticDefault) startVideo();
     refreshLabels();
   }

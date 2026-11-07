@@ -1,4 +1,15 @@
 export const DOCUMENTARY_CLIPS = {
+  'dorm-memory': {
+    titleKey: 'story.documentary.dorm.title',
+    // Authored 17-second subtitle card. No source footage or imitation voice.
+    cues: [0, 1, 2].map((index) => ({
+      duration: [5, 6, 6][index], frame: 'full',
+      sourceKey: 'story.documentary.dorm.source',
+      provenanceKey: 'story.documentary.dorm.source',
+      fallbackKey: 'story.documentary.dorm.fallback',
+      subtitleKey: `story.documentary.dorm.${index}`,
+    })),
+  },
   'vision-cutaway': {
     titleKey: 'story.documentary.vision.title',
     cues: [{ duration: 10, image: '/story/video/V4.jpg', frame: 'full',

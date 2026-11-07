@@ -21,6 +21,7 @@ export const FINALE_CHAPTER = Object.freeze({
     ['kora3', 'kora:walk', 'action'],
     ['kora4', 'kora:walk', 'action'],
     ['lamp', 'lamp:light', 'action'],
+    ['lampPrayer', 'lamp:reflect', 'card'],
     ['diary', 'diary:read', 'card'],
     ['complete', null, 'card'],
   ].map(([id, signal, presentation, choices]) => Object.freeze({
