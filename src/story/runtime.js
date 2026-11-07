@@ -27,6 +27,7 @@ import { getChapter } from '../data/story/chapters.js';
 import { createChapterJournal } from '../ui/story/chapterJournal.js';
 import { createStoryDebugPanel } from '../ui/story/debugPanel.js';
 import { createModeSwitch } from '../ui/modeSwitch.js';
+import { createStoryAudio } from './storyAudio.js';
 import '../i18n/storyChapters.js';
 import './runtime.css';
 
@@ -73,6 +74,7 @@ const art = createCinematicArt(ctx); ctx.storyArt = art;
 const phone = createPhone(ctx); ctx.phone = phone;
 const documentary = createDocumentary(ctx); ctx.documentary = documentary;
 const memory = createMemorySystem(ctx); ctx.memory = memory;
+const storyAudio = createStoryAudio(ctx);
 
 const hud = document.createElement('section'); hud.className = 'story-hud';
 hud.innerHTML = `<header class="story-header"><a href="?mode=home" class="story-wordmark">${t('title')}<small>THE PERSON IN THE MIRROR</small></a><nav><button data-action="phone">${t('phone')}</button><button data-action="settings" aria-label="${t('settings')}">☷</button></nav></header><div class="story-waypoint" aria-hidden="true"><span>◇</span><small></small></div><section class="story-objective"><p class="story-category"></p><h2></h2><p class="story-hint"></p><div class="story-objective-actions"><button data-action="interact" class="story-action"></button><button data-action="guide" class="story-guide">${t('guide')}</button></div></section><footer class="story-footer"><span class="story-controls"></span><span class="story-save">${t('saved')}</span></footer>`;
@@ -84,7 +86,7 @@ let modalCallback = null, modalKeys = null, previousFocus = null;
 let arrivalCount = 0, visionCount = 0, losangLine = 0;
 let currentTarget = null, currentLabel = '', currentAction = null;
 let loading = false, beatToken = 0, currentBeat = 'prologue';
-let ambient = null, soundOn = true;
+let soundOn = true;
 
 function closeModal() {
   if (modal.hidden) return;
@@ -99,6 +101,7 @@ function showCard(titleKey, bodyKey, actionKey, callback, category = 'fiction', 
   previousFocus = document.activeElement;
   modal.hidden = false; state.uiOpen = true; modalCallback = callback;
   modalKeys = { titleKey, bodyKey, actionKey, category, extra, choices };
+  storyAudio.pageTurn();
   renderCard();
 }
 function renderCard() {
@@ -119,27 +122,11 @@ function showLoading(error = false) {
 }
 function beginSound() {
   if (!soundOn) return;
-  try {
-    if (!ambient) {
-      const audio = new (window.AudioContext || window.webkitAudioContext)();
-      const gain = audio.createGain(); gain.gain.value = .014; gain.connect(audio.destination);
-      const low = audio.createOscillator(); low.type = 'sine'; low.frequency.value = 108; low.connect(gain); low.start();
-      const buffer = audio.createBuffer(1, audio.sampleRate * 3, audio.sampleRate);
-      const data = buffer.getChannelData(0); let prev = 0;
-      for (let i = 0; i < data.length; i++) { prev = (prev + (Math.random() * 2 - 1) * .018) / 1.025; data[i] = prev; }
-      const noise = audio.createBufferSource(); noise.buffer = buffer; noise.loop = true;
-      const wind = audio.createGain(); wind.gain.value = .15; noise.connect(wind); wind.connect(audio.destination); noise.start();
-      ambient = { audio, gain, wind };
-    }
-    ambient.audio.resume();
-  } catch { /* Silence is a supported fallback. */ }
+  storyAudio.begin();
 }
 function bowl() {
-  if (!ambient || !soundOn) return;
-  const { audio } = ambient; const gain = audio.createGain(); const osc = audio.createOscillator();
-  osc.frequency.value = state.zone === 'pharping' ? 432 : 288;
-  gain.gain.setValueAtTime(.035, audio.currentTime); gain.gain.exponentialRampToValueAtTime(.0001, audio.currentTime + 2.8);
-  osc.connect(gain); gain.connect(audio.destination); osc.start(); osc.stop(audio.currentTime + 3);
+  if (!soundOn) return;
+  storyAudio.bowl(state.zone === 'pharping' ? 1.333 : 1);
 }
 renderer.domElement.addEventListener('pointerdown', beginSound);
 root.addEventListener('click', beginSound);
@@ -276,7 +263,7 @@ async function enterBeat({ beat }) {
       setTarget(null, 'chapter.continue', () => journal.open());
       showCard('complete.title', 'complete.body', 'complete.action', () => {}); break;
   }
-  refreshHud(); bowl();
+  refreshHud(); storyAudio.enterBeat(beat);
 }
 function interact() { if (!isAnyModalOpen() && currentAction && (!currentTarget || distanceToTarget() <= 4)) currentAction(); }
 function distanceToTarget() { return currentTarget ? Math.hypot(state.player.position.x - currentTarget.x, state.player.position.z - currentTarget.z) : 0; }
@@ -302,7 +289,7 @@ function showSettings() {
   }
   modal.querySelector('[data-setting="language"]').value = i18n.lang;
   modal.querySelector('[data-setting="language"]').onchange = e => { i18n.setLang(e.target.value); closeModal(); showSettings(); };
-  modal.querySelector('[data-setting="sound"]').onchange = e => { soundOn = e.target.checked; if (soundOn) beginSound(); else ambient?.audio.suspend(); };
+  modal.querySelector('[data-setting="sound"]').onchange = e => { soundOn = e.target.checked; storyAudio.setEnabled(soundOn); };
   modal.querySelector('[data-settings="close"]').onclick = closeModal;
   modal.querySelector('[data-settings="debug"]').onclick = () => { closeModal(); debugPanel.open(); };
   const visionVideo = modal.querySelector('[data-settings="vision-video"]');

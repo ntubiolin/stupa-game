@@ -335,6 +335,7 @@ Public narrative APIs and ordered beat/event schemas are specified in
 | `ui/story/phone.js` | `ctx.phone` | Novel-based fixed messages, diaries, evidence, train transcript |
 | `ui/story/documentary.js` | `ctx.documentary` | Lazy full-frame still/video cues, captions, next/finish, pause/seek/replay/skip/cancel and fallback |
 | `story/memorySystem.js` | `ctx.memory` | Pose threshold evaluation, accessible camera assistance and explicit capture |
+| `story/storyAudio.js` | `ctx.storyAudio` | 432 Hz adaptive procedural music & soundscape controller across Demo beats and Chapter checkpoints (#135) |
 | `story/runtime.js` | bootstrap owner only | World exploration, Losang, map, three spring interactions, return, focus/overlay integration |
 
 Only `ctx.save.set('story', ...)` persists narrative state in `stupa.save.v2`.
@@ -496,3 +497,17 @@ start with stills and expose an explicit Play motion button. Captions and proven
 remain outside an uncropped frame. V1–V3 augment restoration, D stays static; V4 is
 an optional settings viewer after reaching the vision, with no story signal or
 chapter advancement. No media is used as documentary historical evidence.
+
+### Narrative adaptive score & soundscape (#135)
+
+`src/story/storyAudio.js` exports `createStoryAudio(ctx)` (`ctx.storyAudio`) and pure
+resolvers `resolveBeatAudio(beat)` and `resolveChapterAudio(chapterId, checkpointId)`.
+It connects Chapter Mode to `createMusicEngine` (`src/systems/music.js`) and adds four
+narrative tracks in `src/data/music.js` (`story.mirror`, `story.memory`, `story.terma`,
+`story.finale`) alongside existing Himalayan chapter tracks (`stupa`, `pharping.drought`,
+`pharping.rain`, `mangyul.storm`, `mangyul.calm`, `yarlung.unrest`, `yarlung.calm`,
+`samye.day`, `samye.night`, `samye.complete`, `chimphu`, `credits`). It transitions
+tracks, stingers, resonant pink-noise wind and procedural SFX (`bowl`, `phoneChime`,
+`pageTurn`, `stone`, `water`, `windhorse`, `starlight`, `lamp`) on `story:chapter-change`,
+`story:chapter-exit`, `story:phone-open`, and `story:clip-play`/`story:clip-end` without
+external audio files or save writes.
