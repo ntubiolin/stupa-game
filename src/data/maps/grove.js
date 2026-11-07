@@ -20,8 +20,8 @@ export const GROVE_MAP = {
     {
       id: 'north',
       x: -1000,
-      z: -33.0,
-      radius: 3.2,
+      z: -32.2,
+      radius: 4.5,
       to: 'stupa',
       toGate: 'from-grove',
       labelKey: 'prompt.returnStupa',

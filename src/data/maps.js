@@ -31,8 +31,8 @@ export const MAPS = {
       {
         id: 'south',
         x: 0,
-        z: 37.0,
-        radius: 3.2,
+        z: 35.6,
+        radius: 4.8,
         to: 'grove',
         toGate: 'from-stupa',
         labelKey: 'prompt.enterStupaGrove',
@@ -41,7 +41,7 @@ export const MAPS = {
     spawns: {
       default: { x: stupaSouthPt.x, z: stupaSouthPt.z, heading: 0 },
       south: { x: stupaSouthPt.x, z: stupaSouthPt.z, heading: 0 },
-      'from-grove': { x: 0, z: 34.2, heading: 0 },
+      'from-grove': { x: 0, z: 33.2, heading: 0 },
       waypoint: { x: 10, z: -24, heading: 0 },
       north: {
         x: W.stupaGate.returnPos.x,
