@@ -13,6 +13,7 @@
 import '../i18n/coop.js';
 import { i18n } from '../i18n.js';
 import { resolveAppearanceColors } from '../data/appearance.js';
+import { getDifficulty } from '../data/combatSettings.js';
 
 const CHANNEL_NAME = 'stupa.coop.v1';
 const STORAGE_NAME_KEY = 'stupa.coop.pilgrimName';
@@ -360,10 +361,17 @@ export function createCoop(ctx) {
         mp: Math.round(ai.mp),
         maxMp: Math.round(ai.maxMp),
         fainted: Boolean(ai.fainted),
+        hurt: (ai.hurtTimer || 0) > 0,
         emote: null,
       });
     }
     return list;
+  }
+
+  function getActiveCompanions() {
+    if (!active || aiCompanions.length === 0) return [];
+    const currentZone = state.zone || 'stupa';
+    return aiCompanions.filter((ai) => !ai.fainted && ai.hp > 0 && ai.zone === currentZone);
   }
 
   function getZonePilgrims() {
@@ -1290,6 +1298,10 @@ export function createCoop(ctx) {
       mp: maxMp,
       maxMp,
       fainted: false,
+      invulnUntil: 0,
+      hazardInvulnUntil: 0,
+      hurtTimer: 0,
+      lastCombatTime: 0,
       followAngle: Math.PI * 0.65 + slotIndex * 1.45,
       followDist: 2.5 + (slotIndex % 2) * 0.6,
       attackTimer: 0.6 + slotIndex * 0.3,
@@ -1360,7 +1372,7 @@ export function createCoop(ctx) {
       }
     }
 
-    // 2. Deal bonus liberation damage (player.atk * 2.2) to all enemies within 12m
+    // 2. Deal bonus liberation damage (player.atk * 2.2) to all enemies & active Boss within 12m
     const bonusDmg = Math.max(12, Math.round((p.atk || 10) * 2.2));
     const hitEnemies = ctx.enemies?.queryCircle?.(pos, 12.0) || [];
     for (const e of hitEnemies) {
@@ -1369,6 +1381,17 @@ export function createCoop(ctx) {
           type: 'magic',
           source: 'coop:resonance',
           from: pos,
+        });
+      }
+    }
+    const activeBoss = ctx.bosses?.getActiveBoss?.();
+    const bossInternal = activeBoss?.getInternalState?.();
+    if (activeBoss?.isActive?.() && bossInternal?.pos) {
+      const bDist = Math.hypot((pos.x || 0) - bossInternal.pos.x, (pos.z || 0) - bossInternal.pos.z);
+      if (bDist <= 12.0 + (bossInternal.radius || 1.2)) {
+        activeBoss.damage?.(bonusDmg, {
+          type: 'magic',
+          source: 'coop:resonance',
         });
       }
     }
@@ -1414,7 +1437,7 @@ export function createCoop(ctx) {
     });
 
     if (skillId === 'mantra' && (member.zone || state.zone) === state.zone) {
-      // Damage enemies around teammate's mantra wave (radius 6m)
+      // Damage enemies & active Boss around teammate's mantra wave (radius 6m)
       const allyAtk = Math.max(8, Math.round((state.player?.atk || 10) * 0.75));
       const nearby = ctx.enemies?.queryCircle?.({ x: mx, z: mz }, 6.0) || [];
       for (const e of nearby) {
@@ -1423,6 +1446,17 @@ export function createCoop(ctx) {
             type: 'magic',
             source: 'ally:mantra',
             from: { x: mx, y: my, z: mz },
+          });
+        }
+      }
+      const activeBoss = ctx.bosses?.getActiveBoss?.();
+      const bossInternal = activeBoss?.getInternalState?.();
+      if (activeBoss?.isActive?.() && bossInternal?.pos) {
+        const bDist = Math.hypot(mx - bossInternal.pos.x, mz - bossInternal.pos.z);
+        if (bDist <= 6.0 + (bossInternal.radius || 1.2)) {
+          activeBoss.damage?.(allyAtk, {
+            type: 'magic',
+            source: 'ally:mantra',
           });
         }
       }
@@ -1558,6 +1592,132 @@ export function createCoop(ctx) {
       return true;
     }
     return false;
+  }
+
+  // ---------------------------------------------------------------- Companion Combat Damage & Mitigation
+  function damageCompanion(id, baseAmount, opts = {}) {
+    if (!active || aiCompanions.length === 0) return 0;
+    const rawAmt = Number(baseAmount) || 0;
+    if (rawAmt <= 0) return 0;
+    if (ctx.world?.isHub?.()) return 0;
+
+    const ai = id
+      ? aiCompanions.find((a) => a.id === id)
+      : aiCompanions.find((a) => !a.fainted && a.hp > 0 && a.zone === state.zone);
+    if (!ai || ai.fainted || ai.hp <= 0 || ai.zone !== state.zone) return 0;
+
+    const now = nowSec();
+    const ignoreInvuln = Boolean(opts.ignoreInvuln);
+    if (!ignoreInvuln && now < (ai.invulnUntil || 0)) return 0;
+    if (ignoreInvuln && now < (ai.hazardInvulnUntil || 0)) return 0;
+
+    const type = opts.type === 'magic' ? 'magic' : 'physical';
+    const aiDef = Math.max(0, Math.round((state.player?.def || 0) * 0.9));
+    const magicRes = Math.max(0, Math.min(0.55, (state.player?.magicRes || 0) * 0.85));
+
+    let mitigated =
+      type === 'magic'
+        ? ((rawAmt * 50) / (50 + aiDef * 0.5)) * (1 - magicRes)
+        : (rawAmt * 50) / (50 + aiDef);
+
+    const diffMult = getDifficulty(ctx)?.damageTaken ?? 1.0;
+    const protRed = Math.max(0, Math.min(0.5, Number(state.player?.protectorDmgReduction) || 0));
+    const dealt = Math.max(1, Math.round(mitigated * diffMult * (1 - protRed)));
+
+    ai.hp = Math.max(0, ai.hp - dealt);
+    ai.hurtTimer = 0.32;
+    ai.lastCombatTime = now;
+    if (ignoreInvuln) {
+      ai.hazardInvulnUntil = now + 0.45;
+    } else {
+      ai.invulnUntil = now + 0.85;
+    }
+
+    const kb = opts.knockback !== undefined ? Number(opts.knockback) : 0.55;
+    if (kb > 0 && opts.sourcePos) {
+      const kdx = ai.x - (opts.sourcePos.x ?? ai.x);
+      const kdz = ai.z - (opts.sourcePos.z ?? ai.z);
+      const kd = Math.hypot(kdx, kdz);
+      if (kd > 1e-3) {
+        const push = Math.min(1.3, kb);
+        ai.x += (kdx / kd) * push;
+        ai.z += (kdz / kd) * push;
+        ai.y = ctx.world?.getHeight ? ctx.world.getHeight(ai.x, ai.z) : ai.y;
+      }
+    }
+
+    const name = i18n.t(ai.nameKey);
+    if (ai.hp <= 0) {
+      ai.hp = 0;
+      ai.fainted = true;
+      ai.action = 'faint';
+      bus?.emit('sfx', { name: 'faint' });
+      bus?.emit('coop:memberFainted', { id: ai.id, name });
+      bus?.emit('toast', {
+        key: 'toast.allyFainted',
+        params: { name },
+        text: i18n.t('toast.allyFainted', { name }),
+        kind: 'warning',
+      });
+    } else {
+      bus?.emit('coop:memberHurt', {
+        id: ai.id,
+        name,
+        amount: dealt,
+        hp: ai.hp,
+        maxHp: ai.maxHp,
+        type,
+        x: ai.x,
+        y: ai.y,
+        z: ai.z,
+      });
+    }
+
+    syncStateOnCtx();
+    bus?.emit('coop:changed', getState());
+    return dealt;
+  }
+
+  function damageCompanionsInRadius(cx, cz, radius, baseAmount, opts = {}) {
+    if (!active || aiCompanions.length === 0) return 0;
+    const r = (Number(radius) || 0) + 0.38;
+    let totalHits = 0;
+    for (let i = 0; i < aiCompanions.length; i++) {
+      const ai = aiCompanions[i];
+      if (!ai || ai.fainted || ai.hp <= 0 || ai.zone !== state.zone) continue;
+      const d = Math.hypot(ai.x - cx, ai.z - cz);
+      if (d <= r) {
+        const dealt = damageCompanion(ai.id, baseAmount, {
+          ...opts,
+          sourcePos: opts.sourcePos || { x: cx, z: cz },
+        });
+        if (dealt > 0) totalHits++;
+      }
+    }
+    return totalHits;
+  }
+
+  function damageCompanionsInLine(startX, startZ, dirX, dirZ, length, halfWidth, baseAmount, opts = {}) {
+    if (!active || aiCompanions.length === 0) return 0;
+    const len = Number(length) || 0;
+    const hw = (Number(halfWidth) || 0.6) + 0.38;
+    let totalHits = 0;
+    for (let i = 0; i < aiCompanions.length; i++) {
+      const ai = aiCompanions[i];
+      if (!ai || ai.fainted || ai.hp <= 0 || ai.zone !== state.zone) continue;
+      const dx = ai.x - startX;
+      const dz = ai.z - startZ;
+      const proj = dx * dirX + dz * dirZ;
+      const perp = Math.abs(dx * dirZ - dz * dirX);
+      if (proj >= 0 && proj <= len && perp <= hw) {
+        const dealt = damageCompanion(ai.id, baseAmount, {
+          ...opts,
+          sourcePos: opts.sourcePos || { x: startX, z: startZ },
+        });
+        if (dealt > 0) totalHits++;
+      }
+    }
+    return totalHits;
   }
 
   function teleportToLeader() {
@@ -1860,6 +2020,36 @@ export function createCoop(ctx) {
   }
 
   // ---------------------------------------------------------------- Local Bus Listeners
+  bus?.on('vitals:restore', (payload) => {
+    if (!active || aiCompanions.length === 0 || !payload) return;
+    if (
+      payload.source === 'coopResonance' ||
+      payload.source === 'mani' ||
+      payload.source === 'mpRegen' ||
+      payload.source === 'humBolt'
+    ) {
+      return;
+    }
+    const hpShare = Math.round((Number(payload.hp) || 0) * 0.65);
+    const mpShare = Math.round((Number(payload.mp) || 0) * 0.65);
+    if (hpShare <= 0 && mpShare <= 0) return;
+
+    let anyHealed = false;
+    for (const ai of aiCompanions) {
+      if (!ai.fainted && ai.zone === state.zone) {
+        const prevHp = ai.hp;
+        const prevMp = ai.mp;
+        if (hpShare > 0) ai.hp = Math.min(ai.maxHp, ai.hp + hpShare);
+        if (mpShare > 0) ai.mp = Math.min(ai.maxMp, ai.mp + mpShare);
+        if (ai.hp !== prevHp || ai.mp !== prevMp) anyHealed = true;
+      }
+    }
+    if (anyHealed) {
+      syncStateOnCtx();
+      bus?.emit('coop:changed', getState());
+    }
+  });
+
   bus?.on('mantra:cast', (payload) => {
     onLocalMantraCast(payload?.origin || state.player?.position);
   });
@@ -2054,20 +2244,62 @@ export function createCoop(ctx) {
     const pPos = p?.position;
     if (!pPos) return;
 
+    const now = nowSec();
+    const isHub = Boolean(ctx.world?.isHub?.());
     const enemies = ctx.enemies?.list?.() || [];
+    const activeBoss = ctx.bosses?.getActiveBoss?.();
+    const bossInternal = activeBoss?.isActive?.() ? activeBoss.getInternalState?.() : null;
     const playerAtk = Math.max(10, Number(p.atk) || 12);
+    const targetMaxHp = Math.max(100, Math.round((p.maxHp || 120) * 0.95));
+    const targetMaxMp = Math.max(60, Math.round((p.maxMp || 80) * 0.95));
+    let stateDirty = false;
 
     for (let i = 0; i < aiCompanions.length; i++) {
       const ai = aiCompanions[i];
 
-      // Sync level & zone with player
+      if (ai.hurtTimer > 0) {
+        ai.hurtTimer = Math.max(0, ai.hurtTimer - dt);
+      }
+
+      // Sync level, maxHp, maxMp & zone with player
       ai.level = Math.max(1, p.level || 1);
+      if (ai.maxHp !== targetMaxHp) {
+        const hpRatio = ai.maxHp > 0 ? ai.hp / ai.maxHp : 1;
+        ai.maxHp = targetMaxHp;
+        if (!ai.fainted) {
+          ai.hp = Math.max(1, Math.min(ai.maxHp, Math.round(ai.maxHp * hpRatio)));
+        }
+        stateDirty = true;
+      }
+      if (ai.maxMp !== targetMaxMp) {
+        const mpRatio = ai.maxMp > 0 ? ai.mp / ai.maxMp : 1;
+        ai.maxMp = targetMaxMp;
+        ai.mp = Math.max(0, Math.min(ai.maxMp, Math.round(ai.maxMp * mpRatio)));
+      }
+
       if (ai.zone !== state.zone) {
         ai.zone = state.zone;
         const ang = (p.heading || 0) + ai.followAngle;
         ai.x = pPos.x + Math.cos(ang) * ai.followDist;
         ai.z = pPos.z + Math.sin(ang) * ai.followDist;
         ai.y = ctx.world?.getHeight ? ctx.world.getHeight(ai.x, ai.z) : pPos.y || 0;
+        stateDirty = true;
+      }
+
+      // In Hub sanctuaries, auto-revive fainted companions and restore HP/MP
+      if (isHub) {
+        if (ai.fainted) {
+          ai.fainted = false;
+          ai.hp = ai.maxHp;
+          ai.mp = ai.maxMp;
+          ai.action = 'idle';
+          stateDirty = true;
+        } else if (ai.hp < ai.maxHp || ai.mp < ai.maxMp) {
+          const prevHp = Math.round(ai.hp);
+          ai.hp = Math.min(ai.maxHp, ai.hp + ai.maxHp * 0.15 * dt);
+          ai.mp = Math.min(ai.maxMp, ai.mp + ai.maxMp * 0.2 * dt);
+          if (Math.round(ai.hp) !== prevHp) stateDirty = true;
+        }
       }
 
       if (ai.fainted) {
@@ -2084,7 +2316,7 @@ export function createCoop(ctx) {
         ai.z = pPos.z + Math.sin(ang) * ai.followDist;
       }
 
-      // Find nearest enemy within 10m of player or AI
+      // Find nearest enemy (or active Boss) within 10m of AI
       let nearestEnemy = null;
       let bestDist = 10.0;
       for (const e of enemies) {
@@ -2094,11 +2326,25 @@ export function createCoop(ctx) {
         const d = Math.hypot(ex - ai.x, ez - ai.z);
         if (d < bestDist) {
           bestDist = d;
-          nearestEnemy = { ...e, x: ex, z: ez };
+          nearestEnemy = { ...e, x: ex, z: ez, isBoss: false };
+        }
+      }
+      if (bossInternal && bossInternal.hp > 0 && bossInternal.pos) {
+        const bd = Math.hypot(bossInternal.pos.x - ai.x, bossInternal.pos.z - ai.z);
+        if (bd < Math.max(bestDist, 12.0)) {
+          bestDist = bd;
+          nearestEnemy = {
+            id: bossInternal.id,
+            x: bossInternal.pos.x,
+            z: bossInternal.pos.z,
+            hp: bossInternal.hp,
+            isBoss: true,
+          };
         }
       }
 
       if (nearestEnemy) {
+        ai.lastCombatTime = now;
         const dx = nearestEnemy.x - ai.x;
         const dz = nearestEnemy.z - ai.z;
         const dist = Math.hypot(dx, dz) || 0.001;
@@ -2117,11 +2363,18 @@ export function createCoop(ctx) {
         if (ai.attackTimer <= 0 && dist <= 6.5) {
           ai.attackTimer = 1.25 + (i % 2) * 0.25;
           const dmg = Math.max(4, Math.round(playerAtk * 0.6));
-          ctx.enemies?.damage?.(nearestEnemy.id, dmg, {
-            type: 'magic',
-            source: 'ally',
-            from: { x: ai.x, y: ai.y, z: ai.z },
-          });
+          if (nearestEnemy.isBoss) {
+            activeBoss?.damage?.(dmg, {
+              type: 'magic',
+              source: 'ally',
+            });
+          } else {
+            ctx.enemies?.damage?.(nearestEnemy.id, dmg, {
+              type: 'magic',
+              source: 'ally',
+              from: { x: ai.x, y: ai.y, z: ai.z },
+            });
+          }
           bus?.emit('coop:remoteSkill', {
             memberId: ai.id,
             memberName: i18n.t(ai.nameKey),
@@ -2134,6 +2387,13 @@ export function createCoop(ctx) {
           });
         }
       } else {
+        // Out-of-combat natural recovery after 5.5s without combat
+        if (!isHub && now - (ai.lastCombatTime || 0) > 5.5 && ai.hp < ai.maxHp) {
+          const prevHp = Math.round(ai.hp);
+          ai.hp = Math.min(ai.maxHp, ai.hp + Math.max(1.5, ai.maxHp * 0.025) * dt);
+          if (Math.round(ai.hp) !== prevHp) stateDirty = true;
+        }
+
         // Smoothly follow near player at formation offset (2.2–3.5m)
         const targetAng = (p.heading || 0) + ai.followAngle;
         const tx = pPos.x + Math.cos(targetAng) * ai.followDist;
@@ -2154,16 +2414,27 @@ export function createCoop(ctx) {
         }
       }
 
+      // Passive MP regeneration
+      if (ai.mp < ai.maxMp) {
+        ai.mp = Math.min(ai.maxMp, ai.mp + 2.0 * dt);
+      }
+
       ai.y = ctx.world?.getHeight ? ctx.world.getHeight(ai.x, ai.z) : pPos.y || 0;
 
       // Periodically cast Six-Syllable Mantra every ~7s
       ai.mantraTimer -= dt;
       if (ai.mantraTimer <= 0) {
         ai.mantraTimer = 6.8 + (i % 3) * 0.9;
-        if (nearestEnemy || nowSec() - lastLocalMantraTime <= RESONANCE_WINDOW_SEC) {
+        if ((nearestEnemy || now - lastLocalMantraTime <= RESONANCE_WINDOW_SEC) && ai.mp >= 8) {
+          ai.mp = Math.max(0, ai.mp - 8);
           handleRemoteSkillCast(ai, 'mantra');
         }
       }
+    }
+
+    if (stateDirty) {
+      syncStateOnCtx();
+      bus?.emit('coop:changed', getState());
     }
   }
 
@@ -2287,6 +2558,7 @@ export function createCoop(ctx) {
     getState,
     getPartySize,
     getMembers,
+    getActiveCompanions,
     getZonePilgrims,
     getAllVisiblePilgrims,
     getZoneCounts,
@@ -2313,6 +2585,9 @@ export function createCoop(ctx) {
     broadcastZoneEvent,
     reviveMember,
     setMemberFainted,
+    damageCompanion,
+    damageCompanionsInRadius,
+    damageCompanionsInLine,
     teleportToLeader,
     triggerResonance,
     handleRemoteEvent,
