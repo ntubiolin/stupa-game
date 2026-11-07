@@ -434,10 +434,21 @@ export function createQuestUi(ctx) {
     journalContentEl.innerHTML = html;
   }
 
+  function syncUiOpenState() {
+    state.uiOpen = Boolean(
+      journalOpen ||
+        activeIntroPayload ||
+        ctx.dialogue?.isOpen?.() ||
+        ctx.shop?.isOpen?.() ||
+        ctx.crafting?.isOpen?.() ||
+        ctx.inventoryUi?.isOpen?.()
+    );
+  }
+
   function openJournal() {
     if (ctx.dialogue?.isOpen?.()) return;
     journalOpen = true;
-    state.uiOpen = true;
+    syncUiOpenState();
     renderJournal();
     journalModalEl.classList.remove('is-hidden');
     bus.emit('sfx', { name: 'step' });
@@ -447,12 +458,7 @@ export function createQuestUi(ctx) {
     if (!journalOpen) return;
     journalOpen = false;
     journalModalEl.classList.add('is-hidden');
-    state.uiOpen = Boolean(
-      ctx.dialogue?.isOpen?.() ||
-        ctx.shop?.isOpen?.() ||
-        ctx.crafting?.isOpen?.() ||
-        ctx.inventoryUi?.isOpen?.()
-    );
+    syncUiOpenState();
   }
 
   function toggleJournal() {
@@ -545,6 +551,7 @@ export function createQuestUi(ctx) {
     if (!chapterIntroEl) return;
     activeIntroPayload = payload;
     introOpenedAt = performance.now();
+    syncUiOpenState();
 
     const inferredChapter =
       payload.chapterId ||
@@ -601,6 +608,7 @@ export function createQuestUi(ctx) {
 
     chapterIntroEl.style.display = 'flex';
     chapterIntroEl.classList.remove('is-hidden');
+    chapterIntroEnterBtn?.focus?.();
 
     bus.emit('sfx', { name: 'bowl' });
   }
@@ -614,6 +622,11 @@ export function createQuestUi(ctx) {
     }
     chapterIntroEl.classList.add('is-hidden');
     chapterIntroEl.style.display = 'none';
+    chapterIntroEnterBtn?.blur?.();
+    syncUiOpenState();
+    ctx.input?.pressed?.('interact');
+    ctx.input?.pressed?.('jump');
+    ctx.input?.clear?.();
     if (flag) {
       ctx.quests?.setFlag?.(flag, true);
     }
@@ -705,12 +718,20 @@ export function createQuestUi(ctx) {
     });
   }
   if (typeof window !== 'undefined') {
-    window.addEventListener('keydown', (e) => {
-      if (!activeIntroPayload || performance.now() - introOpenedAt < 180) return;
-      if (e.code === 'Escape' || e.code === 'Enter' || e.code === 'Space') {
-        dismissChapterIntro();
-      }
-    });
+    window.addEventListener(
+      'keydown',
+      (e) => {
+        if (!activeIntroPayload) return;
+        if (e.code === 'Escape' || e.code === 'Enter' || e.code === 'Space') {
+          e.preventDefault?.();
+          e.stopPropagation?.();
+          e.stopImmediatePropagation?.();
+          if (performance.now() - introOpenedAt < 180) return;
+          dismissChapterIntro();
+        }
+      },
+      true
+    );
   }
 
   let lastBannerQuestId = null;
@@ -1019,7 +1040,7 @@ export function createQuestUi(ctx) {
       return true;
     },
     isOpen() {
-      return journalOpen;
+      return Boolean(journalOpen || activeIntroPayload);
     },
   };
 

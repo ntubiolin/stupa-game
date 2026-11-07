@@ -32,9 +32,10 @@ function normalizeWaypointId(id) {
 }
 
 export function resolveWaypointCoords(mapDef) {
-  if (!mapDef || !mapDef.waypoint) return null;
+  if (!mapDef) return null;
+  const wp = mapDef.waypoint || (Array.isArray(mapDef.waypoints) ? mapDef.waypoints[0] : null);
+  if (!wp) return null;
   const origin = mapDef.origin || { x: 0, z: 0 };
-  const wp = mapDef.waypoint;
   const walkR = mapDef.walkRadius || 70;
 
   // Determine world coordinates: if wp.x is already near origin.x, use it directly;
@@ -51,6 +52,93 @@ export function resolveWaypointCoords(mapDef) {
     localX,
     localZ,
   };
+}
+
+function getMapGates(mapDef) {
+  if (!Array.isArray(mapDef?.gates)) return [];
+  const gates = [];
+  for (const g of mapDef.gates) {
+    if (!g) continue;
+    const x = g.x ?? g.pos?.x ?? g.from?.x;
+    const z = g.z ?? g.pos?.z ?? g.from?.z;
+    const radius = g.radius ?? g.r ?? g.from?.r ?? 3.5;
+    if (Number.isFinite(x) && Number.isFinite(z)) {
+      gates.push({ x, z, radius });
+    }
+  }
+  return gates;
+}
+
+function isClearOfGates(x, z, gates, minMargin = 1.5) {
+  for (const g of gates) {
+    const dist = Math.hypot(x - g.x, z - g.z);
+    if (dist <= (g.radius || 3.5) + minMargin) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function minDistanceToGates(x, z, gates) {
+  if (!gates.length) return Infinity;
+  let minDist = Infinity;
+  for (const g of gates) {
+    const d = Math.hypot(x - g.x, z - g.z) - (g.radius || 3.5);
+    if (d < minDist) minDist = d;
+  }
+  return minDist;
+}
+
+export function resolveWaypointLandingPos(targetMap, coords) {
+  const gates = getMapGates(targetMap);
+  const wpSpawn = targetMap?.spawns?.waypoint;
+  if (wpSpawn && Number.isFinite(wpSpawn.x) && Number.isFinite(wpSpawn.z)) {
+    const distToWp = Math.hypot(wpSpawn.x - coords.x, wpSpawn.z - coords.z);
+    if (
+      distToWp >= 0.8 &&
+      distToWp <= WAYPOINT_UNLOCK_RADIUS &&
+      isClearOfGates(wpSpawn.x, wpSpawn.z, gates, 1.5)
+    ) {
+      return {
+        x: wpSpawn.x,
+        z: wpSpawn.z,
+        heading: typeof wpSpawn.heading === 'number' ? wpSpawn.heading : undefined,
+      };
+    }
+  }
+
+  const candidateOffsets = [
+    { dx: 0, dz: -2.0 },
+    { dx: 0, dz: 2.0 },
+    { dx: -2.0, dz: 0 },
+    { dx: 2.0, dz: 0 },
+  ];
+
+  let best = null;
+  let bestClearance = -Infinity;
+  for (const off of candidateOffsets) {
+    const cx = coords.x + off.dx;
+    const cz = coords.z + off.dz;
+    const clearance = minDistanceToGates(cx, cz, gates);
+    if (isClearOfGates(cx, cz, gates, 1.5) && clearance > bestClearance) {
+      bestClearance = clearance;
+      best = { x: cx, z: cz };
+    }
+  }
+
+  if (best) return best;
+
+  for (const off of candidateOffsets) {
+    const cx = coords.x + off.dx;
+    const cz = coords.z + off.dz;
+    const clearance = minDistanceToGates(cx, cz, gates);
+    if (clearance > bestClearance) {
+      bestClearance = clearance;
+      best = { x: cx, z: cz };
+    }
+  }
+
+  return best || { x: coords.x, z: coords.z - 2.0 };
 }
 
 function buildWaypointMesh(unlocked = false) {
@@ -420,7 +508,8 @@ export function createWaypoints(ctx) {
 
   function ensureWaypointMeshForMap(mapId) {
     const mapDef = MAPS[mapId];
-    if (!mapDef || !mapDef.waypoint) return null;
+    const coords = resolveWaypointCoords(mapDef);
+    if (!coords) return null;
     if (waypointMeshes.has(mapId)) {
       const existing = waypointMeshes.get(mapId);
       const zg = ctx.zoneGroups?.[mapId];
@@ -428,9 +517,6 @@ export function createWaypoints(ctx) {
       existing.visible = (state.zone || 'stupa') === mapId;
       return existing;
     }
-
-    const coords = resolveWaypointCoords(mapDef);
-    if (!coords) return null;
 
     const y = ctx.world?.getHeight?.(coords.x, coords.z, mapId) ?? 0;
     const isUnl = unlockedSet.has(mapId);
@@ -452,8 +538,6 @@ export function createWaypoints(ctx) {
   // Register colliders & interactables for all maps that define a waypoint; build 3D mesh lazily per active zone
   function ensureWaypointForMap(mapId) {
     const mapDef = MAPS[mapId];
-    if (!mapDef || !mapDef.waypoint) return null;
-
     const coords = resolveWaypointCoords(mapDef);
     if (!coords) return null;
 
@@ -506,7 +590,7 @@ export function createWaypoints(ctx) {
   }
 
   for (const mapId of Object.keys(MAPS)) {
-    if (MAPS[mapId]?.waypoint) {
+    if (resolveWaypointCoords(MAPS[mapId])) {
       ensureWaypointForMap(mapId);
     }
   }
@@ -776,7 +860,7 @@ export function createWaypoints(ctx) {
       unlockedSet.add(id);
     }
     for (const id of Object.keys(MAPS)) {
-      if (MAPS[id]?.waypoint) unlockedSet.add(id);
+      if (resolveWaypointCoords(MAPS[id])) unlockedSet.add(id);
     }
     syncAllMeshes();
     save?.markDirty?.();
@@ -792,7 +876,6 @@ export function createWaypoints(ctx) {
   function isPlayerNearWaypoint(radius = WAYPOINT_UNLOCK_RADIUS) {
     const curZone = state.zone || 'stupa';
     const mapDef = MAPS[curZone];
-    if (!mapDef || !mapDef.waypoint) return false;
     const coords = resolveWaypointCoords(mapDef);
     if (!coords) return false;
 
@@ -814,8 +897,12 @@ export function createWaypoints(ctx) {
         if (ok) {
           const coords = resolveWaypointCoords(targetMap);
           if (coords) {
-            const y = ctx.world?.getHeight?.(coords.x, coords.z, mapId) ?? 0;
-            state.player.position.set(coords.x, y, coords.z + 2.0);
+            const landing = resolveWaypointLandingPos(targetMap, coords);
+            const y = ctx.world?.getHeight?.(landing.x, landing.z, mapId) ?? 0;
+            state.player.position.set(landing.x, y, landing.z);
+            if (typeof landing.heading === 'number') {
+              state.player.heading = landing.heading;
+            }
           }
           const name = getMapDisplayName(mapId);
           bus.emit('toast', { text: i18n.t('toast.waypointTeleport', { name }) });
@@ -897,7 +984,7 @@ export function createWaypoints(ctx) {
     // 2. Auto-unlock waypoint when approaching within 3.5m
     const curZone = state.zone || 'stupa';
     const curMapDef = MAPS[curZone];
-    if (curMapDef?.waypoint && !unlockedSet.has(curZone)) {
+    if (resolveWaypointCoords(curMapDef) && !unlockedSet.has(curZone)) {
       if (isPlayerNearWaypoint(WAYPOINT_UNLOCK_RADIUS)) {
         unlock(curZone);
       }

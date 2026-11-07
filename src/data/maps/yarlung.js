@@ -33,8 +33,8 @@ export const YARLUNG_MAP = {
   spawns: {
     default: { x: 4000, z: 81, heading: Math.PI },
     teleport: { x: 4000, z: 81, heading: Math.PI },
-    waypoint: { x: 4000, z: 83, heading: Math.PI },
-    south: { x: 4000, z: 83, heading: Math.PI },
+    waypoint: { x: 4000, z: 82, heading: Math.PI },
+    south: { x: 4000, z: 82, heading: Math.PI },
     'from-stupa': { x: 4000, z: 81, heading: Math.PI },
   },
   spawnTable: [
