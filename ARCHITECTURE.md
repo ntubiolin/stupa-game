@@ -17,9 +17,10 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/world/sky.js` | World | sky dome, sun/moon, stars, lights, fog, exposure — writes `state.time.sunDir/nightFactor` |
 | `src/world/stupa.js` | World | stupa, wall, prayer wheels, night string lights; exports `flagAnchors` |
 | `src/world/prayerFlags.js` | World | wind-animated five-color flags (vertex shader) |
-| `src/world/environment.js` | World | plaza ground, surrounding buildings, hills, pigeons, lit windows at night, north monastery gate |
+| `src/world/environment.js` | World | plaza ground, surrounding buildings, hills, pigeons, lit windows at night, north monastery gate & south grove gate |
 | `src/world/mapBase.js` | World | shared terrain heightfield, InstancedMesh rock scatter, mountain rim, seeded RNG, collider helper |
 | `src/world/wilderness.js` | World | highland steppe terrain, chorten, mani stones, boulders, peaks, return gate (lazy-loaded) |
+| `src/world/maps/grove.js` | World | Outer Sanctuary Hub map: Pilgrim Stupa Grove outside South Gate (`origin = (-1000, 0)`), mandala courtyard & lotus terrace (lazy-loaded) |
 | `src/world/maps/pharping.js` | World | Chapter 1 map: Pharping terrace, Yangleshö & Asura caves, drought-to-rain state transition (lazy-loaded) |
 | `src/world/maps/mangyul.js` | World | Chapter 2 map: Mangyul snow pass, wind gust physics, wind-shelter cairns, Tenma arena (lazy-loaded) |
 | `src/world/maps/yarlung.js` | World | Chapter 3 map: Yarlung valley, Yumbulagang fortress, Sheldrak crystal cave, Shampo glacier (lazy-loaded) |
@@ -27,7 +28,7 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/world/maps/chimphu.js` | World | Chapter 5 hub map: Chimphu hermitage caves, butter-lamp alcoves, Terma Realm portal (lazy-loaded) |
 | `src/world/maps/terma.js` | World | Chapter 5 endgame dungeon: seeded 3-floor procedural layout (Cave / Snow / Mandala themes) (lazy-loaded) |
 | `src/world/maps/sandbox.js` | World | debug sandbox arena with flat ground, scattered rocks, trial stone circle, Mani cairn (lazy-loaded) |
-| `src/data/maps.js`, `src/data/maps/*.js` | Data | data-driven map registry (`MAPS`: `stupa`, `wild`, `pharping`, `mangyul`, `yarlung`, `samye`, `chimphu`, `terma`, `sandbox`) |
+| `src/data/maps.js`, `src/data/maps/*.js` | Data | data-driven map registry (`MAPS`: `stupa`, `grove`, `wild`, `pharping`, `mangyul`, `yarlung`, `samye`, `chimphu`, `terma`, `sandbox`) |
 | `src/data/npcs.js` | Data | data-driven NPC registry (`NPCS`) and 8 procedural look definitions (`NPC_LOOKS`) |
 | `src/data/itemBases.js`, `affixes.js`, `legendaries.js` | Data | 22 base equipment types across 8 slots, 16 affixes (T1–T4), 12 Terma legendary items (`powerId`) |
 | `src/data/eliteAffixes.js` | Data | 6 elite monster affixes (`molten`, `frozen`, `swift`, `armored`, `shielding`, `teleporter`) |
@@ -51,7 +52,7 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/gameplay/items.js`, `groundLoot.js` | Gameplay | monkey sacred artifacts + Diablo-style ground loot drops, rarity light beams, `Alt` label plate layout, auto-pickup |
 | `src/gameplay/potions.js`, `shrines.js`, `waypoints.js` | Gameplay | Amrita potion charges (`X`), 4 blessing shrine types, lotus waypoints & Recall portal (`B`) |
 | `src/gameplay/lamps.js`, `monkeys.js`, `npcs.js` | Gameplay | butter-lamp stations + floating prayer plaques, monkey wander/feeding, procedural 3D NPC builder (8 looks) & overhead quest markers (`!`/`?`) |
-| `src/gameplay/personalStupa.js`, `remotePilgrims.js` | Gameplay | procedural 3D Pilgrim Votive Stupa groves (`stupa` & `samye`), Samye 1,008 perimeter consecration crowns, and 3D Co-op party teammates + Mantra Resonance VFX |
+| `src/gameplay/personalStupa.js`, `remotePilgrims.js` | Gameplay | procedural 3D Pilgrim Votive Stupa groves (`grove` & `samye`), Samye 1,008 perimeter consecration crowns, and 3D Co-op party teammates + Mantra Resonance VFX |
 | `src/systems/community.js`, `coop.js` | Gameplay | async social sync (`BroadcastChannel` + `/api/community` + share codes for lamps, stupas, Samye co-op) & real-time 2–4 player Co-op room/AI companion system |
 | `src/systems/zones.js` | Gameplay | data-driven zone manager (`MAPS`), lazy `import()` loading, gate transitions, `ctx.world` API |
 | `src/systems/save.js` | Gameplay | unified v2 save system (`stupa.save.v2`), v1 migration, per-section fault tolerance, throttled writes |
@@ -83,6 +84,7 @@ Subagents edit **only** files they own. If a contract change is needed, report i
 - Walkable plaza: ring `WORLD.stupaColliderRadius (19.9) < r < WORLD.walkRadius (38)`, ground y = 0.
 - Map Origins (`src/data/maps.js`):
   - `stupa` (博達哈大佛塔): `type: 'hub'`, `origin = (0, 0)`
+  - `grove` (祈願塔林): `type: 'hub'`, `origin = (-1000, 0)`, level 1–40
   - `wild` (北郊原野): `type: 'combat'`, `origin = (1000, 0)`, level 1–5
   - `pharping` (帕平・揚列雪): `type: 'combat'`, `origin = (2000, 0)`, level 5–10
   - `mangyul` (芒域山口): `type: 'combat'`, `origin = (3000, 0)`, level 10–16

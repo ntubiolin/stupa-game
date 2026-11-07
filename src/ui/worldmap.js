@@ -21,7 +21,18 @@ export const WORLD_ROUTE_NODES = [
     levelKey: 'worldNode.stupa.level',
     descKey: 'worldNode.stupa.desc',
     labelZh: '博達哈大佛塔 Lv.1',
-    connectsTo: ['wild', 'pharping'],
+    connectsTo: ['grove', 'wild', 'pharping'],
+  },
+  {
+    id: 'grove',
+    chapter: 0,
+    nx: 0.08,
+    ny: 0.84,
+    nameKey: 'worldNode.grove.name',
+    levelKey: 'worldNode.grove.level',
+    descKey: 'worldNode.grove.desc',
+    labelZh: '祈願塔林 Lv.1',
+    connectsTo: ['stupa'],
   },
   {
     id: 'wild',
@@ -234,6 +245,48 @@ export function renderZoneRadarCanvas(canvas, ctx, opts = {}) {
       g.arc(lp.x, lp.y, 2.5, 0, Math.PI * 2);
       g.fillStyle = '#fb923c';
       g.fill();
+    }
+  } else if (curZone === 'grove') {
+    // 24m flagstone mandala courtyard circle
+    g.beginPath();
+    g.arc(origPt.x, origPt.y, 24 * scale, 0, Math.PI * 2);
+    g.fillStyle = 'rgba(230, 223, 211, 0.45)';
+    g.fill();
+    g.strokeStyle = 'rgba(155, 123, 69, 0.55)';
+    g.lineWidth = 1.5;
+    g.stroke();
+
+    // 14.5m Pilgrim Votive Stupa mandala ring
+    g.beginPath();
+    g.arc(origPt.x, origPt.y, 14.5 * scale, 0, Math.PI * 2);
+    g.strokeStyle = 'rgba(217, 119, 6, 0.48)';
+    g.lineWidth = Math.max(1.5, 2.0 * scale);
+    g.stroke();
+
+    // Central raised lotus terrace (`r = 5.5m`) & Consecration Altar
+    g.beginPath();
+    g.arc(origPt.x, origPt.y, 5.5 * scale, 0, Math.PI * 2);
+    g.fillStyle = '#f5efe4';
+    g.fill();
+    g.strokeStyle = '#d97706';
+    g.lineWidth = 1.6;
+    g.stroke();
+
+    const altarHalf = Math.max(3, 2.2 * scale);
+    g.fillStyle = '#eab308';
+    g.fillRect(origPt.x - altarHalf, origPt.y - altarHalf, altarHalf * 2, altarHalf * 2);
+
+    // 8 Pilgrim Votive Stupas around the mandala ring
+    const groveStupas = ctx.personalStupa?.getGroveStupas?.('grove') || [];
+    for (const gs of groveStupas) {
+      const sp = toCanvas(gs.wx, gs.wz);
+      g.beginPath();
+      g.arc(sp.x, sp.y, Math.max(3, 1.8 * scale), 0, Math.PI * 2);
+      g.fillStyle = gs.stupa?.isOwn ? '#fde047' : '#fffcf5';
+      g.fill();
+      g.strokeStyle = gs.stupa?.isOwn ? '#b45309' : '#9b7b45';
+      g.lineWidth = 1.3;
+      g.stroke();
     }
   } else if (curZone === 'terma' && state.dungeon?.rooms?.length) {
     const dState = state.dungeon;

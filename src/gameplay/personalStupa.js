@@ -1,6 +1,6 @@
 /**
- * Personal Votive Stupa Builder 3D Meshes, Pilgrim Stupa Groves (`stupa` & `samye` zones),
- * Samye 1,008 Consecration Crown InstancedMesh, and Global Co-op Blessing Hook (Ticket #60).
+ * Personal Votive Stupa Builder 3D Meshes, Pilgrim Stupa Groves (`grove` & `samye` zones),
+ * Samye 1,008 Consecration Crown InstancedMesh, and Global Co-op Blessing Hook (Ticket #60, #146).
  *
  * Strictly ZERO PointLights — uses MeshStandardMaterial with emissive & AdditiveBlending meshes.
  */
@@ -14,6 +14,7 @@ import {
 } from '../data/stupaMaterials.js';
 
 const TWO_PI = Math.PI * 2;
+const GROVE_ORIGIN = { x: -1000, z: 0 };
 const SAMYE_ORIGIN = { x: 5000, z: 0 };
 const SAMYE_WALL_RADIUS = 43.0;
 const SAMYE_CROWN_COUNT = 1008;
@@ -791,35 +792,44 @@ export function createPersonalStupa(ctx) {
   const { THREE: THREE_CTX, state, bus, i18n } = ctx;
   const THREE_NS = THREE_CTX || THREE;
 
-  // ------------------------------------------------ 1. Boudhanath (`stupa` zone) Grove & Altar
+  // ------------------------------------------------ 1. Pilgrim Stupa Grove (`grove` zone, South Gate of Boudhanath)
   const boudhaRoot = new THREE_NS.Group();
   boudhaRoot.name = 'PilgrimStupaGrove_Boudha';
-  const stupaZoneGroup = ctx.zoneGroups?.stupa || ctx.stupaGroup || ctx.scene;
-  if (stupaZoneGroup) {
-    stupaZoneGroup.add(boudhaRoot);
-  }
+  boudhaRoot.position.set(GROVE_ORIGIN.x, 0, GROVE_ORIGIN.z);
 
-  // Altar at (23.5, 0, -21.5) in `stupa` zone
-  const BOUDHA_ALTAR_POS = { x: 23.5, y: 0, z: -21.5 };
+  function ensureGroveAttached() {
+    const groveZoneGroup = ctx.zoneGroups?.grove;
+    if (groveZoneGroup && boudhaRoot.parent !== groveZoneGroup) {
+      groveZoneGroup.add(boudhaRoot);
+    }
+  }
+  ensureGroveAttached();
+
+  // Central Votive Stupa Altar at local (0, 0, 0) -> world (-1000, 0, 0) in `grove` zone
+  const BOUDHA_ALTAR_LOCAL = { x: 0, y: 0, z: 0 };
+  const BOUDHA_ALTAR_WORLD = {
+    x: GROVE_ORIGIN.x + BOUDHA_ALTAR_LOCAL.x,
+    y: 0,
+    z: GROVE_ORIGIN.z + BOUDHA_ALTAR_LOCAL.z,
+  };
   let boudhaMonumentMesh = null;
 
-  // 8 Stupa slots in an arc along radius r = 28..31m, angles -35° .. -75°
+  // 8 Stupa slots in a circular mandala ring around the central altar (`r = 14.5m`) in `grove` zone
   const BOUDHA_SLOTS = [];
-  const BOUDHA_ANGLES_DEG = [-35, -39, -46.5, -51.5, -57, -62.5, -68.5, -75];
-  const BOUDHA_RADII = [28.4, 29.8, 28.6, 30.6, 28.8, 30.8, 29.0, 30.5];
+  const BOUDHA_ANGLES_DEG = [-135, -100, -65, -30, 30, 65, 100, 135];
+  const BOUDHA_RING_RADIUS = 14.5;
   for (let i = 0; i < 8; i++) {
     const rad = (BOUDHA_ANGLES_DEG[i] * Math.PI) / 180;
-    const r = BOUDHA_RADII[i];
-    const x = +(Math.cos(rad) * r).toFixed(2);
-    const z = +(Math.sin(rad) * r).toFixed(2);
+    const lx = +(Math.cos(rad) * BOUDHA_RING_RADIUS).toFixed(2);
+    const lz = +(Math.sin(rad) * BOUDHA_RING_RADIUS).toFixed(2);
     BOUDHA_SLOTS.push({
-      zone: 'stupa',
+      zone: 'grove',
       slotIdx: i,
-      wx: x,
-      wz: z,
-      lx: x,
-      lz: z,
-      heading: Math.atan2(-x, -z),
+      lx,
+      lz,
+      wx: +(GROVE_ORIGIN.x + lx).toFixed(2),
+      wz: +(GROVE_ORIGIN.z + lz).toFixed(2),
+      heading: Math.atan2(-lx, -lz),
     });
   }
 
@@ -907,7 +917,7 @@ export function createPersonalStupa(ctx) {
   // ------------------------------------------------ 3. Colliders & Monument Interactables
   if (Array.isArray(ctx.colliders)) {
     ctx.colliders.push(
-      { type: 'circle', zone: 'stupa', x: BOUDHA_ALTAR_POS.x, z: BOUDHA_ALTAR_POS.z, r: 1.35 },
+      { type: 'circle', zone: 'grove', x: BOUDHA_ALTAR_WORLD.x, z: BOUDHA_ALTAR_WORLD.z, r: 1.35 },
       { type: 'circle', zone: 'samye', x: SAMYE_MONUMENT_WORLD.x, z: SAMYE_MONUMENT_WORLD.z, r: 1.45 }
     );
   }
@@ -933,10 +943,10 @@ export function createPersonalStupa(ctx) {
         id: 'votive-stupa-altar-boudha',
         kind: 'shrine',
         priority: 4,
-        zone: 'stupa',
+        zone: 'grove',
         action: 'interact',
         radius: 3.2,
-        position: { x: BOUDHA_ALTAR_POS.x, y: 0, z: BOUDHA_ALTAR_POS.z },
+        position: { x: BOUDHA_ALTAR_WORLD.x, y: 0, z: BOUDHA_ALTAR_WORLD.z },
         labelKey: 'prompt.openStupaBuilder',
         onInteract() {
           ctx.stupaBuilderUi?.open?.('build');
@@ -978,8 +988,8 @@ export function createPersonalStupa(ctx) {
       subtitle: t('stupaBuild.monument.boudhaSub'),
       i18n,
     });
-    boudhaMonumentMesh.position.set(BOUDHA_ALTAR_POS.x, 0, BOUDHA_ALTAR_POS.z);
-    boudhaMonumentMesh.rotation.y = Math.atan2(-BOUDHA_ALTAR_POS.x, -BOUDHA_ALTAR_POS.z);
+    boudhaMonumentMesh.position.set(BOUDHA_ALTAR_LOCAL.x, 0, BOUDHA_ALTAR_LOCAL.z);
+    boudhaMonumentMesh.rotation.y = 0;
     boudhaRoot.add(boudhaMonumentMesh);
 
     const samyeY = ctx.world?.getHeight ? ctx.world.getHeight(SAMYE_MONUMENT_WORLD.x, SAMYE_MONUMENT_WORLD.z, 'samye') : 0;
@@ -1135,6 +1145,7 @@ export function createPersonalStupa(ctx) {
   }
 
   function rebuildGrove() {
+    ensureGroveAttached();
     ensureSamyeAttached();
     clearDynamicGrove();
     rebuildMonumentMeshes();
@@ -1143,7 +1154,7 @@ export function createPersonalStupa(ctx) {
 
     const list = getSourceStupaList();
 
-    // 1. Populate up to 8 Pilgrim Votive Stupas in `stupa` zone (Boudhanath Plaza)
+    // 1. Populate up to 8 Pilgrim Votive Stupas in `grove` zone (Pilgrim Stupa Grove outside South Gate)
     const boudhaCount = Math.min(BOUDHA_SLOTS.length, list.length);
     for (let i = 0; i < boudhaCount; i++) {
       const entry = list[i];
@@ -1168,7 +1179,7 @@ export function createPersonalStupa(ctx) {
         animatedOrnaments.push(mesh);
       }
 
-      const col = { type: 'circle', zone: 'stupa', x: slot.wx, z: slot.wz, r: 0.95 };
+      const col = { type: 'circle', zone: 'grove', x: slot.wx, z: slot.wz, r: 0.95 };
       ctx.colliders?.push(col);
       dynamicStupaColliders.push(col);
 
@@ -1176,7 +1187,7 @@ export function createPersonalStupa(ctx) {
         id: `pilgrim-stupa-boudha-${entry.id}`,
         kind: 'stupa',
         priority: 2,
-        zone: 'stupa',
+        zone: 'grove',
         action: 'interact',
         radius: 2.6,
         position: { x: slot.wx, y: 0, z: slot.wz },
@@ -1191,7 +1202,7 @@ export function createPersonalStupa(ctx) {
       dynamicStupaInteractables.push(inter);
 
       groveRecords.push({
-        zone: 'stupa',
+        zone: 'grove',
         slotIdx: i,
         wx: slot.wx,
         wz: slot.wz,
@@ -1277,12 +1288,13 @@ export function createPersonalStupa(ctx) {
     }
   });
   bus.on('map:loaded', (payload) => {
-    if (payload?.mapId === 'samye') {
+    if (payload?.mapId === 'samye' || payload?.mapId === 'grove') {
       rebuildGrove();
     }
   });
   bus.on('zone:change', (payload) => {
-    if (payload?.to === 'samye' || payload?.to === 'stupa') {
+    if (payload?.to === 'samye' || payload?.to === 'stupa' || payload?.to === 'grove') {
+      ensureGroveAttached();
       ensureSamyeAttached();
       refreshSamyeGlobalBlessing(true);
     }

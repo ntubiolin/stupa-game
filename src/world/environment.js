@@ -653,6 +653,25 @@ export function createEnvironment(ctx) {
 
   root.add(gateGroup);
 
+  // ---------------------------------------------------------------- 2c. South Grove Mountain Gate Archway (南側祈願塔林山門牌樓)
+  const southGateGroup = gateGroup.clone();
+  southGateGroup.name = 'SouthGroveGate';
+  southGateGroup.position.set(0, 0, 37.2);
+  southGateGroup.rotation.y = Math.PI;
+  root.add(southGateGroup);
+
+  if (colliders) {
+    for (const s of [-1, 1]) {
+      colliders.push({
+        type: 'circle',
+        x: s * pillarX,
+        z: 37.2,
+        r: 0.55,
+        zone: 'stupa',
+      });
+    }
+  }
+
   // ---------------------------------------------------------------- 3. Kathmandu Valley Hills & Distant Himalayan Peaks
   const hillSegs = 96;
   const hillInnerR = 112;

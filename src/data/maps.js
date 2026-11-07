@@ -28,10 +28,20 @@ export const MAPS = {
         toGate: 'from-stupa',
         labelKey: 'prompt.enterWild',
       },
+      {
+        id: 'south',
+        x: 0,
+        z: 37.0,
+        radius: 3.2,
+        to: 'grove',
+        toGate: 'from-stupa',
+        labelKey: 'prompt.enterStupaGrove',
+      },
     ],
     spawns: {
       default: { x: stupaSouthPt.x, z: stupaSouthPt.z, heading: 0 },
       south: { x: stupaSouthPt.x, z: stupaSouthPt.z, heading: 0 },
+      'from-grove': { x: 0, z: 34.2, heading: 0 },
       waypoint: { x: 10, z: -24, heading: 0 },
       north: {
         x: W.stupaGate.returnPos.x,
@@ -199,6 +209,7 @@ export const MAPS = {
   },
 };
 
+import GROVE_MAP from './maps/grove.js';
 import PHARPING_MAP from './maps/pharping.js';
 import MANGYUL_MAP from './maps/mangyul.js';
 import YARLUNG_MAP from './maps/yarlung.js';
@@ -214,6 +225,7 @@ const chapterMapModules =
   typeof import.meta.glob === 'function'
     ? import.meta.glob('./maps/*.js', { eager: true })
     : {
+        grove: { GROVE_MAP },
         pharping: { PHARPING_MAP },
         mangyul: { MANGYUL_MAP },
         yarlung: { YARLUNG_MAP },
