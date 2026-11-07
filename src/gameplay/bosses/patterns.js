@@ -142,11 +142,15 @@ export function createPatternRunner(ctx, parentGroup) {
     };
   }
 
+  function getScaledBossDamage(amount) {
+    const bossLevel = Math.max(1, Number(ctx.bosses?.getState?.()?.level || state.boss?.level) || 6);
+    return Math.max(1, Math.round(Number(amount || 10) * (1 + 0.12 * (bossLevel - 1)) * 1.8));
+  }
+
   function dealPlayerDamage(amount, sourcePos, knockback = 0, slowSec = 0) {
     const pPos = state.player?.position;
     if (!pPos || state.bossSubdued) return;
-    const bossLevel = Math.max(1, Number(ctx.bosses?.getState?.()?.level || state.boss?.level) || 6);
-    const scaledAmount = Math.max(1, Math.round(Number(amount || 10) * (1 + 0.12 * (bossLevel - 1)) * 1.8));
+    const scaledAmount = getScaledBossDamage(amount);
     const hurtKb = knockback > 0 ? Math.min(1.2, knockback * 0.18) : 0;
     if (ctx.vitals?.damage) {
       ctx.vitals.damage(scaledAmount, 'physical', {
@@ -215,13 +219,20 @@ export function createPatternRunner(ctx, parentGroup) {
             bus.emit('sfx', 'boulder');
             ctx.cameraRig?.addShake?.(0.35);
 
-            // Check player hit
+            // Check player and AI companions hit
             const pPos = state.player?.position;
             if (pPos) {
               const dist = Math.hypot(pPos.x - cx, pPos.z - cz);
               if (dist <= radius + (ctx.config.PLAYER?.radius || 0.4)) {
                 dealPlayerDamage(damage, { x: cx, z: cz }, knockback);
               }
+            }
+            if (!state.bossSubdued) {
+              ctx.coop?.damageCompanionsInRadius?.(cx, cz, radius, getScaledBossDamage(damage), {
+                type: 'physical',
+                sourcePos: { x: cx, z: cz },
+                knockback: knockback > 0 ? Math.min(1.2, knockback * 0.18) : 0,
+              });
             }
             // Flash impact ring
             disc.fillMat.color.setHex(0xfef08a);
@@ -293,6 +304,19 @@ export function createPatternRunner(ctx, parentGroup) {
               this.hitPlayer = true;
               dealPlayerDamage(damage, boss.pos, knockback);
             }
+          }
+          if (!state.bossSubdued) {
+            ctx.coop?.damageCompanionsInRadius?.(
+              boss.pos.x,
+              boss.pos.z,
+              width * 0.65,
+              getScaledBossDamage(damage),
+              {
+                type: 'physical',
+                sourcePos: { ...boss.pos },
+                knockback: knockback > 0 ? Math.min(1.2, knockback * 0.18) : 0,
+              }
+            );
           }
           line.fillMat.opacity = Math.max(0, 0.7 * (1 - frac));
           return false;
@@ -502,6 +526,28 @@ export function createPatternRunner(ctx, parentGroup) {
               if (diff > gapHalfWidth) {
                 this.hitPlayer = true;
                 dealPlayerDamage(damage, { x: cx, z: cz }, 3.0, slowSec);
+              }
+            }
+          }
+          if (!state.bossSubdued) {
+            const aiList = ctx.coop?.getActiveCompanions?.();
+            if (aiList && aiList.length > 0) {
+              const scaledWaveDmg = getScaledBossDamage(damage);
+              for (let aIdx = 0; aIdx < aiList.length; aIdx++) {
+                const ai = aiList[aIdx];
+                const adx = ai.x - cx;
+                const adz = ai.z - cz;
+                const adist = Math.hypot(adx, adz);
+                if (Math.abs(adist - curR) <= ringThickness * 0.55) {
+                  const aAngle = Math.atan2(adx, adz);
+                  if (Math.abs(normalizeAngle(aAngle - gapAngle)) > gapHalfWidth) {
+                    ctx.coop?.damageCompanion?.(ai.id, scaledWaveDmg, {
+                      type: 'magic',
+                      sourcePos: { x: cx, z: cz },
+                      knockback: 0.55,
+                    });
+                  }
+                }
               }
             }
           }
@@ -807,17 +853,33 @@ export function createPatternRunner(ctx, parentGroup) {
           line.fillMat.color.setRGB(0.6, 1.9, 2.8);
           line.fillMat.opacity = 0.85;
 
+          const bx = Math.sin(curAngle);
+          const bz = Math.cos(curAngle);
           if (state.player?.position && this.age - this.lastHitAt > 0.45) {
             const dx = state.player.position.x - boss.pos.x;
             const dz = state.player.position.z - boss.pos.z;
-            const bx = Math.sin(curAngle);
-            const bz = Math.cos(curAngle);
             const proj = dx * bx + dz * bz;
             const perp = Math.abs(dx * bz - dz * bx);
             if (proj >= 0 && proj <= length && perp <= width * 0.6) {
               this.lastHitAt = this.age;
               dealPlayerDamage(damage, boss.pos, 2.5, 1.2);
             }
+          }
+          if (!state.bossSubdued) {
+            ctx.coop?.damageCompanionsInLine?.(
+              boss.pos.x,
+              boss.pos.z,
+              bx,
+              bz,
+              length,
+              width * 0.6,
+              getScaledBossDamage(damage),
+              {
+                type: 'magic',
+                sourcePos: { ...boss.pos },
+                knockback: 0.45,
+              }
+            );
           }
           return false;
         }
@@ -862,6 +924,23 @@ export function createPatternRunner(ctx, parentGroup) {
         if (dist <= proj.hitRadius + pRadius) {
           hit = true;
           dealPlayerDamage(proj.damage, { x: proj.x, z: proj.z }, 3.5, 1.5);
+        }
+      }
+      if (!hit && !state.bossSubdued) {
+        const aiList = ctx.coop?.getActiveCompanions?.();
+        if (aiList && aiList.length > 0) {
+          for (let aIdx = 0; aIdx < aiList.length; aIdx++) {
+            const ai = aiList[aIdx];
+            if (Math.hypot(ai.x - proj.x, ai.z - proj.z) <= proj.hitRadius + 0.38) {
+              hit = true;
+              ctx.coop?.damageCompanion?.(ai.id, getScaledBossDamage(proj.damage), {
+                type: 'physical',
+                sourcePos: { x: proj.x, z: proj.z },
+                knockback: 0.65,
+              });
+              break;
+            }
+          }
         }
       }
       if (hit || proj.traveled >= proj.maxDist) {
@@ -960,6 +1039,20 @@ export function createPatternRunner(ctx, parentGroup) {
             if (dist <= radius + (ctx.config.PLAYER?.radius || 0.4)) {
               dealPlayerDamage(tickDamage, { x: cx, z: cz }, 0);
             }
+          }
+          if (!state.bossSubdued) {
+            ctx.coop?.damageCompanionsInRadius?.(
+              cx,
+              cz,
+              radius,
+              getScaledBossDamage(tickDamage),
+              {
+                type: 'magic',
+                ignoreInvuln: true,
+                knockback: 0,
+                sourcePos: { x: cx, z: cz },
+              }
+            );
           }
         }
         return this.age >= this.duration;

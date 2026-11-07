@@ -153,7 +153,7 @@ export function createX(ctx, ...extra) {
 | `credits` | `{ update(dt), play(), hide(), isOpen() }` |
 | `community` | `{ update(dt), getPilgrimName(), setPilgrimName(name), getLamps(), offerLamp(opts), rejoiceLamp(id), getStupas(), getOwnStupa(), saveOwnStupa(opts), rejoiceStupa(id), getSamyeProgress(), contributeSamye(opts), exportShareCode(), importShareCode(code) }` |
 | `personalStupa` | `{ update(dt), rebuildGrove(), buildVotiveStupaMesh(THREE, spec, opts), getGroveStupas() }` |
-| `coop` | `{ update(dt), getState(), getPartySize(), getMembers(), createRoom(code?), joinRoom(code), leaveRoom(), addAiCompanion(idx?), removeAiCompanion(id?), broadcastEvent(type, payload), reviveMember(id), teleportToLeader() }` |
+| `coop` | `{ update(dt), getState(), getPartySize(), getMembers(), getActiveCompanions(), createRoom(code?), joinRoom(code), leaveRoom(), addAiCompanion(idx?), removeAiCompanion(id?), broadcastEvent(type, payload), reviveMember(id), damageCompanion(id, amt, opts?), damageCompanionsInRadius(cx, cz, r, amt, opts?), damageCompanionsInLine(sx, sz, dx, dz, len, hw, amt, opts?), teleportToLeader() }` |
 | `remotePilgrims` | `{ update(dt), getMeshes(), getCount(), spawnResonanceMandalaVfx(pos) }` |
 | `lampOfferingUi` / `stupaBuilderUi` / `coopLobbyUi` | `{ update(dt), open(tab?), close(), toggle(), isOpen() }` |
 | `merit` | `{ update(dt), reset, getStats, getAchievementsList }` |
@@ -238,7 +238,7 @@ state.interactionTarget  // currently targeted interactable or null
 | `codex:open` / `codex:unlock` / `codex:changed` | `{ id }` | codex / dialogue / worldmap |
 | `terma:entered` / `terma:floor` / `terma:cleared` | `{ tier, floor, seed }` | dungeon → quests / UI / coop |
 | `community:lampOffered` / `community:lampRejoiced` / `community:stupaBuilt` / `community:samyeContributed` / `community:changed` | `{ id?, type? }` | community → lamps / personalStupa / UI |
-| `coop:joined` / `coop:left` / `coop:updated` / `coop:remoteSkill` / `coop:resonance` / `coop:revived` | `{ roomCode?, x?, z? }` | coop → remotePilgrims / dungeon / UI |
+| `coop:joined` / `coop:left` / `coop:updated` / `coop:remoteSkill` / `coop:resonance` / `coop:memberHurt` / `coop:memberFainted` / `coop:revived` | `{ roomCode?, id?, x?, z? }` | coop → remotePilgrims / dungeon / UI |
 | `credits:play` / `credits:opened` / `credits:closed` | `{}` | credits |
 
 ---

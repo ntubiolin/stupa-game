@@ -307,6 +307,8 @@ export function createRemotePilgrims(ctx) {
       rightArm,
       leftLeg,
       rightLeg,
+      robeMat,
+      shawlMat,
       lotusRing,
       ringMat,
       nameplate,
@@ -374,6 +376,11 @@ export function createRemotePilgrims(ctx) {
 
   bus?.on('coop:resonance', (payload) => {
     spawnResonanceMandalaVfx(payload);
+  });
+
+  bus?.on('coop:memberHurt', (payload) => {
+    if (!payload) return;
+    spawnTeammateMantraWave(payload.x || 0, payload.y || 0, payload.z || 0, 0xef4444, 1.35, 0.28);
   });
 
   // ---------------------------------------------------------------- Fainted Ally Revive Interactable
@@ -459,6 +466,19 @@ export function createRemotePilgrims(ctx) {
       }
       actor.root.rotation.y = lerpAngle(actor.root.rotation.y, m.heading || 0, Math.min(1, dt * 12));
 
+      // Hurt emissive flash on robe & shawl
+      if (m.hurt && !m.fainted) {
+        actor.robeMat?.emissive?.setHex(0xef4444);
+        if (actor.robeMat) actor.robeMat.emissiveIntensity = 0.75;
+        actor.shawlMat?.emissive?.setHex(0xfca5a5);
+        if (actor.shawlMat) actor.shawlMat.emissiveIntensity = 0.6;
+      } else {
+        actor.robeMat?.emissive?.setHex(0x000000);
+        if (actor.robeMat) actor.robeMat.emissiveIntensity = 0;
+        actor.shawlMat?.emissive?.setHex(0x000000);
+        if (actor.shawlMat) actor.shawlMat.emissiveIntensity = 0;
+      }
+
       // Limb & posture animation
       const isMoving = m.action === 'walk' || m.action === 'run' || moveDist > 0.04;
       if (m.fainted) {
@@ -472,8 +492,8 @@ export function createRemotePilgrims(ctx) {
         actor.ringMat.color.setHex(0xfbbf24);
         actor.ringMat.opacity = 0.75;
       } else {
-        actor.body.rotation.x = 0;
-        actor.ringMat.color.setHex(m.look?.auraColor || 0x2dd4bf);
+        actor.body.rotation.x = m.hurt ? -0.18 : 0;
+        actor.ringMat.color.setHex(m.hurt ? 0xf87171 : m.look?.auraColor || 0x2dd4bf);
         actor.ringMat.opacity = 0.55 + Math.sin((state.elapsed || 0) * 2.5) * 0.15;
 
         if (isMoving) {

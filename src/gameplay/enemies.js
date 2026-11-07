@@ -2306,7 +2306,7 @@ export function createEnemies(ctx) {
     enemy.stateTimer = atk.windup || 0.5;
     enemy.lockedHeading = enemy.heading;
 
-    const playerPos = state.player?.position || { x: 1000, y: 0, z: 0 };
+    const playerPos = enemy.chaseTargetPos || state.player?.position || { x: 1000, y: 0, z: 0 };
 
     if (atk.id === 'ghostfire' || atk.id === 'heatBolt') {
       if (enemy.animNodes.mouthOrb) {
@@ -2749,7 +2749,7 @@ export function createEnemies(ctx) {
         continue;
       }
 
-      // Distance to player (or taunting protector ally if taunted, or Samye wall segment if wallTarget active)
+      // Distance to player, nearest living AI companion, taunting protector ally, or Samye wall segment
       const tauntOrigin =
         enemy.status?.taunt > 0 && enemy.status.tauntTarget?.pos
           ? enemy.status.tauntTarget.pos
@@ -2761,7 +2761,25 @@ export function createEnemies(ctx) {
         enemy.wallTarget.active !== false
           ? enemy.wallTarget
           : null;
-      const chaseTargetPos = tauntOrigin || wallOrigin || playerPos;
+      let nearestPilgrimPos = playerPos;
+      if (!tauntOrigin && !wallOrigin && !isPlayerInSafeZone) {
+        const aiList = ctx.coop?.getActiveCompanions?.();
+        if (aiList && aiList.length > 0) {
+          let bestDist = playerPos
+            ? Math.hypot(playerPos.x - enemy.pos.x, playerPos.z - enemy.pos.z)
+            : Infinity;
+          for (let aIdx = 0; aIdx < aiList.length; aIdx++) {
+            const ai = aiList[aIdx];
+            const dAi = Math.hypot(ai.x - enemy.pos.x, ai.z - enemy.pos.z);
+            if (dAi < bestDist) {
+              bestDist = dAi;
+              nearestPilgrimPos = { x: ai.x, y: ai.y ?? enemy.pos.y, z: ai.z };
+            }
+          }
+        }
+      }
+      const chaseTargetPos = tauntOrigin || wallOrigin || nearestPilgrimPos;
+      enemy.chaseTargetPos = chaseTargetPos;
       const dxPlayer = chaseTargetPos ? chaseTargetPos.x - enemy.pos.x : 999;
       const dzPlayer = chaseTargetPos ? chaseTargetPos.z - enemy.pos.z : 999;
       const distToPlayer = Math.hypot(dxPlayer, dzPlayer);
@@ -2915,18 +2933,24 @@ export function createEnemies(ctx) {
               }
             }
 
-            // Check hit on player along charge segment
+            // Check hit on player and AI companions along charge segment
+            const hitWidth = enemy.activeAttack.hitWidth ?? 1.1;
+            const chargeDmg = getScaledAttackDamage(enemy, enemy.activeAttack.damage);
             if (!cd.hasHit && playerPos) {
               const curDist = Math.hypot(playerPos.x - enemy.pos.x, playerPos.z - enemy.pos.z);
-              if (curDist <= (enemy.activeAttack.hitWidth ?? 1.1) + (config.PLAYER.radius || 0.35)) {
+              if (curDist <= hitWidth + (config.PLAYER.radius || 0.35)) {
                 cd.hasHit = true;
                 bus.emit('vitals:damage', {
-                  amount: getScaledAttackDamage(enemy, enemy.activeAttack.damage),
+                  amount: chargeDmg,
                   type: 'physical',
                   sourcePos: { ...enemy.pos },
                 });
               }
             }
+            ctx.coop?.damageCompanionsInRadius?.(enemy.pos.x, enemy.pos.z, hitWidth, chargeDmg, {
+              type: 'physical',
+              sourcePos: { ...enemy.pos },
+            });
 
             if (u >= 1) {
               enemy.attackCooldowns[enemy.activeAttack.id] = enemy.activeAttack.cooldown * cdMult;
@@ -3047,37 +3071,46 @@ export function createEnemies(ctx) {
             enemy.state = 'recover';
             enemy.stateTimer = atk.recover ?? 0.45;
           } else if (atk.id === 'shadowStep') {
-            if (!isRooted && playerPos) {
-              const pHeading = state.player?.heading || 0;
+            const stepTarget = enemy.chaseTargetPos || playerPos;
+            if (!isRooted && stepTarget) {
+              const pHeading = stepTarget === playerPos ? (state.player?.heading || 0) : enemy.heading;
               const behindDist = 1.35;
               // Player forward is (-sin(h), -cos(h)), so behind player is (+sin(h), +cos(h))
-              enemy.pos.x = playerPos.x + Math.sin(pHeading) * behindDist;
-              enemy.pos.z = playerPos.z + Math.cos(pHeading) * behindDist;
+              enemy.pos.x = stepTarget.x + Math.sin(pHeading) * behindDist;
+              enemy.pos.z = stepTarget.z + Math.cos(pHeading) * behindDist;
               clampEnemyPosition(enemy);
-              enemy.heading = Math.atan2(-(playerPos.x - enemy.pos.x), -(playerPos.z - enemy.pos.z));
+              enemy.heading = Math.atan2(-(stepTarget.x - enemy.pos.x), -(stepTarget.z - enemy.pos.z));
               spawnSmokePuff(
                 { x: enemy.pos.x, y: enemy.pos.y + 0.7, z: enemy.pos.z },
                 0x7f1d1d,
                 1.6,
                 0.42
               );
-              const strikeDist = Math.hypot(playerPos.x - enemy.pos.x, playerPos.z - enemy.pos.z);
-              if (strikeDist <= (atk.hitReach ?? 2.4)) {
-                bus.emit('vitals:damage', {
-                  amount: scaledDmg,
-                  type: 'physical',
-                  sourcePos: { ...enemy.pos },
-                });
+              const reach = atk.hitReach ?? 2.4;
+              if (playerPos) {
+                const strikeDist = Math.hypot(playerPos.x - enemy.pos.x, playerPos.z - enemy.pos.z);
+                if (strikeDist <= reach) {
+                  bus.emit('vitals:damage', {
+                    amount: scaledDmg,
+                    type: 'physical',
+                    sourcePos: { ...enemy.pos },
+                  });
+                }
               }
+              ctx.coop?.damageCompanionsInRadius?.(enemy.pos.x, enemy.pos.z, reach, scaledDmg, {
+                type: 'physical',
+                sourcePos: { ...enemy.pos },
+              });
             }
             enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
             enemy.state = 'recover';
             enemy.stateTimer = atk.recover ?? 0.4;
           } else if (atk.id === 'silence') {
             bus.emit('sfx', { name: 'dispel' });
+            const silRadius = atk.aoeRadius ?? 3.0;
             if (playerPos) {
               const silDist = Math.hypot(playerPos.x - enemy.pos.x, playerPos.z - enemy.pos.z);
-              if (silDist <= (atk.aoeRadius ?? 3.0)) {
+              if (silDist <= silRadius) {
                 const silDur = atk.silenceDuration ?? 2.0;
                 if (state.player) {
                   state.player.silencedUntil = Math.max(state.player.silencedUntil || 0, state.elapsed + silDur);
@@ -3091,6 +3124,12 @@ export function createEnemies(ctx) {
                   });
                 }
               }
+            }
+            if (scaledDmg > 0) {
+              ctx.coop?.damageCompanionsInRadius?.(enemy.pos.x, enemy.pos.z, silRadius, scaledDmg, {
+                type: 'magic',
+                sourcePos: { ...enemy.pos },
+              });
             }
             enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
             enemy.state = 'recover';
@@ -3194,9 +3233,10 @@ export function createEnemies(ctx) {
             } else if (isRootGrasp) {
               bus.emit('sfx', { name: 'boulder' });
             }
+            const slamRadius = atk.aoeRadius ?? (isHeatWave ? 2.5 : isRootGrasp ? 2.8 : 3.5);
             if (playerPos) {
               const slamDist = Math.hypot(playerPos.x - enemy.pos.x, playerPos.z - enemy.pos.z);
-              if (slamDist <= (atk.aoeRadius ?? (isHeatWave ? 2.5 : isRootGrasp ? 2.8 : 3.5))) {
+              if (slamDist <= slamRadius) {
                 if (isRootGrasp && state.player) {
                   const rootDur = atk.playerRoot || 1.0;
                   state.player.rootUntil = Math.max(state.player.rootUntil || 0, state.elapsed + rootDur);
@@ -3211,11 +3251,16 @@ export function createEnemies(ctx) {
                 });
               }
             }
+            ctx.coop?.damageCompanionsInRadius?.(enemy.pos.x, enemy.pos.z, slamRadius, scaledDmg, {
+              type: isHeatWave ? 'magic' : 'physical',
+              sourcePos: { ...enemy.pos },
+            });
             enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
             enemy.state = 'recover';
             enemy.stateTimer = atk.recover ?? 0.5;
           } else {
             // Melee claw / smash
+            const hitReach = atk.hitReach ?? 1.8;
             if (wallOrigin && distToPlayer <= (atk.hitReach ?? 2.2)) {
               if (typeof wallOrigin.onHit === 'function') {
                 wallOrigin.onHit(scaledDmg, enemy);
@@ -3225,15 +3270,21 @@ export function createEnemies(ctx) {
                 damage: scaledDmg,
                 enemyId: enemy.id,
               });
-            } else if (playerPos) {
-              const clawDist = Math.hypot(playerPos.x - enemy.pos.x, playerPos.z - enemy.pos.z);
-              if (clawDist <= (atk.hitReach ?? 1.8)) {
-                bus.emit('vitals:damage', {
-                  amount: scaledDmg,
-                  type: 'physical',
-                  sourcePos: { ...enemy.pos },
-                });
+            } else {
+              if (playerPos) {
+                const clawDist = Math.hypot(playerPos.x - enemy.pos.x, playerPos.z - enemy.pos.z);
+                if (clawDist <= hitReach) {
+                  bus.emit('vitals:damage', {
+                    amount: scaledDmg,
+                    type: 'physical',
+                    sourcePos: { ...enemy.pos },
+                  });
+                }
               }
+              ctx.coop?.damageCompanionsInRadius?.(enemy.pos.x, enemy.pos.z, hitReach, scaledDmg, {
+                type: 'physical',
+                sourcePos: { ...enemy.pos },
+              });
             }
             enemy.attackCooldowns[atk.id] = atk.cooldown * cdMult;
             enemy.state = 'recover';
@@ -3371,18 +3422,29 @@ export function createEnemies(ctx) {
       activeAttackers += Number(enemy.state === 'windup' || enemy.state === 'attack') - Number(wasAttacking);
 
       // --- Contact Damage Check
-      // Applies when player touches body (except during charge attack where charge damage takes priority)
-      if (playerPos && !isPlayerInSafeZone && (!passive || enemy.provoked) &&
+      // Applies when player or AI companion touches body (except during charge attack where charge damage takes priority)
+      if (!isPlayerInSafeZone && (!passive || enemy.provoked) &&
           enemy.state !== 'wander' && enemy.state !== 'liberated' && enemy.state !== 'hurt' &&
           enemy.state !== 'attack' && !isStunned) {
+        const contactDmg = getScaledAttackDamage(enemy, cfg.contactDamage ?? 3);
         const contactReach = enemy.radius + (config.PLAYER.radius || 0.35) + 0.15;
-        if (distToPlayer <= contactReach) {
-          bus.emit('vitals:damage', {
-            amount: getScaledAttackDamage(enemy, cfg.contactDamage ?? 3),
-            type: 'physical',
-            sourcePos: { ...enemy.pos },
-          });
+        if (playerPos) {
+          const directPlayerDist = Math.hypot(playerPos.x - enemy.pos.x, playerPos.z - enemy.pos.z);
+          if (directPlayerDist <= contactReach) {
+            bus.emit('vitals:damage', {
+              amount: contactDmg,
+              type: 'physical',
+              sourcePos: { ...enemy.pos },
+            });
+          }
         }
+        ctx.coop?.damageCompanionsInRadius?.(
+          enemy.pos.x,
+          enemy.pos.z,
+          enemy.radius + 0.15,
+          contactDmg,
+          { type: 'physical', sourcePos: { ...enemy.pos } }
+        );
       }
 
       // ---Procedural Animations & `molten` Fire Patch Trail
@@ -3463,10 +3525,10 @@ export function createEnemies(ctx) {
       }
 
       if (f.age >= fuse) {
+        const dmg = f.damage ?? Math.max(1, Math.round(8 * (f.dmgMult || 1)));
         if (playerPos && !isPlayerInSafeZone) {
           const d = Math.hypot(playerPos.x - f.x, playerPos.z - f.z);
           if (d <= f.radius) {
-            const dmg = f.damage ?? Math.max(1, Math.round(8 * (f.dmgMult || 1)));
             bus.emit('vitals:damage', {
               amount: dmg,
               type: 'magic',
@@ -3474,6 +3536,12 @@ export function createEnemies(ctx) {
               sourcePos: { x: f.x, y: f.y, z: f.z },
             });
           }
+        }
+        if (!isPlayerInSafeZone) {
+          ctx.coop?.damageCompanionsInRadius?.(f.x, f.z, f.radius, dmg, {
+            type: 'magic',
+            sourcePos: { x: f.x, y: f.y, z: f.z },
+          });
         }
         spawnSmokePuff({ x: f.x, y: f.y + 0.35, z: f.z }, 0x38bdf8, f.radius * 1.1, 0.35);
         eliteHazardGroup.remove(f.group);
@@ -3494,10 +3562,10 @@ export function createEnemies(ctx) {
 
       if (mp.tickTimer <= 0) {
         mp.tickTimer += mp.tickInterval || 0.5;
+        const dmg = mp.damage ?? Math.max(1, Math.round(2 * (mp.dmgMult || 1)));
         if (playerPos && !isPlayerInSafeZone) {
           const d = Math.hypot(playerPos.x - mp.x, playerPos.z - mp.z);
           if (d <= mp.radius) {
-            const dmg = mp.damage ?? Math.max(1, Math.round(2 * (mp.dmgMult || 1)));
             bus.emit('vitals:damage', {
               amount: dmg,
               type: 'magic',
@@ -3506,6 +3574,14 @@ export function createEnemies(ctx) {
               sourcePos: { x: mp.x, y: mp.y, z: mp.z },
             });
           }
+        }
+        if (!isPlayerInSafeZone) {
+          ctx.coop?.damageCompanionsInRadius?.(mp.x, mp.z, mp.radius, dmg, {
+            type: 'magic',
+            ignoreInvuln: true,
+            knockback: 0,
+            sourcePos: { x: mp.x, y: mp.y, z: mp.z },
+          });
         }
       }
 
@@ -3530,16 +3606,22 @@ export function createEnemies(ctx) {
       }
 
       if (b.age >= fuse) {
+        const dmg = b.damage ?? Math.max(1, Math.round(14 * (b.dmgMult || 1)));
         if (playerPos && !isPlayerInSafeZone) {
           const d = Math.hypot(playerPos.x - b.x, playerPos.z - b.z);
           if (d <= b.radius) {
-            const dmg = b.damage ?? Math.max(1, Math.round(14 * (b.dmgMult || 1)));
             bus.emit('vitals:damage', {
               amount: dmg,
               type: 'magic',
               sourcePos: { x: b.x, y: b.y, z: b.z },
             });
           }
+        }
+        if (!isPlayerInSafeZone) {
+          ctx.coop?.damageCompanionsInRadius?.(b.x, b.z, b.radius, dmg, {
+            type: 'magic',
+            sourcePos: { x: b.x, y: b.y, z: b.z },
+          });
         }
         bus.emit('sfx', { name: 'fireball' });
         spawnSmokePuff({ x: b.x, y: b.y + 0.5, z: b.z }, 0xf97316, b.radius * 1.15, 0.45);
