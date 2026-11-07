@@ -1221,6 +1221,9 @@ export function createEnemies(ctx) {
       packRank: opts.packRank || null,
       minionOf: opts.minionOf || null,
       noSplit: Boolean(opts.noSplit),
+      isSplitMinion: Boolean(opts.isSplitMinion),
+      noRespawn: Boolean(opts.noRespawn || state.zone === 'terma' || opts.dungeonFloor != null),
+      dungeonFloor: opts.dungeonFloor ?? null,
       displayNameKey,
       def,
       ccResist,
@@ -2105,13 +2108,20 @@ export function createEnemies(ctx) {
         eliteName: enemy.eliteName,
         mapId: state.zone || 'wild',
         calmed: true,
+        isSplitMinion: Boolean(enemy.isSplitMinion),
+        dungeonFloor: enemy.dungeonFloor ?? null,
         tags: calmedTags,
       });
 
       const yakToast = i18n?.t?.('toast.yakCalmed') || '狂暴野犛牛眼中的白光消退，溫順地低頭啃食青草。';
       ctx.hud?.toast?.(yakToast);
 
-      if (!enemy.noSplit) {
+      const inDungeon =
+        state.zone === 'terma' ||
+        enemy.zone === 'terma' ||
+        enemy.dungeonFloor != null ||
+        Boolean(enemy.noRespawn);
+      if (!enemy.noSplit && !inDungeon) {
         const respawnTime =
           (cfg.respawnMin ?? 20) + Math.random() * ((cfg.respawnMax ?? 40) - (cfg.respawnMin ?? 20));
         pendingRespawns.push({
@@ -2155,6 +2165,9 @@ export function createEnemies(ctx) {
             rank: 'normal',
             affixes: [],
             noSplit: true,
+            isSplitMinion: true,
+            noRespawn: true,
+            dungeonFloor: enemy.dungeonFloor ?? null,
             level: enemy.level,
           }
         );
@@ -2176,6 +2189,8 @@ export function createEnemies(ctx) {
       affixes: Array.isArray(enemy.affixes) ? [...enemy.affixes] : [],
       eliteName: enemy.eliteName,
       mapId: state.zone || 'wild',
+      isSplitMinion: Boolean(enemy.isSplitMinion),
+      dungeonFloor: enemy.dungeonFloor ?? null,
       tags: enemy.tags || [enemy.kind],
     });
 
@@ -2191,45 +2206,53 @@ export function createEnemies(ctx) {
       params: { name: localizedName, exp: enemy.exp },
     });
 
-    // Queue respawn timer
-    if (enemy.packId) {
-      const packStillAlive = activeEnemies.some(
-        (e) => e.id !== enemy.id && e.state !== 'liberated' && e.hp > 0 && e.packId === enemy.packId
-      );
-      if (!packStillAlive) {
-        const packRespawnTime = 90 + Math.random() * 60; // 90-150s
-        pendingElitePackRespawns.push({
-          rank: enemy.packRank || (enemy.rank === 'rare' ? 'rare' : 'champion'),
+    const inDungeon =
+      state.zone === 'terma' ||
+      enemy.zone === 'terma' ||
+      enemy.dungeonFloor != null ||
+      Boolean(enemy.noRespawn);
+
+    // Queue respawn timer (wilderness combat zones only; never respawn inside Terma dungeon)
+    if (!inDungeon) {
+      if (enemy.packId) {
+        const packStillAlive = activeEnemies.some(
+          (e) => e.id !== enemy.id && e.state !== 'liberated' && e.hp > 0 && e.packId === enemy.packId
+        );
+        if (!packStillAlive) {
+          const packRespawnTime = 90 + Math.random() * 60; // 90-150s
+          pendingElitePackRespawns.push({
+            rank: enemy.packRank || (enemy.rank === 'rare' ? 'rare' : 'champion'),
+            kind: enemy.kind,
+            timer: packRespawnTime,
+          });
+        }
+      } else if (!enemy.noSplit) {
+        const respawnTime =
+          (cfg.respawnMin ?? 20) + Math.random() * ((cfg.respawnMax ?? 40) - (cfg.respawnMin ?? 20));
+        pendingRespawns.push({
           kind: enemy.kind,
-          timer: packRespawnTime,
+          ring: enemy.ring,
+          tags: enemy.tags,
+          fixedPos: enemy.fixedPos || null,
+          timer: respawnTime,
         });
       }
-    } else if (!enemy.noSplit) {
-      const respawnTime =
-        (cfg.respawnMin ?? 20) + Math.random() * ((cfg.respawnMax ?? 40) - (cfg.respawnMin ?? 20));
-      pendingRespawns.push({
-        kind: enemy.kind,
-        ring: enemy.ring,
-        tags: enemy.tags,
-        fixedPos: enemy.fixedPos || null,
-        timer: respawnTime,
-      });
-    }
 
-    // If no non-liberated enemies remain on the field and total queued < maxCount,
-    // schedule respawns from current map's spawnTable.
-    const remainingAlive = activeEnemies.filter((e) => e.state !== 'liberated').length;
-    const mapDef = ctx.world?.getMap(state.zone);
-    const spawnTable = mapDef?.spawnTable || [];
-    const mapTotalCount = spawnTable.reduce((acc, s) => acc + (s.count || 0), 0);
-    if (remainingAlive === 0 && mapTotalCount > 0 && pendingRespawns.length < mapTotalCount) {
-      for (const entry of spawnTable) {
-        for (let c = 0; c < (entry.count || 0); c++) {
-          if (pendingRespawns.length >= mapTotalCount) break;
-          const t =
-            (cfg.respawnMin ?? 20) +
-            Math.random() * ((cfg.respawnMax ?? 40) - 2 - (cfg.respawnMin ?? 20));
-          pendingRespawns.push({ kind: entry.kind, ring: entry.area || 'near', timer: t });
+      // If no non-liberated enemies remain on the field and total queued < maxCount,
+      // schedule respawns from current map's spawnTable.
+      const remainingAlive = activeEnemies.filter((e) => e.state !== 'liberated').length;
+      const mapDef = ctx.world?.getMap(state.zone);
+      const spawnTable = mapDef?.spawnTable || [];
+      const mapTotalCount = spawnTable.reduce((acc, s) => acc + (s.count || 0), 0);
+      if (remainingAlive === 0 && mapTotalCount > 0 && pendingRespawns.length < mapTotalCount) {
+        for (const entry of spawnTable) {
+          for (let c = 0; c < (entry.count || 0); c++) {
+            if (pendingRespawns.length >= mapTotalCount) break;
+            const t =
+              (cfg.respawnMin ?? 20) +
+              Math.random() * ((cfg.respawnMax ?? 40) - 2 - (cfg.respawnMin ?? 20));
+            pendingRespawns.push({ kind: entry.kind, ring: entry.area || 'near', timer: t });
+          }
         }
       }
     }
@@ -2457,54 +2480,59 @@ export function createEnemies(ctx) {
       bus.emit('toast', { key: 'toast.eliteLevelWarning' });
     }
 
-    // 1. Process Respawn Timers
-    const mapSpawnTotal = (mapDef?.spawnTable || []).reduce((acc, s) => acc + (s.count || 0), 0);
-    const maxMapEnemies = Math.max(cfg.maxCount ?? 12, mapSpawnTotal);
-    for (let i = pendingRespawns.length - 1; i >= 0; i--) {
-      const r = pendingRespawns[i];
-      r.timer -= dt;
-      if (r.timer <= 0) {
-        pendingRespawns.splice(i, 1);
-        const activeHostileCount = activeEnemies.filter(
-          (e) => e.state !== 'liberated' && e.state !== 'calmed'
-        ).length;
-        if (activeHostileCount < maxMapEnemies && ctx.world?.sampleSpawnPoint) {
-          const pt = r.fixedPos
-            ? {
-                x: r.fixedPos.x,
-                y: ctx.world.getHeight(r.fixedPos.x, r.fixedPos.z),
-                z: r.fixedPos.z,
-              }
-            : ctx.world.sampleSpawnPoint(r.ring, {
-                minDistFromGate: 12,
-                minPlayerDist: cfg.respawnMinPlayerDist ?? 20,
-              });
-          const newEnemy = createEnemyInstance(r.kind, pt, {
-            tags: r.tags,
-            fixedPos: r.fixedPos,
-          });
-          newEnemy.ring = r.ring;
-          clampEnemyPosition(newEnemy);
+    // 1. Process Respawn Timers (wilderness combat zones only; never respawn in Terma dungeon)
+    if (currentZone !== 'terma') {
+      const mapSpawnTotal = (mapDef?.spawnTable || []).reduce((acc, s) => acc + (s.count || 0), 0);
+      const maxMapEnemies = Math.max(cfg.maxCount ?? 12, mapSpawnTotal);
+      for (let i = pendingRespawns.length - 1; i >= 0; i--) {
+        const r = pendingRespawns[i];
+        r.timer -= dt;
+        if (r.timer <= 0) {
+          pendingRespawns.splice(i, 1);
+          const activeHostileCount = activeEnemies.filter(
+            (e) => e.state !== 'liberated' && e.state !== 'calmed'
+          ).length;
+          if (activeHostileCount < maxMapEnemies && ctx.world?.sampleSpawnPoint) {
+            const pt = r.fixedPos
+              ? {
+                  x: r.fixedPos.x,
+                  y: ctx.world.getHeight(r.fixedPos.x, r.fixedPos.z),
+                  z: r.fixedPos.z,
+                }
+              : ctx.world.sampleSpawnPoint(r.ring, {
+                  minDistFromGate: 12,
+                  minPlayerDist: cfg.respawnMinPlayerDist ?? 20,
+                });
+            const newEnemy = createEnemyInstance(r.kind, pt, {
+              tags: r.tags,
+              fixedPos: r.fixedPos,
+            });
+            newEnemy.ring = r.ring;
+            clampEnemyPosition(newEnemy);
+          }
         }
       }
-    }
 
-    // 1b. Process Elite Pack Respawn Timers (90-150s)
-    for (let i = pendingElitePackRespawns.length - 1; i >= 0; i--) {
-      const ep = pendingElitePackRespawns[i];
-      ep.timer -= dt;
-      if (ep.timer <= 0) {
-        pendingElitePackRespawns.splice(i, 1);
-        const k = ep.kind || pickEliteKindForMap(mapDef);
-        const area = ep.rank === 'rare' ? 'deep' : 'mid';
-        const center = ctx.world?.sampleSpawnPoint
-          ? ctx.world.sampleSpawnPoint(area, {
-              minDistFromGate: 15,
-              minPlayerDist: cfg.respawnMinPlayerDist ?? 20,
-            })
-          : null;
-        spawnElitePack(k, ep.rank, null, center);
+      // 1b. Process Elite Pack Respawn Timers (90-150s)
+      for (let i = pendingElitePackRespawns.length - 1; i >= 0; i--) {
+        const ep = pendingElitePackRespawns[i];
+        ep.timer -= dt;
+        if (ep.timer <= 0) {
+          pendingElitePackRespawns.splice(i, 1);
+          const k = ep.kind || pickEliteKindForMap(mapDef);
+          const area = ep.rank === 'rare' ? 'deep' : 'mid';
+          const center = ctx.world?.sampleSpawnPoint
+            ? ctx.world.sampleSpawnPoint(area, {
+                minDistFromGate: 15,
+                minPlayerDist: cfg.respawnMinPlayerDist ?? 20,
+              })
+            : null;
+          spawnElitePack(k, ep.rank, null, center);
+        }
       }
+    } else {
+      if (pendingRespawns.length > 0) pendingRespawns.length = 0;
+      if (pendingElitePackRespawns.length > 0) pendingElitePackRespawns.length = 0;
     }
 
     let activeChasers = activeEnemies.filter(e => e.hp > 0 && e.zone === currentZone &&

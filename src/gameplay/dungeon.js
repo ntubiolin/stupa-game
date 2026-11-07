@@ -395,6 +395,8 @@ export function createDungeon(ctx) {
   let bossSubduedOnFloor = false;
   let chestOpened = false;
   let pendingTimeBonus = false;
+  const floorEnemyIds = new Set();
+  const liberatedEnemyIds = new Set();
   const vaultGuardIds = new Set();
   let vaultUnsealed = false;
   let vaultExtracted = false;
@@ -669,6 +671,8 @@ export function createDungeon(ctx) {
     vaultCoreMesh = null;
     vaultRingMat = null;
     vaultBeamMesh = null;
+    floorEnemyIds.clear();
+    liberatedEnemyIds.clear();
 
     // Remove registered colliders from ctx.colliders
     if (Array.isArray(ctx.colliders) && floorColliders.length > 0) {
@@ -1547,6 +1551,8 @@ export function createDungeon(ctx) {
    */
   function spawnFloorEnemies(layout) {
     ctx.enemies?.clear?.();
+    floorEnemyIds.clear();
+    liberatedEnemyIds.clear();
     totalEnemies = 0;
     liberatedCount = 0;
     gateUnlocked = false;
@@ -1580,6 +1586,7 @@ export function createDungeon(ctx) {
         enemy.maxHp = Math.max(1, Math.round(enemy.maxHp * tierHpMult * coopHpMult));
         enemy.hp = enemy.maxHp;
         enemy.dungeonFloor = layout.floor;
+        enemy.noRespawn = true;
       }
       return enemy;
     }
@@ -1599,10 +1606,12 @@ export function createDungeon(ctx) {
           z: sz,
           level: monsterLevel,
           rank: 'normal',
+          noRespawn: true,
+          dungeonFloor: layout.floor,
           tags: room.role === 'vault' ? ['termaVaultGuard'] : undefined,
         });
         if (applyTierScalingToEnemyId(id)) {
-          totalEnemies += 1;
+          floorEnemyIds.add(id);
           if (room.role === 'vault') {
             vaultGuardIds.add(id);
           }
@@ -1640,15 +1649,19 @@ export function createDungeon(ctx) {
         level: monsterLevel,
         rank,
         affixes,
+        noRespawn: true,
+        dungeonFloor: layout.floor,
         tags: targetRoom.role === 'vault' ? ['termaVaultGuard'] : undefined,
       });
       if (applyTierScalingToEnemyId(id)) {
-        totalEnemies += 1;
+        floorEnemyIds.add(id);
         if (targetRoom.role === 'vault') {
           vaultGuardIds.add(id);
         }
       }
     }
+
+    totalEnemies = floorEnemyIds.size;
 
     setVaultUnsealedVisual(vaultGuardIds.size === 0);
 
@@ -2146,7 +2159,6 @@ export function createDungeon(ctx) {
   // ---------------------------------------------------------------- Event Listeners
   bus.on('enemy:liberated', (payload) => {
     if (state.zone !== 'terma' || !active) return;
-    liberatedCount += 1;
 
     if (payload?.id && vaultGuardIds.has(payload.id)) {
       vaultGuardIds.delete(payload.id);
@@ -2158,6 +2170,28 @@ export function createDungeon(ctx) {
           kind: 'merit',
         });
       }
+    }
+
+    if (payload?.isSplitMinion) {
+      return;
+    }
+
+    if (payload?.id != null) {
+      if (liberatedEnemyIds.has(payload.id)) {
+        return;
+      }
+      if (floorEnemyIds.size > 0) {
+        if (!floorEnemyIds.has(payload.id)) {
+          return;
+        }
+        liberatedEnemyIds.add(payload.id);
+        liberatedCount = Math.min(totalEnemies, liberatedEnemyIds.size);
+      } else {
+        liberatedEnemyIds.add(payload.id);
+        liberatedCount = Math.min(totalEnemies, liberatedCount + 1);
+      }
+    } else {
+      liberatedCount = Math.min(totalEnemies, liberatedCount + 1);
     }
 
     const ratio = totalEnemies > 0 ? liberatedCount / totalEnemies : 1;
