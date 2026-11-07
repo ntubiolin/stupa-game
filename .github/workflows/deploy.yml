@@ -1,20 +1,40 @@
-name: Deploy to Vercel Production
+name: Deploy to Vercel
 
 on:
   push:
     branches:
       - master
   workflow_dispatch:
+    inputs:
+      target:
+        description: Deployment environment (production requires master)
+        type: choice
+        required: true
+        default: preview
+        options:
+          - preview
+          - production
 
 env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
   VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+  DEPLOY_TARGET: ${{ github.event_name == 'push' && 'production' || inputs.target }}
 
 jobs:
   deploy:
     name: Deploy to Vercel
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
+      - name: Guard production branch
+        env:
+          SOURCE_REF: ${{ github.ref }}
+        run: |
+          if [ "$DEPLOY_TARGET" = production ] && [ "$SOURCE_REF" != refs/heads/master ]; then
+            echo 'Production deployments require master.' >&2
+            exit 1
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -22,22 +42,56 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'npm'
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Check i18n keys
-        run: npm run check:i18n
+      - name: Validate source
+        run: |
+          npm run check:i18n
+          npm test
 
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
       - name: Pull Vercel Environment Information
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: vercel pull --yes --environment="$DEPLOY_TARGET" --token="$VERCEL_TOKEN"
 
       - name: Build Project Artifacts
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ "$DEPLOY_TARGET" = production ]; then
+            vercel build --prod --token="$VERCEL_TOKEN"
+          else
+            vercel build --token="$VERCEL_TOKEN"
+          fi
 
       - name: Deploy Project Artifacts to Vercel
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        id: deployment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ "$DEPLOY_TARGET" = production ]; then
+            vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN" > deployment-url.txt
+          else
+            vercel deploy --prebuilt --token="$VERCEL_TOKEN" > deployment-url.txt
+          fi
+          DEPLOYMENT_URL=$(tail -n 1 deployment-url.txt)
+          case "$DEPLOYMENT_URL" in
+            https://*.vercel.app) ;;
+            *) echo 'Missing Vercel deployment URL.' >&2; exit 1 ;;
+          esac
+          echo "url=$DEPLOYMENT_URL" >> "$GITHUB_OUTPUT"
+          echo "### Vercel $DEPLOY_TARGET" >> "$GITHUB_STEP_SUMMARY"
+          echo "$DEPLOYMENT_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "Source commit: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Retain deployment URL
+        uses: actions/upload-artifact@v4
+        with:
+          name: vercel-deployment-url
+          path: deployment-url.txt

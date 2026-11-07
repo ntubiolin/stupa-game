@@ -320,6 +320,28 @@ export function createSky(ctx) {
       };
     }
 
+    // Check the 5 Chapter Terma Caves (`src/gameplay/termaCaves.js`)
+    const termaCaveCoords = {
+      pharping: { x: 1958, z: -56, kind: 'lampCave' },
+      mangyul: { x: 2956, z: -24, kind: 'crystalCave' },
+      yarlung: { x: 4052, z: -46, kind: 'crystalCave' },
+      samye: { x: 5058, z: 22, kind: 'asuraCave' },
+      chimphu: { x: 5976, z: -28, kind: 'hermitageCave' },
+    }[zone];
+    if (termaCaveCoords) {
+      const dTermaCave = Math.hypot(px - termaCaveCoords.x, pz - termaCaveCoords.z);
+      const fTermaCave = 1.0 - smoothstep(4.2, 8.6, dTermaCave);
+      if (fTermaCave > 0.01) {
+        return {
+          subterranean: 0.0,
+          factor: fTermaCave,
+          ceilingY: 5.0,
+          kind: termaCaveCoords.kind,
+          lightCenter: { x: termaCaveCoords.x, z: termaCaveCoords.z },
+        };
+      }
+    }
+
     if (zone === 'pharping') {
       const dYanglesho = Math.hypot(px - 2020, (pz - -46.2) * 1.12);
       const fYanglesho = 1.0 - smoothstep(5.8, 11.5, dYanglesho);

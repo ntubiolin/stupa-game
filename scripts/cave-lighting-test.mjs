@@ -5,6 +5,7 @@ import { createBus } from '../src/core/events.js';
 import { createSky } from '../src/world/sky.js';
 import { createCameraRig } from '../src/player/cameraRig.js';
 import { createDungeon, DOOR_WIDTH } from '../src/gameplay/dungeon.js';
+import { createTermaCaves, TERMA_CAVE_DEFS } from '../src/gameplay/termaCaves.js';
 import { createMap as createPharpingMap } from '../src/world/maps/pharping.js';
 import { createMap as createYarlungMap } from '../src/world/maps/yarlung.js';
 import { createMap as createChimphuMap } from '../src/world/maps/chimphu.js';
@@ -142,6 +143,18 @@ function countPointLights(root) {
   for (let i = 0; i < 30; i++) sky.update(0.1);
   assert.ok(ctx.state.caveFactor > 0.85, 'Chimphu Northern Cave activates caveFactor');
   assert.equal(ctx.state.caveCeilingY, 8.2, 'Chimphu Northern Cave sets 8.2m ceiling clamp');
+
+  // 5 Chapter Terma Caves (pharping, mangyul, yarlung, samye, chimphu)
+  for (const def of TERMA_CAVE_DEFS) {
+    ctx.state.zone = def.map;
+    ctx.state.player.position.set(def.x, 0, def.z);
+    for (let i = 0; i < 30; i++) sky.update(0.1);
+    assert.ok(
+      ctx.state.caveFactor > 0.85,
+      `Terma Cave ${def.id} activates caveFactor (${ctx.state.caveFactor.toFixed(2)})`,
+    );
+    assert.equal(ctx.state.caveCeilingY, 5.0, `Terma Cave ${def.id} sets 5.0m ceiling clamp`);
+  }
 }
 
 // ---------------------------------------------------------------- 2. Camera Rig Cave Ceiling Clamping
@@ -258,12 +271,21 @@ function countPointLights(root) {
   assert.equal(solvedState.solved, true, 'Sheldrak puzzle solved');
   assert.equal(solvedState.beamHits, 4, 'All 4 crystal beams aligned');
 
-  // Chimphu Northern Cavern Vault
+  // Chimphu Northern Cavern Vault & Chapter Terma Caves
   assert.ok(
     ctx.scene.getObjectByName('ChimphuNorthernCavernVault'),
     'ChimphuNorthernCavernVault exists',
   );
   assert.ok(ctx.scene.getObjectByName('ChimphuCavernDust'), 'ChimphuCavernDust particles exist');
+  const termaCaves = createTermaCaves(ctx);
+  for (const def of TERMA_CAVE_DEFS) {
+    ctx.state.zone = def.map;
+    termaCaves.update(0.016);
+    assert.ok(
+      ctx.scene.getObjectByName(`TermaCave_${def.id}`),
+      `TermaCave_${def.id} enclosed grotto exists`,
+    );
+  }
   chimphu.update(0.016, 12.0);
   terma.update(0.016);
 

@@ -137,6 +137,12 @@ export const ITEMS_STRINGS = {
     'legendary.tertonFind.power': '在伏藏秘境中打破伏藏晶石時，有 20% 機率額外掉落一件精良或更高品質裝備',
     'legendary.retreatShield.name': '青朴閉關法衣',
     'legendary.retreatShield.power': '蓮花結界結束時，其剩餘冷卻時間減少 50%',
+    'legendary.thokchaVajra.name': '蓮師天鐵九股杵',
+    'legendary.thokchaVajra.power': '施放六字真言時降下 6.5m 天鐵雷霆，造成 110% ATK 法術傷害並震懾 1.5 秒',
+    'legendary.dakiniMirror.name': '空行母秘密明鏡',
+    'legendary.dakiniMirror.power': '生命低於 30% 時化為五色虹光免疫傷害 2.5 秒並回復 40% 最大生命（冷卻 60 秒）',
+    'legendary.uddiyanaLotusHat.name': '烏金蓮花法帽',
+    'legendary.uddiyanaLotusHat.power': '技能冷卻縮減額外 +10%，且蓮師心咒大招所需充能減少 5 點',
 
     // Currency & ground loot interaction
     'item.turquoise': '綠松石 ×{n}',
@@ -324,6 +330,12 @@ export const ITEMS_STRINGS = {
     'legendary.tertonFind.power': 'Breaking a Terma Crystal in the dungeon has a 20% chance to drop an extra Rare or higher item',
     'legendary.retreatShield.name': 'Chimphu Retreat Robe',
     'legendary.retreatShield.power': 'When Lotus Shield ends, its remaining cooldown is reduced by 50%',
+    'legendary.thokchaVajra.name': 'Thokcha Nine-Pronged Vajra',
+    'legendary.thokchaVajra.power': 'Casting Six-Syllable Mantra calls down a 6.5m Thokcha thunderbolt dealing 110% ATK magic damage and stunning for 1.5s',
+    'legendary.dakiniMirror.name': 'Secret Mirror of the Dakini',
+    'legendary.dakiniMirror.power': 'Below 30% HP, dissolves into rainbow light granting 2.5s invulnerability and restoring 40% maxHp (60s CD)',
+    'legendary.uddiyanaLotusHat.name': 'Lotus Crown of Oddiyana',
+    'legendary.uddiyanaLotusHat.power': 'Grants +10% bonus Cooldown Reduction and reduces Vajra Guru Mantra ultimate charge cost by 5',
 
     // Currency & ground loot interaction
     'item.turquoise': 'Turquoise ×{n}',

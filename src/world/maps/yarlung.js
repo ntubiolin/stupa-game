@@ -1007,7 +1007,7 @@ export function createMap(ctx) {
   };
   ctx.sheldrak = sheldrakApi;
   ctx.debug?.register?.('sheldrak', sheldrakApi);
-  if (typeof window !== 'undefined') {
+  if (!ctx.storyPreview && typeof window !== 'undefined') {
     window.__stupa = window.__stupa || {};
     window.__stupa.sheldrak = sheldrakApi;
   }

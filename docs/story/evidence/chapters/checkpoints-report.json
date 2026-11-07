@@ -1,0 +1,54 @@
+{
+  "scenarios": [
+    {
+      "id": "yarlung",
+      "mobile": false,
+      "checkpoints": 11,
+      "result": "PASS"
+    },
+    {
+      "id": "samye",
+      "mobile": false,
+      "checkpoints": 8,
+      "result": "PASS"
+    },
+    {
+      "id": "chimphu",
+      "mobile": false,
+      "checkpoints": 9,
+      "result": "PASS"
+    },
+    {
+      "id": "finale",
+      "mobile": false,
+      "checkpoints": 16,
+      "result": "PASS"
+    },
+    {
+      "id": "yarlung",
+      "mobile": true,
+      "checkpoints": 11,
+      "result": "PASS"
+    },
+    {
+      "id": "samye",
+      "mobile": true,
+      "checkpoints": 8,
+      "result": "PASS"
+    },
+    {
+      "id": "chimphu",
+      "mobile": true,
+      "checkpoints": 9,
+      "result": "PASS"
+    },
+    {
+      "id": "finale",
+      "mobile": true,
+      "checkpoints": 16,
+      "result": "PASS"
+    }
+  ],
+  "errors": [],
+  "result": "PASS"
+}

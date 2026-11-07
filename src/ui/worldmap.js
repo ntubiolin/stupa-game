@@ -292,13 +292,17 @@ export function renderZoneRadarCanvas(canvas, ctx, opts = {}) {
           ? 'rgba(34, 197, 94, 0.58)'
           : r.role === 'boss' || r.role === 'exit'
             ? 'rgba(245, 158, 11, 0.65)'
-            : templateColors[r.template] || 'rgba(56, 189, 248, 0.38)';
+            : r.role === 'vault'
+              ? 'rgba(236, 72, 153, 0.52)'
+              : templateColors[r.template] || 'rgba(56, 189, 248, 0.38)';
       g.strokeStyle =
         r.role === 'start'
           ? '#4ade80'
           : r.role === 'boss' || r.role === 'exit'
             ? '#fbbf24'
-            : '#38bdf8';
+            : r.role === 'vault'
+              ? '#f472b6'
+              : '#38bdf8';
       g.lineWidth = 1.6;
       g.fillRect(rp.x - half, rp.y - half, roomSizePx, roomSizePx);
       g.strokeRect(rp.x - half, rp.y - half, roomSizePx, roomSizePx);
@@ -315,9 +319,25 @@ export function renderZoneRadarCanvas(canvas, ctx, opts = {}) {
               ? 'B'
               : r.role === 'exit'
                 ? 'G'
-                : (r.template || 'H')[0].toUpperCase();
+                : r.role === 'vault'
+                  ? 'V'
+                  : (r.template || 'H')[0].toUpperCase();
         g.fillText(tag, rp.x, rp.y);
       }
+    }
+
+    // Draw Ancient Terma Vault Reliquary icon
+    if (dState.vaultRoomWorld && !dState.vaultExtracted) {
+      const vp = toCanvas(dState.vaultRoomWorld.x, dState.vaultRoomWorld.z);
+      g.save();
+      g.translate(vp.x, vp.y);
+      g.rotate(Math.PI / 4);
+      g.fillStyle = dState.vaultUnsealed ? '#fbbf24' : '#f472b6';
+      g.strokeStyle = '#fef08a';
+      g.lineWidth = 1.3;
+      g.fillRect(-3.6, -3.6, 7.2, 7.2);
+      g.strokeRect(-3.6, -3.6, 7.2, 7.2);
+      g.restore();
     }
 
     // Draw Terma Crystal nodes
@@ -354,6 +374,31 @@ export function renderZoneRadarCanvas(canvas, ctx, opts = {}) {
       g.strokeStyle = 'rgba(250, 204, 21, 0.35)';
       g.lineWidth = 1;
       g.stroke();
+    }
+
+    // Chapter Terma Cave marker (revealed by Tertön's Compass, debugAll, or proximity)
+    const caveInfo = state.termaCaves?.caves?.[curZone];
+    if (caveInfo) {
+      const hasCompass = Boolean(ctx.termaCaves?.hasCompass?.());
+      const distToCave = Math.hypot(px - caveInfo.x, pz - caveInfo.z);
+      const stUpper = String(caveInfo.status || '').toUpperCase();
+      if (hasCompass || debugAll || stUpper !== 'DORMANT' || distToCave <= 24) {
+        const cp = toCanvas(caveInfo.x, caveInfo.z);
+        g.save();
+        g.translate(cp.x, cp.y);
+        g.rotate(Math.PI / 4);
+        g.fillStyle =
+          stUpper === 'EXTRACTED'
+            ? '#64748b'
+            : stUpper === 'UNSEALED'
+              ? '#fbbf24'
+              : '#2dd4bf';
+        g.strokeStyle = '#fef08a';
+        g.lineWidth = 1.4;
+        g.fillRect(-4.2, -4.2, 8.4, 8.4);
+        g.strokeRect(-4.2, -4.2, 8.4, 8.4);
+        g.restore();
+      }
     }
   }
 

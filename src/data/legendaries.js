@@ -89,6 +89,33 @@ export const LEGENDARIES = [
     nameKey: 'legendary.retreatShield.name',
     powerKey: 'legendary.retreatShield.power',
   },
+  {
+    id: 'thokchaVajra',
+    powerId: 'thokchaVajra',
+    baseId: 'giltVajra',
+    slot: 'mainhand',
+    minIlvl: 16,
+    nameKey: 'legendary.thokchaVajra.name',
+    powerKey: 'legendary.thokchaVajra.power',
+  },
+  {
+    id: 'dakiniMirror',
+    powerId: 'dakiniMirror',
+    baseId: 'giltBell',
+    slot: 'offhand',
+    minIlvl: 22,
+    nameKey: 'legendary.dakiniMirror.name',
+    powerKey: 'legendary.dakiniMirror.power',
+  },
+  {
+    id: 'uddiyanaLotusHat',
+    powerId: 'uddiyanaLotusHat',
+    baseId: 'brocadeHat',
+    slot: 'head',
+    minIlvl: 25,
+    nameKey: 'legendary.uddiyanaLotusHat.name',
+    powerKey: 'legendary.uddiyanaLotusHat.power',
+  },
 ];
 
 export const LEGENDARIES_BY_ID = Object.fromEntries(

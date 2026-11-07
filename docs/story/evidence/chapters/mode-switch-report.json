@@ -1,0 +1,21 @@
+{
+  "browser": "157.0.8103.39",
+  "scenarios": [
+    {
+      "name": "desktop",
+      "input": "mouse",
+      "checkpoint": "channel1",
+      "gear": "i_3e4e01",
+      "codex": "pharping"
+    },
+    {
+      "name": "mobile",
+      "input": "touch",
+      "checkpoint": "channel1",
+      "gear": "i_33eb01",
+      "codex": "pharping"
+    }
+  ],
+  "errors": [],
+  "result": "PASS"
+}

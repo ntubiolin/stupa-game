@@ -1,0 +1,24 @@
+import '../../../i18n/storyYarlung.js';
+
+export const YARLUNG_CHAPTER = Object.freeze({
+  id: 'yarlung',
+  mapId: 'yarlung',
+  previousId: 'mangyul',
+  entryCheckpoint: 'observe',
+  siteIds: Object.freeze(['yarlungValley', 'yumbulagang', 'sheldrak', 'yarlhaShampo']),
+  checkpoints: Object.freeze([
+    ['observe', 'yak:observe'],
+    ['calm', 'yak:calm', 'card'],
+    ['stone1', 'yak:clear'],
+    ['pause', 'yak:pause'],
+    ['stone2', 'yak:clear'],
+    ['release', 'yak:release'],
+    ['guardian', 'yak:touch', 'card'],
+    ['memory', 'memory:read', 'card'],
+    ['boundary', 'boundary:read', 'card', 'yarlung'],
+    ['diary', 'diary:read', 'card'],
+    ['complete', null],
+  ].map(([id, signal, presentation, phoneThreadId]) => Object.freeze(
+    presentation ? { id, signal, presentation, ...(phoneThreadId && { phoneThreadId }) } : { id, signal },
+  ))),
+});

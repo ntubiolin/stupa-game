@@ -1,0 +1,25 @@
+{
+  "startedAt": "2026-11-06T14:55:47.636Z",
+  "browser": "157.0.8103.39",
+  "suite": "journey",
+  "renderProfile": "Software CI: low journey quality, 0.5 render DPR; CSS viewport unchanged. Not art/performance acceptance.",
+  "scenarios": [
+    {
+      "name": "continuous-six-chapter-handoff",
+      "result": "PASS",
+      "checkpoints": 75
+    },
+    {
+      "name": "desktop",
+      "result": "PASS",
+      "mode": "complete user-facing flow, assisted navigation, no debug beat progression",
+      "language": "zh",
+      "gameElapsedSeconds": 3.516699999999995,
+      "automatedWallSeconds": 13.522,
+      "pacingNote": "Fast automated path with navigation/photo assistance and manual cue advance; not a 15-minute human reading test"
+    }
+  ],
+  "errors": [],
+  "metrics": [],
+  "result": "PASS"
+}

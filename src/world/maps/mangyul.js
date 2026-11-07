@@ -101,7 +101,7 @@ export function mangyulHeightFn(wx, wz) {
   return h;
 }
 
-export function createMangyulMap(ctx) {
+export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   const { scene, state, bus, i18n } = ctx;
   const zoneGroup = ctx.zoneGroups?.mangyul || new THREE.Group();
   zoneGroup.name = 'MangyulMap';
@@ -1263,7 +1263,7 @@ export function createMangyulMap(ctx) {
       handleInteract();
     }
   };
-  if (typeof window !== 'undefined') {
+  if (!presentationOnly && typeof window !== 'undefined') {
     window.addEventListener('keydown', onKeyDown);
   }
 
@@ -1342,10 +1342,12 @@ export function createMangyulMap(ctx) {
     },
   };
 
-  ctx.tenma = tenmaApi;
-  ctx.debug?.register?.('tenma', tenmaApi);
-  if (typeof window !== 'undefined' && window.__stupa) {
-    window.__stupa.tenma = tenmaApi;
+  if (!presentationOnly) {
+    ctx.tenma = tenmaApi;
+    ctx.debug?.register?.('tenma', tenmaApi);
+    if (typeof window !== 'undefined' && window.__stupa) {
+      window.__stupa.tenma = tenmaApi;
+    }
   }
 
   // ==========================================================================
@@ -1590,7 +1592,7 @@ export function createMangyulMap(ctx) {
     offVitalsFaint?.();
     offPlayerFaint?.();
     offQuestStart?.();
-    if (typeof window !== 'undefined') {
+    if (!presentationOnly && typeof window !== 'undefined') {
       window.removeEventListener('keydown', onKeyDown);
     }
     if (scene.fog) {

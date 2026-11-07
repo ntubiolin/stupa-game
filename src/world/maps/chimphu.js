@@ -582,7 +582,7 @@ export function buildChimphuMap(ctx) {
   const portalRing = new THREE.Mesh(new THREE.RingGeometry(1.4, 2.1, 32), portalGlowMat);
   portalRing.position.set(0, 2.7, 0.05);
 
-  const plaqueTex = makeSyllablePlaqueTexture('ཨོཾ་ཨཱཿ་ཧཱུྃ', 'གཏེར་མ · 伏藏秘境');
+  const plaqueTex = ctx.storyPreview ? null : makeSyllablePlaqueTexture('ཨོཾ་ཨཱཿ་ཧཱུྃ', 'གཏེར་མ · 伏藏秘境');
   const plaqueMat = new THREE.MeshBasicMaterial({
     map: plaqueTex,
     transparent: true,
@@ -614,7 +614,9 @@ export function buildChimphuMap(ctx) {
     plaqueMesh,
   );
   group.add(termaGateGroup);
-  disposables.push(pillarGeo, portalDiscMat, portalGlowMat, plaqueTex, plaqueMat);
+  disposables.push(pillarGeo, portalDiscMat, portalGlowMat);
+  if (plaqueTex) disposables.push(plaqueTex);
+  disposables.push(plaqueMat);
 
   // Pillar colliders so player walks up to the gate threshold cleanly
   registerCollider({ type: 'circle', x: gateX - 2.9, z: gateZ, r: 0.9 });
