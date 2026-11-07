@@ -353,6 +353,7 @@ export function createMap(ctx) {
         !springState.inspected &&
         !ctx.quests?.hasFlag?.('ch1.rain'),
       onInteract: () => {
+        if (springState.inspected) return;
         // Check if any active droughtSprite is still guarding within 14m
         const activeEnemies = ctx.enemies?.getActiveEnemies?.() || [];
         const guard = activeEnemies.find(
@@ -377,8 +378,7 @@ export function createMap(ctx) {
           ctx.i18n?.t?.('toast.spring.seep') ||
           '甘泉微湧——旱魅退散後，泉眼滲出清涼細流！';
         ctx.hud?.toast?.(msg);
-        ctx.bus.emit('quest:interact', { target: 'pharpingSpring', count: 1 });
-        ctx.bus.emit('quest:interact', { target: sp.id, count: 1 });
+        ctx.bus.emit('quest:interact', { target: sp.id, uniqueId: sp.id, count: 1 });
       },
     });
   }
