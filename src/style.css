@@ -3433,9 +3433,10 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
 
 .shop-modal,
 .crafting-modal {
+  pointer-events: auto;
   position: fixed;
   inset: 0;
-  z-index: 82;
+  z-index: 660;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3447,10 +3448,12 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
 .shop-modal.is-hidden,
 .crafting-modal.is-hidden {
   display: none !important;
+  pointer-events: none !important;
 }
 
 .shop-dialog,
 .crafting-dialog {
+  pointer-events: auto;
   width: min(1120px, 96vw);
   max-height: min(740px, 92vh);
   display: flex;
@@ -3542,12 +3545,13 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
   transition: background 0.15s ease, transform 0.1s ease;
 }
 
-.shop-refresh-btn:hover:not(:disabled),
-.shop-batch-btn:hover:not(:disabled) {
+.shop-refresh-btn:hover:not(:disabled):not(.is-disabled),
+.shop-batch-btn:hover:not(:disabled):not(.is-disabled) {
   background: rgba(251, 191, 36, 0.26);
 }
 
-.shop-batch-btn:disabled {
+.shop-batch-btn:disabled,
+.shop-batch-btn.is-disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
@@ -3604,9 +3608,11 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
 }
 
 .shop-item-row:hover,
+.shop-item-row:focus-visible,
 .shop-item-row.is-selected {
   background: rgba(30, 41, 59, 0.92);
   border-color: rgba(251, 191, 36, 0.75);
+  outline: none;
 }
 
 .shop-item-row.rarity-blessed {
@@ -3687,11 +3693,12 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
   cursor: pointer;
 }
 
-.shop-action-btn:hover:not(:disabled) {
+.shop-action-btn:hover:not(:disabled):not(.is-disabled) {
   filter: brightness(1.12);
 }
 
-.shop-action-btn:disabled {
+.shop-action-btn:disabled,
+.shop-action-btn.is-disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }

@@ -348,6 +348,8 @@ export function createShop(ctx) {
     }
 
     const currentTq = ctx.inventory?.getTurquoise?.() ?? 0;
+    const slots = ctx.inventory?.getBagSlots?.() || [];
+    const bagFull = slots.length > 0 && !slots.some((s) => s === null);
 
     stock.forEach((item, index) => {
       const normRarity = item.rarity === 'common' ? 'normal' : item.rarity;
@@ -355,6 +357,7 @@ export function createShop(ctx) {
       const iconUrl = getSlotIconDataUrl(item.slot, normRarity);
       const cost = getBuyPrice(item);
       const canAfford = currentTq >= cost;
+      const canBuy = canAfford && !bagFull;
       const isSelected =
         inspectedSource === 'stock' && inspectedItem?.uid === item.uid;
 
@@ -362,6 +365,8 @@ export function createShop(ctx) {
       row.className = `shop-item-row rarity-${normRarity}${isSelected ? ' is-selected' : ''}`;
       row.dataset.uid = item.uid;
       row.dataset.index = String(index);
+      row.tabIndex = 0;
+      row.setAttribute('role', 'button');
       row.innerHTML = `
         <div class="shop-item-row__left">
           <img class="shop-item-row__icon" src="${iconUrl}" alt="${item.name}" />
@@ -374,7 +379,7 @@ export function createShop(ctx) {
         </div>
         <div class="shop-item-row__right">
           <span class="shop-price-tag ${canAfford ? '' : 'is-insufficient'}">💎 ${cost}</span>
-          <button type="button" class="shop-action-btn shop-action-btn--buy" ${canAfford ? '' : 'disabled'}>
+          <button type="button" class="shop-action-btn shop-action-btn--buy${canBuy ? '' : ' is-disabled'}" aria-disabled="${!canBuy}">
             ${i18n.t('shop.buyBtn')}
           </button>
         </div>
@@ -389,6 +394,15 @@ export function createShop(ctx) {
         inspectedSource = 'stock';
         inspectedItem = item;
         renderAll();
+      });
+      row.addEventListener('keydown', (e) => {
+        if (e.target !== row) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          inspectedSource = 'stock';
+          inspectedItem = item;
+          renderAll();
+        }
       });
 
       const buyBtn = row.querySelector('.shop-action-btn--buy');
@@ -408,7 +422,8 @@ export function createShop(ctx) {
     const hasCommons = bagItems.some(
       (it) => it && (it.rarity === 'normal' || it.rarity === 'common')
     );
-    sellCommonBtn.disabled = !hasCommons;
+    sellCommonBtn.classList.toggle('is-disabled', !hasCommons);
+    sellCommonBtn.setAttribute('aria-disabled', String(!hasCommons));
 
     if (bagItems.length === 0) {
       bagListEl.innerHTML = `<div class="shop-empty">${i18n.t('shop.bagEmpty')}</div>`;
@@ -426,6 +441,8 @@ export function createShop(ctx) {
       const row = document.createElement('div');
       row.className = `shop-item-row rarity-${normRarity}${isSelected ? ' is-selected' : ''}`;
       row.dataset.uid = item.uid;
+      row.tabIndex = 0;
+      row.setAttribute('role', 'button');
       row.innerHTML = `
         <div class="shop-item-row__left">
           <img class="shop-item-row__icon" src="${iconUrl}" alt="${item.name}" />
@@ -453,6 +470,15 @@ export function createShop(ctx) {
         inspectedSource = 'bag';
         inspectedItem = item;
         renderAll();
+      });
+      row.addEventListener('keydown', (e) => {
+        if (e.target !== row) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          inspectedSource = 'bag';
+          inspectedItem = item;
+          renderAll();
+        }
       });
 
       const sellBtn = row.querySelector('.shop-action-btn--sell');
