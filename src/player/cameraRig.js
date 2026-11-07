@@ -26,6 +26,13 @@ export function createCameraRig(ctx) {
   let distance = 6.8;        // meters
   let targetDistance = 6.8;
   let savedFollowDistance = 6.8;
+  const normalizeAutoFollowMode = (mode) => ['smart', 'off', 'on'].includes(mode) ? mode : 'smart';
+  let autoFollowMode = normalizeAutoFollowMode(
+    ctx.save?.get?.('settings', {})?.cameraAutoFollow || state.cameraAutoFollow || 'smart'
+  );
+  state.cameraAutoFollow = autoFollowMode;
+  let combatLockTimer = 0;
+  let keyboardTogglePending = false;
 
   // Front portrait camera state (toggled with V key in play mode)
   let frontCamActive = false;
@@ -43,11 +50,151 @@ export function createCameraRig(ctx) {
   const currentLook = new THREE.Vector3(0, 12, 0);
   const desiredPos = new THREE.Vector3();
   const desiredLook = new THREE.Vector3();
+  const smoothedStupaLookOffset = new THREE.Vector3();
+  const stupaLookOffset = new THREE.Vector3();
   const introPos = new THREE.Vector3();
   const introLook = new THREE.Vector3(0, 12, 0);
 
   // Initialize yaw behind the player's starting heading
   yaw = state.player.heading || 0;
+
+  function setAutoFollowMode(mode, silent = false) {
+    autoFollowMode = normalizeAutoFollowMode(mode);
+    state.cameraAutoFollow = autoFollowMode;
+    if (ctx.save?.set) {
+      const curSettings = ctx.save.get?.('settings', {}) || {};
+      ctx.save.set('settings', { ...curSettings, cameraAutoFollow: autoFollowMode });
+    }
+    bus.emit('camera:autoFollowChanged', { mode: autoFollowMode });
+    if (!silent) {
+      const messages = ctx.i18n?.lang === 'en'
+        ? { off: 'Camera: Fixed Angle (Auto-Follow Off)', smart: 'Camera: Smart Anti-Spin', on: 'Camera: Classic Auto-Follow' }
+        : { off: '視角模式：固定視角（關閉自動運鏡）', smart: '視角模式：智慧防暈運鏡', on: '視角模式：經典自動跟隨' };
+      bus.emit('toast', { text: messages[autoFollowMode], kind: 'info' });
+    }
+    return autoFollowMode;
+  }
+
+  function toggleAutoFollow(silent = false) {
+    return setAutoFollowMode(autoFollowMode === 'off' ? 'smart' : 'off', silent);
+  }
+
+  bus.on('camera:setAutoFollow', (payload) => setAutoFollowMode(payload?.mode, Boolean(payload?.silent)));
+  bus.on('settings:changed', (payload) => {
+    const mode = payload?.cameraAutoFollow ?? ctx.save?.get?.('settings', {})?.cameraAutoFollow;
+    if (mode === undefined || normalizeAutoFollowMode(mode) === autoFollowMode) return;
+    autoFollowMode = normalizeAutoFollowMode(mode);
+    state.cameraAutoFollow = autoFollowMode;
+    // Settings already owns persistence; avoid writing back during its notification.
+    bus.emit('camera:autoFollowChanged', { mode: autoFollowMode });
+  });
+
+  for (const event of ['player:attack', 'player:chant', 'mantra:cast', 'skill:cast', 'vitals:damage']) {
+    bus.on(event, () => {
+      combatLockTimer = 4.0;
+      if (state.elapsed !== undefined) state.lastCombatTime = state.elapsed;
+    });
+  }
+
+  function isInCombatOrTargeted() {
+    if (combatLockTimer > 0 || state.boss?.active || state.player?.combatTarget || state.combatTarget) return true;
+    const bossBar = typeof document !== 'undefined' ? document.getElementById('boss-bar') : null;
+    if (bossBar && !bossBar.classList.contains('is-hidden')) return true;
+    const pPos = state.player.position;
+    const enemies = ctx.enemies?.getActiveEnemies?.() || ctx.enemies?.list?.() || state.enemies || [];
+    return enemies.some((enemy) => {
+      if (!enemy || enemy.state === 'liberated' || enemy.state === 'calmed' || (enemy.hp !== undefined && !(enemy.hp > 0))) return false;
+      if (['notice', 'chase', 'windup', 'attack', 'recover'].includes(enemy.state)) return true;
+      const pos = enemy.pos || enemy.position || enemy;
+      return Math.hypot(pos.x - pPos.x, pos.z - pPos.z) <= 18;
+    });
+  }
+
+  function isNearDenseCluster() {
+    const pPos = state.player.position;
+    if (state.zone === 'stupa' && Math.hypot(pPos.x, pPos.z) <= 25.5 + 1e-6) return true;
+    let nearbyCount = 0;
+    for (const items of [ctx.interactables || [], ctx.colliders || []]) {
+      for (const item of items) {
+        if (!item || (item.zone && item.zone !== state.zone)) continue;
+        const pos = item.position || item;
+        const dist = Math.hypot(pos.x - pPos.x, pos.z - pPos.z);
+        if (items === ctx.interactables && dist <= 3.8) return true;
+        if (dist <= 2.8 && ++nearbyCount >= 2) return true;
+      }
+    }
+    return false;
+  }
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('keydown', (e) => {
+      const activeElement = typeof document !== 'undefined' ? document.activeElement : null;
+      if (e.repeat || state.mode !== 'play' || state.uiOpen || state.customizing
+        || activeElement?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/i.test(activeElement?.tagName || '')) return;
+      if (e.code === 'KeyL' || (e.code === 'KeyC' && e.altKey)) {
+        e.preventDefault();
+        toggleAutoFollow(false);
+        keyboardTogglePending = true;
+      }
+    });
+  }
+
+  // Intersect the viewing ray with the plaza circles. Scaling about the world
+  // origin changes camera forward, which also changes camera-relative movement.
+  function clampStupaCamera(pos, look) {
+    const preferredMinR = frontCamActive
+      ? config.WORLD.stupaColliderRadius + 0.15
+      : Math.max(20.5, config.WORLD.stupaColliderRadius + 0.6);
+    // The player can enter the camera's comfort margin. Relax that margin
+    // instead of choosing the far intersection on the opposite side of the dome.
+    const minR = Math.min(preferredMinR, Math.max(0, Math.hypot(look.x, look.z) - 0.05));
+    const maxR = config.WORLD.buildingsInnerRadius - 0.6;
+    const radius = Math.hypot(pos.x, pos.z);
+    const rayLength = Math.hypot(pos.x - look.x, pos.z - look.z);
+    if (rayLength > 1e-4 && (radius < minR || radius > maxR)) {
+      const dx = (pos.x - look.x) / rayLength;
+      const dz = (pos.z - look.z) / rayLength;
+      const dot = look.x * dx + look.z * dz;
+      const boundary = radius < minR ? minR : maxR;
+      const discriminant = dot * dot + boundary * boundary - look.x * look.x - look.z * look.z;
+      if (discriminant >= 0) {
+        const root = Math.sqrt(discriminant);
+        const near = -dot - root;
+        const far = -dot + root;
+        const length = radius < minR && near >= 0 ? near : far;
+        if (length >= 0) {
+          pos.x = look.x + dx * length;
+          pos.z = look.z + dz * length;
+          if (radius < minR && !frontCamActive) pos.y = Math.max(pos.y, 2.2);
+        }
+      }
+    }
+    pos.y = Math.max(0.55, pos.y);
+  }
+
+  function clampWildCamera(pos, look, mapDef) {
+    const wOrigin = mapDef?.origin || config.WILD?.origin || { x: 1000, z: 0 };
+    const maxR = ((mapDef?.walkRadius ?? config.WILD?.walkRadius) || 70) + 15;
+    const cdx = pos.x - wOrigin.x;
+    const cdz = pos.z - wOrigin.z;
+    const radius = Math.hypot(cdx, cdz);
+    const rayLength = Math.hypot(pos.x - look.x, pos.z - look.z);
+    if (rayLength > 1e-4 && radius > maxR) {
+      const ldx = look.x - wOrigin.x;
+      const ldz = look.z - wOrigin.z;
+      const dx = (pos.x - look.x) / rayLength;
+      const dz = (pos.z - look.z) / rayLength;
+      const dot = ldx * dx + ldz * dz;
+      const discriminant = dot * dot + maxR * maxR - ldx * ldx - ldz * ldz;
+      if (discriminant >= 0) {
+        const length = Math.max(0.5, -dot + Math.sqrt(discriminant));
+        pos.x = look.x + dx * length;
+        pos.z = look.z + dz * length;
+      }
+    }
+    const terrainY = ctx.world ? ctx.world.getHeight(pos.x, pos.z) : 0;
+    pos.y = Math.max(terrainY + 0.55, pos.y);
+  }
 
   function setFrontCam(active, silent = false) {
     const next = Boolean(active);
@@ -99,15 +246,8 @@ export function createCameraRig(ctx) {
     const pPos = state.player.position;
     const isStupa = (state.zone === 'stupa');
     const lookHeight = 1.45;
+    smoothedStupaLookOffset.set(0, 0, 0);
     desiredLook.set(pPos.x, pPos.y + lookHeight, pPos.z);
-    if (isStupa && !frontCamActive) {
-      const toStupaDist = Math.hypot(pPos.x, pPos.z);
-      if (toStupaDist > 1) {
-        desiredLook.x += (-pPos.x / toStupaDist) * 1.25;
-        desiredLook.z += (-pPos.z / toStupaDist) * 1.25;
-        desiredLook.y += 1.65;
-      }
-    }
     const cosP = Math.cos(pitch);
     const sinP = Math.sin(pitch);
     desiredPos.set(
@@ -115,7 +255,9 @@ export function createCameraRig(ctx) {
       pPos.y + 1.35 + sinP * distance,
       pPos.z + Math.cos(yaw) * cosP * distance
     );
-    if (!isStupa) {
+    if (isStupa) {
+      clampStupaCamera(desiredPos, desiredLook);
+    } else {
       const terrainY = ctx.world ? ctx.world.getHeight(desiredPos.x, desiredPos.z) : 0;
       desiredPos.y = Math.max(terrainY + 0.65, desiredPos.y);
     }
@@ -147,6 +289,9 @@ export function createCameraRig(ctx) {
 
   function update(dt) {
     const input = ctx.input;
+    combatLockTimer = Math.max(0, combatLockTimer - dt);
+    const toggledByKeyboard = keyboardTogglePending;
+    keyboardTogglePending = false;
 
     // 0. Studio Customization Camera (active in either 'intro' or 'play')
     if (state.customizing) {
@@ -215,8 +360,11 @@ export function createCameraRig(ctx) {
       introBlend = Math.min(1, introBlend + dt * 1.8);
     }
 
-    // Toggle front portrait view when pressing V
-    if (input && input.pressed('toggleFrontCam') && !state.uiOpen) {
+    // Toggle auto-follow or front portrait view via mapped input.
+    if (input?.pressed?.('toggleCameraLock') && !state.uiOpen && !toggledByKeyboard) {
+      toggleAutoFollow(false);
+    }
+    if (input?.pressed?.('toggleFrontCam') && !state.uiOpen) {
       setFrontCam(!frontCamActive);
     }
 
@@ -236,13 +384,26 @@ export function createCameraRig(ctx) {
 
     distance += (targetDistance - distance) * Math.min(1, dt * 10);
 
-    // 2. Gentle auto-follow behind (or in front of) moving player when user hasn't dragged camera recently
-    const timeSinceLook = input ? (performance.now() - input.lastLookTime) * 0.001 : 999;
-    if (state.player.isMoving && timeSinceLook > (frontCamActive ? 1.4 : 2.2)) {
+    // 2. Horizontal yaw stability:
+    // - In 'off' and default 'smart' modes (when not in frontCam portrait mode), NEVER auto-rotate
+    //   horizontal yaw during play movement. The camera angle stays strictly where the player
+    //   placed it with mouse/touch so movement never spins the camera or overrides mouse look.
+    // - In 'on' mode, gently follow behind the player ONLY when moving straight forward outside
+    //   combat and dense object clusters after 4.0s without manual camera input.
+    const timeSinceLook = (performance.now() - (input?.lastLookTime ?? -1e9)) * 0.001;
+    const moveX = Math.abs(input?.move?.x || 0);
+    const moveY = input?.move?.y ?? 1;
+    const headingDelta = Math.abs(wrapAngle((state.player.heading || 0) - yaw));
+    const isForwardOnly = moveY > 0.5 && moveX < 0.15 && headingDelta <= Math.PI * 0.58;
+    const combatLocked = isInCombatOrTargeted();
+    const canAutoFollow = frontCamActive
+      ? ((autoFollowMode !== 'smart' || !combatLocked) && timeSinceLook > 1.4)
+      : (autoFollowMode === 'on' && !combatLocked && !isNearDenseCluster() && isForwardOnly && timeSinceLook > 4.0);
+    if (state.player.isMoving && canAutoFollow) {
       const targetYaw = frontCamActive
         ? wrapAngle((state.player.heading || 0) + Math.PI)
         : (state.player.heading || 0);
-      yaw = lerpAngle(yaw, targetYaw, dt * (frontCamActive ? 3.2 : 1.35));
+      yaw = lerpAngle(yaw, targetYaw, dt * (frontCamActive ? 3.2 : 0.85));
     }
 
     // 3. Optional side-angle framing during prostration so full-body bow + stupa are visible
@@ -270,56 +431,39 @@ export function createCameraRig(ctx) {
     const pPos = state.player.position;
     desiredLook.set(pPos.x, pPos.y + lookHeight, pPos.z);
 
+    stupaLookOffset.set(0, 0, 0);
     if (isStupa && !frontCamActive) {
       // Bias look target toward the stupa dome & Buddha eyes when zoomed out, fade out when zoomed in close
       const stupaBiasWeight = 1 - closeFactor;
       const toStupaDist = Math.hypot(pPos.x, pPos.z);
       if (toStupaDist > 1 && state.player.action !== 'prostrate' && stupaBiasWeight > 0.01) {
-        desiredLook.x += (-pPos.x / toStupaDist) * 1.25 * stupaBiasWeight;
-        desiredLook.z += (-pPos.z / toStupaDist) * 1.25 * stupaBiasWeight;
-        desiredLook.y += 1.65 * stupaBiasWeight;
+        // Keep the shifted viewing ray outside the physical collider even when
+        // the player hugs the inner kora boundary.
+        const horizontalBias = Math.min(0.32 * stupaBiasWeight,
+          Math.max(0, toStupaDist - config.WORLD.stupaColliderRadius - 0.1));
+        stupaLookOffset.set(
+          (-pPos.x / toStupaDist) * horizontalBias,
+          0.65 * stupaBiasWeight,
+          (-pPos.z / toStupaDist) * horizontalBias
+        );
       }
     }
+    smoothedStupaLookOffset.lerp(stupaLookOffset, 1 - Math.exp(-dt * 4.5));
+    desiredLook.add(smoothedStupaLookOffset);
 
     const cosP = Math.cos(activePitch);
     const sinP = Math.sin(activePitch);
     desiredPos.set(
-      pPos.x + Math.sin(activeYaw) * cosP * activeDist,
+      pPos.x + smoothedStupaLookOffset.x + Math.sin(activeYaw) * cosP * activeDist,
       pPos.y + (frontCamActive ? 1.28 : 1.35) + sinP * activeDist,
-      pPos.z + Math.cos(activeYaw) * cosP * activeDist
+      pPos.z + smoothedStupaLookOffset.z + Math.cos(activeYaw) * cosP * activeDist
     );
 
     if (isStupa) {
       // 4. Keep camera outside stupa collider (r > ~20.1) and above plaza ground
-      const minCamR = frontCamActive
-        ? config.WORLD.stupaColliderRadius + 0.15
-        : Math.max(20.5, config.WORLD.stupaColliderRadius + 0.6);
-      const maxCamR = config.WORLD.buildingsInnerRadius - 0.6;
-      const camR = Math.hypot(desiredPos.x, desiredPos.z);
-      if (camR < minCamR && camR > 1e-4) {
-        const scale = minCamR / camR;
-        desiredPos.x *= scale;
-        desiredPos.z *= scale;
-        if (!frontCamActive) desiredPos.y = Math.max(desiredPos.y, 2.2);
-      } else if (camR > maxCamR) {
-        const scale = maxCamR / camR;
-        desiredPos.x *= scale;
-        desiredPos.z *= scale;
-      }
-      desiredPos.y = Math.max(0.55, desiredPos.y);
+      clampStupaCamera(desiredPos, desiredLook);
     } else {
-      const wOrigin = mapDef?.origin || config.WILD?.origin || { x: 1000, z: 0 };
-      const cdx = desiredPos.x - wOrigin.x;
-      const cdz = desiredPos.z - wOrigin.z;
-      const camWildDist = Math.hypot(cdx, cdz);
-      const maxCamWildDist = ((mapDef?.walkRadius ?? config.WILD?.walkRadius) || 70) + 10;
-      if (camWildDist > maxCamWildDist) {
-        const s = maxCamWildDist / (camWildDist || 1);
-        desiredPos.x = wOrigin.x + cdx * s;
-        desiredPos.z = wOrigin.z + cdz * s;
-      }
-      const terrainY = ctx.world ? ctx.world.getHeight(desiredPos.x, desiredPos.z) : 0;
-      desiredPos.y = Math.max(terrainY + 0.55, desiredPos.y);
+      clampWildCamera(desiredPos, desiredLook, mapDef);
     }
 
     // 5. Smooth damping (and blend from intro orbit right after game:start)
@@ -336,28 +480,14 @@ export function createCameraRig(ctx) {
 
     // Re-enforce ground & stupa/terrain clearance on interpolated position
     if (isStupa) {
-      const minCamR = frontCamActive
-        ? config.WORLD.stupaColliderRadius + 0.15
-        : Math.max(20.5, config.WORLD.stupaColliderRadius + 0.6);
-      const curR = Math.hypot(currentPos.x, currentPos.z);
-      if (curR < minCamR && curR > 1e-4 && introBlend >= 0.99) {
-        currentPos.x *= minCamR / curR;
-        currentPos.z *= minCamR / curR;
-      }
+      if (introBlend >= 0.99) clampStupaCamera(currentPos, currentLook);
       if (currentPos.y < 0.55) currentPos.y = 0.55;
     } else {
-      const wOrigin = mapDef?.origin || config.WILD?.origin || { x: 1000, z: 0 };
-      const cdx = currentPos.x - wOrigin.x;
-      const cdz = currentPos.z - wOrigin.z;
-      const curWildDist = Math.hypot(cdx, cdz);
-      const maxCamWildDist = ((mapDef?.walkRadius ?? config.WILD?.walkRadius) || 70) + 10;
-      if (curWildDist > maxCamWildDist) {
-        const s = maxCamWildDist / (curWildDist || 1);
-        currentPos.x = wOrigin.x + cdx * s;
-        currentPos.z = wOrigin.z + cdz * s;
+      if (introBlend >= 0.99) clampWildCamera(currentPos, currentLook, mapDef);
+      else {
+        const curTerrainY = ctx.world ? ctx.world.getHeight(currentPos.x, currentPos.z) : 0;
+        if (currentPos.y < curTerrainY + 0.55) currentPos.y = curTerrainY + 0.55;
       }
-      const curTerrainY = ctx.world ? ctx.world.getHeight(currentPos.x, currentPos.z) : 0;
-      if (currentPos.y < curTerrainY + 0.55) currentPos.y = curTerrainY + 0.55;
     }
 
     camera.position.copy(currentPos);
@@ -366,11 +496,18 @@ export function createCameraRig(ctx) {
     camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
   }
 
-  return {
+  const api = {
     update,
     getYaw() { return yaw; },
+    setYaw(nextYaw) { if (Number.isFinite(nextYaw)) yaw = wrapAngle(nextYaw); },
     isFrontCam() { return frontCamActive; },
     setFrontCam,
     toggleFrontCam() { return setFrontCam(!frontCamActive); },
+    getAutoFollowMode() { return autoFollowMode; },
+    setAutoFollowMode,
+    toggleAutoFollow,
+    isCombatLocked() { return Boolean(isInCombatOrTargeted()); },
   };
+  ctx.cameraRig = api;
+  return api;
 }
