@@ -15,6 +15,8 @@
  * Strict zero-memory-leak: base geometries and particle pools allocated once.
  */
 import * as THREE from 'three';
+import { getDifficulty } from '../data/combatSettings.js';
+import { SANCTUARY_RADIUS, MANI_SANCTUARY_RADIUS } from './shrines.js';
 import {
   pickEliteAffixes,
   rollRareMonsterSeed,
@@ -153,22 +155,11 @@ export function createEnemies(ctx) {
 
   // ---------------------------------------------------------------- 1. Shared Geometries
   // --- Preta Geometries
-  const pretaBellyGeo = new THREE.SphereGeometry(0.38, 12, 10);
-  pretaBellyGeo.scale(1.15, 1.35, 1.15);
-  pretaBellyGeo.translate(0, 0.58, 0);
+  const pretaBellyGeo = new THREE.SphereGeometry(0.46, 20, 16);
+  const pretaEyeGeo = new THREE.SphereGeometry(0.09, 12, 10);
+  const pretaWispGeo = new THREE.SphereGeometry(0.09, 12, 10);
+  const pretaHaloGeo = new THREE.TorusGeometry(0.44, 0.022, 8, 28);
 
-  const pretaNeckGeo = new THREE.CylinderGeometry(0.05, 0.075, 0.32, 8);
-  pretaNeckGeo.translate(0, 1.08, 0);
-
-  const pretaHeadGeo = new THREE.SphereGeometry(0.18, 10, 8);
-  pretaHeadGeo.scale(0.9, 1.1, 0.9);
-  pretaHeadGeo.translate(0, 1.32, 0);
-
-  const pretaMouthGeo = new THREE.TorusGeometry(0.045, 0.018, 6, 8);
-  pretaMouthGeo.translate(0, 1.26, -0.16);
-
-  const pretaEyeGeo = new THREE.SphereGeometry(0.038, 8, 8);
-  const pretaLimbGeo = new THREE.CylinderGeometry(0.045, 0.032, 0.58, 6);
 
   // --- Tsen Geometries (Warrior + Horse + Spear)
   const horseBodyGeo = new THREE.BoxGeometry(0.68, 0.65, 1.35);
@@ -240,8 +231,8 @@ export function createEnemies(ctx) {
   aimLineGeo.translate(0, 8.0, 0);
   aimLineGeo.rotateX(-Math.PI / 2);
 
-  // Preta mouth gathering green orb
-  const pretaOrbGeo = new THREE.SphereGeometry(0.14, 10, 8);
+  // Preta luminous mandala core (also gathers ghostfire)
+  const pretaOrbGeo = new THREE.OctahedronGeometry(0.20, 1);
 
   // --- Status Effect Geometries & Shared Materials (Root & Stun)
   const rootOuterRingGeo = new THREE.RingGeometry(0.62, 0.82, 32);
@@ -686,9 +677,11 @@ export function createEnemies(ctx) {
     });
   }
 
-  function sampleMapLevel() {
+  function sampleMapLevel(kind, rank) {
     const mapDef = ctx.world?.getMap(state.zone);
-    const range = mapDef?.level;
+    const range = state.zone === 'wild'
+      ? (rank !== 'normal' ? [3, 5] : kind === 'preta' ? [1, 2] : kind === 'tsen' ? [3, 4] : [4, 5])
+      : mapDef?.level;
     if (Array.isArray(range) && range.length >= 2) {
       const min = Math.max(1, Math.floor(range[0]));
       const max = Math.max(min, Math.floor(range[1]));
@@ -704,8 +697,8 @@ export function createEnemies(ctx) {
         mat.emissive?.setRGB(0.14, 0.52, 0.95);
         if (mat.emissiveIntensity != null) mat.emissiveIntensity = 0.6;
       } else {
-        mat.emissive?.setHex(0x000000);
-        if (mat.emissiveIntensity != null) mat.emissiveIntensity = 0;
+        mat.emissive?.setHex(mat.userData.idleEmissive ?? 0x000000);
+        if (mat.emissiveIntensity != null) mat.emissiveIntensity = mat.userData.idleEmissiveIntensity ?? 0;
       }
     }
   }
@@ -717,7 +710,7 @@ export function createEnemies(ctx) {
     const level =
       opts.level != null
         ? Math.max(1, Math.floor(Number(opts.level)))
-        : sampleMapLevel();
+        : sampleMapLevel(kind, opts.rank || 'normal');
     const rank = opts.rank || 'normal';
     const rMult = RANK_MULTS[rank] || RANK_MULTS.normal;
 
@@ -772,80 +765,77 @@ export function createEnemies(ctx) {
       }
     } else if (kind === 'preta') {
       const skinMat = new THREE.MeshStandardMaterial({
-        color: 0x4d6352,
-        roughness: 0.82,
-        metalness: 0.04,
-        transparent: true,
-        opacity: 0.85,
-        emissive: new THREE.Color(0x000000),
+        color: 0x75c7bb, roughness: 0.25, metalness: 0.08,
+        transparent: true, opacity: 0.78, depthWrite: false,
+        emissive: new THREE.Color(0x163e3b), emissiveIntensity: 0.3,
       });
-      materials.push(skinMat);
-
-      const eyeMat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color(2.2, 0.4, 0.3),
-        toneMapped: false,
+      const goldMat = new THREE.MeshStandardMaterial({
+        color: 0xffd58a, roughness: 0.3, metalness: 0.55,
+        emissive: 0xd39d35, emissiveIntensity: 0.6,
       });
+      const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffb479, toneMapped: false });
+      const pupilMat = new THREE.MeshBasicMaterial({ color: 0x182d37 });
+      const highlightMat = new THREE.MeshBasicMaterial({ color: 0xfffbef, toneMapped: false });
+      const coreMat = new THREE.MeshStandardMaterial({
+        color: 0xb6f5ac, emissive: 0x82dca7, emissiveIntensity: 1.2,
+        roughness: 0.2, metalness: 0.25,
+      });
+      materials.push(skinMat, goldMat, eyeMat, pupilMat, highlightMat, coreMat);
+      for (const mat of materials) {
+        mat.userData.idleEmissive = mat.emissive?.getHex();
+        mat.userData.idleEmissiveIntensity = mat.emissiveIntensity;
+      }
 
-      const belly = new THREE.Mesh(pretaBellyGeo, skinMat);
-      belly.castShadow = true;
-      group.add(belly);
-
-      const neck = new THREE.Mesh(pretaNeckGeo, skinMat);
-      group.add(neck);
-
-      const head = new THREE.Mesh(pretaHeadGeo, skinMat);
-      head.castShadow = true;
+      const head = new THREE.Group();
       group.add(head);
+      const belly = new THREE.Mesh(pretaBellyGeo, skinMat);
+      belly.scale.set(1.12, 0.88, 1.12);
+      belly.position.y = 0.44;
+      belly.castShadow = true;
+      head.add(belly);
+      const mouthOrb = new THREE.Mesh(pretaOrbGeo, coreMat);
+      mouthOrb.position.y = 0.44;
+      head.add(mouthOrb);
 
-      const mouth = new THREE.Mesh(pretaMouthGeo, skinMat);
-      group.add(mouth);
-
-      // Glowing hungry eyes
-      const eyeL = new THREE.Mesh(pretaEyeGeo, eyeMat);
-      eyeL.position.set(-0.065, 1.34, -0.16);
-      group.add(eyeL);
-
-      const eyeR = new THREE.Mesh(pretaEyeGeo, eyeMat);
-      eyeR.position.set(0.065, 1.34, -0.16);
-      group.add(eyeR);
-
-      // Green mouth gathering orb for ghostfire
-      const mouthOrbMat = new THREE.MeshBasicMaterial({
-        color: 0x22c55e,
-        transparent: true,
-        opacity: 0.88,
-        depthWrite: false,
+      const haloRing = new THREE.Mesh(pretaHaloGeo, goldMat);
+      haloRing.position.y = 0.83;
+      haloRing.rotation.set(Math.PI / 2 + 0.22, 0.18, 0.1);
+      head.add(haloRing);
+      for (const side of [-1, 1]) {
+        const eye = new THREE.Mesh(pretaEyeGeo, eyeMat);
+        eye.position.set(side * 0.17, 0.54, -0.43);
+        eye.scale.set(1, 1.18, 0.55);
+        head.add(eye);
+        const pupil = new THREE.Mesh(pretaEyeGeo, pupilMat);
+        pupil.scale.set(0.5, 0.75, 0.25);
+        pupil.position.set(side * 0.17, 0.54, -0.475);
+        head.add(pupil);
+        const highlight = new THREE.Mesh(pretaEyeGeo, highlightMat);
+        highlight.scale.setScalar(0.22);
+        highlight.position.set(side * 0.17 - 0.018, 0.575, -0.50);
+        head.add(highlight);
+      }
+      const wisps = [];
+      for (const side of [-1, 1]) {
+        const wisp = new THREE.Mesh(pretaWispGeo, skinMat);
+        wisp.position.set(side * 0.32, 0.87, 0);
+        wisp.scale.set(0.8, 1.8, 0.8);
+        wisp.rotation.z = side * -0.35;
+        head.add(wisp);
+        wisps.push(wisp);
+      }
+      const droplets = [];
+      for (let i = 0; i < 3; i++) {
+        const drop = new THREE.Mesh(pretaWispGeo, i === 1 ? goldMat : skinMat);
+        drop.scale.setScalar(0.5 + i * 0.12);
+        head.add(drop);
+        droplets.push(drop);
+      }
+      Object.assign(animNodes, {
+        belly, mouthOrb, head, haloRing, droplets,
+        leftArm: wisps[0], rightArm: wisps[1], leftLeg: droplets[0], rightLeg: droplets[1],
+        armL: wisps[0], armR: wisps[1], legL: droplets[0], legR: droplets[1],
       });
-      const mouthOrb = new THREE.Mesh(pretaOrbGeo, mouthOrbMat);
-      mouthOrb.position.set(0, 1.26, -0.28);
-      mouthOrb.visible = false;
-      group.add(mouthOrb);
-      animNodes.mouthOrb = mouthOrb;
-
-      // Limbs
-      const armL = new THREE.Mesh(pretaLimbGeo, skinMat);
-      armL.position.set(-0.32, 0.75, 0);
-      armL.rotation.z = 0.22;
-      group.add(armL);
-
-      const armR = new THREE.Mesh(pretaLimbGeo, skinMat);
-      armR.position.set(0.32, 0.75, 0);
-      armR.rotation.z = -0.22;
-      group.add(armR);
-
-      const legL = new THREE.Mesh(pretaLimbGeo, skinMat);
-      legL.position.set(-0.16, 0.28, 0);
-      group.add(legL);
-
-      const legR = new THREE.Mesh(pretaLimbGeo, skinMat);
-      legR.position.set(0.16, 0.28, 0);
-      group.add(legR);
-
-      animNodes.armL = armL;
-      animNodes.armR = armR;
-      animNodes.legL = legL;
-      animNodes.legR = legR;
-      animNodes.belly = belly;
     } else if (kind === 'tsen') {
       const horseMat = new THREE.MeshStandardMaterial({
         color: 0x821919,
@@ -1244,13 +1234,15 @@ export function createEnemies(ctx) {
       exp: scaledExp,
       ring: kCfg.ring,
       radius: kCfg.radius * (rank === 'rare' ? 1.2 : 1.0),
-      height: kCfg.height * (rank === 'rare' ? 1.2 : 1.0),
+      height: (kind === 'preta' ? 1.05 : kCfg.height) * (rank === 'rare' ? 1.2 : 1.0),
       pos: { x: spawnPos.x, y: spawnPos.y, z: spawnPos.z },
       position: group.position,
       heading: 0,
       lockedHeading: 0,
       lastAttackId: null,
       state: 'wander',
+      provoked: false,
+      zone: state.zone || 'wild',
       stateTimer: 0,
       activeAttack: null,
       attackCooldowns: {},
@@ -1332,11 +1324,49 @@ export function createEnemies(ctx) {
     return enemy;
   }
 
+  function getSafeZones(mapDef, diff = getDifficulty(ctx)) {
+    const zones = (mapDef?.safeZones || [
+      { x: wildCfg.wildGate.x, z: wildCfg.wildGate.z, r: cfg.gateSafeRadius ?? 10 },
+    ]).filter(s => !s.sanctuary || diff.sanctuarySafe !== false);
+    if (diff.sanctuarySafe !== false) {
+      for (const shrine of ctx.shrines?.list?.() || []) {
+        if (shrine.zone === state.zone) zones.push({ ...shrine, r: SANCTUARY_RADIUS });
+      }
+      if (state.zone === 'wild') {
+        for (const stone of wildCfg.maniStones || []) zones.push({ ...stone, r: MANI_SANCTUARY_RADIUS });
+      }
+    }
+    return zones;
+  }
+
+  function returnToWander(enemy) {
+    enemy.state = 'wander';
+    enemy.provoked = false;
+    enemy.aggroedByPlayer = false;
+    enemy.stateTimer = 0;
+    enemy.activeAttack = null;
+    enemy.chargeData = null;
+    enemy.dashTimer = 0;
+    enemy.wanderTarget = { ...enemy.homePos };
+    enemy.wanderTimer = 3;
+    if (enemy.telegraphGroup) enemy.telegraphGroup.visible = false;
+    if (enemy.animNodes?.mouthOrb && enemy.kind !== 'preta') enemy.animNodes.mouthOrb.visible = false;
+    applyIdleMaterialEmissive(enemy);
+  }
+
   // ---------------------------------------------------------------- 4. Clamping & Collisions
   function clampEnemyPosition(enemy) {
     const mapDef = ctx.world?.getMap(state.zone);
     const origin = mapDef?.origin || wildCfg.origin || { x: 1000, z: 0 };
     const maxR = ((mapDef?.walkRadius ?? wildCfg.walkRadius) || 70) - enemy.radius;
+
+    if (state.zone === 'wild' && enemy.state === 'wander') {
+      const polygon = mapDef?.spawnAreas?.[enemy.ring]?.polygon;
+      if (polygon) {
+        enemy.pos.x = Math.max(Math.min(...polygon.map(p => p.x)), Math.min(Math.max(...polygon.map(p => p.x)), enemy.pos.x));
+        enemy.pos.z = Math.max(Math.min(...polygon.map(p => p.z)), Math.min(Math.max(...polygon.map(p => p.z)), enemy.pos.z));
+      }
+    }
 
     // 1. Walk boundary from map origin
     let dx = enemy.pos.x - origin.x;
@@ -1349,19 +1379,17 @@ export function createEnemies(ctx) {
     }
 
     // 2. Safe zones (from mapDef.safeZones)
-    const safeZones = mapDef?.safeZones || [
-      { x: wildCfg.wildGate.x, z: wildCfg.wildGate.z, r: cfg.gateSafeRadius ?? 10 },
-    ];
+    const safeZones = getSafeZones(mapDef);
     for (let s = 0; s < safeZones.length; s++) {
       const sz = safeZones[s];
-      const safeR = sz.r ?? cfg.gateSafeRadius ?? 10;
+      const safeR = (sz.r ?? cfg.gateSafeRadius ?? 10) + enemy.radius;
       const gdx = enemy.pos.x - sz.x;
       const gdz = enemy.pos.z - sz.z;
       const gd = Math.hypot(gdx, gdz);
       if (gd < safeR) {
         const push = safeR / (gd || 1);
-        enemy.pos.x = sz.x + gdx * push;
-        enemy.pos.z = sz.z + gdz * push;
+        enemy.pos.x = sz.x + (gd > 0.0001 ? gdx * push : safeR);
+        enemy.pos.z = sz.z + (gd > 0.0001 ? gdz * push : 0);
       }
     }
 
@@ -1927,6 +1955,7 @@ export function createEnemies(ctx) {
         : 0;
 
     enemy.hp = Math.max(0, enemy.hp - dealt);
+    if (dealt > 0) enemy.provoked = true;
     if (dealt > 0 && !enemy.aggroedByPlayer) {
       enemy.aggroedByPlayer = true;
       enemy.wallTarget = null;
@@ -2369,7 +2398,20 @@ export function createEnemies(ctx) {
     }
   }
 
+  let warningCooldown = 0;
+  let wardInvulnUntil = null;
+  let previousInvulnUntil = 0;
+
   function update(dt) {
+    // Release only our own one-frame immunity; preserve dodge/hit/respawn protection.
+    const player = state.player;
+    if (player && wardInvulnUntil !== null && player.invulnUntil === wardInvulnUntil) {
+      player.invulnUntil = previousInvulnUntil;
+    }
+    wardInvulnUntil = null;
+    const diff = getDifficulty(ctx);
+    const currentZone = state.zone || 'stupa';
+    warningCooldown = Math.max(0, warningCooldown - dt);
     const isCombat = Boolean(ctx.world?.isCombatZone());
     enemyGroup.visible = isCombat;
 
@@ -2384,9 +2426,7 @@ export function createEnemies(ctx) {
 
     const playerPos = state.player?.position;
     const mapDef = ctx.world?.getMap(state.zone);
-    const safeZones = mapDef?.safeZones || [
-      { x: wildCfg.wildGate.x, z: wildCfg.wildGate.z, r: cfg.gateSafeRadius ?? 10 },
-    ];
+    const safeZones = getSafeZones(mapDef);
     let isPlayerInSafeZone = !playerPos;
     if (playerPos) {
       for (let s = 0; s < safeZones.length; s++) {
@@ -2396,6 +2436,25 @@ export function createEnemies(ctx) {
           break;
         }
       }
+    }
+
+    if (playerPos && diff.sanctuarySafe !== false &&
+        ctx.shrines?.isInSanctuary?.(playerPos.x, playerPos.z, currentZone)) {
+      isPlayerInSafeZone = true;
+    }
+    // Also stop attacks already in flight, through the existing vitals immunity API.
+    // Enemies update before bosses and projectiles, so entry is protected in this frame.
+    if (player && isPlayerInSafeZone) {
+      previousInvulnUntil = player.invulnUntil || 0;
+      wardInvulnUntil = Math.max(previousInvulnUntil, state.elapsed + dt + 0.05);
+      player.invulnUntil = wardInvulnUntil;
+    }
+    if (currentZone === 'wild' && playerPos && (player.level || 1) < 3 && warningCooldown <= 0 &&
+        (playerPos.z < -15 || activeEnemies.some(e => e.hp > 0 && e.zone === currentZone &&
+          (e.rank === 'champion' || e.rank === 'rare') &&
+          Math.hypot(e.pos.x - playerPos.x, e.pos.z - playerPos.z) <= 16))) {
+      warningCooldown = 45;
+      bus.emit('toast', { key: 'toast.eliteLevelWarning' });
     }
 
     // 1. Process Respawn Timers
@@ -2448,9 +2507,39 @@ export function createEnemies(ctx) {
       }
     }
 
+    let activeChasers = activeEnemies.filter(e => e.hp > 0 && e.zone === currentZone &&
+      (e.state === 'chase' || e.state === 'notice')).length;
+    let activeAttackers = activeEnemies.filter(e => e.hp > 0 && e.zone === currentZone &&
+      (e.state === 'windup' || e.state === 'attack')).length;
+
     // 2. Update Active Enemies
     for (let i = activeEnemies.length - 1; i >= 0; i--) {
       const enemy = activeEnemies[i];
+
+      if (enemy.zone !== currentZone) continue;
+      if (isPlayerInSafeZone && enemy.hp > 0 && enemy.state !== 'calmed' && enemy.state !== 'liberated') {
+        if (enemy.state === 'chase' || enemy.state === 'notice') activeChasers--;
+        if (enemy.state === 'windup' || enemy.state === 'attack') activeAttackers--;
+        returnToWander(enemy);
+        clampEnemyPosition(enemy);
+      }
+      const wasChasing = enemy.state === 'chase' || enemy.state === 'notice';
+      const wasAttacking = enemy.state === 'windup' || enemy.state === 'attack';
+      const isLv1NearPreta =
+        currentZone === 'wild' &&
+        enemy.rank === 'normal' &&
+        enemy.kind === 'preta' &&
+        enemy.ring === 'near' &&
+        (player?.level || 1) <= 1;
+      const passive =
+        (diff.passiveNearMonsters && currentZone === 'wild' && enemy.rank === 'normal') ||
+        isLv1NearPreta;
+      const canNotice = enemy.provoked || (!passive && activeChasers < (diff.maxSimultaneousChasers ?? 3));
+
+      if (enemy.kind === 'preta' && enemy.hp > 0) {
+        enemy.animNodes.mouthOrb.visible = true;
+        if (enemy.state !== 'windup') enemy.animNodes.mouthOrb.scale.setScalar(1);
+      }
 
       // Tick cooldowns
       for (const atkId in enemy.attackCooldowns) {
@@ -2665,6 +2754,10 @@ export function createEnemies(ctx) {
               !isPlayerInSafeZone && distToPlayer <= (cfg.leashRange ?? 25) ? 'chase' : 'wander';
           }
         }
+        if (enemy.state === 'wander') returnToWander(enemy);
+        activeChasers += Number(enemy.state === 'chase' || enemy.state === 'notice') - Number(wasChasing);
+        activeAttackers += Number(enemy.state === 'windup' || enemy.state === 'attack') - Number(wasAttacking);
+        if (enemy.kind === 'preta') enemy.animNodes.mouthOrb.visible = true;
         enemy.group.position.set(enemy.pos.x, enemy.pos.y, enemy.pos.z);
         enemy.group.rotation.y = enemy.heading;
         continue;
@@ -2731,7 +2824,7 @@ export function createEnemies(ctx) {
 
       // --- Disguised Nyen (`enemy.disguised`): sits as mossy boulder/tree until player within 5m
       if (enemy.disguised) {
-        if (!isPlayerInSafeZone && distToPlayer <= (enemy.kindConfig.wakeRadius ?? 5.0)) {
+        if (!isPlayerInSafeZone && canNotice && distToPlayer <= (enemy.kindConfig.wakeRadius ?? 5.0)) {
           enemy.disguised = false;
           enemy.model?.setDisguised?.(false);
           enemy.state = 'notice';
@@ -2885,7 +2978,7 @@ export function createEnemies(ctx) {
           if (atk.id === 'ghostfire' || atk.id === 'heatBolt') {
             const mouthPos = {
               x: enemy.pos.x - Math.sin(enemy.heading) * 0.35,
-              y: enemy.pos.y + 1.25,
+              y: enemy.pos.y + (enemy.kind === 'preta' ? 0.50 : 1.25),
               z: enemy.pos.z - Math.cos(enemy.heading) * 0.35,
             };
             ctx.projectiles?.spawn(atk.id, {
@@ -3122,8 +3215,7 @@ export function createEnemies(ctx) {
       } else if (enemy.state === 'chase') {
         // Leash check (bypassed when marching toward a Samye wall segment)
         if (!wallOrigin && (isPlayerInSafeZone || distToPlayer > (cfg.leashRange ?? 25))) {
-          enemy.state = 'wander';
-          enemy.wanderTimer = 0;
+          returnToWander(enemy);
         } else {
           // Smoothly face target (player or wall segment)
           const targetHeading = Math.atan2(-dxPlayer, -dzPlayer);
@@ -3183,11 +3275,13 @@ export function createEnemies(ctx) {
             }
           }
 
-          if (chosenAttack) {
+          const waitingForTurn = activeAttackers >= (diff.maxSimultaneousAttackers ?? 2);
+          if (chosenAttack && !waitingForTurn) {
             startEnemyAttack(enemy, chosenAttack, false);
           } else if (effSpeed > 0) {
             // Move toward player until stopDistance (or kite away if closer than preferredMinDist)
-            const prefMin = enemy.kindConfig.preferredMinDist ?? 0;
+            const waitingDistance = (enemy.kindConfig.stopDistance ?? 1.2) + 1.4;
+            const prefMin = waitingForTurn ? waitingDistance : (enemy.kindConfig.preferredMinDist ?? 0);
             const stopDist = Math.max(enemy.kindConfig.stopDistance ?? 1.2, prefMin);
             if (prefMin > 0 && distToPlayer < prefMin - 0.3 && distToPlayer > 0.05) {
               const retreatDist = effSpeed * 0.78 * dt;
@@ -3214,9 +3308,9 @@ export function createEnemies(ctx) {
         }
       } else {
         // 'wander'
-        if (wallOrigin) {
+        if (wallOrigin && !isPlayerInSafeZone && canNotice) {
           enemy.state = 'chase';
-        } else if (!isPlayerInSafeZone && distToPlayer <= (cfg.sightRange ?? 14)) {
+        } else if (!isPlayerInSafeZone && canNotice && distToPlayer <= (cfg.sightRange ?? 14)) {
           enemy.state = 'notice';
           enemy.stateTimer = 0.25;
         } else if (effSpeed > 0) {
@@ -3244,9 +3338,15 @@ export function createEnemies(ctx) {
         }
       }
 
+      if (enemy.state === 'wander') enemy.provoked = false;
+      activeChasers += Number(enemy.state === 'chase' || enemy.state === 'notice') - Number(wasChasing);
+      activeAttackers += Number(enemy.state === 'windup' || enemy.state === 'attack') - Number(wasAttacking);
+
       // --- Contact Damage Check
       // Applies when player touches body (except during charge attack where charge damage takes priority)
-      if (playerPos && enemy.state !== 'liberated' && enemy.state !== 'hurt' && enemy.state !== 'attack' && !isStunned) {
+      if (playerPos && !isPlayerInSafeZone && (!passive || enemy.provoked) &&
+          enemy.state !== 'wander' && enemy.state !== 'liberated' && enemy.state !== 'hurt' &&
+          enemy.state !== 'attack' && !isStunned) {
         const contactReach = enemy.radius + (config.PLAYER.radius || 0.35) + 0.15;
         if (distToPlayer <= contactReach) {
           bus.emit('vitals:damage', {
@@ -3276,16 +3376,24 @@ export function createEnemies(ctx) {
       if (typeof enemy.customAnimate === 'function') {
         enemy.customAnimate(enemy, dt, isMoving);
       } else if (enemy.kind === 'preta') {
-        const pace = isMoving ? 9.5 : 2.5;
-        const swing = Math.sin(enemy.animTime * pace);
-        if (enemy.animNodes.legL) enemy.animNodes.legL.rotation.x = swing * 0.35;
-        if (enemy.animNodes.legR) enemy.animNodes.legR.rotation.x = -swing * 0.35;
-        if (enemy.animNodes.armL) enemy.animNodes.armL.rotation.x = -swing * 0.3;
-        if (enemy.animNodes.armR) enemy.animNodes.armR.rotation.x = swing * 0.3;
-        if (enemy.animNodes.belly) {
-          const breath = Math.sin(enemy.animTime * 3) * 0.04;
-          enemy.animNodes.belly.scale.set(1.15 + breath, 1.35 + breath, 1.15 + breath);
-        }
+        const nodes = enemy.animNodes;
+        const bounce = Math.sin(enemy.animTime * (isMoving ? 7 : 2.5));
+        const stretch = bounce * (isMoving ? 0.09 : 0.025);
+        nodes.head.position.y = Math.max(0, bounce) * (isMoving ? 0.13 : 0.025);
+        nodes.belly.scale.set(1.12 - stretch * 0.5, 0.88 + stretch, 1.12 - stretch * 0.5);
+        nodes.mouthOrb.visible = true;
+        nodes.mouthOrb.rotation.y += dt * 1.2;
+        nodes.mouthOrb.rotation.z = Math.sin(enemy.animTime * 1.4) * 0.25;
+        if (enemy.state !== 'windup') nodes.mouthOrb.scale.setScalar(1 + bounce * 0.06);
+        nodes.haloRing.rotation.x = Math.PI / 2 + Math.sin(enemy.animTime * 1.3) * 0.22;
+        nodes.haloRing.rotation.y = Math.cos(enemy.animTime * 0.8) * 0.2;
+        nodes.haloRing.rotation.z += dt * 0.35;
+        nodes.armL.rotation.z = -0.35 + bounce * 0.12;
+        nodes.armR.rotation.z = 0.35 - bounce * 0.12;
+        nodes.droplets.forEach((drop, index) => {
+          const angle = enemy.animTime * 0.9 + index * TWO_PI / 3;
+          drop.position.set(Math.cos(angle) * 0.64, 0.40 + Math.sin(angle * 2) * 0.14, Math.sin(angle) * 0.64);
+        });
       } else if (enemy.kind === 'tsen') {
         const pace = enemy.state === 'attack' ? 24 : (isMoving ? 13 : 0);
         const gallop = Math.sin(enemy.animTime * pace);
