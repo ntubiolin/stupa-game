@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright';
 import { CHAPTERS } from '../src/data/story/chapters.js';
+import { phoneThreads } from '../src/data/story/phoneThreads.js';
 import { adventureCIOptions, adventureBrowserArgs, startAdventureWithInput } from './adventure-browser-start.mjs';
 
 const base = process.env.STORY_BASE_URL || 'http://127.0.0.1:4173';
@@ -61,6 +62,13 @@ async function fullJourney(name, mobile, lang) {
   const action = () => page.locator('.story-objective [data-action="interact"]');
   const cardContinue = () => page.locator('[data-card="continue"]');
   const guide = () => page.locator('[data-action="guide"]');
+  const completePhoneThread = async threadId => {
+    const thread = phoneThreads.find(entry => entry.id === threadId);
+    await page.locator('.story-phone[open]').waitFor();
+    for (let i = 0; i <= thread.turns.length; i++) {
+      await click(page.locator('.story-phone__actions .story-phone__action--primary'));
+    }
+  };
   await ready(page);
   await page.locator('.story-phone[open]').waitFor();
   if (!mobile) {
@@ -134,6 +142,7 @@ async function fullJourney(name, mobile, lang) {
   for (let i = 0; i < 6; i++) await click(cardContinue());
   await waitBeat(page, 'map'); await shot(page, `${name}-06-map`);
   await click(cardContinue()); await click(cardContinue());
+  await completePhoneThread('hotel');
   await waitBeat(page, 'vision'); await cardContinue().waitFor(); await click(cardContinue());
   await shot(page, `${name}-07-vision`);
   for (let i = 0; i < 3; i++) { await click(guide()); await click(action()); await click(cardContinue()); }
@@ -152,6 +161,7 @@ async function fullJourney(name, mobile, lang) {
   assert.equal(await page.locator('.story-phone__message--outgoing').count(), 7, `${name} retains archive after final reload`);
   await click(page.locator('.story-phone__close'));
   if (suite === 'journey') {
+    await page.evaluate(() => window.__stupa?.storyAudio?.setEnabled(false));
     for (const chapter of CHAPTERS) {
       await click(page.locator('[data-action="journal"]'));
       await click(page.locator(`[data-chapter-action="start-${chapter.id}"]`));
@@ -159,18 +169,39 @@ async function fullJourney(name, mobile, lang) {
         window.__stupa?.chapters?.getState().activeChapterId === chapterId
         && window.__stupa?.chapterScene?.getCheckpoint() === id, { chapterId: chapter.id, id });
       await waitCheckpoint(chapter.entryCheckpoint);
-      if (chapter.id === 'pharping') await click(cardContinue());
+      await click(cardContinue());
       for (const [index, step] of chapter.checkpoints.entries()) {
         await waitCheckpoint(step.id);
         console.log('continuous-journey', chapter.id, step.id);
         if (!step.signal) break;
+        if (chapter.id === 'finale' && step.id === 'response') {
+          await page.locator('.story-phone[open]').waitFor();
+          await click(page.locator('.story-phone__actions .story-phone__action--primary'));
+          await waitCheckpoint(chapter.checkpoints[index + 1].id);
+          continue;
+        }
         await action().waitFor({ state: 'visible' }); // HUD resumes on the next render after a card closes.
         if (await guide().isVisible()) await click(guide());
         await click(action());
         if (step.id === 'diary') await click(page.locator('[data-chapter-action="read-diary"]'));
-        else if (step.choices) await click(page.locator('[data-card-choice="end"]'));
+        else if (chapter.id === 'finale' && step.id === 'decision') {
+          await page.locator('.story-phone[open]').waitFor();
+          await click(page.locator('.story-phone__actions .story-phone__action--primary'));
+          await click(page.locator('.story-phone__actions button').first());
+        } else if (chapter.id === 'yarlung' && step.id === 'memory') {
+          await click(cardContinue());
+          await page.locator('.story-documentary[open]').waitFor();
+          await click(documentaryAction('skip'));
+        } else if (step.phoneThreadId) {
+          if (['mangyul', 'chimphu'].includes(chapter.id) && step.id !== 'phone') await click(cardContinue());
+          await completePhoneThread(step.phoneThreadId);
+          if (['yarlung', 'samye'].includes(chapter.id)) await click(cardContinue());
+        } else if (step.choices) await click(page.locator(`[data-card-choice="${step.choices[0]}"]`));
         else if (step.presentation === 'card' || step.id.startsWith('altar')
-          || chapter.id === 'pharping' && ['shadow', 'release'].includes(step.id)) await click(cardContinue());
+          || chapter.id === 'pharping' && ['shadow', 'release', 'settle', 'wait', 'lamp'].includes(step.id)
+          || chapter.id === 'mangyul' && step.id === 'clearing'
+          || chapter.id === 'yarlung' && ['pause', 'release'].includes(step.id)
+          || chapter.id === 'chimphu' && ['cave', 'light'].includes(step.id)) await click(cardContinue());
         await waitCheckpoint(chapter.checkpoints[index + 1].id);
       }
       await shot(page, `journey-${chapter.id}-complete`);
@@ -222,7 +253,15 @@ try {
     await shot(fp, 'missing-media-fallback');
     await fp.locator('.story-documentary-controls [data-action="skip"]').click(); await waitBeat(fp, 'losang');
     report.scenarios.push({ name: 'missing-media-fallback', result: 'PASS' }); await fallback.close();
-    const adventure = await browser.newContext({ ...ciDevice, ...adventureCIOptions }); const ap = await adventure.newPage(); monitor(ap, 'adventure');
+    const adventure = await browser.newContext({ ...ciDevice, ...adventureCIOptions });
+    await adventure.addInitScript(() => {
+      if (!localStorage.getItem('stupa.save.v2')) {
+        localStorage.setItem('stupa.save.v2', JSON.stringify({
+          version: 2, savedAt: 1, sections: { appearance: { customizedOnce: true } },
+        }));
+      }
+    });
+    const ap = await adventure.newPage(); monitor(ap, 'adventure');
     await ap.goto(`${base}/?mode=adventure&debug=1`);
     await startAdventureWithInput(ap);
     assert.equal(await ap.evaluate(() => Boolean(__stupa.story)), false);
