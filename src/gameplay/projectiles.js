@@ -1018,9 +1018,24 @@ export function createProjectiles(ctx) {
         continue;
       }
 
-      // Homing turn towards player on XZ
-      if (playerPos) {
-        const tAngle = Math.atan2(-(playerPos.x - gf.pos.x), -(playerPos.z - gf.pos.z));
+      // Homing turn towards nearest living pilgrim (player or AI companion) on XZ
+      let homeTarget = playerPos;
+      const aiList = ctx.coop?.getActiveCompanions?.();
+      if (aiList && aiList.length > 0) {
+        let bestDist = playerPos
+          ? Math.hypot(playerPos.x - gf.pos.x, playerPos.z - gf.pos.z)
+          : Infinity;
+        for (let aIdx = 0; aIdx < aiList.length; aIdx++) {
+          const ai = aiList[aIdx];
+          const dAi = Math.hypot(ai.x - gf.pos.x, ai.z - gf.pos.z);
+          if (dAi < bestDist) {
+            bestDist = dAi;
+            homeTarget = { x: ai.x, z: ai.z };
+          }
+        }
+      }
+      if (homeTarget) {
+        const tAngle = Math.atan2(-(homeTarget.x - gf.pos.x), -(homeTarget.z - gf.pos.z));
         gf.heading = lerpAngle(gf.heading, tAngle, gf.turnRate * dt);
       }
 
@@ -1095,6 +1110,28 @@ export function createProjectiles(ctx) {
             type: 'magic',
             sourcePos: { ...gf.pos },
           });
+          gf.active = false;
+          gf.group.visible = false;
+          gf.hitbox.visible = false;
+          continue;
+        }
+      }
+
+      // Check collision with active AI companions
+      if (aiList && aiList.length > 0) {
+        let hitCompanion = false;
+        for (let aIdx = 0; aIdx < aiList.length; aIdx++) {
+          const ai = aiList[aIdx];
+          if (Math.hypot(ai.x - gf.pos.x, ai.z - gf.pos.z) <= gf.hitRadius + 0.38) {
+            ctx.coop?.damageCompanion?.(ai.id, gf.damage, {
+              type: 'magic',
+              sourcePos: { ...gf.pos },
+            });
+            hitCompanion = true;
+            break;
+          }
+        }
+        if (hitCompanion) {
           gf.active = false;
           gf.group.visible = false;
           gf.hitbox.visible = false;
@@ -1187,6 +1224,29 @@ export function createProjectiles(ctx) {
         }
       }
 
+      // Check AI companion hit
+      const raAiList = ctx.coop?.getActiveCompanions?.();
+      if (raAiList && raAiList.length > 0) {
+        let hitCompanion = false;
+        for (let aIdx = 0; aIdx < raAiList.length; aIdx++) {
+          const ai = raAiList[aIdx];
+          if (Math.hypot(ai.x - ra.pos.x, ai.z - ra.pos.z) <= ra.hitRadius + 0.38) {
+            ctx.coop?.damageCompanion?.(ai.id, ra.damage, {
+              type: 'physical',
+              sourcePos: { ...ra.pos },
+            });
+            hitCompanion = true;
+            break;
+          }
+        }
+        if (hitCompanion) {
+          ra.active = false;
+          ra.group.visible = false;
+          ra.hitbox.visible = false;
+          continue;
+        }
+      }
+
       ra.group.position.copy(ra.pos);
       if (hitboxesVisible) ra.hitbox.visible = true;
     }
@@ -1228,6 +1288,13 @@ export function createProjectiles(ctx) {
             });
           }
         }
+        ctx.coop?.damageCompanionsInRadius?.(
+          b.targetPos.x,
+          b.targetPos.z,
+          b.hitRadius,
+          b.damage,
+          { type: 'physical', sourcePos: { ...b.targetPos } }
+        );
 
         b.active = false;
         b.group.visible = false;
@@ -1273,6 +1340,13 @@ export function createProjectiles(ctx) {
             }
           }
         }
+        ctx.coop?.damageCompanionsInRadius?.(
+          fr.centerPos.x,
+          fr.centerPos.z,
+          fr.aoeRadius,
+          fr.damage,
+          { type: 'magic', sourcePos: { ...fr.centerPos } }
+        );
       }
 
       if (fr.erupted) {

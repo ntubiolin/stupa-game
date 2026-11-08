@@ -1,12 +1,16 @@
 /**
- * 3D Remote Pilgrims & Co-op Resonance VFX (`src/gameplay/remotePilgrims.js`) — Issue #61
+ * 3D Remote Pilgrims, Zone Presence & Co-op Resonance VFX (`src/gameplay/remotePilgrims.js`) — Issue #61 / #176
  *
- * Renders procedural 3D Pilgrim models for all active Co-op teammates (`ctx.coop.getMembers()`)
- * in the current zone (Strictly 0 PointLights):
+ * Renders procedural 3D Pilgrim models for all visible online pilgrims (`ctx.coop.getAllVisiblePilgrims()`)
+ * including both 4-player Co-op Party teammates and Ambient Zone Pilgrims in the current zone (Strictly 0 PointLights):
  *   - Maroon/indigo/saffron robes, lotus crown / headband / straw hat, mala prayer beads,
  *     golden chest emblem, and an unmistakable glowing ground lotus ring under their feet.
- *   - Overhead `THREE.Sprite` (`CanvasTexture`) nameplate with `[Lv.X] Name` + HP bar
- *     (turns crimson with `[按 E 甘露救援]` when fainted).
+ *   - Overhead `THREE.Sprite` (`CanvasTexture`) nameplate:
+ *       - Party members keep `👑` / `🤝` / `☸` badge and gold/teal border (`#fbbf24` / `#2dd4bf`).
+ *       - Ambient online pilgrims (`member.isAmbient === true`) feature a serene lotus-cyan border (`#38bdf8`)
+ *         and `🌐` badge.
+ *       - Golden/ivory Dharma Emote / Prayer Bubble above the nameplate when a pilgrim sends an emote
+ *         (`🙏 頂禮隨喜`, `☸ 嗡嘛呢唄美吽`, `🪔 供燈祈願`, `⚔️ 護法除障`).
  *   - Smooth position & heading interpolation (`lerp`) + walk/run/prostrate/faint animations.
  *   - Remote Skill VFX (`coop:remoteSkill`) & Double-Layered Golden/Turquoise Mandala Lotus Wave
  *     (`r = 12m`) when Six-Syllable Mantra Resonance (`coop:resonance`) triggers!
@@ -42,6 +46,10 @@ export function createRemotePilgrims(ctx) {
 
   // Map<member.id, actorRecord>
   const actors = new Map();
+  // Map<peerId, number> for skill cast timers triggered before actor creation
+  const pendingCastTimers = new Map();
+  // Map<peerId, { id, text, expiresAt }>
+  const activeEmotes = new Map();
   const activeVfx = [];
 
   // Shared materials for common accents (Strictly 0 PointLights)
@@ -71,56 +79,118 @@ export function createRemotePilgrims(ctx) {
     color: 0x2b1d16,
     roughness: 0.85,
   });
+  const sharedMaterials = new Set([skinMat, hairMat, goldMat, beadMat, bootMat]);
 
-  function drawNameplateCanvas(canvas, member) {
-    const g = canvas.getContext('2d');
+  function resolveMemberEmote(member) {
+    const now = Date.now();
+    if (member?.emote && member.emote.expiresAt > now && member.emote.text) {
+      return member.emote;
+    }
+    const cached = activeEmotes.get(member?.id);
+    if (cached && cached.expiresAt > now && cached.text) {
+      return cached;
+    }
+    if (cached) activeEmotes.delete(member?.id);
+    return null;
+  }
+
+  function drawNameplateCanvas(canvas, member, emote = null) {
+    const g = canvas?.getContext?.('2d');
     if (!g) return;
     const w = canvas.width;
     const h = canvas.height;
     g.clearRect(0, 0, w, h);
 
     const isFainted = Boolean(member.fainted);
+    const isAmbient = Boolean(member.isAmbient);
     const hpRatio = Math.max(0, Math.min(1, (member.hp || 0) / Math.max(1, member.maxHp || 100)));
 
-    // Pill background
-    g.fillStyle = isFainted ? 'rgba(69, 10, 10, 0.88)' : 'rgba(15, 23, 42, 0.82)';
-    g.strokeStyle = isFainted ? '#f87171' : member.isHost ? '#fbbf24' : '#2dd4bf';
+    // 1. Optional Dharma Emote / Prayer Bubble above the nameplate (y: 4..42)
+    if (emote && emote.text) {
+      g.fillStyle = 'rgba(254, 243, 199, 0.96)';
+      g.strokeStyle = '#f59e0b';
+      g.lineWidth = 2.5;
+      g.beginPath();
+      g.roundRect(24, 4, w - 48, 34, 16);
+      g.fill();
+      g.stroke();
+
+      g.font = 'bold 18px "Noto Serif TC", system-ui, sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillStyle = '#78350f';
+      g.fillText(String(emote.text).slice(0, 20), w / 2, 21);
+    }
+
+    // 2. Main Nameplate Pill (y: 46..130)
+    const topY = 46;
+    const boxH = h - topY - 6;
+    g.fillStyle = isFainted
+      ? 'rgba(69, 10, 10, 0.88)'
+      : isAmbient
+        ? 'rgba(12, 26, 46, 0.84)'
+        : 'rgba(15, 23, 42, 0.82)';
+    g.strokeStyle = isFainted
+      ? '#f87171'
+      : isAmbient
+        ? '#38bdf8'
+        : member.isHost
+          ? '#fbbf24'
+          : '#2dd4bf';
     g.lineWidth = 3;
     g.beginPath();
-    g.roundRect(8, 8, w - 16, h - 16, 14);
+    g.roundRect(8, topY, w - 16, boxH, 14);
     g.fill();
     g.stroke();
 
     // Name & Level
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    g.font = 'bold 22px "Noto Serif TC", system-ui, sans-serif';
-    g.fillStyle = isFainted ? '#fca5a5' : '#fef08a';
-    const rolePrefix = member.isHost ? '👑 ' : member.isAi ? '☸ ' : '🤝 ';
+    g.font = 'bold 21px "Noto Serif TC", system-ui, sans-serif';
+    g.fillStyle = isFainted ? '#fca5a5' : isAmbient ? '#bae6fd' : '#fef08a';
+    const rolePrefix = isAmbient ? '🌐 ' : member.isHost ? '👑 ' : member.isAi ? '☸ ' : '🤝 ';
     const label = `${rolePrefix}[Lv.${member.level || 1}] ${member.name || 'Pilgrim'}`;
-    g.fillText(label.slice(0, 22), w / 2, 30);
+    g.fillText(label.slice(0, 22), w / 2, topY + 21);
 
     // HP Bar track
     const barX = 28;
-    const barY = 50;
+    const barY = topY + 40;
     const barW = w - 56;
-    const barH = 12;
+    const barH = 11;
     g.fillStyle = 'rgba(15, 23, 42, 0.95)';
     g.fillRect(barX, barY, barW, barH);
 
     // HP Bar fill
-    g.fillStyle = isFainted ? '#ef4444' : hpRatio > 0.35 ? '#10b981' : '#f59e0b';
+    g.fillStyle = isFainted
+      ? '#ef4444'
+      : isAmbient
+        ? '#38bdf8'
+        : hpRatio > 0.35
+          ? '#10b981'
+          : '#f59e0b';
     g.fillRect(barX + 1, barY + 1, Math.max(0, (barW - 2) * hpRatio), barH - 2);
 
     // Fainted revive prompt or role subtitle
     if (isFainted) {
-      g.font = 'bold 17px "Noto Serif TC", system-ui, sans-serif';
+      g.font = 'bold 16px "Noto Serif TC", system-ui, sans-serif';
       g.fillStyle = '#fecaca';
-      g.fillText(i18n.t('coop.nameplate.fainted'), w / 2, 76);
+      g.fillText(i18n.t('coop.nameplate.fainted'), w / 2, topY + 66);
+    } else if (isAmbient) {
+      g.font = '14px "Noto Serif TC", system-ui, sans-serif';
+      g.fillStyle = '#7dd3fc';
+      g.fillText(
+        `${i18n.t('coop.nameplate.ambient')} · ${Math.round(member.hp || 0)}/${Math.round(member.maxHp || 100)} HP`,
+        w / 2,
+        topY + 66,
+      );
     } else {
       g.font = '15px "Noto Serif TC", system-ui, sans-serif';
       g.fillStyle = '#99f6e4';
-      g.fillText(`${Math.round(member.hp || 0)} / ${Math.round(member.maxHp || 100)} HP`, w / 2, 76);
+      g.fillText(
+        `${Math.round(member.hp || 0)} / ${Math.round(member.maxHp || 100)} HP`,
+        w / 2,
+        topY + 66,
+      );
     }
   }
 
@@ -235,14 +305,53 @@ export function createRemotePilgrims(ctx) {
       headGroup.add(band);
     }
 
-    // 4. Arms & Legs
+    // 4. Arms (Upper Sleeve + Golden Cuff + Forearm + Wrist Mala + Hand) & Legs
     function makeArm(side) {
       const pivot = new THREE.Group();
+      pivot.name = side < 0 ? 'LeftArm' : 'RightArm';
       pivot.position.set(side * 0.24, 0.45, 0);
-      const sleeveGeo = new THREE.CylinderGeometry(0.068, 0.055, 0.36, 8);
-      sleeveGeo.translate(0, -0.18, 0);
+      pivot.rotation.z = side < 0 ? -0.09 : 0.09;
+
+      const sleeveGeo = new THREE.CylinderGeometry(0.068, 0.058, 0.28, 10);
+      sleeveGeo.translate(0, -0.13, 0);
       const sleeve = new THREE.Mesh(sleeveGeo, side < 0 ? shawlMat : robeMat);
+      sleeve.castShadow = true;
       pivot.add(sleeve);
+
+      const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.056, 0.012, 6, 12), goldMat);
+      cuff.rotation.x = Math.PI / 2;
+      cuff.position.y = -0.26;
+      pivot.add(cuff);
+
+      const forearmPivot = new THREE.Group();
+      forearmPivot.name = side < 0 ? 'LeftForearmPivot' : 'RightForearmPivot';
+      forearmPivot.position.set(0, -0.26, 0);
+      forearmPivot.rotation.x = 0.22;
+      pivot.add(forearmPivot);
+
+      const forearmGeo = new THREE.CylinderGeometry(0.052, 0.044, 0.24, 10);
+      forearmGeo.translate(0, -0.12, 0);
+      const forearm = new THREE.Mesh(forearmGeo, skinMat);
+      forearm.name = side < 0 ? 'LeftForearm' : 'RightForearm';
+      forearm.castShadow = true;
+      forearmPivot.add(forearm);
+
+      const wristBeads = new THREE.Mesh(new THREE.TorusGeometry(0.046, 0.011, 6, 10), beadMat);
+      wristBeads.rotation.x = Math.PI / 2;
+      wristBeads.position.y = -0.21;
+      forearmPivot.add(wristBeads);
+
+      const handGeo = new THREE.SphereGeometry(0.052, 10, 8);
+      handGeo.scale(0.85, 1.18, 0.95);
+      const hand = new THREE.Mesh(handGeo, skinMat);
+      hand.name = side < 0 ? 'LeftHand' : 'RightHand';
+      hand.position.set(0, -0.25, 0);
+      hand.castShadow = true;
+      forearmPivot.add(hand);
+
+      pivot.forearmPivot = forearmPivot;
+      pivot.forearm = forearm;
+      pivot.hand = hand;
       torsoPivot.add(pivot);
       return pivot;
     }
@@ -263,7 +372,7 @@ export function createRemotePilgrims(ctx) {
 
     // 5. Ground Lotus Ring under feet (0 PointLights, AdditiveBlending)
     const ringMat = new THREE.MeshBasicMaterial({
-      color: look.auraColor || 0x2dd4bf,
+      color: member.isAmbient ? 0x38bdf8 : look.auraColor || 0x2dd4bf,
       transparent: true,
       opacity: 0.65,
       blending: THREE.AdditiveBlending,
@@ -275,11 +384,12 @@ export function createRemotePilgrims(ctx) {
     lotusRing.position.y = 0.03;
     root.add(lotusRing);
 
-    // 6. Overhead Nameplate Sprite
-    const canvas = document.createElement('canvas');
-    canvas.width = 320;
-    canvas.height = 96;
-    drawNameplateCanvas(canvas, member);
+    // 6. Overhead Nameplate Sprite (with top space for Dharma Emote Bubble)
+    const canvas =
+      typeof document !== 'undefined' ? document.createElement('canvas') : { width: 340, height: 136 };
+    canvas.width = 340;
+    canvas.height = 136;
+    drawNameplateCanvas(canvas, member, resolveMemberEmote(member));
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.needsUpdate = true;
@@ -290,13 +400,16 @@ export function createRemotePilgrims(ctx) {
       depthWrite: false,
     });
     const nameplate = new THREE.Sprite(spriteMat);
-    nameplate.position.set(0, 2.25, 0);
-    nameplate.scale.set(2.1, 0.63, 1);
+    nameplate.position.set(0, 2.38, 0);
+    nameplate.scale.set(2.25, 0.9, 1);
     root.add(nameplate);
 
     root.position.set(member.x || 0, member.y || 0, member.z || 0);
     root.rotation.y = member.heading || 0;
     group.add(root);
+
+    const initialCastTimer = pendingCastTimers.get(member.id) || 0;
+    pendingCastTimers.delete(member.id);
 
     return {
       id: member.id,
@@ -305,17 +418,43 @@ export function createRemotePilgrims(ctx) {
       torsoPivot,
       leftArm,
       rightArm,
+      leftForearm: leftArm.forearmPivot,
+      rightForearm: rightArm.forearmPivot,
+      leftHand: leftArm.hand,
+      rightHand: rightArm.hand,
       leftLeg,
       rightLeg,
+      robeMat,
+      shawlMat,
       lotusRing,
       ringMat,
       nameplate,
       canvas,
       tex,
       walkPhase: Math.random() * TWO_PI,
+      castTimer: initialCastTimer,
       lastSignature: '',
       data: { ...member },
     };
+  }
+
+  function disposeActor(actor) {
+    if (!actor) return;
+    group.remove(actor.root);
+    actor.root.traverse((obj) => {
+      if (obj.isMesh) {
+        obj.geometry?.dispose?.();
+        if (Array.isArray(obj.material)) {
+          for (const m of obj.material) {
+            if (m && !sharedMaterials.has(m)) m.dispose?.();
+          }
+        } else if (obj.material && !sharedMaterials.has(obj.material)) {
+          obj.material.dispose?.();
+        }
+      }
+    });
+    actor.tex?.dispose?.();
+    actor.nameplate?.material?.dispose?.();
   }
 
   // ---------------------------------------------------------------- Skill & Resonance VFX (0 PointLights)
@@ -365,6 +504,14 @@ export function createRemotePilgrims(ctx) {
 
   bus?.on('coop:remoteSkill', (payload) => {
     if (!payload) return;
+    if (payload.peerId) {
+      const actor = actors.get(payload.peerId);
+      if (actor) {
+        actor.castTimer = 0.55;
+      } else {
+        pendingCastTimers.set(payload.peerId, 0.55);
+      }
+    }
     if (payload.skillId === 'mantra') {
       spawnTeammateMantraWave(payload.x || 0, payload.y || 0, payload.z || 0, 0xfbbf24, 6.0, 0.65);
     } else {
@@ -376,6 +523,40 @@ export function createRemotePilgrims(ctx) {
     spawnResonanceMandalaVfx(payload);
   });
 
+  bus?.on('coop:memberHurt', (payload) => {
+    if (!payload) return;
+    spawnTeammateMantraWave(payload.x || 0, payload.y || 0, payload.z || 0, 0xef4444, 1.35, 0.28);
+  });
+
+  bus?.on('coop:emote', (payload) => {
+    if (!payload) return;
+    if (payload.peerId) {
+      activeEmotes.set(payload.peerId, {
+        id: payload.emoteId || 'mantra',
+        text: payload.text || i18n.t(`coop.emote.${payload.emoteId || 'mantra'}`),
+        expiresAt: payload.expiresAt || Date.now() + 4500,
+      });
+    }
+    if (payload.isSelf) {
+      const pPos = state.player?.position;
+      if (pPos) {
+        spawnTeammateMantraWave(pPos.x || 0, pPos.y || 0, pPos.z || 0, 0xfbbf24, 3.8, 0.65);
+      }
+    } else if (payload.peerId && actors.has(payload.peerId)) {
+      const actor = actors.get(payload.peerId);
+      if (actor && actor.root.visible) {
+        spawnTeammateMantraWave(
+          actor.root.position.x,
+          actor.root.position.y,
+          actor.root.position.z,
+          0xfde047,
+          3.2,
+          0.55,
+        );
+      }
+    }
+  });
+
   // ---------------------------------------------------------------- Fainted Ally Revive Interactable
   const revivePosVec = new THREE.Vector3();
   function findNearestFaintedActor(maxDist = 2.8) {
@@ -384,7 +565,7 @@ export function createRemotePilgrims(ctx) {
     let best = null;
     let bestD = maxDist;
     for (const actor of actors.values()) {
-      if (!actor.root.visible || !actor.data?.fainted) continue;
+      if (!actor.root.visible || !actor.data?.fainted || actor.data?.isAmbient) continue;
       const d = Math.hypot(pPos.x - actor.root.position.x, pPos.z - actor.root.position.z);
       if (d <= bestD) {
         bestD = d;
@@ -427,7 +608,7 @@ export function createRemotePilgrims(ctx) {
 
   // ---------------------------------------------------------------- Frame Update
   function update(dt) {
-    const members = ctx.coop?.getMembers?.() || [];
+    const members = ctx.coop?.getAllVisiblePilgrims?.() || ctx.coop?.getMembers?.() || [];
     const activeIds = new Set();
 
     for (const m of members) {
@@ -459,56 +640,102 @@ export function createRemotePilgrims(ctx) {
       }
       actor.root.rotation.y = lerpAngle(actor.root.rotation.y, m.heading || 0, Math.min(1, dt * 12));
 
+      // Hurt emissive flash on robe & shawl
+      if (m.hurt && !m.fainted) {
+        actor.robeMat?.emissive?.setHex(0xef4444);
+        if (actor.robeMat) actor.robeMat.emissiveIntensity = 0.75;
+        actor.shawlMat?.emissive?.setHex(0xfca5a5);
+        if (actor.shawlMat) actor.shawlMat.emissiveIntensity = 0.6;
+      } else {
+        actor.robeMat?.emissive?.setHex(0x000000);
+        if (actor.robeMat) actor.robeMat.emissiveIntensity = 0;
+        actor.shawlMat?.emissive?.setHex(0x000000);
+        if (actor.shawlMat) actor.shawlMat.emissiveIntensity = 0;
+      }
+
       // Limb & posture animation
+      if (actor.castTimer > 0) {
+        actor.castTimer = Math.max(0, actor.castTimer - dt);
+      }
+      if (m.action === 'cast' || m.action === 'chant' || m.action === 'attack') {
+        actor.castTimer = 0.55;
+      }
+
       const isMoving = m.action === 'walk' || m.action === 'run' || moveDist > 0.04;
       if (m.fainted) {
         actor.body.rotation.x = Math.PI * 0.46;
         actor.body.position.y = 0.12;
+        actor.leftArm.rotation.set(0.2, 0, -0.25);
+        actor.rightArm.rotation.set(0.2, 0, 0.25);
+        actor.leftForearm.rotation.set(0.15, 0, 0);
+        actor.rightForearm.rotation.set(0.15, 0, 0);
         actor.ringMat.color.setHex(0xef4444);
         actor.ringMat.opacity = 0.55 + Math.sin((state.elapsed || 0) * 5) * 0.25;
       } else if (m.action === 'prostrate') {
         actor.body.rotation.x = Math.PI * 0.42;
         actor.body.position.y = 0.15;
+        actor.leftArm.rotation.set(2.4, 0, -0.12);
+        actor.rightArm.rotation.set(2.4, 0, 0.12);
+        actor.leftForearm.rotation.set(0.2, 0, 0);
+        actor.rightForearm.rotation.set(0.2, 0, 0);
         actor.ringMat.color.setHex(0xfbbf24);
         actor.ringMat.opacity = 0.75;
       } else {
-        actor.body.rotation.x = 0;
-        actor.ringMat.color.setHex(m.look?.auraColor || 0x2dd4bf);
+        actor.body.rotation.x = m.hurt ? -0.18 : 0;
+        actor.ringMat.color.setHex(
+          m.hurt ? 0xf87171 : m.isAmbient ? 0x38bdf8 : m.look?.auraColor || 0x2dd4bf,
+        );
         actor.ringMat.opacity = 0.55 + Math.sin((state.elapsed || 0) * 2.5) * 0.15;
 
         if (isMoving) {
           const speed = m.action === 'run' ? 10 : 6.5;
           actor.walkPhase += dt * speed;
           const swing = Math.sin(actor.walkPhase) * 0.48;
-          actor.leftArm.rotation.x = swing;
-          actor.rightArm.rotation.x = -swing;
+          actor.leftArm.rotation.set(swing, 0, -0.08);
+          actor.rightArm.rotation.set(-swing, 0, 0.08);
+          actor.leftForearm.rotation.set(0.28 + Math.max(0, swing) * 0.35, 0, 0);
+          actor.rightForearm.rotation.set(0.28 + Math.max(0, -swing) * 0.35, 0, 0);
           actor.leftLeg.rotation.x = -swing * 0.8;
           actor.rightLeg.rotation.x = swing * 0.8;
           actor.body.position.y = Math.abs(Math.sin(actor.walkPhase)) * 0.05;
         } else {
           actor.leftArm.rotation.x *= 0.85;
           actor.rightArm.rotation.x *= 0.85;
+          actor.leftArm.rotation.y = 0;
+          actor.rightArm.rotation.y = 0;
+          actor.leftArm.rotation.z = -0.09;
+          actor.rightArm.rotation.z = 0.09;
+          actor.leftForearm.rotation.set(0.22, 0, 0);
+          actor.rightForearm.rotation.set(0.22, 0, 0);
           actor.leftLeg.rotation.x *= 0.85;
           actor.rightLeg.rotation.x *= 0.85;
           actor.body.position.y = 0;
+          actor.torsoPivot.position.y = 0.72 + Math.sin((state.elapsed || 0) * 2.2) * 0.012;
+        }
+
+        if (actor.castTimer > 0) {
+          actor.leftArm.rotation.set(0.75, -0.38, -0.1);
+          actor.rightArm.rotation.set(1.15, 0.15, 0.1);
+          actor.leftForearm.rotation.set(0.95, 0, 0.25);
+          actor.rightForearm.rotation.set(0.35, 0, -0.15);
         }
       }
 
-      // Redraw overhead nameplate only when values change
-      const sig = `${i18n.lang}|${m.name}|${m.level}|${Math.round(m.hp)}|${Math.round(m.maxHp)}|${m.fainted}|${m.isHost}`;
+      // Redraw overhead nameplate only when values or emote bubble state change
+      const activeEmote = resolveMemberEmote(m);
+      const emoteKey = activeEmote ? activeEmote.text : '';
+      const sig = `${i18n.lang}|${m.name}|${m.level}|${Math.round(m.hp)}|${Math.round(m.maxHp)}|${m.fainted}|${m.isHost}|${Boolean(m.isAmbient)}|${emoteKey}`;
       if (sig !== actor.lastSignature) {
         actor.lastSignature = sig;
-        drawNameplateCanvas(actor.canvas, m);
+        drawNameplateCanvas(actor.canvas, m, activeEmote);
         actor.tex.needsUpdate = true;
       }
     }
 
-    // Remove actors who left the party
+    // Remove and properly dispose actors who left the party or zone
     for (const [id, actor] of actors.entries()) {
       if (!activeIds.has(id)) {
-        group.remove(actor.root);
-        actor.tex?.dispose?.();
-        actor.nameplate?.material?.dispose?.();
+        disposeActor(actor);
         actors.delete(id);
       }
     }
@@ -537,6 +764,7 @@ export function createRemotePilgrims(ctx) {
         id: a.id,
         name: a.data?.name,
         zone: a.data?.zone,
+        isAmbient: Boolean(a.data?.isAmbient),
         fainted: Boolean(a.data?.fainted),
         x: Number(a.root.position.x.toFixed(2)),
         y: Number(a.root.position.y.toFixed(2)),
@@ -548,6 +776,7 @@ export function createRemotePilgrims(ctx) {
   const api = {
     update,
     getMeshes,
+    getActor: (id) => actors.get(id) || null,
     getCount: () => getMeshes().length,
     spawnResonanceMandalaVfx,
   };

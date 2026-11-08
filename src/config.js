@@ -98,9 +98,9 @@ export const CONFIG = {
     walkRadius: 70,
     stupaGate: {
       x: 0,
-      z: -37.0,
-      radius: 3.2,
-      returnPos: { x: 0, z: -34.2 },
+      z: -35.6,
+      radius: 4.8,
+      returnPos: { x: 0, z: -33.2 },
       returnHeading: Math.PI, // faces stupa at (0, 0)
     },
     wildGate: {
@@ -191,6 +191,7 @@ export const CONFIG = {
   MERIT: {
     weights: {
       kora: 108,
+      koraCommunion: 27,
       prostration: 27,
       lamp: 18,
       monkey: 12,

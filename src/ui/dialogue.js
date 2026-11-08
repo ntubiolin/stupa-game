@@ -298,23 +298,56 @@ export function createDialogue(ctx) {
 
   function resolveSpeakerKey(rawSpeaker) {
     if (!rawSpeaker || typeof rawSpeaker !== 'string') return 'npc.oldLama';
-    if (i18n.has?.(rawSpeaker)) return rawSpeaker;
-    if (i18n.has?.(`${rawSpeaker}.name`)) return `${rawSpeaker}.name`;
-    if (rawSpeaker.startsWith('npc.') || rawSpeaker.startsWith('boss.')) return rawSpeaker;
+    if (i18n?.has?.(rawSpeaker)) return rawSpeaker;
+    if (i18n?.has?.(`${rawSpeaker}.name`)) return `${rawSpeaker}.name`;
+    if (
+      rawSpeaker.startsWith('npc.') ||
+      rawSpeaker.startsWith('boss.') ||
+      rawSpeaker.startsWith('dlg.')
+    ) {
+      return rawSpeaker;
+    }
     return `npc.${rawSpeaker}`;
   }
 
   function resolveCodexLabel(codexId) {
-    if (i18n.has?.(`codex.${codexId}.title`)) return i18n.t(`codex.${codexId}.title`);
-    if (i18n.has?.(`codex.entry.${codexId}.title`)) return i18n.t(`codex.entry.${codexId}.title`);
+    if (i18n?.has?.(`codex.${codexId}.title`)) return i18n.t(`codex.${codexId}.title`);
+    if (i18n?.has?.(`codex.entry.${codexId}.title`)) return i18n.t(`codex.entry.${codexId}.title`);
     return codexId;
+  }
+
+  function normalizeActionItem(act) {
+    if (!act || typeof act !== 'object') return null;
+    if (act.type) return act;
+    if (act.flag) {
+      return { type: 'setFlag', flag: act.flag, value: act.value ?? true };
+    }
+    return null;
+  }
+
+  function collectActions(obj) {
+    if (!obj || typeof obj !== 'object') return [];
+    const list = [];
+    if (Array.isArray(obj.actions)) {
+      for (const a of obj.actions) {
+        const norm = normalizeActionItem(a);
+        if (norm) list.push(norm);
+      }
+    }
+    if (obj.action && typeof obj.action === 'object') {
+      const norm = normalizeActionItem(obj.action);
+      if (norm) list.push(norm);
+    }
+    return list;
   }
 
   // Register debug & prologue dialogues + auto-discover chapter dialogues (`src/data/dialogues/*.js`)
   register(DEBUG_DIALOGUES);
   register(PROLOGUE_DIALOGUES);
   const chapterDialogueModules =
-    (typeof import.meta.glob === 'function' && import.meta.glob('../data/dialogues/*.js', { eager: true })) || {};
+    (typeof import.meta.glob === 'function' &&
+      import.meta.glob('../data/dialogues/*.js', { eager: true })) ||
+    {};
   for (const mod of Object.values(chapterDialogueModules)) {
     if (!mod || typeof mod !== 'object') continue;
     for (const val of Object.values(mod)) {
@@ -614,8 +647,9 @@ export function createDialogue(ctx) {
     }
 
     // Execute node entry actions BEFORE evaluating choices so flags set by the node are available to choice `requires`
-    if (Array.isArray(node.actions)) {
-      executeActions(node.actions);
+    const nodeActions = collectActions(node);
+    if (nodeActions.length > 0) {
+      executeActions(nodeActions);
     }
 
     const rawText = i18n.t(node.textKey || node.text || '');
@@ -730,17 +764,9 @@ export function createDialogue(ctx) {
     const choice = active.visibleChoices[index];
     if (!choice) return false;
 
-    if (Array.isArray(choice.actions)) {
-      executeActions(choice.actions);
-    } else if (choice.action && typeof choice.action === 'object') {
-      const normalized = choice.action.type
-        ? choice.action
-        : choice.action.flag
-          ? { type: 'setFlag', flag: choice.action.flag, value: choice.action.value ?? true }
-          : null;
-      if (normalized) {
-        executeActions([normalized]);
-      }
+    const choiceActions = collectActions(choice);
+    if (choiceActions.length > 0) {
+      executeActions(choiceActions);
     }
 
     if (choice.next) {
@@ -899,11 +925,13 @@ export function createDialogue(ctx) {
         id: active?.id || null,
         nodeId: active?.nodeId || null,
         npcId: active?.npcId || null,
+        speakerKey: active?.speakerKey || null,
+        speaker: active?.speakerKey ? i18n.t(active.speakerKey) : null,
         typing: Boolean(active?.typing),
         choices:
           active?.visibleChoices?.map((c, i) => {
-            const ck = c.textKey || c.labelKey || '';
-            return { index: i + 1, textKey: ck, text: i18n.t(ck) };
+            const key = c.textKey || c.labelKey || '';
+            return { index: i + 1, textKey: key, text: i18n.t(key) };
           }) || [],
         executedActions: [...executedActionsLog],
       };

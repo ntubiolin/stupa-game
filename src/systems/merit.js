@@ -7,6 +7,7 @@ const STORAGE_KEY = 'stupa.merit.v1';
 
 const DEFAULT_WEIGHTS = {
   kora: 108,
+  koraCommunion: 27,
   prostration: 27,
   lamp: 18,
   monkey: 12,
@@ -40,6 +41,7 @@ export const ACHIEVEMENTS = [
 function defaultData() {
   return {
     kora: 0,
+    koraCommunion: 0,
     prostration: 0,
     lamp: 0,
     monkey: 0,
@@ -66,6 +68,7 @@ export function createMerit(ctx) {
       const saved = ctx.save.get('merit', defaultData());
       data = {
         kora: Number(saved.kora) || 0,
+        koraCommunion: Number(saved.koraCommunion) || 0,
         prostration: Number(saved.prostration) || 0,
         lamp: Number(saved.lamp) || 0,
         monkey: Number(saved.monkey) || 0,
@@ -87,6 +90,7 @@ export function createMerit(ctx) {
       if (parsed && typeof parsed === 'object') {
         data = {
           kora: Number(parsed.kora) || 0,
+          koraCommunion: Number(parsed.koraCommunion) || 0,
           prostration: Number(parsed.prostration) || 0,
           lamp: Number(parsed.lamp) || 0,
           monkey: Number(parsed.monkey) || 0,
@@ -145,15 +149,21 @@ export function createMerit(ctx) {
   });
 
   bus.on('merit', (payload) => {
-    const type = payload?.type;
+    const rawType = payload?.type;
+    const isCommunion =
+      payload?.source === 'sharedKoraCommunion' || rawType === 'koraCommunion';
+    const type = isCommunion ? 'koraCommunion' : rawType;
     const currentWeights = config?.MERIT?.weights || weights;
-    if (!type || !(type in currentWeights)) return;
+    if (!type || (!isCommunion && !(type in currentWeights))) return;
 
     const count = Math.max(1, Number(payload.count) || 1);
     if (typeof data[type] === 'number') {
       data[type] += count;
     }
-    const pts = (currentWeights[type] || 0) * count;
+    const weight = isCommunion
+      ? currentWeights.koraCommunion ?? DEFAULT_WEIGHTS.koraCommunion
+      : currentWeights[type] || 0;
+    const pts = weight * count;
     data.points += pts;
     save();
 
@@ -230,6 +240,7 @@ export function createMerit(ctx) {
     getStats() {
       return {
         kora: data.kora,
+        koraCommunion: data.koraCommunion,
         koraFraction,
         prostration: data.prostration,
         lamp: data.lamp,

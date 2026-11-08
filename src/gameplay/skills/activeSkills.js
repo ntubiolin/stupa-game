@@ -169,17 +169,52 @@ export function createActiveSkills(ctx) {
     return { amount: Math.max(1, Math.round(baseAtk * totalMult)), crit: false };
   }
 
+  function cloneEnemyPos(enemyOrPos, fallbackY = 0) {
+    const p = enemyOrPos?.pos || enemyOrPos?.position || enemyOrPos;
+    if (p && typeof p.clone === 'function') return p.clone();
+    return new THREE.Vector3(
+      Number(p?.x) || 0,
+      Number(p?.y ?? fallbackY) || 0,
+      Number(p?.z) || 0
+    );
+  }
+
+  function hasPhurbaSplitPower() {
+    if (ctx.powers?.has?.('phurbaSplit')) return true;
+    if (ctx.inventory?.hasSpecialEffect?.('phurbaSplit')) return true;
+    if (ctx.inventory?.getEquippedPowers?.()?.has?.('phurbaSplit')) return true;
+    const eq =
+      ctx.inventory?.getEquipment?.() ||
+      ctx.inventory?.getEquipped?.() ||
+      state.equipment ||
+      null;
+    if (eq && typeof eq === 'object') {
+      for (const item of Object.values(eq)) {
+        if (
+          item &&
+          (item.id === 'phurbaSplit' ||
+            item.legendaryId === 'phurbaSplit' ||
+            item.powerId === 'phurbaSplit' ||
+            item.specialEffect === 'phurbaSplit')
+        ) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   // ---------------------------------------------------------------- 1. Phurba (普巴橛)
   function castPhurba(payload = {}) {
     const {
       rank = 1,
       enh = null,
-      origin = state.player.position.clone(),
+      origin = cloneEnemyPos(state.player?.position),
       dir = state.player.heading || 0,
       damageMult = 1.4,
     } = payload;
 
-    const hasSplitPower = Boolean(ctx.powers?.has?.('phurbaSplit'));
+    const hasSplitPower = hasPhurbaSplitPower();
     const rootDur = 2.0 + (hasSplitPower ? 1.0 : 0);
 
     // Determine dagger angles:
@@ -199,6 +234,7 @@ export function createActiveSkills(ctx) {
 
     const hitEnemyIds = new Set();
     let firstHitEnemy = null;
+    let centerEndY = origin.y || 0;
 
     for (let i = 0; i < angles.length; i++) {
       const a = angles[i];
@@ -214,6 +250,9 @@ export function createActiveSkills(ctx) {
       const endX = origin.x - Math.sin(a) * lineLen;
       const endZ = origin.z - Math.cos(a) * lineLen;
       const endY = ctx.world ? ctx.world.getHeight(endX, endZ) : origin.y || 0;
+      if (i === Math.floor(angles.length / 2)) {
+        centerEndY = endY;
+      }
 
       flyingDaggers.push({
         mesh,
@@ -245,42 +284,59 @@ export function createActiveSkills(ctx) {
           ctx.enemies?.applyStatus?.(e, { type: 'root', duration: rootDur });
         }
       }
+    }
 
-      // Enh B ('釘地'): dagger plants in ground and explodes after 1.0s for 4m AoE (ATK * 0.6)
-      if (enh === 'b' && i === Math.floor(angles.length / 2)) {
-        const plantPos = firstHitEnemy
-          ? firstHitEnemy.pos.clone()
-          : new THREE.Vector3(
-              origin.x - Math.sin(dir) * 6.0,
-              endY,
-              origin.z - Math.cos(dir) * 6.0
-            );
-        const plantedMesh = buildPhurbaMesh();
-        plantedMesh.position.set(plantPos.x, (plantPos.y || 0) + 0.45, plantPos.z);
-        plantedMesh.rotation.x = -Math.PI * 0.5;
-        group.add(plantedMesh);
+    // Enh B ('釘地'): dagger plants in ground and explodes after 1.0s for 4m AoE (ATK * 0.6)
+    if (enh === 'b') {
+      const plantPos = firstHitEnemy
+        ? cloneEnemyPos(firstHitEnemy, centerEndY)
+        : new THREE.Vector3(
+            origin.x - Math.sin(dir) * 6.0,
+            centerEndY,
+            origin.z - Math.cos(dir) * 6.0
+          );
+      const plantedMesh = buildPhurbaMesh();
+      plantedMesh.position.set(plantPos.x, (plantPos.y || 0) + 0.45, plantPos.z);
+      plantedMesh.rotation.x = -Math.PI * 0.5;
+      group.add(plantedMesh);
 
-        plantedDaggers.push({
-          mesh: plantedMesh,
-          pos: plantPos,
-          timer: 1.0,
-          radius: 4.0,
-          damageMult: 0.6,
-        });
-      }
+      plantedDaggers.push({
+        mesh: plantedMesh,
+        pos: plantPos,
+        timer: 1.0,
+        radius: 4.0,
+        damageMult: 0.6,
+      });
     }
 
     // If phurbaSplit Terma power is active and we hit an enemy, also fire 2 secondary split bolts at nearby enemies
     if (hasSplitPower && firstHitEnemy) {
-      const nearby = ctx.enemies?.queryCircle?.(firstHitEnemy.pos, 6.0) || [];
+      const firstHitPos = cloneEnemyPos(firstHitEnemy, centerEndY);
+      const nearby = ctx.enemies?.queryCircle?.(firstHitPos, 6.0) || [];
       let splitCount = 0;
       for (const other of nearby) {
         if (other.id === firstHitEnemy.id) continue;
+        const otherPos = cloneEnemyPos(other, firstHitPos.y);
+        const boltMesh = buildPhurbaMesh();
+        boltMesh.position.set(firstHitPos.x, (firstHitPos.y || 0) + 0.9, firstHitPos.z);
+        boltMesh.rotation.y = Math.atan2(
+          -(otherPos.x - firstHitPos.x),
+          -(otherPos.z - firstHitPos.z)
+        );
+        group.add(boltMesh);
+        flyingDaggers.push({
+          mesh: boltMesh,
+          start: boltMesh.position.clone(),
+          end: new THREE.Vector3(otherPos.x, (otherPos.y || 0) + 0.9, otherPos.z),
+          elapsed: 0,
+          duration: 0.22,
+        });
+
         const rolled = computeSkillDamage(damageMult * 0.65);
         ctx.enemies?.damageEnemy?.(other, rolled.amount, {
           type: 'physical',
           crit: rolled.crit,
-          origin: firstHitEnemy.pos,
+          origin: firstHitPos,
           source: 'phurbaSplit',
         });
         ctx.enemies?.applyStatus?.(other, { type: 'root', duration: rootDur });
@@ -303,7 +359,7 @@ export function createActiveSkills(ctx) {
     const {
       rank = 1,
       enh = null,
-      origin = state.player.position.clone(),
+      origin = cloneEnemyPos(state.player?.position),
       dir = state.player.heading || 0,
       damageMult = 1.0,
       stunDuration = 1.0,
@@ -362,7 +418,7 @@ export function createActiveSkills(ctx) {
     lotusShieldActive = false;
     if (lotusPetalGroup) lotusPetalGroup.visible = false;
 
-    const origin = state.player.position.clone();
+    const origin = cloneEnemyPos(state.player?.position);
     const radius = 4.0;
     spawnExpandingRing(origin, radius, 0xf472b6, 0.55);
 
@@ -485,7 +541,7 @@ export function createActiveSkills(ctx) {
     const {
       rank = 1,
       enh = null,
-      origin = state.player.position.clone(),
+      origin = cloneEnemyPos(state.player?.position),
       damageMult = 5.0,
       radius = 16.0,
       channelDuration = 2.5,
@@ -548,7 +604,7 @@ export function createActiveSkills(ctx) {
       ringGroup,
       sprites,
       innerHalo,
-      origin: origin.clone(),
+      origin: cloneEnemyPos(origin),
       maxRadius: effectiveRadius,
       damageMult,
       elapsed: 0,

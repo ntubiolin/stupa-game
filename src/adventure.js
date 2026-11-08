@@ -185,7 +185,6 @@ const ctx = {
 ctx.input = createInput(ctx);
 createDebug(ctx);
 ctx.save = createSave(ctx);
-createModeSwitch(ctx, 'adventure');
 i18n.bindSave?.(ctx.save);
 
 // ---------------------------------------------------------------- modules (order = update order)
@@ -237,6 +236,7 @@ const skillbar = createSkillbar(ctx);
 const inventoryUi = createInventoryUi(ctx);
 const appearanceUi = createAppearanceUi(ctx);
 createSettingsUi(ctx);
+createModeSwitch(ctx, 'adventure', document.getElementById('settings-mode-mount'));
 const dialogue = createDialogue(ctx);
 const questUi = createQuestUi(ctx);
 const worldmap = createWorldMap(ctx);

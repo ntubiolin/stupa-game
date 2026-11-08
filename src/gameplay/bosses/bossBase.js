@@ -367,10 +367,11 @@ export function createBoss(ctx, def) {
   function registerOathStoneInteractable() {
     removeOathStoneInteractable();
     const posVec = new THREE.Vector3(arena.x, getGroundY(arena.x, arena.z), arena.z);
-    const makeEntry = (id, radius = 3.0) => ({
+    const makeEntry = (id, radius = 2.4) => ({
       id,
       kind: 'oathStone',
       zone: arena.map,
+      priority: -25,
       action: 'interact',
       position: { x: arena.x, y: posVec.y, z: arena.z },
       getPosition: () => {
@@ -387,8 +388,8 @@ export function createBoss(ctx, def) {
       interact: () => start({ isRematch: true }),
       onInteract: () => start({ isRematch: true }),
     });
-    const entry = makeEntry(oathInteractableId, 3.0);
-    const dotAlias = makeEntry(oathInteractableDotId, 3.0);
+    const entry = makeEntry(oathInteractableId, 2.4);
+    const dotAlias = makeEntry(oathInteractableDotId, 2.4);
     ctx.interaction?.register?.(entry);
     if (Array.isArray(ctx.interactables)) {
       ctx.interactables.push(entry, dotAlias);
@@ -802,12 +803,17 @@ export function createBoss(ctx, def) {
     bossState.oathCeremonyTimer = 0;
     bossState.setPosition(arena.x, arena.z);
 
+    if (isSavedSubdued()) {
+      bossState.subdued = true;
+    }
     state.bossActive = false;
+    state.bossSubdued = Boolean(bossState.subdued);
     barrierGroup.visible = false;
     chainsGroup.visible = false;
     invulnMesh.visible = false;
 
-    const overlayEl = document.getElementById('boss-oath-overlay');
+    const overlayEl =
+      typeof document !== 'undefined' ? document.getElementById('boss-oath-overlay') : null;
     if (overlayEl) overlayEl.style.opacity = '0';
 
     syncOathStoneVisibility();
@@ -974,6 +980,7 @@ export function createBoss(ctx, def) {
   // Listen for dialogue closing after oath -> release camera focus & hide kneeling boss
   bus.on('dialogue:close', ({ id }) => {
     if (id === def.oath?.dialogue && bossState.subdued && !bossState.active) {
+      bossState.oathCeremonyTimer = 0;
       ctx.cameraRig?.clearDialogueFocus?.();
       chainsGroup.visible = false;
       syncOathStoneVisibility();
@@ -1138,7 +1145,9 @@ export function createBoss(ctx, def) {
 
     // 4. Update active pattern telegraphs, projectiles, and hazards
     patternRunner.update(dt);
+    if (!bossState.active) return;
     def.onUpdate?.(dt, bossState, ctx, patternRunner, built);
+    if (!bossState.active) return;
 
     if (pPos && bossState.active) {
       const dx = pPos.x - arena.x;

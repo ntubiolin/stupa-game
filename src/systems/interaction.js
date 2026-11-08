@@ -17,7 +17,11 @@ export function createInteraction(ctx) {
   let lastEmittedParamsSig = null;
 
   function getKindPenalty(item) {
-    // Lower score is better: NPC and gate have priority over normal props, which have priority over ground loot
+    // Lower score is better: NPC and gate have priority over normal props, which have priority over ground loot,
+    // and ground loot always has priority over Boss rematch Oath Stones.
+    if (item.kind === 'oathStone') {
+      return typeof item.priority === 'number' ? -item.priority : 25;
+    }
     if (typeof item.priority === 'number') return -item.priority;
     if (item.kind === 'npc') return -10;
     if (item.kind === 'gate') return -5;
@@ -113,6 +117,9 @@ export function createInteraction(ctx) {
     const fwdZ = -Math.cos(h);
 
     const list = ctx.interactables || [];
+    const hasLootInRange = list.some(
+      (item) => item?.kind === 'loot' && scoreItem(item, px, pz, fwdX, fwdZ) < Infinity
+    );
     let best = null;
     let bestScore = Infinity;
     let bestByAction = { interact: null, feed: null };
@@ -120,6 +127,7 @@ export function createInteraction(ctx) {
 
     for (let i = 0; i < list.length; i++) {
       const item = list[i];
+      if (hasLootInRange && item?.kind === 'oathStone') continue;
       const s = scoreItem(item, px, pz, fwdX, fwdZ);
       if (s < bestScore) {
         bestScore = s;

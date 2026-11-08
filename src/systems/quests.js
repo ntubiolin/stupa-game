@@ -9,6 +9,11 @@
 import * as THREE from 'three';
 import { DEBUG_QUESTS } from '../data/quests/debug.js';
 import { PROLOGUE_QUESTS } from '../data/quests/prologue.js';
+import { CH1_QUESTS } from '../data/quests/ch1.js';
+import { CH2_QUESTS } from '../data/quests/ch2.js';
+import { CH3_QUESTS } from '../data/quests/ch3.js';
+import { CH4_QUESTS } from '../data/quests/ch4.js';
+import { CH5_QUESTS } from '../data/quests/ch5.js';
 import '../i18n/quests.js';
 import '../i18n/prologue.js';
 
@@ -182,7 +187,7 @@ export function createQuests(ctx) {
           ring,
         };
 
-        ctx.interactables.push({
+        ctx.interactables?.push({
           id: nodeId,
           kind: 'questItem',
           zone: mapId,
@@ -297,17 +302,24 @@ export function createQuests(ctx) {
 
   register(DEBUG_QUESTS);
   register(PROLOGUE_QUESTS);
+  register(CH1_QUESTS);
+  register(CH2_QUESTS);
+  register(CH3_QUESTS);
+  register(CH4_QUESTS);
+  register(CH5_QUESTS);
 
   // Auto-discover chapter i18n (`src/i18n/*.js`) and chapter quests (`src/data/quests/*.js`)
-  import.meta.glob('../i18n/*.js', { eager: true });
-  const chapterQuestModules = import.meta.glob('../data/quests/*.js', { eager: true });
-  for (const mod of Object.values(chapterQuestModules)) {
-    if (!mod || typeof mod !== 'object') continue;
-    for (const val of Object.values(mod)) {
-      if (Array.isArray(val)) {
-        register(val);
-      } else if (val && typeof val === 'object' && typeof val.id === 'string' && Array.isArray(val.steps)) {
-        register([val]);
+  if (typeof import.meta.glob === 'function') {
+    import.meta.glob('../i18n/*.js', { eager: true });
+    const chapterQuestModules = import.meta.glob('../data/quests/*.js', { eager: true });
+    for (const mod of Object.values(chapterQuestModules)) {
+      if (!mod || typeof mod !== 'object') continue;
+      for (const val of Object.values(mod)) {
+        if (Array.isArray(val)) {
+          register(val);
+        } else if (val && typeof val === 'object' && typeof val.id === 'string' && Array.isArray(val.steps)) {
+          register([val]);
+        }
       }
     }
   }
@@ -410,6 +422,7 @@ export function createQuests(ctx) {
       step: 0,
       progress: 0,
       tracked: shouldTrack,
+      interactedTargets: [],
     };
     persist();
 
@@ -470,6 +483,7 @@ export function createQuests(ctx) {
 
     entry.step += 1;
     entry.progress = 0;
+    entry.interactedTargets = [];
 
     if (entry.step >= (def.steps?.length || 0)) {
       return complete(questId);
@@ -729,16 +743,30 @@ export function createQuests(ctx) {
   bus.on('quest:item', handleCollectEvent);
   bus.on('quest:collect', handleCollectEvent);
 
-  // 5. `interact`: { target, count } (also supports `light` if target === 'lamp')
+  // 5. `interact`: { target, count, uniqueId? } (also supports `light` if target === 'lamp')
   bus.on('quest:interact', (payload = {}) => {
     const target = payload.target || payload.id;
     const count = Number(payload.count ?? 1);
     if (target) {
-      forEachActiveStepOfType('interact', (qId, _entry, step) => {
+      forEachActiveStepOfType('interact', (qId, entry, step) => {
         if (
           step.target === target ||
           (Array.isArray(step.target) && step.target.includes(target))
         ) {
+          const dedupeKey =
+            payload.uniqueId ||
+            (Array.isArray(step.target) && step.target.length > 1 && target !== step.target[0]
+              ? target
+              : null);
+          if (dedupeKey) {
+            if (!Array.isArray(entry.interactedTargets)) {
+              entry.interactedTargets = [];
+            }
+            if (entry.interactedTargets.includes(dedupeKey)) {
+              return;
+            }
+            entry.interactedTargets.push(dedupeKey);
+          }
           advanceStepProgress(qId, count);
         }
       });
@@ -753,8 +781,9 @@ export function createQuests(ctx) {
 
   // 6. `kora` & 7. `light` via `merit` (and direct `kora:lap` / `lamp:lit` aliases)
   bus.on('merit', (payload = {}) => {
+    if (payload.source === 'sharedKoraCommunion' || payload.type === 'koraCommunion') return;
     const kind = payload.type || payload.source;
-    if (kind === 'kora') {
+    if (kind === 'kora' && payload.source !== 'sharedKoraCommunion') {
       forEachActiveStepOfType('kora', (qId) => {
         advanceStepProgress(qId, 1);
       });
@@ -806,12 +835,17 @@ export function createQuests(ctx) {
   bus.on('zone:change', ({ to }) => {
     const mapDef = ctx.world?.getMap?.(to);
     const intro = mapDef?.chapterIntro;
-    if (intro?.startQuest && !isActive(intro.startQuest) && !isDone(intro.startQuest)) {
+    const startQuestDone = Boolean(intro?.startQuest && isDone(intro.startQuest));
+    if (intro?.startQuest && !isActive(intro.startQuest) && !startQuestDone) {
       start(intro.startQuest);
     }
     checkAutoStartQuests();
     if (intro && intro.flag && !hasFlag(intro.flag)) {
-      bus.emit('chapter:intro', intro);
+      if (startQuestDone) {
+        setFlag(intro.flag, true);
+      } else {
+        bus.emit('chapter:intro', intro);
+      }
     }
   });
 

@@ -66,14 +66,14 @@ export const CH1_I18N = {
       '「烏仗那大士與行者啊，我今誠心降伏，立下金剛誓言：即刻釋放被鎖閉的龍族雲雨，令帕平谷地泉湧林茂，永不再興旱魃之災！」',
     'boss.droughtLord.oath.choice': '「願汝謹守誓言，護持山谷蒼生。」',
     'dlg.boss.droughtLord.oath.1':
-      '「嗚呼！普巴金剛橛之無上威光刺透吾心，三界嗔火與焦土妄執俱化灰燼……」',
+      '「嗚呼！金剛橛之威光刺透我心，三界嗔火與慳貪俱化灰燼……」',
     'dlg.boss.droughtLord.oath.2':
-      '「吾本是棲息於[[codex:asuraCave|阿蘇拉洞]]岩脈之大力非人，因嫉恨烏仗那大士於[[codex:yangleshoCave|揚列雪洞]]修持妙法，遂以嗔火鎖閉龍族雲雨，令帕平三年枯旱。」',
+      '（焦黑巨岩般的魔主雙膝跪倒於阿蘇拉洞前，胸中熾燃的熔岩化為清涼甘泉之光。）',
     'dlg.boss.droughtLord.oath.3':
-      '「今見[[codex:vajrakilaya|普巴金剛]]慈悲威猛壇城，吾之傲慢已徹底摧破，甘願頂禮臣服！」',
+      '「烏仗那大士與具足定慧的行者啊，我往昔因瞋嫉而鎖閉雲雨，令帕平生靈塗炭，今已徹悟前非。」',
     'dlg.boss.droughtLord.oath.4':
-      '「吾在此立下不壞金剛誓言：即刻釋放被鎖閉的漫天甘霖，令[[codex:pharping|帕平]]谷地三泉湧流、萬木復甦，永為護持修行者之山神！」',
-    'dlg.boss.droughtLord.oath.accept': '「善哉，願汝謹守三昧耶誓言，護佑山谷蒼生。」',
+      '「我今於普巴金剛壇城前立下不壞誓言：即刻釋放龍族雲雨，令帕平谷地三泉長湧、林木常青，永護正法行者！」',
+    'dlg.boss.droughtLord.oath.accept': '「願汝謹守金剛誓言，護持山谷蒼生。」',
 
     // NPCs
     'npc.villageElder': '帕平村長老',
@@ -362,14 +362,15 @@ export const CH1_I18N = {
       '"Great Master of Oddiyana and noble practitioner, I bow in subjugation and swear this Vajra Oath: I release the imprisoned rain-clouds at once, so Pharping\'s springs and forests may flourish forevermore!"',
     'boss.droughtLord.oath.choice': '"Keep your oath and guard the beings of this valley."',
     'dlg.boss.droughtLord.oath.1':
-      '"Alas! The blazing Phurba of [[codex:vajrakilaya|Vajrakīlaya]] pierces my heart — my three-realm wrath and scorching delusion crumble into ash..."',
+      '"Alas! The blazing Phurba of Vajrakīlaya pierces my heart — my wrath and greed crumble into ash..."',
     'dlg.boss.droughtLord.oath.2':
-      '"I am the spirit-lord dwelling within the crags of [[codex:asuraCave|Asura Cave]]. Envious of the Master of Oddiyana meditating in [[codex:yangleshoCave|Yangleshö Cave]], I locked away the rain-clouds and parched this valley for three years."',
+      '(The charred rock colossus falls to its knees before Asura Cave as the molten fire in its chest cools into a gentle spring-light.)',
     'dlg.boss.droughtLord.oath.3':
-      '"Beholding the wrathful compassion of the Vajrakīlaya mandala, my pride is shattered and I bow in complete submission!"',
+      '"Great Master of Oddiyana and noble practitioner, blinded by jealousy I locked away the rain-clouds and parched Pharping Valley. Now I see my delusion."',
     'dlg.boss.droughtLord.oath.4':
-      '"I swear an unbreakable Vajra Oath: I release the imprisoned rain-clouds at once, so the three springs and forests of [[codex:pharping|Pharping]] flourish forevermore!"',
-    'dlg.boss.droughtLord.oath.accept': '"Abide by your Samaya vow and guard all beings of this valley."',
+      '"Before this Vajrakīlaya mandala I swear an unbreakable oath: I release the rain-clouds at once so Pharping\'s three springs and forests flourish forevermore!"',
+    'dlg.boss.droughtLord.oath.accept':
+      '"Keep your Vajra oath and guard the beings of this valley."',
 
     // NPCs
     'npc.villageElder': 'Pharping Village Elder',

@@ -52,8 +52,9 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/gameplay/items.js`, `groundLoot.js` | Gameplay | monkey sacred artifacts + Diablo-style ground loot drops, rarity light beams, `Alt` label plate layout, auto-pickup |
 | `src/gameplay/potions.js`, `shrines.js`, `waypoints.js` | Gameplay | Amrita potion charges (`X`), 4 blessing shrine types, lotus waypoints & Recall portal (`B`) |
 | `src/gameplay/lamps.js`, `monkeys.js`, `npcs.js` | Gameplay | butter-lamp stations + floating prayer plaques, monkey wander/feeding, procedural 3D NPC builder (8 looks) & overhead quest markers (`!`/`?`) |
-| `src/gameplay/personalStupa.js`, `remotePilgrims.js` | Gameplay | procedural 3D Pilgrim Votive Stupa groves (`grove` & `samye`), Samye 1,008 perimeter consecration crowns, and 3D Co-op party teammates + Mantra Resonance VFX |
-| `src/systems/community.js`, `coop.js` | Gameplay | async social sync (`BroadcastChannel` + `/api/community` + share codes for lamps, stupas, Samye co-op) & real-time 2–4 player Co-op room/AI companion system |
+| `src/gameplay/personalStupa.js`, `remotePilgrims.js` | Gameplay | procedural 3D Pilgrim Votive Stupa groves (`grove` & `samye`), Samye 1,008 perimeter consecration crowns, and 3D Co-op party teammates + ambient online pilgrims + Dharma Emote bubbles + Mantra Resonance VFX |
+| `src/systems/community.js`, `coop.js` | Gameplay | async social sync (`BroadcastChannel` + `/api/community` + WS relay + offline write queue + share codes) & real-time Zone Presence / 2–4 player Co-op room / AI companion system |
+| `server/store.js`, `handler.js`, `ws.js`, `index.js`, `api/*.js` | **Architect** | persistent JSON/in-memory community store (`.data/stupa-backend.json`), 12-player Zone Sharding (`stupa#1`, `wild#1`, …), public/private Co-op rooms, RFC 6455 WebSocket (`/ws/multiplayer`) & HTTP REST (`/api/community`, `/api/coop`, `/api/presence`) |
 | `src/systems/zones.js` | Gameplay | data-driven zone manager (`MAPS`), lazy `import()` loading, gate transitions, `ctx.world` API |
 | `src/systems/save.js` | Gameplay | unified v2 save system (`stupa.save.v2`), v1 migration, per-section fault tolerance, throttled writes |
 | `src/systems/vitals.js` | Gameplay | vitals system (HP/MP/EXP/ATK/DEF/Crit/Subdue/CDR/Find), Lv 1–40 curve, equipment stat aggregation |
@@ -151,9 +152,9 @@ export function createX(ctx, ...extra) {
 | `skillbar` | `{ update(dt), openSkillsModal(), closeSkillsModal(), toggleSkillsModal() }` |
 | `shop` / `crafting` | `{ update(dt), open(), close(), isOpen() }` |
 | `credits` | `{ update(dt), play(), hide(), isOpen() }` |
-| `community` | `{ update(dt), getPilgrimName(), setPilgrimName(name), getLamps(), offerLamp(opts), rejoiceLamp(id), getStupas(), getOwnStupa(), saveOwnStupa(opts), rejoiceStupa(id), getSamyeProgress(), contributeSamye(opts), exportShareCode(), importShareCode(code) }` |
+| `community` | `{ update(dt), getPilgrimName(), setPilgrimName(name), getLamps(), offerLamp(opts), rejoiceLamp(id), getStupas(), getOwnStupa(), saveOwnStupa(opts), rejoiceStupa(id), getSamyeProgress(), contributeSamye(opts), exportShareCode(), importShareCode(code), syncFromServer(), flushPendingActions(), getBackendStatus() }` |
 | `personalStupa` | `{ update(dt), rebuildGrove(), buildVotiveStupaMesh(THREE, spec, opts), getGroveStupas() }` |
-| `coop` | `{ update(dt), getState(), getPartySize(), getMembers(), createRoom(code?), joinRoom(code), leaveRoom(), addAiCompanion(idx?), removeAiCompanion(id?), broadcastEvent(type, payload), reviveMember(id), teleportToLeader() }` |
+| `coop` | `{ update(dt), getState(), getPartySize(), getMembers(), getActiveCompanions(), getZonePilgrims(), getAllVisiblePilgrims(), getZoneCounts(), getTotalOnline(), getShowAmbientPilgrims(), setShowAmbientPilgrims(bool), createRoom(code?), joinRoom(code), leaveRoom(), isRoomPublic(), setRoomPublic(bool), getPublicRooms(), refreshPublicRooms(), addAiCompanion(idx?), removeAiCompanion(id?), broadcastEvent(type, payload), sendEmote(emoteId), getLocalEmote(), getExpBonusPct(), reviveMember(id), damageCompanion(id, amt, opts?), damageCompanionsInRadius(cx, cz, r, amt, opts?), damageCompanionsInLine(sx, sz, dx, dz, len, hw, amt, opts?), teleportToLeader() }` |
 | `remotePilgrims` | `{ update(dt), getMeshes(), getCount(), spawnResonanceMandalaVfx(pos) }` |
 | `lampOfferingUi` / `stupaBuilderUi` / `coopLobbyUi` | `{ update(dt), open(tab?), close(), toggle(), isOpen() }` |
 | `merit` | `{ update(dt), reset, getStats, getAchievementsList }` |
@@ -238,7 +239,7 @@ state.interactionTarget  // currently targeted interactable or null
 | `codex:open` / `codex:unlock` / `codex:changed` | `{ id }` | codex / dialogue / worldmap |
 | `terma:entered` / `terma:floor` / `terma:cleared` | `{ tier, floor, seed }` | dungeon → quests / UI / coop |
 | `community:lampOffered` / `community:lampRejoiced` / `community:stupaBuilt` / `community:samyeContributed` / `community:changed` | `{ id?, type? }` | community → lamps / personalStupa / UI |
-| `coop:joined` / `coop:left` / `coop:updated` / `coop:remoteSkill` / `coop:resonance` / `coop:revived` | `{ roomCode?, x?, z? }` | coop → remotePilgrims / dungeon / UI |
+| `coop:joined` / `coop:left` / `coop:updated` / `coop:remoteSkill` / `coop:resonance` / `coop:memberHurt` / `coop:memberFainted` / `coop:revived` | `{ roomCode?, id?, x?, z? }` | coop → remotePilgrims / dungeon / UI |
 | `credits:play` / `credits:opened` / `credits:closed` | `{}` | credits |
 
 ---
