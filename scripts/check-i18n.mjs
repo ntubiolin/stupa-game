@@ -126,19 +126,29 @@ for (const file of dataFiles) {
   }
 }
 
-// Also scan `index.html` and `src/**/*.js` for `data-i18n="key"` attributes
-const htmlAndUiFiles = [
+// Also scan `index.html` and `src/**/*.js` for `data-i18n="key"`, `i18n.t('key')`, and `*Key: 'key'`
+const allSourceFiles = [
   path.join(ROOT, 'index.html'),
-  ...walkFiles(path.join(ROOT, 'src', 'ui'), '.js'),
+  ...walkFiles(path.join(ROOT, 'src'), '.js'),
 ];
 const dataI18nRegex = /data-i18n=["']([a-zA-Z0-9_.-]+)["']/g;
-for (const file of htmlAndUiFiles) {
+const i18nCallRegex = /i18n(?:\?\.|\.)t(?:\?\.)?\(\s*["']([a-zA-Z0-9_.-]+)["']/g;
+const keyPropRegex =
+  /\b(?:nameKey|titleKey|descKey|textKey|labelKey|hintKey|bodyKey|subtitleKey|regionKey|powerDescKey|loreKey|kickerKey|subKey|oathKey|speakerKey|promptKey)\s*:\s*["']([a-zA-Z0-9_.-]+)["']/g;
+
+for (const file of allSourceFiles) {
   if (!fs.existsSync(file)) continue;
   const rel = path.relative(ROOT, file);
   const content = fs.readFileSync(file, 'utf8');
   let match;
   while ((match = dataI18nRegex.exec(content)) !== null) {
     recordRef(match[1], rel);
+  }
+  while ((match = i18nCallRegex.exec(content)) !== null) {
+    if (!match[1].endsWith('.')) recordRef(match[1], rel);
+  }
+  while ((match = keyPropRegex.exec(content)) !== null) {
+    if (!match[1].endsWith('.')) recordRef(match[1], rel);
   }
 }
 

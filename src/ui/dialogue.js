@@ -41,13 +41,13 @@ function escapeHtml(str) {
 }
 
 /**
- * Parse raw localized string containing `[[codex:id|label]]` into tokens:
+ * Parse raw localized string containing `[[codex:id|label]]` (or `[[codex:id]]`) into tokens:
  *   [{ type: 'text', text }, { type: 'codex', id, text }]
  */
-export function parseDialogueTokens(rawText) {
+export function parseDialogueTokens(rawText, resolveLabel) {
   const str = String(rawText || '');
   const tokens = [];
-  const regex = /\[\[codex:([^|\]]+)\|([^\]]+)\]\]/g;
+  const regex = /\[\[codex:([^|\]]+)(?:\|([^\]]+))?\]\]/g;
   let lastIndex = 0;
   let match;
 
@@ -58,10 +58,12 @@ export function parseDialogueTokens(rawText) {
         text: str.slice(lastIndex, match.index),
       });
     }
+    const id = match[1].trim();
+    const label = match[2] ? match[2] : (typeof resolveLabel === 'function' ? resolveLabel(id) : id);
     tokens.push({
       type: 'codex',
-      id: match[1].trim(),
-      text: match[2],
+      id,
+      text: label,
     });
     lastIndex = regex.lastIndex;
   }
@@ -276,11 +278,12 @@ export function createDialogue(ctx) {
   const registry = new Map();
   const executedActionsLog = [];
 
-  function register(defs, maybeDef) {
-    if (typeof defs === 'string' && maybeDef && typeof maybeDef === 'object') {
-      registry.set(defs, { id: defs, ...maybeDef });
+  function register(idOrDefs, maybeDef) {
+    if (typeof idOrDefs === 'string' && maybeDef && typeof maybeDef === 'object') {
+      registry.set(idOrDefs, { id: idOrDefs, ...maybeDef });
       return;
     }
+    const defs = idOrDefs;
     if (!defs || typeof defs !== 'object') return;
     if (defs.id && defs.nodes) {
       registry.set(defs.id, defs);
@@ -293,20 +296,24 @@ export function createDialogue(ctx) {
     }
   }
 
-  function resolveSpeakerKey(raw) {
-    if (!raw || typeof raw !== 'string') return 'npc.oldLama';
+  function resolveSpeakerKey(rawSpeaker) {
+    if (!rawSpeaker || typeof rawSpeaker !== 'string') return 'npc.oldLama';
+    if (i18n?.has?.(rawSpeaker)) return rawSpeaker;
+    if (i18n?.has?.(`${rawSpeaker}.name`)) return `${rawSpeaker}.name`;
     if (
-      raw.startsWith('npc.') ||
-      raw.startsWith('boss.') ||
-      raw.startsWith('dlg.') ||
-      i18n?.has?.(raw)
+      rawSpeaker.startsWith('npc.') ||
+      rawSpeaker.startsWith('boss.') ||
+      rawSpeaker.startsWith('dlg.')
     ) {
-      if (raw.startsWith('boss.') && !raw.endsWith('.name') && i18n?.has?.(`${raw}.name`)) {
-        return `${raw}.name`;
-      }
-      return raw;
+      return rawSpeaker;
     }
-    return `npc.${raw}`;
+    return `npc.${rawSpeaker}`;
+  }
+
+  function resolveCodexLabel(codexId) {
+    if (i18n?.has?.(`codex.${codexId}.title`)) return i18n.t(`codex.${codexId}.title`);
+    if (i18n?.has?.(`codex.entry.${codexId}.title`)) return i18n.t(`codex.entry.${codexId}.title`);
+    return codexId;
   }
 
   function normalizeActionItem(act) {
@@ -646,7 +653,7 @@ export function createDialogue(ctx) {
     }
 
     const rawText = i18n.t(node.textKey || node.text || '');
-    const tokens = parseDialogueTokens(rawText);
+    const tokens = parseDialogueTokens(rawText, resolveCodexLabel);
     const totalChars = tokens.reduce((sum, t) => sum + t.text.length, 0);
 
     active.tokens = tokens;
@@ -873,7 +880,7 @@ export function createDialogue(ctx) {
   i18n.onChange(() => {
     if (!active) return;
     const rawText = i18n.t(active.node.textKey || active.node.text || '');
-    active.tokens = parseDialogueTokens(rawText);
+    active.tokens = parseDialogueTokens(rawText, resolveCodexLabel);
     active.totalChars = active.tokens.reduce((sum, t) => sum + t.text.length, 0);
     if (!active.typing) {
       active.revealedChars = active.totalChars;
