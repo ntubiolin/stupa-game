@@ -11,8 +11,8 @@ body.story-quality-low .story-phone::backdrop { backdrop-filter: none; }
 .story-letter-qr { width: 10rem; margin: 1.25rem auto; text-align: center; font-size: .8rem; }
 .story-letter-qr svg { display: block; width: 100%; }
 
-/* Keep Losang's entire head, hands and map visible; captions never overlay art. */
-.story-losang-still { margin: 24px 0; }
-.story-losang-still img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: contain; background: #0c1921; }
-.story-losang-still figcaption { margin-top: 10px; font-size: 12px; line-height: 1.65; color: #c9d3d3; }
-.story-losang-still-fallback { margin: 0; padding: 18px; border: 1px solid #b8afa04d; font-size: 14px; line-height: 1.8; color: #c9d3d3; }
+/* Keep Losang's entire head, hands and map visible, and keep chapter stills uncropped; captions never overlay art. */
+.story-losang-still, .story-chapter-still { margin: 24px 0; }
+.story-losang-still img, .story-chapter-still img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: contain; background: #0c1921; }
+.story-losang-still figcaption, .story-chapter-still figcaption { margin-top: 10px; font-size: 12px; line-height: 1.65; color: #c9d3d3; }
+.story-losang-still-fallback, .story-chapter-still-fallback { margin: 0; padding: 18px; border: 1px solid #b8afa04d; font-size: 14px; line-height: 1.8; color: #c9d3d3; }

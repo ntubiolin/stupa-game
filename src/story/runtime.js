@@ -21,6 +21,7 @@ import { HANDOVER_QR_SVG, unreadPhoneThreads } from '../data/story/phoneThreads.
 import { createPhone } from '../ui/story/phone.js';
 import { createDocumentary } from '../ui/story/documentary.js';
 import { createLosangStill } from '../ui/story/losangStill.js';
+import { createChapterStill } from '../ui/story/chapterStills.js';
 import { DOCUMENTARY_CLIPS } from '../data/story/documentary.js';
 import { createMemorySystem } from './memorySystem.js';
 import { createLosang } from './characters/losang.js';
@@ -132,6 +133,9 @@ function renderCard() {
   if (bodyKey === 'losang.5') {
     modalStill = createLosangStill(t);
     modal.querySelector('.story-prose').before(modalStill.element);
+  } else {
+    modalStill = createChapterStill(bodyKey, t);
+    if (modalStill) modal.querySelector('.story-prose').before(modalStill.element);
   }
   const card = modal.querySelector('.story-card');
   let completed = false;

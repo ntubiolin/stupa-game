@@ -340,6 +340,7 @@ Public narrative APIs and ordered beat/event schemas are specified in
 | `ui/story/phone.js` | `ctx.phone` | Novel-based fixed messages, diaries, evidence, train transcript |
 | `ui/story/documentary.js` | `ctx.documentary` | Lazy full-frame still/video cues, captions, next/finish, pause/seek/replay/skip/cancel and fallback |
 | `ui/story/losangStill.js` | runtime-owned DOM only | Optional final-dialogue map-handoff illustration, full-frame layout, localized fallback/provenance and image cleanup (#113); no gameplay/save effects |
+| `ui/story/chapterStills.js` | runtime-owned DOM only | Optional 16:9 chapter card illustrations across Mangyul, Yarlung, Samye, Chimphu and Finale, full-frame layout, localized fallback/provenance and image cleanup (#114); no gameplay/save effects |
 | `story/memorySystem.js` | `ctx.memory` | Pose threshold evaluation, accessible camera assistance and explicit capture |
 | `story/storyAudio.js` | `ctx.storyAudio` | 432 Hz adaptive procedural music & soundscape controller across Demo beats and Chapter checkpoints (#135) |
 | `story/runtime.js` | bootstrap owner only | World exploration, Losang, map, three spring interactions, return, focus/overlay integration |
