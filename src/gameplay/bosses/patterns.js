@@ -219,12 +219,16 @@ export function createPatternRunner(ctx, parentGroup) {
             bus.emit('sfx', 'boulder');
             ctx.cameraRig?.addShake?.(0.35);
 
-            // Check player and AI companions hit
+            // Check player and AI companions hit (jumping evades ground radial AoE)
             const pPos = state.player?.position;
             if (pPos) {
               const dist = Math.hypot(pPos.x - cx, pPos.z - cz);
               if (dist <= radius + (ctx.config.PLAYER?.radius || 0.4)) {
-                dealPlayerDamage(damage, { x: cx, z: cz }, knockback);
+                if (state.player?.isJumping || (state.player?.jumpHeight || 0) > 0.15) {
+                  bus.emit('player:jumpDodge', { source: 'radialAoe', pos: { x: cx, z: cz } });
+                } else {
+                  dealPlayerDamage(damage, { x: cx, z: cz }, knockback);
+                }
               }
             }
             if (!state.bossSubdued) {
@@ -302,7 +306,11 @@ export function createPatternRunner(ctx, parentGroup) {
             );
             if (dist <= width * 0.65 + (ctx.config.PLAYER?.radius || 0.4)) {
               this.hitPlayer = true;
-              dealPlayerDamage(damage, boss.pos, knockback);
+              if (state.player?.isJumping || (state.player?.jumpHeight || 0) > 0.15) {
+                bus.emit('player:jumpDodge', { source: 'lineCharge', pos: { ...boss.pos } });
+              } else {
+                dealPlayerDamage(damage, boss.pos, knockback);
+              }
             }
           }
           if (!state.bossSubdued) {
@@ -525,7 +533,11 @@ export function createPatternRunner(ctx, parentGroup) {
               const diff = Math.abs(normalizeAngle(pAngle - gapAngle));
               if (diff > gapHalfWidth) {
                 this.hitPlayer = true;
-                dealPlayerDamage(damage, { x: cx, z: cz }, 3.0, slowSec);
+                if (state.player?.isJumping || (state.player?.jumpHeight || 0) > 0.15) {
+                  bus.emit('player:jumpDodge', { source: 'ringWave', pos: { x: cx, z: cz } });
+                } else {
+                  dealPlayerDamage(damage, { x: cx, z: cz }, 3.0, slowSec);
+                }
               }
             }
           }
@@ -931,8 +943,12 @@ export function createPatternRunner(ctx, parentGroup) {
       if (pPos) {
         const dist = Math.hypot(pPos.x - proj.x, pPos.z - proj.z);
         if (dist <= proj.hitRadius + pRadius) {
-          hit = true;
-          dealPlayerDamage(proj.damage, { x: proj.x, z: proj.z }, 3.5, 1.5);
+          if (state.player?.isJumping || (state.player?.jumpHeight || 0) > 0.15) {
+            bus.emit('player:jumpDodge', { source: 'projectileVolley', pos: { x: proj.x, z: proj.z } });
+          } else {
+            hit = true;
+            dealPlayerDamage(proj.damage, { x: proj.x, z: proj.z }, 3.5, 1.5);
+          }
         }
       }
       if (!hit && !state.bossSubdued) {

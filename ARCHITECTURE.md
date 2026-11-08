@@ -178,7 +178,9 @@ state.player.position // THREE.Vector3 — player writes
 state.player.heading  // radians
 state.player.velocity // THREE.Vector3
 state.player.isMoving // bool
-state.player.action   // 'idle'|'walk'|'run'|'prostrate'|'light'|'feed'|'chant'|'hurt'|'faint'
+state.player.isJumping// bool (#210 airborne jump evasion state)
+state.player.jumpHeight // vertical airborne height in meters (#210)
+state.player.action   // 'idle'|'walk'|'run'|'jump'|'prostrate'|'light'|'feed'|'chant'|'hurt'|'faint'
 state.player.level    // 1..40
 state.player.exp      // 0..maxExp
 state.player.hp       // 0..maxHp
@@ -211,6 +213,7 @@ state.interactionTarget  // currently targeted interactable or null
 | `merit` | `{ type: 'kora'\|'prostration'\|'lamp'\|'monkey'\|'wheel' }` | player / lamps / monkeys / stupa |
 | `kora:progress` | `{ fraction: 0..1, laps }` | player |
 | `kora:wrongway` | – | player (walking counter-clockwise for a while) |
+| `player:jump` / `player:jumpDodge` | `{ x, z }` / `{ source, pos? }` | player / projectiles / enemies / boss patterns (#210) |
 | `achievement` | `{ id }` | merit |
 | `toast` | `{ key?, text?, params?, kind? }` | anyone → HUD |
 | `prompt` | `{ labelKey, keyHint } \| null` | interaction → HUD |
@@ -562,9 +565,13 @@ the current memory checkpoint. All new chapter props use emissive meshes with
 zero new PointLights. The existing #135 score implementation and score data are
 preserved.
 
-## Adventure difficulty and settings (#120)
+## Adventure difficulty and settings (#120 #210)
 
-- `src/data/combatSettings.js`: shared `MIGOI_ARENA_RADIUS` (20 m) for the snow king barrier/player clamp, wilderness flattening and boulder exclusion. Difficulty presets resolve unknown/missing values to `normal`.
+- `src/data/combatSettings.js`: shared `MIGOI_ARENA_RADIUS` (20 m) for the snow king barrier/player clamp, wilderness flattening and boulder exclusion. Difficulty presets resolve unknown/missing values to `normal`. Includes `bossArenaLock` (`false` on `easy`/`normal` so players can fight outside `arena.r` or disengage, and `true` on `hard` to seal the Boss arena barrier and lock dungeon Boss doors).
+- `src/player/player.js`, `src/gameplay/targeting.js`, `src/systems/quests.js` (#210):
+  - **Jump Evasion (`KeyZ` / `KeyG` / HUD & Skillbar Jump buttons)**: `ctx.player.jump()` / `ctx.player.isJumping()` launches an airborne jump (`0` PointLights) that evades ground-erupting attacks (`frostRoar`, `boulder` shockwave, `groundSlam`/`heatWave`/`rootGrasp`/`stomp`, elite ground hazards, Boss `radialAoe`/`targetedAoe`/`ringWave`, Drought Lord whirlwinds), arrows (`redArrow`, Boss `projectileVolley`), and charges (`spearCharge`/`spinDash`/`yakCharge`/`avalancheRoll`, Boss `lineCharge`).
+  - **Mouse Cursor Auto-Aim**: On desktop (`ctx.input.mouse.active`), `ctx.targeting.acquire()` aims toward the 3D ground point under the mouse cursor (`getCursorWorldPoint` / `getMouseAimDirection`) with narrow-cone (`±24°`) soft-target assist and rotates `state.player.heading` toward the attack direction.
+  - **Initial Quest Guidance**: `prologue.vow` (`autoStart: true, freshStartOnly: true`) auto-starts on `game:start` with an expanded Quest Tracker, onboarding guidance toast, and a `0`-PointLight 3D golden stepping-stone trail (`QuestGuidanceTrailGroup`) leading to the tracked objective.
 - `src/ui/settings.js`: `ctx.settingsUi.open()`, `close()`, `isOpen()`; native modal dialog with title/HUD entries, keyboard focus containment and bilingual radio options. Restores prior `state.uiOpen` on close. No new bus events or update loop.
 - Persistence: existing `settings` section gains `difficulty: 'easy' | 'normal' | 'hard'`; writes merge with existing settings via `ctx.save`, flush immediately, and preserve audio/language preferences. Old saves default to normal without migration.
 - `vitals.applyDamage`: multiply mitigated incoming damage by 0.6 / 1 / 1.4 (minimum 1), once before shield absorption; invulnerability/god mode still short-circuit. Changes apply to the next hit, including active boss fights, without resetting HP or changing enemy HP, loot, experience or quest progress.

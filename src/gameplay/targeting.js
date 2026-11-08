@@ -12,6 +12,8 @@ import * as THREE from 'three';
 
 export function createTargeting(ctx) {
   const { state } = ctx;
+  const raycaster = new THREE.Raycaster();
+  const mouseNdc = new THREE.Vector2();
 
   function getEnemyXZ(enemy) {
     const p = enemy?.pos || enemy?.position || enemy?.group?.position;
@@ -22,11 +24,135 @@ export function createTargeting(ctx) {
     };
   }
 
-  function acquire({ range = 14, halfAngle = Math.PI * 0.45, closeRadius = 2.5 } = {}) {
+  function getActiveCandidateList(origin, range, halfAngle, aimHeading) {
+    const list = [];
+    if (ctx.enemies?.getActiveEnemies) {
+      const active = ctx.enemies.getActiveEnemies() || [];
+      for (let i = 0; i < active.length; i++) {
+        const e = active[i];
+        if (e && e.state !== 'liberated' && e.hp > 0) list.push(e);
+      }
+    } else if (ctx.enemies?.queryCone && origin) {
+      const cone = ctx.enemies.queryCone(origin, aimHeading, range, halfAngle) || [];
+      for (let i = 0; i < cone.length; i++) {
+        const e = cone[i];
+        if (e && e.state !== 'liberated' && e.hp > 0) list.push(e);
+      }
+    }
+    const activeBoss = ctx.bosses?.getActiveBoss?.()?.getInternalState?.() || state.boss?.active;
+    if (activeBoss && !activeBoss.dead && (activeBoss.hp ?? 1) > 0 && activeBoss.pos) {
+      list.push(activeBoss);
+    }
+    return list;
+  }
+
+  function getCursorWorldPoint(origin = state.player?.position) {
+    const mouse = ctx.input?.mouse;
+    const camera = ctx.camera;
+    if (!mouse?.active || !camera || typeof camera.updateMatrixWorld !== 'function') {
+      return null;
+    }
+    mouseNdc.set(Number(mouse.x) || 0, Number(mouse.y) || 0);
+    raycaster.setFromCamera(mouseNdc, camera);
+    const ray = raycaster.ray;
+    const ox = Number(origin?.x ?? state.player?.position?.x) || 0;
+    const oy = Number(origin?.y ?? state.player?.position?.y) || 0;
+    const oz = Number(origin?.z ?? state.player?.position?.z) || 0;
+    const planeY = oy + 0.55;
+
+    let hitX = ox;
+    let hitZ = oz;
+    if (ray.direction.y < -0.015) {
+      const t = (planeY - ray.origin.y) / ray.direction.y;
+      if (t > 0 && t < 250) {
+        hitX = ray.origin.x + ray.direction.x * t;
+        hitZ = ray.origin.z + ray.direction.z * t;
+      } else {
+        hitX = ray.origin.x + ray.direction.x * 24;
+        hitZ = ray.origin.z + ray.direction.z * 24;
+      }
+    } else {
+      const hLen = Math.hypot(ray.direction.x, ray.direction.z);
+      if (hLen <= 1e-5) return null;
+      hitX = ox + (ray.direction.x / hLen) * 14;
+      hitZ = oz + (ray.direction.z / hLen) * 14;
+    }
+    return new THREE.Vector3(hitX, oy, hitZ);
+  }
+
+  function getMouseAimDirection(origin = state.player?.position) {
+    const pt = getCursorWorldPoint(origin);
+    if (!pt) return null;
+    const ox = Number(origin?.x ?? state.player?.position?.x) || 0;
+    const oz = Number(origin?.z ?? state.player?.position?.z) || 0;
+    const dx = pt.x - ox;
+    const dz = pt.z - oz;
+    if (dx * dx + dz * dz <= 0.0025) return null;
+    return {
+      dir: Math.atan2(-dx, -dz),
+      point: pt,
+    };
+  }
+
+  function acquire({ range = 14, halfAngle = Math.PI * 0.45, closeRadius = 2.5, useMouse = true } = {}) {
     const origin = state.player?.position || { x: 0, y: 0, z: 0 };
     const ox = Number(origin.x) || 0;
     const oz = Number(origin.z) || 0;
     const playerHeading = Number(state.player?.heading) || 0;
+
+    const mouseAim = useMouse ? getMouseAimDirection(origin) : null;
+    if (mouseAim) {
+      // When mouse cursor is active on desktop, aim toward the mouse cursor,
+      // with gentle soft-target snapping only within a narrow cone (±24°) around the cursor ray.
+      const mouseDir = mouseAim.dir;
+      const fwdX = -Math.sin(mouseDir);
+      const fwdZ = -Math.cos(mouseDir);
+      const cosMouseCone = Math.cos((24 * Math.PI) / 180);
+      const candidates = getActiveCandidateList(origin, range, (24 * Math.PI) / 180, mouseDir);
+
+      let bestMouseTarget = null;
+      let bestScore = Infinity;
+      for (let i = 0; i < candidates.length; i++) {
+        const e = candidates[i];
+        const ep = getEnemyXZ(e);
+        const dx = ep.x - ox;
+        const dz = ep.z - oz;
+        const dist = Math.hypot(dx, dz);
+        if (dist > range || dist <= 1e-4) continue;
+        const dot = (dx / dist) * fwdX + (dz / dist) * fwdZ;
+        const cursorDist = Math.hypot(ep.x - mouseAim.point.x, ep.z - mouseAim.point.z);
+        if (dot >= cosMouseCone || cursorDist <= 1.8) {
+          const score = cursorDist * 0.7 + dist * 0.3;
+          if (score < bestScore) {
+            bestScore = score;
+            bestMouseTarget = e;
+          }
+        }
+      }
+
+      if (bestMouseTarget) {
+        const ep = getEnemyXZ(bestMouseTarget);
+        if (!bestMouseTarget.position || !(bestMouseTarget.position instanceof THREE.Vector3)) {
+          bestMouseTarget.position = new THREE.Vector3(ep.x, ep.y, ep.z);
+        } else {
+          bestMouseTarget.position.set(ep.x, ep.y, ep.z);
+        }
+        const dx = ep.x - ox;
+        const dz = ep.z - oz;
+        const dir = dx * dx + dz * dz > 1e-6 ? Math.atan2(-dx, -dz) : mouseDir;
+        return {
+          target: bestMouseTarget,
+          dir,
+          targetPos: bestMouseTarget.position.clone(),
+        };
+      }
+
+      return {
+        target: null,
+        dir: mouseDir,
+        targetPos: mouseAim.point,
+      };
+    }
 
     let bestTarget = null;
     let bestDist = Infinity;
@@ -65,6 +191,22 @@ export function createTargeting(ctx) {
         if (dist < bestDist) {
           bestDist = dist;
           bestTarget = e;
+        }
+      }
+    }
+
+    // Also check active Boss in forward cone
+    const activeBoss = ctx.bosses?.getActiveBoss?.()?.getInternalState?.() || state.boss?.active;
+    if (activeBoss && !activeBoss.dead && (activeBoss.hp ?? 1) > 0 && activeBoss.pos) {
+      const ep = getEnemyXZ(activeBoss);
+      const dx = ep.x - ox;
+      const dz = ep.z - oz;
+      const dist = Math.hypot(dx, dz);
+      if (dist <= range) {
+        const dot = dist > 1e-4 ? (dx / dist) * fwdX + (dz / dist) * fwdZ : 1;
+        if ((dot >= cosHalf || dist <= closeRadius) && dist < bestDist) {
+          bestDist = dist;
+          bestTarget = activeBoss;
         }
       }
     }
@@ -115,6 +257,9 @@ export function createTargeting(ctx) {
   const api = {
     update() {},
     acquire,
+    getCursorWorldPoint,
+    getMouseAimDirection,
+    getAimDirection: (origin) => acquire({ range: 14, halfAngle: Math.PI * 0.45 }),
   };
 
   ctx.targeting = api;

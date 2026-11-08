@@ -23,6 +23,7 @@ import '../i18n/ch5.js';
 import '../i18n/coop.js';
 import '../i18n/termaCaves.js';
 import { i18n } from '../i18n.js';
+import { getDifficulty } from '../data/combatSettings.js';
 
 export const GRID_W = 6;
 export const GRID_H = 6;
@@ -2596,6 +2597,7 @@ export function createDungeon(ctx) {
     const doorHalf = Math.max(0.5, DOOR_WIDTH / 2 - radius);
     const activeBoss = state.boss?.active;
     const lockBossRoom =
+      Boolean(getDifficulty(ctx).bossArenaLock) &&
       currentFloor === 3 &&
       activeBoss &&
       activeBoss.id === 'termaGuardian' &&

@@ -26,6 +26,7 @@ const STRINGS = {
     'controls.feed': '餵猴子',
     'controls.prostrate': '大禮拜',
     'controls.basic': '吽字光彈',
+    'controls.jump': '跳躍閃避',
     'controls.chant': '六字大明咒',
     'controls.skills': '技能面板',
     'controls.hud': '隱藏介面',
@@ -105,6 +106,7 @@ const STRINGS = {
     'mobile.interact': '互動',
     'mobile.feed': '餵食',
     'mobile.chant': '誦咒',
+    'mobile.jump': '跳躍',
 
     'toast.welcome': '歡迎來到博達哈。請順時針繞塔，讓佛塔在你的右手邊。',
     'toast.koraLap': '完成第 {n} 圈繞塔',
@@ -127,7 +129,9 @@ const STRINGS = {
     'toast.levelUp': '修為提升至等級 {level}',
     'toast.itemPickup': '獲得 {name}：{effect}',
     'toast.enemyLiberated': '超度了 {name} +{exp} EXP',
-    'tutorial.wild1': '按 Space 施放吽字光彈 · 按 R 誦念六字大明咒',
+    'toast.jumpDodge': '✦ 凌空躍起，閃避了攻勢！',
+    'toast.questGuideStart': '📜 願行指引：跟隨金色指引標記，前往佛塔南側與「老喇嘛」交談（按 E）',
+    'tutorial.wild1': '按 Space 施放吽字光彈 · 按 R 誦念六字大明咒 · 按 Z 跳躍閃避',
     'tutorial.wild2': '注意紅色預警，及時閃避',
     'tutorial.wild3': 'HP/MP 不足時，回佛塔大禮拜、點燈、餵猴',
 
@@ -213,6 +217,7 @@ const STRINGS = {
     'controls.feed': 'Feed monkey',
     'controls.prostrate': 'Prostrate',
     'controls.basic': 'Hum Bolt',
+    'controls.jump': 'Jump / Dodge',
     'controls.chant': 'Six-Syllable Mantra',
     'controls.skills': 'Skills Panel',
     'controls.hud': 'Hide interface',
@@ -292,6 +297,7 @@ const STRINGS = {
     'mobile.interact': 'Use',
     'mobile.feed': 'Feed',
     'mobile.chant': 'Chant',
+    'mobile.jump': 'Jump',
 
     'toast.welcome': 'Welcome to Boudha. Walk clockwise, keeping the stupa on your right.',
     'toast.koraLap': 'Kora lap {n} complete',
@@ -314,7 +320,9 @@ const STRINGS = {
     'toast.levelUp': 'Reached Level {level}',
     'toast.itemPickup': 'Obtained {name}: {effect}',
     'toast.enemyLiberated': 'Liberated {name} +{exp} EXP',
-    'tutorial.wild1': 'Press Space for Hum Bolt · Press R for Six-Syllable Mantra',
+    'toast.jumpDodge': '✦ Leapt into the air and dodged the attack!',
+    'toast.questGuideStart': '📜 Quest Guide: Follow the golden marker to speak with the Old Lama south of the Stupa (press E)',
+    'tutorial.wild1': 'Press Space for Hum Bolt · Press R for Six-Syllable Mantra · Press Z to Jump & Dodge',
     'tutorial.wild2': 'Watch for red telegraphs and dodge in time',
     'tutorial.wild3': 'When low on HP/MP, return to the Stupa to prostrate, light lamps, and feed monkeys',
 

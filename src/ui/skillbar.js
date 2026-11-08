@@ -103,6 +103,34 @@ export function createSkillbar(ctx) {
     });
   }
 
+  // Jump button (Z) on the desktop skill bar
+  const jumpBarBtn = document.createElement('button');
+  jumpBarBtn.id = 'btn-skillbar-jump';
+  jumpBarBtn.type = 'button';
+  jumpBarBtn.className = 'skill-slot skill-slot--jump';
+  jumpBarBtn.dataset.action = 'jump';
+  jumpBarBtn.innerHTML = `
+    <span class="skill-slot__glyph" aria-hidden="true">⏫</span>
+    <kbd class="skill-slot__key">Z</kbd>
+    <span class="skill-slot__tooltip" aria-hidden="true">${i18n.t('controls.jump')}</span>
+  `;
+  jumpBarBtn.setAttribute('aria-label', `${i18n.t('controls.jump')} (Z)`);
+  jumpBarBtn.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    ctx.input?.trigger('jump');
+    ctx.player?.jump?.();
+  });
+  jumpBarBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (e.detail === 0) {
+      ctx.input?.trigger('jump');
+      ctx.player?.jump?.();
+    }
+  });
+  skillBarEl.appendChild(jumpBarBtn);
+
   // Small K button on the right end of the skill bar to open the Skills Modal
   const openModalBtn = document.createElement('button');
   openModalBtn.id = 'btn-skillbar-modal';
@@ -249,6 +277,24 @@ export function createSkillbar(ctx) {
     ctx.input?.trigger('interact');
   });
   mobilePadEl.appendChild(interactBtn);
+
+  // Jump button (Z) on Mobile Skill Pad
+  const jumpPadBtn = document.createElement('button');
+  jumpPadBtn.id = 'btn-mobile-pad-jump';
+  jumpPadBtn.type = 'button';
+  jumpPadBtn.className = 'arc-btn arc-btn--jump glass-panel';
+  jumpPadBtn.dataset.mobileAction = 'jump';
+  jumpPadBtn.innerHTML = `
+    <span class="arc-btn__icon" aria-hidden="true">⏫</span>
+    <kbd class="arc-btn__key">Z</kbd>
+  `;
+  jumpPadBtn.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    ctx.input?.trigger('jump');
+    ctx.player?.jump?.();
+  });
+  mobilePadEl.appendChild(jumpPadBtn);
 
   playHud.appendChild(mobilePadEl);
 
@@ -556,6 +602,10 @@ export function createSkillbar(ctx) {
       if (ui.tooltipEl) ui.tooltipEl.textContent = name;
       ui.btn.setAttribute('aria-label', `${name} (${ui.def.keyLabel})`);
     }
+    const jumpLabel = i18n.t('controls.jump');
+    const jumpTip = jumpBarBtn.querySelector('.skill-slot__tooltip');
+    if (jumpTip) jumpTip.textContent = jumpLabel;
+    jumpBarBtn.setAttribute('aria-label', `${jumpLabel} (Z)`);
     if (modalOpen) renderModal();
   });
   bus?.on('skill:rank', () => {

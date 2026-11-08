@@ -5,6 +5,7 @@
  * and clockwise kora tracking.
  */
 import { deg, polar } from '../config.js';
+import { getDifficulty } from '../data/combatSettings.js';
 import {
   DEFAULT_APPEARANCE,
   normalizeAppearance,
@@ -940,6 +941,63 @@ export function createPlayer(ctx) {
   let chantTimer = 0;
   let chantDuration = 0.5;
 
+  // Jump state (for dodging ground attacks, arrows, and charges)
+  const JUMP_V0 = 6.2;
+  const JUMP_GRAVITY = 20.0;
+  const JUMP_COOLDOWN = 0.62;
+  let jumpY = 0;
+  let jumpVy = 0;
+  let jumpCooldown = 0;
+  let jumpRingTimer = 0;
+  state.player.isJumping = false;
+  state.player.jumpHeight = 0;
+
+  const jumpRingMat = new THREE.MeshBasicMaterial({
+    color: 0xfde68a,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const jumpRingMesh = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.46, 28), jumpRingMat);
+  jumpRingMesh.rotation.x = -Math.PI * 0.5;
+  jumpRingMesh.position.y = 0.04;
+  jumpRingMesh.visible = false;
+  root.add(jumpRingMesh);
+
+  function triggerJump() {
+    if (
+      state.mode !== 'play' ||
+      state.uiOpen ||
+      state.customizing ||
+      state.player.action === 'faint' ||
+      prostrateTime >= 0 ||
+      gesture ||
+      jumpY > 0.04 ||
+      jumpCooldown > 0
+    ) {
+      return false;
+    }
+    jumpVy = JUMP_V0;
+    jumpY = 0.02;
+    jumpCooldown = JUMP_COOLDOWN;
+    jumpRingTimer = 0.36;
+    state.player.jumpHeight = jumpY;
+    state.player.isJumping = true;
+    state.player.action = 'jump';
+    jumpRingMesh.visible = true;
+    jumpRingMesh.scale.set(0.65, 0.65, 0.65);
+    jumpRingMat.opacity = 0.78;
+    bus.emit('player:jump', {
+      x: state.player.position.x,
+      y: state.player.position.y,
+      z: state.player.position.z,
+    });
+    bus.emit('sfx', { name: 'step' });
+    return true;
+  }
+
   // Hurt & flash state
   let hurtTimer = 0;
   let flashTimer = 0;
@@ -1083,6 +1141,13 @@ export function createPlayer(ctx) {
     prostrateTime = -1;
     chantTimer = 0;
     hurtTimer = 0;
+    jumpY = 0;
+    jumpVy = 0;
+    jumpCooldown = 0;
+    jumpRingTimer = 0;
+    jumpRingMesh.visible = false;
+    state.player.isJumping = false;
+    state.player.jumpHeight = 0;
     if (flashTimer > 0) {
       flashTimer = 0;
       restoreFlash();
@@ -1204,9 +1269,15 @@ export function createPlayer(ctx) {
         ctx.dungeon.clampPosition(pos, pr);
       }
 
-      // Keep inside active boss arena barrier
+      // Keep inside active boss arena barrier only when difficulty locks the arena (Hard)
       const bState = state.boss?.active;
-      if (bState && !bState.dead && bState.arena && bState.arena.map === currentZone) {
+      if (
+        bState &&
+        !bState.dead &&
+        bState.arena &&
+        bState.arena.map === currentZone &&
+        Boolean(getDifficulty(ctx).bossArenaLock)
+      ) {
         const bdx = pos.x - bState.arena.x;
         const bdz = pos.z - bState.arena.z;
         const bd = Math.hypot(bdx, bdz);
@@ -1610,6 +1681,36 @@ export function createPlayer(ctx) {
       return;
     }
 
+    // 3b. Jump input & vertical physics
+    if (jumpCooldown > 0) {
+      jumpCooldown = Math.max(0, jumpCooldown - dt);
+    }
+    if (input && input.pressed('jump') && !state.uiOpen) {
+      triggerJump();
+    }
+    if (jumpY > 0 || jumpVy !== 0) {
+      jumpY += jumpVy * dt;
+      jumpVy -= JUMP_GRAVITY * dt;
+      if (jumpY <= 0) {
+        jumpY = 0;
+        jumpVy = 0;
+        bus.emit('sfx', { name: 'step' });
+      }
+    }
+    state.player.jumpHeight = jumpY;
+    state.player.isJumping = jumpY > 0.05;
+
+    if (jumpRingTimer > 0) {
+      jumpRingTimer = Math.max(0, jumpRingTimer - dt);
+      const p = 1 - jumpRingTimer / 0.36;
+      const sc = 0.65 + p * 1.45;
+      jumpRingMesh.scale.set(sc, sc, sc);
+      jumpRingMat.opacity = (1 - p) * 0.72;
+      if (jumpRingTimer === 0) {
+        jumpRingMesh.visible = false;
+      }
+    }
+
     // 4. Camera-relative movement
     const mx = (input && !state.uiOpen && !state.player.lockedMovement) ? input.move.x : 0;
     const my = (input && !state.uiOpen && !state.player.lockedMovement) ? input.move.y : 0;
@@ -1623,6 +1724,9 @@ export function createPlayer(ctx) {
     camRight.set(-camForward.z, 0, camForward.x);
 
     let targetSpeed = moveMag > 0.02 ? (isRun ? P.runSpeed : P.walkSpeed) * moveMag : 0;
+    if (state.player.isJumping) {
+      targetSpeed *= 1.12;
+    }
     if (state.player.moveSpeedMult && state.player.moveSpeedMult !== 1) {
       targetSpeed *= state.player.moveSpeedMult;
     }
@@ -1673,7 +1777,11 @@ export function createPlayer(ctx) {
     }
 
     state.player.isMoving = speed > 0.12;
-    state.player.action = state.player.isMoving ? (isRun ? 'run' : 'walk') : 'idle';
+    state.player.action = state.player.isJumping
+      ? 'jump'
+      : state.player.isMoving
+        ? (isRun ? 'run' : 'walk')
+        : 'idle';
 
     if (hurtTimer > 0) {
       hurtTimer = Math.max(0, hurtTimer - dt);
@@ -1751,6 +1859,17 @@ export function createPlayer(ctx) {
       rightArm.pivot.rotation.set(0.35, 0.2, 0.45);
     }
 
+    if (state.player.isJumping) {
+      body.position.y = jumpY;
+      torsoPivot.rotation.x = -0.18;
+      leftArm.pivot.rotation.set(0.42, -0.22, -0.28);
+      rightArm.pivot.rotation.set(0.42, 0.22, 0.28);
+      leftArm.forearmPivot.rotation.set(0.55, 0, 0);
+      rightArm.forearmPivot.rotation.set(0.55, 0, 0);
+      leftLeg.rotation.x = -0.48;
+      rightLeg.rotation.x = 0.36;
+    }
+
     root.position.copy(state.player.position);
     root.rotation.y = state.player.heading;
 
@@ -1765,6 +1884,8 @@ export function createPlayer(ctx) {
     koraTargets,
     resolveCollisions,
     moveWithCollisions: movePlayerWithCollisions,
+    jump: triggerJump,
+    isJumping: () => Boolean(state.player.isJumping),
     getKoraProgress() {
       return { fraction: Math.max(0, Math.min(1, koraAccum / TWO_PI)), laps: koraLaps, target: activeKoraTargetId };
     },

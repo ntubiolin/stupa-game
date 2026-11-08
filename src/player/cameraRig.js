@@ -5,6 +5,7 @@
  * collision avoidance, and side-angle framing during prostrations in 'play' mode.
  */
 const TWO_PI = Math.PI * 2;
+import { getDifficulty } from '../data/combatSettings.js';
 
 function wrapAngle(a) {
   a = (a + Math.PI) % TWO_PI;
@@ -336,7 +337,7 @@ export function createCameraRig(ctx) {
     const activeBoss =
       state.boss?.active ||
       (state.bossActive ? (ctx.bosses?.getActiveBoss?.() || true) : ctx.bosses?.getActiveBoss?.());
-    const bossLocked = Boolean(activeBoss && !activeBoss.dead);
+    const bossLocked = Boolean(activeBoss && !activeBoss.dead && getDifficulty(ctx).bossArenaLock);
 
     if (currentRoom && bestRoomDist <= 8.8) {
       const { wx, wz } = currentRoom;

@@ -2933,18 +2933,22 @@ export function createEnemies(ctx) {
               }
             }
 
-            // Check hit on player and AI companions along charge segment
+            // Check hit on player and AI companions along charge segment (jumping evades charges)
             const hitWidth = enemy.activeAttack.hitWidth ?? 1.1;
             const chargeDmg = getScaledAttackDamage(enemy, enemy.activeAttack.damage);
             if (!cd.hasHit && playerPos) {
               const curDist = Math.hypot(playerPos.x - enemy.pos.x, playerPos.z - enemy.pos.z);
               if (curDist <= hitWidth + (config.PLAYER.radius || 0.35)) {
                 cd.hasHit = true;
-                bus.emit('vitals:damage', {
-                  amount: chargeDmg,
-                  type: 'physical',
-                  sourcePos: { ...enemy.pos },
-                });
+                if (state.player?.isJumping || (state.player?.jumpHeight || 0) > 0.15) {
+                  bus.emit('player:jumpDodge', { source: enemy.activeAttack.id, pos: { ...enemy.pos } });
+                } else {
+                  bus.emit('vitals:damage', {
+                    amount: chargeDmg,
+                    type: 'physical',
+                    sourcePos: { ...enemy.pos },
+                  });
+                }
               }
             }
             ctx.coop?.damageCompanionsInRadius?.(enemy.pos.x, enemy.pos.z, hitWidth, chargeDmg, {
@@ -3237,18 +3241,22 @@ export function createEnemies(ctx) {
             if (playerPos) {
               const slamDist = Math.hypot(playerPos.x - enemy.pos.x, playerPos.z - enemy.pos.z);
               if (slamDist <= slamRadius) {
-                if (isRootGrasp && state.player) {
-                  const rootDur = atk.playerRoot || 1.0;
-                  state.player.rootUntil = Math.max(state.player.rootUntil || 0, state.elapsed + rootDur);
-                  state.player.slowUntil = Math.max(state.player.slowUntil || 0, state.elapsed + rootDur);
-                  state.player.slowMultiplier = 0.05;
+                if (state.player?.isJumping || (state.player?.jumpHeight || 0) > 0.15) {
+                  bus.emit('player:jumpDodge', { source: atk.id, pos: { ...enemy.pos } });
+                } else {
+                  if (isRootGrasp && state.player) {
+                    const rootDur = atk.playerRoot || 1.0;
+                    state.player.rootUntil = Math.max(state.player.rootUntil || 0, state.elapsed + rootDur);
+                    state.player.slowUntil = Math.max(state.player.slowUntil || 0, state.elapsed + rootDur);
+                    state.player.slowMultiplier = 0.05;
+                  }
+                  bus.emit('vitals:damage', {
+                    amount: scaledDmg,
+                    type: isHeatWave ? 'magic' : 'physical',
+                    slow: isRootGrasp ? (atk.playerRoot || 1.0) : undefined,
+                    sourcePos: { ...enemy.pos },
+                  });
                 }
-                bus.emit('vitals:damage', {
-                  amount: scaledDmg,
-                  type: isHeatWave ? 'magic' : 'physical',
-                  slow: isRootGrasp ? (atk.playerRoot || 1.0) : undefined,
-                  sourcePos: { ...enemy.pos },
-                });
               }
             }
             ctx.coop?.damageCompanionsInRadius?.(enemy.pos.x, enemy.pos.z, slamRadius, scaledDmg, {
@@ -3526,7 +3534,8 @@ export function createEnemies(ctx) {
 
       if (f.age >= fuse) {
         const dmg = f.damage ?? Math.max(1, Math.round(8 * (f.dmgMult || 1)));
-        if (playerPos && !isPlayerInSafeZone) {
+        const playerAirborne = Boolean(state.player?.isJumping || (state.player?.jumpHeight || 0) > 0.15);
+        if (playerPos && !isPlayerInSafeZone && !playerAirborne) {
           const d = Math.hypot(playerPos.x - f.x, playerPos.z - f.z);
           if (d <= f.radius) {
             bus.emit('vitals:damage', {
@@ -3563,7 +3572,8 @@ export function createEnemies(ctx) {
       if (mp.tickTimer <= 0) {
         mp.tickTimer += mp.tickInterval || 0.5;
         const dmg = mp.damage ?? Math.max(1, Math.round(2 * (mp.dmgMult || 1)));
-        if (playerPos && !isPlayerInSafeZone) {
+        const playerAirborne = Boolean(state.player?.isJumping || (state.player?.jumpHeight || 0) > 0.15);
+        if (playerPos && !isPlayerInSafeZone && !playerAirborne) {
           const d = Math.hypot(playerPos.x - mp.x, playerPos.z - mp.z);
           if (d <= mp.radius) {
             bus.emit('vitals:damage', {
@@ -3607,7 +3617,8 @@ export function createEnemies(ctx) {
 
       if (b.age >= fuse) {
         const dmg = b.damage ?? Math.max(1, Math.round(14 * (b.dmgMult || 1)));
-        if (playerPos && !isPlayerInSafeZone) {
+        const playerAirborne = Boolean(state.player?.isJumping || (state.player?.jumpHeight || 0) > 0.15);
+        if (playerPos && !isPlayerInSafeZone && !playerAirborne) {
           const d = Math.hypot(playerPos.x - b.x, playerPos.z - b.z);
           if (d <= b.radius) {
             bus.emit('vitals:damage', {
@@ -3660,7 +3671,8 @@ export function createEnemies(ctx) {
 
       if (dp.tickTimer <= 0) {
         dp.tickTimer = 0.25;
-        if (playerPos && !isPlayerInSafeZone) {
+        const playerAirborne = Boolean(state.player?.isJumping || (state.player?.jumpHeight || 0) > 0.15);
+        if (playerPos && !isPlayerInSafeZone && !playerAirborne) {
           const d = Math.hypot(playerPos.x - dp.x, playerPos.z - dp.z);
           if (d <= dp.radius) {
             bus.emit('vitals:damage', {

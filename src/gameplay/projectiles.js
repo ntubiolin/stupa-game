@@ -1206,21 +1206,25 @@ export function createProjectiles(ctx) {
         continue;
       }
 
-      // Check player hit
+      // Check player hit (jumping evades horizontal arrows)
       if (playerPos) {
         const pdx = playerPos.x - ra.pos.x;
         const pdz = playerPos.z - ra.pos.z;
         const pDist = Math.hypot(pdx, pdz);
         if (pDist <= ra.hitRadius + playerRadius && Math.abs(playerPos.y - ra.pos.y) < 1.8) {
-          bus.emit('vitals:damage', {
-            amount: ra.damage,
-            type: 'physical',
-            sourcePos: { ...ra.pos },
-          });
-          ra.active = false;
-          ra.group.visible = false;
-          ra.hitbox.visible = false;
-          continue;
+          if (state.player?.isJumping || (state.player?.jumpHeight || 0) > 0.15) {
+            bus.emit('player:jumpDodge', { source: 'redArrow', pos: { ...ra.pos } });
+          } else {
+            bus.emit('vitals:damage', {
+              amount: ra.damage,
+              type: 'physical',
+              sourcePos: { ...ra.pos },
+            });
+            ra.active = false;
+            ra.group.visible = false;
+            ra.hitbox.visible = false;
+            continue;
+          }
         }
       }
 
@@ -1281,11 +1285,15 @@ export function createProjectiles(ctx) {
           const pdz = playerPos.z - b.targetPos.z;
           const pDist = Math.hypot(pdx, pdz);
           if (pDist <= b.hitRadius) {
-            bus.emit('vitals:damage', {
-              amount: b.damage,
-              type: 'physical',
-              sourcePos: { ...b.targetPos },
-            });
+            if (state.player?.isJumping || (state.player?.jumpHeight || 0) > 0.15) {
+              bus.emit('player:jumpDodge', { source: 'boulder', pos: { ...b.targetPos } });
+            } else {
+              bus.emit('vitals:damage', {
+                amount: b.damage,
+                type: 'physical',
+                sourcePos: { ...b.targetPos },
+              });
+            }
           }
         }
         ctx.coop?.damageCompanionsInRadius?.(
@@ -1330,6 +1338,8 @@ export function createProjectiles(ctx) {
             const lotusReflect = (state.player?.shield || 0) > 0 && state.player?.shieldEnh === 'a';
             if (lotusReflect) {
               reflectMagicProjectileAt(fr.centerPos.x, fr.centerPos.y + 0.5, fr.centerPos.z, fr.damage);
+            } else if (state.player?.isJumping || (state.player?.jumpHeight || 0) > 0.15) {
+              bus.emit('player:jumpDodge', { source: 'frostRoar', pos: { ...fr.centerPos } });
             } else {
               bus.emit('vitals:damage', {
                 amount: fr.damage,

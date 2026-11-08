@@ -450,7 +450,11 @@ export const DROUGHT_LORD_DEF = {
       w.cone.rotation.y += dt * 7.5;
       w.baseRing.rotation.z -= dt * 6.0;
 
-      if (pPos && rt.whirlwindHitCooldown <= 0) {
+      if (
+        pPos &&
+        rt.whirlwindHitCooldown <= 0 &&
+        !(ctx.state?.player?.isJumping || (ctx.state?.player?.jumpHeight || 0) > 0.15)
+      ) {
         const d = Math.hypot(pPos.x - w.x, pPos.z - w.z);
         if (d <= w.radius + 0.4) {
           rt.whirlwindHitCooldown = 0.65;

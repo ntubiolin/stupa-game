@@ -277,6 +277,30 @@ export function createQuests(ctx) {
 
   scene.add(worldMarkerGroup);
 
+  // 3D Ground Guidance Trail (8 golden lotus-ring stepping stones from player toward tracked target; 0 PointLights)
+  const TRAIL_NODE_COUNT = 8;
+  const questTrailGroup = new THREE.Group();
+  questTrailGroup.name = 'QuestGuidanceTrailGroup';
+  questTrailGroup.visible = false;
+  const trailNodeGeo = new THREE.RingGeometry(0.12, 0.24, 16);
+  trailNodeGeo.rotateX(-Math.PI / 2);
+  const trailNodes = [];
+  for (let i = 0; i < TRAIL_NODE_COUNT; i++) {
+    const mat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(2.2, 1.75, 0.5),
+      transparent: true,
+      opacity: 0.45,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      toneMapped: false,
+    });
+    const mesh = new THREE.Mesh(trailNodeGeo, mat);
+    questTrailGroup.add(mesh);
+    trailNodes.push({ mesh, mat });
+  }
+  scene.add(questTrailGroup);
+
   // ---------------------------------------------------------------- Quest Registration
   function register(questDefs) {
     const list = Array.isArray(questDefs) ? questDefs : [questDefs];
@@ -376,9 +400,15 @@ export function createQuests(ctx) {
 
   function checkAutoStartQuests() {
     for (const def of registry.values()) {
-      if (def.autoStart && canStartQuest(def)) {
-        start(def.id);
+      if (!def.autoStart || !canStartQuest(def)) continue;
+      if (def.freshStartOnly) {
+        const hasAnyQuestHistory =
+          Object.keys(questData.active || {}).length > 0 ||
+          (questData.done || []).length > 0 ||
+          Boolean(questData.flags?.sentinel);
+        if (hasAnyQuestHistory) continue;
       }
+      start(def.id);
     }
   }
 
@@ -829,6 +859,14 @@ export function createQuests(ctx) {
   // Reset on `merit:reset`
   bus.on('merit:reset', () => {
     reset();
+    if (state.mode === 'play') {
+      checkAutoStartQuests();
+    }
+  });
+
+  // Auto-start initial quest (e.g. prologue.vow) when entering gameplay on a fresh save
+  bus.on('game:start', () => {
+    checkAutoStartQuests();
   });
 
   // Trigger Pure Vision Intro Card & chapter opening quest on first arrival in a chapter map
@@ -1293,7 +1331,7 @@ export function createQuests(ctx) {
       }
     }
 
-    // Animate 3D World Target Diamond Marker for the primary tracked quest in current map
+    // Animate 3D World Target Diamond Marker & Ground Guidance Trail for the primary tracked quest in current map
     const targets = getTrackedTargets();
     const sameMapTarget = targets.find((tg) => tg.map === currentZone);
     if (sameMapTarget && state.mode === 'play') {
@@ -1306,8 +1344,35 @@ export function createQuests(ctx) {
       groundRingMesh.rotation.z = t * 0.9;
       const s = 1.0 + Math.sin(t * 3.2) * 0.08;
       groundRingMesh.scale.set(s, s, 1);
+
+      const dx = sameMapTarget.x - px;
+      const dz = sameMapTarget.z - pz;
+      const dist = Math.hypot(dx, dz);
+      if (dist > 2.8) {
+        questTrailGroup.visible = true;
+        const dirX = dx / dist;
+        const dirZ = dz / dist;
+        const maxTrailDist = Math.min(dist - 1.1, 16.0);
+        const startOffset = 1.4;
+        for (let i = 0; i < TRAIL_NODE_COUNT; i++) {
+          const frac = (i + 0.5) / TRAIL_NODE_COUNT;
+          const d = startOffset + frac * Math.max(1.2, maxTrailDist - startOffset);
+          const nx = px + dirX * d;
+          const nz = pz + dirZ * d;
+          const ny = (ctx.world?.getHeight(nx, nz, currentZone) ?? 0) + 0.045;
+          const node = trailNodes[i];
+          node.mesh.position.set(nx, ny, nz);
+          const wave = Math.sin(t * 4.2 - i * 0.65) * 0.5 + 0.5;
+          node.mat.opacity = (0.22 + wave * 0.58) * (1 - frac * 0.25);
+          const scale = 0.85 + wave * 0.32;
+          node.mesh.scale.set(scale, scale, 1);
+        }
+      } else {
+        questTrailGroup.visible = false;
+      }
     } else {
       worldMarkerGroup.visible = false;
+      questTrailGroup.visible = false;
     }
   }
 
