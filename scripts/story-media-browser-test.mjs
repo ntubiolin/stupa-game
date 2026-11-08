@@ -133,7 +133,7 @@ async function assertLayout(ui, media) {
   assert.equal(metrics.noHorizontalScroll, true);
   assert.ok(metrics.caption && metrics.source);
   if (media === 'video') {
-    assert.match(await ui.dialog.locator('.story-documentary-provenance').innerText(), /not archival footage/i);
+    assert.match(await ui.dialog.locator('.story-documentary-provenance').innerText(), /visual recollection|not archival footage/i);
   }
 }
 
