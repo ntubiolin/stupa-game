@@ -582,3 +582,21 @@ test('6. Offline resilience & community.js Authorization header integration', as
   assert.equal(cloud.getState().dirtySinceLastSync, false);
   assert.equal(cloud.getState().cloudSummary.level, 7);
 });
+
+test('7. Settings UI .game-settings .is-hidden CSS rule and sign-in form toggle (#233)', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const styleCss = fs.readFileSync(path.resolve('src/style.css'), 'utf8');
+  const settingsJs = fs.readFileSync(path.resolve('src/ui/settings.js'), 'utf8');
+
+  assert.match(
+    styleCss,
+    /\.game-settings\s+\.is-hidden\s*\{\s*display:\s*none\s*!important;\s*\}/,
+    'src/style.css must define .game-settings .is-hidden { display: none !important; }'
+  );
+  assert.match(
+    settingsJs,
+    /btnGoogleSignIn\.classList\.toggle\('is-hidden',\s*Boolean\(cloudState\.signedIn\)\s*\|\|\s*devFormOpen\)/,
+    'settings.js must hide #btn-google-signin while devFormOpen is true or user is signed in'
+  );
+});

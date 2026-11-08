@@ -27,7 +27,12 @@ export const CLOCK_SKEW_MS = 30 * 1000; // 30 seconds
 
 const DEFAULT_RUNTIME_SECRET =
   process.env.STUPA_AUTH_SECRET ||
-  `stupa-runtime-secret-${crypto.randomBytes(24).toString('hex')}`;
+  crypto
+    .createHash('sha256')
+    .update(
+      `stupa-hmac-secret-v1:${process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.GOOGLE_CLIENT_ID || 'local-dev'}`,
+    )
+    .digest('hex');
 
 const FORBIDDEN_IDS = new Set([
   '__proto__',

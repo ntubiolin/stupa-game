@@ -58,7 +58,7 @@ async function fullJourney(name, mobile, lang) {
   await fixture(context, null, lang);
   const page = await context.newPage(); monitor(page, name);
   const wallStart = Date.now();
-  const click = async locator => mobile ? locator.tap() : locator.click();
+  const click = async locator => mobile ? locator.tap({ noWaitAfter: true }) : locator.click({ noWaitAfter: true });
   const action = () => page.locator('.story-objective [data-action="interact"]');
   const cardContinue = () => page.locator('[data-card="continue"]');
   const guide = () => page.locator('[data-action="guide"]');
