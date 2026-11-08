@@ -925,7 +925,12 @@ export function createQuestUi(ctx) {
   });
   bus.on('game:start', () => {
     trackerEl.classList.remove('is-hidden');
+    trackerCollapsed = false;
+    applyTrackerCollapsedState();
     renderTracker();
+    if (ctx.quests?.isAtStep?.('prologue.vow', 'talk_intro')) {
+      bus.emit('toast', { key: 'quest.toast.guideStart' });
+    }
   });
 
   i18n.onChange(() => {
@@ -968,7 +973,7 @@ export function createQuestUi(ctx) {
     const inFront = tmpView.z < -0.1;
     const onScreen = inFront && Math.abs(tmpNdc.x) <= 0.86 && Math.abs(tmpNdc.y) <= 0.82;
 
-    if (onScreen && dist <= 28) {
+    if (onScreen && dist <= 85) {
       // Show on-screen diamond indicator over the 3D marker
       const sx = (tmpNdc.x * 0.5 + 0.5) * w;
       const sy = (-tmpNdc.y * 0.5 + 0.5) * h;

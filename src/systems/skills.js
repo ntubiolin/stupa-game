@@ -347,6 +347,15 @@ export function createSkills(ctx) {
     const dir = typeof acquired?.dir === 'number' ? acquired.dir : (state.player?.heading || 0);
     const target = acquired?.target || null;
 
+    if (state.player && (def.id === 'humBolt' || def.id === 'phurba' || def.id === 'vajraBell')) {
+      state.player.heading = dir;
+      state.player.castHeading = dir;
+      state.player.castSlowUntil = Math.max(
+        state.player.castSlowUntil || 0,
+        (state.elapsed || 0) + Math.max(0.22, def.castTime || 0.22)
+      );
+    }
+
     if (def.maxCharge) {
       if (!noCooldownFlag) {
         ultCharge = 0;

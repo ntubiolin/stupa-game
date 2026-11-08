@@ -13,6 +13,7 @@
  */
 import * as THREE from 'three';
 import { createPatternRunner } from './patterns.js';
+import { getDifficulty } from '../../data/combatSettings.js';
 
 const TWO_PI = Math.PI * 2;
 const PRAYER_COLORS = [
@@ -295,6 +296,10 @@ export function createBoss(ctx, def) {
     ctx.save.set('bosses', saved);
   }
 
+  function isArenaLocked() {
+    return Boolean(getDifficulty(ctx).bossArenaLock);
+  }
+
   const bossState = {
     id: def.id,
     kind: def.id,
@@ -328,19 +333,44 @@ export function createBoss(ctx, def) {
     ctx,
     built,
     patternRunner,
+    isArenaLocked,
     setPosition(nx, nz) {
-      const dx = nx - arena.x;
-      const dz = nz - arena.z;
-      const dist = Math.hypot(dx, dz);
-      const maxR = arena.r - bossState.radius - 0.3;
-      if (dist > maxR && dist > 0.001) {
-        nx = arena.x + (dx / dist) * maxR;
-        nz = arena.z + (dz / dist) * maxR;
-      }
-      if (arena.map === 'terma') {
-        const roomHalf = Math.max(1.5, 7.45 - bossState.radius - 0.15);
-        nx = Math.max(arena.x - roomHalf, Math.min(arena.x + roomHalf, nx));
-        nz = Math.max(arena.z - roomHalf, Math.min(arena.z + roomHalf, nz));
+      if (isArenaLocked()) {
+        const dx = nx - arena.x;
+        const dz = nz - arena.z;
+        const dist = Math.hypot(dx, dz);
+        const maxR = arena.r - bossState.radius - 0.3;
+        if (dist > maxR && dist > 0.001) {
+          nx = arena.x + (dx / dist) * maxR;
+          nz = arena.z + (dz / dist) * maxR;
+        }
+        if (arena.map === 'terma') {
+          const roomHalf = Math.max(1.5, 7.45 - bossState.radius - 0.15);
+          nx = Math.max(arena.x - roomHalf, Math.min(arena.x + roomHalf, nx));
+          nz = Math.max(arena.z - roomHalf, Math.min(arena.z + roomHalf, nz));
+        }
+      } else if (arena.map === 'terma') {
+        if (ctx.dungeon?.isActive?.() && typeof ctx.dungeon.clampPosition === 'function') {
+          const clamped = { x: nx, z: nz };
+          ctx.dungeon.clampPosition(clamped, bossState.radius);
+          nx = clamped.x;
+          nz = clamped.z;
+        } else {
+          const roomHalf = Math.max(1.5, 7.45 - bossState.radius - 0.15);
+          nx = Math.max(arena.x - roomHalf, Math.min(arena.x + roomHalf, nx));
+          nz = Math.max(arena.z - roomHalf, Math.min(arena.z + roomHalf, nz));
+        }
+      } else {
+        const mapDef = ctx.world?.getMap?.(arena.map);
+        const wOrigin = mapDef?.origin || { x: arena.x, z: arena.z };
+        const maxWalkR = Math.max(20, ((mapDef?.walkRadius ?? 70) - bossState.radius - 1.0));
+        const dx = nx - wOrigin.x;
+        const dz = nz - wOrigin.z;
+        const dist = Math.hypot(dx, dz);
+        if (dist > maxWalkR && dist > 0.001) {
+          nx = wOrigin.x + (dx / dist) * maxWalkR;
+          nz = wOrigin.z + (dz / dist) * maxWalkR;
+        }
       }
       bossState.pos.x = nx;
       bossState.pos.z = nz;
@@ -501,7 +531,7 @@ export function createBoss(ctx, def) {
     invulnMesh.visible = false;
     barrierGroup.position.set(arena.x, curStartY, arena.z);
     oathStoneGroup.position.set(arena.x, curStartY, arena.z);
-    barrierGroup.visible = true;
+    barrierGroup.visible = isArenaLocked();
     oathStoneGroup.visible = false;
     bossMeshGroup.visible = true;
     removeOathStoneInteractable();
@@ -1046,8 +1076,13 @@ export function createBoss(ctx, def) {
 
     if (!bossState.active) return;
 
-    // 1. Clamp Player inside the 5-color prayer-flag arena barrier
-    if (pPos) {
+    const lockArena = isArenaLocked();
+    if (barrierGroup.visible !== lockArena) {
+      barrierGroup.visible = lockArena;
+    }
+
+    // 1. Clamp Player inside the 5-color prayer-flag arena barrier only on Hard difficulty (lockArena)
+    if (pPos && lockArena) {
       const dx = pPos.x - arena.x;
       const dz = pPos.z - arena.z;
       const dist = Math.hypot(dx, dz);
@@ -1056,11 +1091,21 @@ export function createBoss(ctx, def) {
         pPos.x = arena.x + (dx / dist) * maxPlayerR;
         pPos.z = arena.z + (dz / dist) * maxPlayerR;
       }
+    } else if (pPos && !lockArena) {
+      const distCenter = Math.hypot(pPos.x - arena.x, pPos.z - arena.z);
+      const distBoss = Math.hypot(pPos.x - bossState.pos.x, pPos.z - bossState.pos.z);
+      const leashR = Math.max(arena.r * 2.5, arena.r + 26);
+      if (distCenter > leashR && distBoss > 26) {
+        reset();
+        return;
+      }
     }
 
     // Shimmer barrier segments
-    for (let i = 0; i < barrierMats.length; i++) {
-      barrierMats[i].opacity = 0.22 + Math.sin(state.elapsed * 3.0 + i * 0.7) * 0.08;
+    if (lockArena) {
+      for (let i = 0; i < barrierMats.length; i++) {
+        barrierMats[i].opacity = 0.22 + Math.sin(state.elapsed * 3.0 + i * 0.7) * 0.08;
+      }
     }
 
     // 2. Update phase-transition invulnerability timer
@@ -1150,13 +1195,15 @@ export function createBoss(ctx, def) {
     if (!bossState.active) return;
 
     if (pPos && bossState.active) {
-      const dx = pPos.x - arena.x;
-      const dz = pPos.z - arena.z;
-      const dist = Math.hypot(dx, dz);
-      const maxPlayerR = arena.r - (ctx.config.PLAYER?.radius || 0.4) - 0.25;
-      if (dist > maxPlayerR && dist > 0.001) {
-        pPos.x = arena.x + (dx / dist) * maxPlayerR;
-        pPos.z = arena.z + (dz / dist) * maxPlayerR;
+      if (lockArena) {
+        const dx = pPos.x - arena.x;
+        const dz = pPos.z - arena.z;
+        const dist = Math.hypot(dx, dz);
+        const maxPlayerR = arena.r - (ctx.config.PLAYER?.radius || 0.4) - 0.25;
+        if (dist > maxPlayerR && dist > 0.001) {
+          pPos.x = arena.x + (dx / dist) * maxPlayerR;
+          pPos.z = arena.z + (dz / dist) * maxPlayerR;
+        }
       }
       ctx.player?.resolveCollisions?.(pPos, pPos.x, pPos.z);
     }
@@ -1187,6 +1234,7 @@ export function createBoss(ctx, def) {
       safeZones: patternRunner.getSafeZones().map((s) => ({ x: s.x, z: s.z, r: s.r })),
       position: { x: bossState.pos.x, y: bossState.pos.y, z: bossState.pos.z },
       arena: { ...arena },
+      arenaLocked: isArenaLocked(),
       oathStoneVisible: oathStoneGroup.visible,
       ...(extra || {}),
     };
@@ -1203,6 +1251,7 @@ export function createBoss(ctx, def) {
     isActive() {
       return bossState.active;
     },
+    isArenaLocked,
     damage,
     applyStatus,
     getState,

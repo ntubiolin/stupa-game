@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import '../i18n/codex.js';
 import { i18n } from '../i18n.js';
 import { MAPS } from '../data/maps.js';
+import { getDifficulty } from '../data/combatSettings.js';
 
 const RECALL_CHANNEL_DURATION = 3.0; // seconds
 const WAYPOINT_UNLOCK_RADIUS = 3.5;
@@ -737,7 +738,7 @@ export function createWaypoints(ctx) {
       bus.emit('toast', { text: i18n.t('toast.recallInHub') });
       return false;
     }
-    if (state.bossActive) {
+    if (state.bossActive && getDifficulty(ctx).bossArenaLock) {
       bus.emit('toast', { text: i18n.t('toast.recallInBoss') });
       return false;
     }

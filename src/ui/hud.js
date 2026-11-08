@@ -95,6 +95,10 @@ export function createHud(ctx) {
             <span data-i18n="controls.basic"></span>
           </div>
           <div class="control-chip">
+            <kbd>Z</kbd>
+            <span data-i18n="controls.jump"></span>
+          </div>
+          <div class="control-chip">
             <kbd>R</kbd>
             <span data-i18n="controls.chant"></span>
           </div>
@@ -351,6 +355,11 @@ export function createHud(ctx) {
           <span id="mobile-potion-count" class="action-fab__badge">4</span>
           <kbd class="action-fab__key">X</kbd>
         </button>
+        <button id="btn-mobile-jump" data-action="jump" type="button" class="action-fab glass-panel">
+          <span class="action-fab__icon" aria-hidden="true">⏫</span>
+          <span class="action-fab__label" data-i18n="mobile.jump"></span>
+          <kbd class="action-fab__key">Z</kbd>
+        </button>
       </div>
     </div>
 
@@ -426,6 +435,7 @@ export function createHud(ctx) {
               <div class="controls-row"><span data-i18n="controls.move"></span><kbd>WASD / ↑←↓→</kbd></div>
               <div class="controls-row"><span data-i18n="controls.run"></span><kbd>Shift</kbd></div>
               <div class="controls-row"><span data-i18n="controls.basic"></span><kbd>Space</kbd></div>
+              <div class="controls-row"><span data-i18n="controls.jump"></span><kbd>Z</kbd></div>
               <div class="controls-row"><span data-i18n="controls.chant"></span><kbd>R</kbd></div>
               <div class="controls-row"><span data-i18n="controls.skills"></span><kbd>K</kbd></div>
               <div class="controls-row"><span data-i18n="controls.look"></span><kbd data-i18n="keys.drag"></kbd></div>
@@ -873,6 +883,15 @@ export function createHud(ctx) {
   }
 
   bus.on('toast', showToast);
+
+  let lastJumpDodgeToastAt = -10;
+  bus.on('player:jumpDodge', () => {
+    const now = state.elapsed || 0;
+    if (now - lastJumpDodgeToastAt >= 1.5) {
+      lastJumpDodgeToastAt = now;
+      showToast({ key: 'toast.jumpDodge', kind: 'info' });
+    }
+  });
 
   // ---------------------------------------------------------------- interaction prompt
   bus.on('prompt', (payload) => {

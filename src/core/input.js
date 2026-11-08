@@ -39,6 +39,8 @@ const ACTION_KEYS = {
   KeyH: 'toggleHud',
   KeyP: 'pause',
   KeyV: 'toggleFrontCam',
+  KeyZ: 'jump',
+  KeyG: 'jump',
 };
 
 const UI_ALLOWED_ACTIONS = new Set([
@@ -92,6 +94,7 @@ export function createInput(ctx) {
     look: { dx: 0, dy: 0 },
     zoom: 0,
     isTouch,
+    mouse: { x: 0, y: 0, clientX: 0, clientY: 0, active: false, lastMoveTime: -1e9 },
     /** performance.now() of the last manual camera input (used by cameraRig auto-follow). */
     lastLookTime: -1e9,
     pressed(action) {
@@ -151,15 +154,31 @@ export function createInput(ctx) {
     },
   };
 
+  function updateMouseCoords(e) {
+    if (!e || e.pointerType === 'touch') return;
+    const w = (typeof window !== 'undefined' && window.innerWidth) || 1;
+    const h = (typeof window !== 'undefined' && window.innerHeight) || 1;
+    if (!Number.isFinite(e.clientX) || !Number.isFinite(e.clientY)) return;
+    api.mouse.clientX = e.clientX;
+    api.mouse.clientY = e.clientY;
+    api.mouse.x = (e.clientX / w) * 2 - 1;
+    api.mouse.y = -(e.clientY / h) * 2 + 1;
+    api.mouse.active = true;
+    api.mouse.lastMoveTime = performance.now();
+  }
+
   function setTouchDeviceMode(active) {
     if (typeof document === 'undefined' || !document.body) return;
     api.isTouch = Boolean(active);
+    if (active) api.mouse.active = false;
     document.body.classList.toggle('is-touch-device', Boolean(active));
     document.body.classList.toggle('is-mouse-active', !active);
   }
 
   if (typeof window !== 'undefined') {
     setTouchDeviceMode(isTouch || window.innerWidth <= 820);
+    window.addEventListener('pointermove', updateMouseCoords, { passive: true });
+    window.addEventListener('pointerdown', updateMouseCoords, { passive: true });
     window.addEventListener('touchstart', () => setTouchDeviceMode(true), { passive: true });
     window.addEventListener('resize', () => {
       if (window.innerWidth <= 820) setTouchDeviceMode(true);

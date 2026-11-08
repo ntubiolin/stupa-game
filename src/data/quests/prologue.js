@@ -14,6 +14,8 @@ export const PROLOGUE_QUESTS = [
     descKey: 'quest.prologue.vow.desc',
     giverNpc: 'oldLama',
     requires: {},
+    autoStart: true,
+    freshStartOnly: true,
     nextQuest: 'prologue.north',
     steps: [
       {
