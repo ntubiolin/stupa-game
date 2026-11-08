@@ -7,6 +7,9 @@
  * quest props, 3D world diamond markers, and `getTrackedTargets()`.
  */
 import * as THREE from 'three';
+import { CONFIG } from '../config.js';
+import { MAPS } from '../data/maps.js';
+import { resolveWaypointCoords } from '../gameplay/waypoints.js';
 import { DEBUG_QUESTS } from '../data/quests/debug.js';
 import { PROLOGUE_QUESTS } from '../data/quests/prologue.js';
 import { CH1_QUESTS } from '../data/quests/ch1.js';
@@ -277,12 +280,13 @@ export function createQuests(ctx) {
 
   scene.add(worldMarkerGroup);
 
-  // 3D Ground Guidance Trail (8 golden lotus-ring stepping stones from player toward tracked target; 0 PointLights)
-  const TRAIL_NODE_COUNT = 8;
+  // 3D Ground Guidance Trail (24 golden lotus-ring nodes for circular kora or 8 stepping stones; 0 PointLights)
+  const TRAIL_NODE_COUNT = 24;
+  const DIRECT_TRAIL_COUNT = 8;
   const questTrailGroup = new THREE.Group();
   questTrailGroup.name = 'QuestGuidanceTrailGroup';
   questTrailGroup.visible = false;
-  const trailNodeGeo = new THREE.RingGeometry(0.12, 0.24, 16);
+  const trailNodeGeo = new THREE.RingGeometry(0.14, 0.28, 18);
   trailNodeGeo.rotateX(-Math.PI / 2);
   const trailNodes = [];
   for (let i = 0; i < TRAIL_NODE_COUNT; i++) {
@@ -848,8 +852,15 @@ export function createQuests(ctx) {
 
   // 9. `event`: { name, count, match? }
   function handleCustomEventStep(eventName, payload) {
-    forEachActiveStepOfType('event', (qId, _entry, step) => {
+    forEachActiveStepOfType('event', (qId, entry, step) => {
       if ((step.name || step.event) === eventName && matchEventPayload(payload, step.match)) {
+        if (typeof payload?.altarIndex === 'number' && payload.altarIndex >= 0) {
+          if (!Array.isArray(entry.interactedTargets)) entry.interactedTargets = [];
+          const altarKey = `mangyul-tenma-altar-${payload.altarIndex}`;
+          if (!entry.interactedTargets.includes(altarKey)) {
+            entry.interactedTargets.push(altarKey);
+          }
+        }
         const inc = Math.max(1, Number(payload?.increment || payload?.count || 1));
         advanceStepProgress(qId, inc);
       }
@@ -1209,41 +1220,476 @@ export function createQuests(ctx) {
     return null;
   }
 
-  function resolveStepWorldCoords(questDef, step) {
+  const PHARPING_SPRING_COORDS = {
+    spring1: { x: 1945, z: 10 },
+    spring2: { x: 2040, z: 30 },
+    spring3: { x: 2010, z: -20 },
+  };
+
+  const PHARPING_LAMP_COORDS = [
+    { id: 'pharping-lamp-1', x: 2012, z: -42 },
+    { id: 'pharping-lamp-2', x: 2028, z: -42 },
+    { id: 'pharping-lamp-3', x: 2010, z: -50 },
+    { id: 'pharping-lamp-4', x: 2030, z: -50 },
+    { id: 'pharping-lamp-5', x: 2014, z: -58 },
+    { id: 'pharping-lamp-6', x: 2026, z: -58 },
+    { id: 'pharping-lamp-7', x: 2020, z: -61 },
+  ];
+
+  const TENMA_ALTAR_COORDS = [
+    { index: 0, id: 'mangyul-tenma-altar-0', x: 2988, z: 34 },
+    { index: 1, id: 'mangyul-tenma-altar-1', x: 3016, z: 26 },
+    { index: 2, id: 'mangyul-tenma-altar-2', x: 2982, z: 18 },
+    { index: 3, id: 'mangyul-tenma-altar-3', x: 3020, z: 10 },
+    { index: 4, id: 'mangyul-tenma-altar-4', x: 2980, z: 2 },
+    { index: 5, id: 'mangyul-tenma-altar-5', x: 3018, z: -6 },
+    { index: 6, id: 'mangyul-tenma-altar-6', x: 2982, z: -14 },
+    { index: 7, id: 'mangyul-tenma-altar-7', x: 3020, z: -22 },
+    { index: 8, id: 'mangyul-tenma-altar-8', x: 2984, z: -30 },
+    { index: 9, id: 'mangyul-tenma-altar-9', x: 3018, z: -36 },
+    { index: 10, id: 'mangyul-tenma-altar-10', x: 2982, z: -44 },
+    { index: 11, id: 'mangyul-tenma-altar-11', x: 3018, z: -46 },
+  ];
+
+  const SHELDRAK_PILLAR_COORDS = [
+    { x: 4052, z: -56 },
+    { x: 4068, z: -56 },
+    { x: 4060, z: -46 },
+  ];
+
+  function getActiveEnemiesList() {
+    return (
+      ctx.enemies?.getActiveEnemies?.() ||
+      ctx.enemies?.getActive?.() ||
+      ctx.enemies?.list?.() ||
+      []
+    );
+  }
+
+  function pickNearestPoint(points, px, pz) {
+    let best = null;
+    let bestDist = Infinity;
+    for (const pt of points) {
+      if (!pt || typeof pt.x !== 'number' || typeof pt.z !== 'number') continue;
+      const d = Math.hypot(pt.x - px, pt.z - pz);
+      if (d < bestDist) {
+        bestDist = d;
+        best = pt;
+      }
+    }
+    return best;
+  }
+
+  function resolveStepWorldCoords(questDef, step, activeEntry = null) {
     if (!step) return null;
-    let map = step.map || questDef.map || state.zone || 'stupa';
+    const currentZone = state.zone || 'stupa';
+    const px = state.player?.position?.x ?? 0;
+    const pz = state.player?.position?.z ?? 0;
+
+    let map = step.map || questDef?.map || currentZone;
     let x = step.x;
     let z = step.z;
+    let koraRing = null;
 
     if (step.type === 'talk' && step.npc) {
-      const npcDef = ctx.npcs?.getNpc?.(step.npc);
-      if (npcDef) {
-        map = npcDef.map || map;
-        x = npcDef.x;
-        z = npcDef.z;
+      const liveNpc =
+        ctx.npcs?.list?.()?.find?.((n) => n.id === step.npc) ||
+        ctx.npcs?.getNpc?.(step.npc);
+      if (liveNpc) {
+        map = liveNpc.map || map;
+        x = liveNpc.x;
+        z = liveNpc.z;
       }
-    } else if (step.type === 'collect' && Array.isArray(step.spots)) {
-      // Point to the first uncollected spot for this quest step
-      const uncollected = collectibleNodes.find(
-        (n) => n.questId === questDef.id && n.item === step.item && !n.collected
-      );
-      if (uncollected) {
-        map = uncollected.map;
-        x = uncollected.x;
-        z = uncollected.z;
-      } else if (step.spots[0]) {
-        x = step.spots[0].x;
-        z = step.spots[0].z;
+    } else if (step.type === 'kora') {
+      const cx = map === 'samye' ? 5000 : 0;
+      const cz = 0;
+      const radius = map === 'samye' ? 50 : 22.5;
+      const inSameZone = currentZone === map;
+      const dx = inSameZone ? px - cx : 0;
+      const dz = inSameZone ? pz - cz : radius;
+      const playerAngle = Math.hypot(dx, dz) > 0.5 ? Math.atan2(dz, dx) : Math.PI / 2;
+      // Clockwise kora in top-down (x, z) increases angle theta (+60 deg lead ahead)
+      const leadAngle = playerAngle + Math.PI / 3;
+      x = cx + Math.cos(leadAngle) * radius;
+      z = cz + Math.sin(leadAngle) * radius;
+      koraRing = { cx, cz, radius, playerAngle };
+    } else if (step.type === 'light') {
+      const candidates = [];
+      for (const it of ctx.interactables || []) {
+        if (!it || (it.zone || 'stupa') !== map) continue;
+        if (it.kind !== 'lamp') continue;
+        if (currentZone === map && !state.uiOpen && typeof it.isAvailable === 'function' && !it.isAvailable()) {
+          continue;
+        }
+        const pos = it.getPosition?.();
+        if (pos && typeof pos.x === 'number' && typeof pos.z === 'number') {
+          candidates.push({ x: pos.x, z: pos.z });
+        }
+      }
+      if (candidates.length === 0 && map === 'stupa') {
+        const stations = CONFIG.LAMPS?.stations || [
+          { angleDeg: 45, radius: 22.5 },
+          { angleDeg: 165, radius: 22.5 },
+          { angleDeg: 285, radius: 22.5 },
+        ];
+        for (const st of stations) {
+          const rad = (st.angleDeg * Math.PI) / 180;
+          candidates.push({
+            x: Math.cos(rad) * st.radius,
+            z: Math.sin(rad) * st.radius,
+          });
+        }
+      }
+      const nearest = pickNearestPoint(candidates, px, pz);
+      if (nearest) {
+        x = nearest.x;
+        z = nearest.z;
+      }
+    } else if (step.type === 'interact') {
+      const interacted = Array.isArray(activeEntry?.interactedTargets)
+        ? activeEntry.interactedTargets
+        : [];
+      const targetSpecs = Array.isArray(step.target)
+        ? step.target
+        : Array.isArray(step.targets)
+          ? step.targets
+          : step.target
+            ? [step.target]
+            : [];
+
+      const candidates = [];
+      for (const it of ctx.interactables || []) {
+        if (!it || (it.zone || 'stupa') !== map) continue;
+        const matchesSpec = targetSpecs.some(
+          (spec) =>
+            it.id === spec ||
+            it.kind === spec ||
+            it.target === spec ||
+            it.id === `pharping-${spec}`,
+        );
+        if (!matchesSpec) continue;
+        const alreadyDone = interacted.some(
+          (doneId) =>
+            it.id === doneId ||
+            it.target === doneId ||
+            it.id === `pharping-${doneId}`,
+        );
+        if (alreadyDone) continue;
+        if (currentZone === map && !state.uiOpen && typeof it.isAvailable === 'function' && !it.isAvailable()) {
+          continue;
+        }
+        const pos = it.getPosition?.();
+        if (pos && typeof pos.x === 'number' && typeof pos.z === 'number') {
+          candidates.push({ x: pos.x, z: pos.z });
+        }
+      }
+
+      if (candidates.length === 0) {
+        for (const spec of targetSpecs) {
+          if (interacted.includes(spec) || interacted.includes(`pharping-${spec}`)) continue;
+          if (PHARPING_SPRING_COORDS[spec]) {
+            candidates.push(PHARPING_SPRING_COORDS[spec]);
+          } else if (spec === 'yangleshoLamp') {
+            for (const lamp of PHARPING_LAMP_COORDS) {
+              if (!interacted.includes(lamp.id)) {
+                candidates.push(lamp);
+              }
+            }
+          }
+        }
+      }
+
+      const nearest = pickNearestPoint(candidates, px, pz);
+      if (nearest) {
+        x = nearest.x;
+        z = nearest.z;
+      }
+    } else if (step.type === 'liberate') {
+      const candidates = [];
+      for (const e of getActiveEnemiesList()) {
+        if (!e || e.dead || e.state === 'dead' || (typeof e.hp === 'number' && e.hp <= 0)) continue;
+        if (e.zone && e.zone !== map) continue;
+        if (step.kind && e.kind !== step.kind) continue;
+        if (!step.kind && step.tag === 'calmed' && e.kind && e.kind !== 'wildYak') continue;
+        if (step.rank && e.rank !== step.rank) continue;
+        const epos = e.position || e.pos || e.group?.position || e.root?.position;
+        if (epos && typeof epos.x === 'number' && typeof epos.z === 'number') {
+          candidates.push({ x: epos.x, z: epos.z });
+        }
+      }
+      if (candidates.length === 0 && questDef?.id === 'ch1.drought' && step.id === 'liberate_sprites') {
+        for (const [spKey, spCoord] of Object.entries(PHARPING_SPRING_COORDS)) {
+          const springIt = (ctx.interactables || []).find((it) => it.id === `pharping-${spKey}`);
+          if (!springIt || (currentZone === 'pharping' && !state.uiOpen ? springIt.isAvailable?.() !== false : true)) {
+            candidates.push(spCoord);
+          }
+        }
+      }
+      const nearest = pickNearestPoint(candidates, px, pz);
+      if (nearest) {
+        x = nearest.x;
+        z = nearest.z;
+      }
+    } else if (step.type === 'collect') {
+      if (step.item === 'termaScrollShard') {
+        const shState = ctx.sheldrak?.getState?.();
+        if (shState && !shState.solved && Array.isArray(shState.steps) && Array.isArray(shState.targetSteps)) {
+          const pillarCandidates = [];
+          for (let i = 0; i < shState.steps.length; i++) {
+            if (shState.steps[i] !== shState.targetSteps[i] && SHELDRAK_PILLAR_COORDS[i]) {
+              pillarCandidates.push(SHELDRAK_PILLAR_COORDS[i]);
+            }
+          }
+          const nearestPillar = pickNearestPoint(pillarCandidates, px, pz);
+          if (nearestPillar) {
+            x = nearestPillar.x;
+            z = nearestPillar.z;
+          }
+        }
+      }
+      if (Array.isArray(step.spots)) {
+        const uncollected = collectibleNodes.filter(
+          (n) => n.questId === questDef.id && n.item === step.item && !n.collected,
+        );
+        const nearestNode = pickNearestPoint(uncollected, px, pz);
+        if (nearestNode) {
+          map = nearestNode.map || map;
+          x = nearestNode.x;
+          z = nearestNode.z;
+        } else if (step.spots[0] && (typeof x !== 'number' || typeof z !== 'number')) {
+          x = step.spots[0].x;
+          z = step.spots[0].z;
+        }
+      }
+    } else if (step.type === 'boss') {
+      const targetBossId = step.bossId || step.boss;
+      for (const e of getActiveEnemiesList()) {
+        if (!e || e.dead || e.state === 'dead' || (typeof e.hp === 'number' && e.hp <= 0)) continue;
+        if (e.zone && e.zone !== map) continue;
+        if (targetBossId && e.bossId !== targetBossId && e.kind !== targetBossId) continue;
+        const epos = e.position || e.pos || e.group?.position || e.root?.position;
+        if (epos && typeof epos.x === 'number' && typeof epos.z === 'number') {
+          x = epos.x;
+          z = epos.z;
+          break;
+        }
+      }
+    } else if (step.type === 'event') {
+      const evName = step.name || step.event;
+      const interacted = Array.isArray(activeEntry?.interactedTargets)
+        ? activeEntry.interactedTargets
+        : [];
+
+      if (evName === 'escort:arrived') {
+        const messengerNpc =
+          ctx.npcs?.list?.()?.find?.((n) => n.id === 'messenger') ||
+          ctx.npcs?.getNpc?.('messenger');
+        if (messengerNpc && typeof messengerNpc.x === 'number' && typeof messengerNpc.z === 'number') {
+          map = messengerNpc.map || map;
+          x = messengerNpc.x;
+          z = messengerNpc.z;
+        }
+      } else if (evName === 'tenma:oath') {
+        map = 'mangyul';
+        const candidates = [];
+        for (const it of ctx.interactables || []) {
+          if (!it || it.kind !== 'tenmaAltar') continue;
+          if (interacted.includes(it.id)) continue;
+          if (currentZone === 'mangyul' && !state.uiOpen && typeof it.isAvailable === 'function' && !it.isAvailable()) {
+            continue;
+          }
+          const pos = it.getPosition?.();
+          if (pos && typeof pos.x === 'number' && typeof pos.z === 'number') {
+            candidates.push({ x: pos.x, z: pos.z });
+          }
+        }
+        if (candidates.length === 0) {
+          for (const altar of TENMA_ALTAR_COORDS) {
+            if (!interacted.includes(altar.id) && !hasFlag(`tenma.altar.${altar.index}`)) {
+              candidates.push(altar);
+            }
+          }
+        }
+        const nearest = pickNearestPoint(candidates, px, pz);
+        if (nearest) {
+          x = nearest.x;
+          z = nearest.z;
+        }
+      } else if (evName === 'samye:nightSurvived') {
+        map = 'samye';
+        const samyeSt = ctx.samye?.getState?.();
+        if (samyeSt) {
+          if (samyeSt.phase === 'night') {
+            const enemyPts = [];
+            for (const e of getActiveEnemiesList()) {
+              if (!e || e.dead || e.state === 'dead' || (typeof e.hp === 'number' && e.hp <= 0)) continue;
+              if (e.zone && e.zone !== 'samye') continue;
+              const epos = e.position || e.pos || e.group?.position || e.root?.position;
+              if (epos && typeof epos.x === 'number' && typeof epos.z === 'number') {
+                enemyPts.push({ x: epos.x, z: epos.z });
+              }
+            }
+            const nearestEnemy = pickNearestPoint(enemyPts, px, pz);
+            x = nearestEnemy ? nearestEnemy.x : 5000;
+            z = nearestEnemy ? nearestEnemy.z : 0;
+          } else {
+            const carriedTotal = (samyeSt.carriedStone || 0) + (samyeSt.carriedTimber || 0);
+            const needStone = Math.max(0, (samyeSt.stoneQuota || 3) - (samyeSt.stoneDelivered || 0));
+            const needTimber = Math.max(0, (samyeSt.timberQuota || 3) - (samyeSt.timberDelivered || 0));
+            const canFinishQuota =
+              (samyeSt.carriedStone || 0) >= needStone &&
+              (samyeSt.carriedTimber || 0) >= needTimber &&
+              carriedTotal > 0;
+            if (carriedTotal >= (samyeSt.carryCapacity || 5) || canFinishQuota) {
+              x = 4966.5;
+              z = 52.5;
+            } else if ((samyeSt.carriedStone || 0) < needStone) {
+              const nearestQuarry = pickNearestPoint(
+                [
+                  { x: 4940, z: 70 },
+                  { x: 5050, z: 75 },
+                ],
+                px,
+                pz,
+              );
+              x = nearestQuarry.x;
+              z = nearestQuarry.z;
+            } else {
+              x = 5010;
+              z = 88;
+            }
+          }
+        }
+      } else if (evName === 'hepori:cleared') {
+        map = 'samye';
+        const heporiEnemies = [];
+        for (const e of getActiveEnemiesList()) {
+          if (!e || e.dead || e.state === 'dead' || (typeof e.hp === 'number' && e.hp <= 0)) continue;
+          if (e.zone && e.zone !== 'samye') continue;
+          const epos = e.position || e.pos || e.group?.position || e.root?.position;
+          if (epos && epos.x > 5035) {
+            heporiEnemies.push({ x: epos.x, z: epos.z });
+          }
+        }
+        const nearest = pickNearestPoint(heporiEnemies, px, pz);
+        if (nearest) {
+          x = nearest.x;
+          z = nearest.z;
+        }
+      } else if (evName === 'terma:cleared' && currentZone === 'terma' && state.dungeon) {
+        map = 'terma';
+        const dState = state.dungeon;
+        const floorEnemies = [];
+        if (dState.floor < 3 && !dState.gateUnlocked) {
+          for (const e of getActiveEnemiesList()) {
+            if (!e || e.dead || e.state === 'dead' || (typeof e.hp === 'number' && e.hp <= 0)) continue;
+            if (e.zone && e.zone !== 'terma') continue;
+            const epos = e.position || e.pos || e.group?.position || e.root?.position;
+            if (epos && typeof epos.x === 'number' && typeof epos.z === 'number') {
+              floorEnemies.push({ x: epos.x, z: epos.z });
+            }
+          }
+        }
+        const nearestEnemy = pickNearestPoint(floorEnemies, px, pz);
+        if (nearestEnemy) {
+          x = nearestEnemy.x;
+          z = nearestEnemy.z;
+        } else if (dState.exitRoomWorld) {
+          x = dState.exitRoomWorld.x;
+          z = dState.exitRoomWorld.z;
+        }
       }
     }
 
     if (typeof x !== 'number' || typeof z !== 'number') return null;
     const y = ctx.world?.getHeight(x, z, map) ?? 0;
-    return { x, y, z, map };
+    return { x, y, z, map, koraRing };
+  }
+
+  function resolveCrossMapTransit(coords, currentZone) {
+    if (!coords || !currentZone || coords.map === currentZone) return coords;
+    const px = state.player?.position?.x ?? 0;
+    const pz = state.player?.position?.z ?? 0;
+    const curMapDef = MAPS[currentZone] || ctx.world?.getMap?.(currentZone);
+
+    if (currentZone === 'terma') {
+      const ex = state.dungeon?.exitRoomWorld || { x: 0, z: 0 };
+      const tx = ex.x;
+      const tz = ex.z - 4.2;
+      return {
+        x: tx,
+        y: ctx.world?.getHeight(tx, tz, 'terma') ?? 0,
+        z: tz,
+        map: 'terma',
+        destMap: coords.map,
+        viaTransit: true,
+      };
+    }
+
+    if (currentZone === 'stupa') {
+      const retPortal = ctx.waypoints?.getReturnPortal?.();
+      if (retPortal && retPortal.returnMap === coords.map) {
+        return {
+          x: retPortal.portalX,
+          y: ctx.world?.getHeight(retPortal.portalX, retPortal.portalZ, 'stupa') ?? 0,
+          z: retPortal.portalZ,
+          map: 'stupa',
+          destMap: coords.map,
+          viaTransit: true,
+        };
+      }
+      const directGate = (curMapDef?.gates || []).find(
+        (g) => (g.to || g.toMap) === coords.map,
+      );
+      if (directGate) {
+        return {
+          x: directGate.x,
+          y: ctx.world?.getHeight(directGate.x, directGate.z, 'stupa') ?? 0,
+          z: directGate.z,
+          map: 'stupa',
+          destMap: coords.map,
+          viaTransit: true,
+        };
+      }
+      const wp = resolveWaypointCoords(curMapDef) || { x: 10, z: -26 };
+      return {
+        x: wp.x,
+        y: ctx.world?.getHeight(wp.x, wp.z, 'stupa') ?? 0,
+        z: wp.z,
+        map: 'stupa',
+        destMap: coords.map,
+        viaTransit: true,
+      };
+    }
+
+    const candidates = [];
+    for (const g of curMapDef?.gates || []) {
+      if ((g.to || g.toMap) === coords.map) {
+        candidates.push({ x: g.x, z: g.z });
+      }
+    }
+    const wp = resolveWaypointCoords(curMapDef);
+    if (wp && (candidates.length === 0 || ctx.waypoints?.isUnlocked?.(currentZone))) {
+      candidates.push({ x: wp.x, z: wp.z });
+    }
+    if (candidates.length === 0 && curMapDef?.gates?.[0]) {
+      candidates.push({ x: curMapDef.gates[0].x, z: curMapDef.gates[0].z });
+    }
+    const best = pickNearestPoint(candidates, px, pz);
+    if (!best) return coords;
+    return {
+      x: best.x,
+      y: ctx.world?.getHeight(best.x, best.z, currentZone) ?? 0,
+      z: best.z,
+      map: currentZone,
+      destMap: coords.map,
+      viaTransit: true,
+    };
   }
 
   function getTrackedTargets(mapFilter) {
     const targets = [];
+    const currentZone = state.zone || 'stupa';
     for (const [qId, entry] of Object.entries(questData.active)) {
       if (entry.tracked === false) continue;
       const def = registry.get(qId);
@@ -1251,8 +1697,14 @@ export function createQuests(ctx) {
       const step = def.steps?.[entry.step];
       if (!step) continue;
 
-      const coords = resolveStepWorldCoords(def, step);
-      if (coords && (!mapFilter || coords.map === mapFilter)) {
+      let coords = resolveStepWorldCoords(def, step, entry);
+      if (!coords) continue;
+
+      if (coords.map !== currentZone && (!mapFilter || mapFilter === currentZone)) {
+        coords = resolveCrossMapTransit(coords, currentZone);
+      }
+
+      if (!mapFilter || coords.map === mapFilter) {
         targets.push({
           questId: qId,
           stepId: step.id,
@@ -1261,6 +1713,9 @@ export function createQuests(ctx) {
           y: coords.y,
           z: coords.z,
           map: coords.map,
+          destMap: coords.destMap || coords.map,
+          viaTransit: Boolean(coords.viaTransit),
+          koraRing: coords.koraRing || null,
           labelKey: step.textKey || def.titleKey,
         });
       }
@@ -1348,24 +1803,89 @@ export function createQuests(ctx) {
       const dx = sameMapTarget.x - px;
       const dz = sameMapTarget.z - pz;
       const dist = Math.hypot(dx, dz);
-      if (dist > 2.8) {
+
+      if (sameMapTarget.koraRing) {
+        // Full clockwise circle of 24 golden lotus rings around the stupa/monastery (`繞塔一圈`)
         questTrailGroup.visible = true;
-        const dirX = dx / dist;
-        const dirZ = dz / dist;
-        const maxTrailDist = Math.min(dist - 1.1, 16.0);
-        const startOffset = 1.4;
+        const { cx, cz, radius } = sameMapTarget.koraRing;
+        const pdx = px - cx;
+        const pdz = pz - cz;
+        const pAngle = Math.hypot(pdx, pdz) > 0.5 ? Math.atan2(pdz, pdx) : Math.PI / 2;
         for (let i = 0; i < TRAIL_NODE_COUNT; i++) {
-          const frac = (i + 0.5) / TRAIL_NODE_COUNT;
-          const d = startOffset + frac * Math.max(1.2, maxTrailDist - startOffset);
-          const nx = px + dirX * d;
-          const nz = pz + dirZ * d;
+          const frac = i / TRAIL_NODE_COUNT;
+          const theta = pAngle + frac * Math.PI * 2;
+          const nx = cx + Math.cos(theta) * radius;
+          const nz = cz + Math.sin(theta) * radius;
           const ny = (ctx.world?.getHeight(nx, nz, currentZone) ?? 0) + 0.045;
           const node = trailNodes[i];
+          node.mesh.visible = true;
           node.mesh.position.set(nx, ny, nz);
-          const wave = Math.sin(t * 4.2 - i * 0.65) * 0.5 + 0.5;
-          node.mat.opacity = (0.22 + wave * 0.58) * (1 - frac * 0.25);
-          const scale = 0.85 + wave * 0.32;
+          const wave = Math.sin(t * 4.5 - i * 0.52) * 0.5 + 0.5;
+          node.mat.opacity = 0.28 + wave * 0.62;
+          const scale = 0.92 + wave * 0.36;
           node.mesh.scale.set(scale, scale, 1);
+        }
+      } else if (dist > 2.8) {
+        questTrailGroup.visible = true;
+        for (let i = DIRECT_TRAIL_COUNT; i < TRAIL_NODE_COUNT; i++) {
+          trailNodes[i].mesh.visible = false;
+        }
+
+        // Check if straight segment in 'stupa' cuts through the central stupa collider (r < 20.5m)
+        const uClosest = Math.max(0, Math.min(1, (-px * dx - pz * dz) / (dist * dist)));
+        const closestDistToOrigin = Math.hypot(px + uClosest * dx, pz + uClosest * dz);
+        const curveAroundStupa =
+          currentZone === 'stupa' &&
+          closestDistToOrigin < 20.5 &&
+          Math.hypot(px, pz) > 12 &&
+          Math.hypot(sameMapTarget.x, sameMapTarget.z) > 12;
+
+        if (curveAroundStupa) {
+          const theta0 = Math.atan2(pz, px);
+          const theta1 = Math.atan2(sameMapTarget.z, sameMapTarget.x);
+          let deltaTheta = Math.atan2(Math.sin(theta1 - theta0), Math.cos(theta1 - theta0));
+          if (Math.abs(deltaTheta) > 2.8 && deltaTheta < 0) {
+            deltaTheta += Math.PI * 2;
+          }
+          const r0 = Math.max(22.0, Math.hypot(px, pz));
+          const r1 = Math.max(22.0, Math.hypot(sameMapTarget.x, sameMapTarget.z));
+          const arcLen = Math.max(1.0, Math.abs(deltaTheta) * 22.5);
+          const maxArcFrac = Math.min(1.0, 18.0 / arcLen);
+          for (let i = 0; i < DIRECT_TRAIL_COUNT; i++) {
+            const frac = (i + 0.5) / DIRECT_TRAIL_COUNT;
+            const stepFrac = frac * maxArcFrac;
+            const theta = theta0 + deltaTheta * stepFrac;
+            const r = Math.max(22.0, r0 + (r1 - r0) * stepFrac);
+            const nx = Math.cos(theta) * r;
+            const nz = Math.sin(theta) * r;
+            const ny = (ctx.world?.getHeight(nx, nz, currentZone) ?? 0) + 0.045;
+            const node = trailNodes[i];
+            node.mesh.visible = true;
+            node.mesh.position.set(nx, ny, nz);
+            const wave = Math.sin(t * 4.2 - i * 0.65) * 0.5 + 0.5;
+            node.mat.opacity = (0.22 + wave * 0.58) * (1 - frac * 0.25);
+            const scale = 0.85 + wave * 0.32;
+            node.mesh.scale.set(scale, scale, 1);
+          }
+        } else {
+          const dirX = dx / dist;
+          const dirZ = dz / dist;
+          const maxTrailDist = Math.min(dist - 1.1, 16.0);
+          const startOffset = 1.4;
+          for (let i = 0; i < DIRECT_TRAIL_COUNT; i++) {
+            const frac = (i + 0.5) / DIRECT_TRAIL_COUNT;
+            const d = startOffset + frac * Math.max(1.2, maxTrailDist - startOffset);
+            const nx = px + dirX * d;
+            const nz = pz + dirZ * d;
+            const ny = (ctx.world?.getHeight(nx, nz, currentZone) ?? 0) + 0.045;
+            const node = trailNodes[i];
+            node.mesh.visible = true;
+            node.mesh.position.set(nx, ny, nz);
+            const wave = Math.sin(t * 4.2 - i * 0.65) * 0.5 + 0.5;
+            node.mat.opacity = (0.22 + wave * 0.58) * (1 - frac * 0.25);
+            const scale = 0.85 + wave * 0.32;
+            node.mesh.scale.set(scale, scale, 1);
+          }
         }
       } else {
         questTrailGroup.visible = false;
