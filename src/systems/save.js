@@ -250,6 +250,7 @@ export function createSave(ctx, { writableSections = null } = {}) {
 
   const pendingSections = new Map();
   const registeredSections = new Map();
+  const flushListeners = new Set();
   let sampleRegistered = false;
   let dirtyTimer = 0;
   let writeCount = 0;
@@ -287,7 +288,7 @@ export function createSave(ctx, { writableSections = null } = {}) {
     return doc?.sections && typeof doc.sections === 'object' && !Array.isArray(doc.sections);
   }
 
-  function writeToStorage(updates, replacement = null) {
+  function writeToStorage(updates, replacement = null, meta = {}) {
     if (isReadOnly()) return fail('unsupported-version');
     try {
       const raw = localStorage.getItem(SAVE_STORAGE_KEY);
@@ -320,11 +321,29 @@ export function createSave(ctx, { writableSections = null } = {}) {
         && JSON.stringify(sections.story) !== JSON.stringify(base.sections.story)) {
         return fail('unsupported-story-version');
       }
-      const next = { ...base, version: SAVE_VERSION, savedAt: Date.now(), sections };
+      const savedAt = (typeof meta?.savedAt === 'number' && Number.isFinite(meta.savedAt))
+        ? meta.savedAt
+        : Date.now();
+      const next = { ...base, version: SAVE_VERSION, savedAt, sections };
       localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(next));
       store = deepClone(next);
       writeCount += 1;
       status = { ok: true };
+      const flushPayload = {
+        savedAt: store.savedAt,
+        writeCount,
+        sections: Object.keys(store.sections || {}),
+        writableSections: allowedSections ? Array.from(allowedSections) : null,
+        source: meta?.source || 'flush',
+      };
+      for (const listener of flushListeners) {
+        try {
+          listener(flushPayload);
+        } catch (err) {
+          console.warn('[save] Flush listener error:', err);
+        }
+      }
+      ctx?.bus?.emit?.('save:flushed', flushPayload);
       return { ...status };
     } catch (err) {
       console.warn('[save] Failed to write save to localStorage:', err);
@@ -425,8 +444,8 @@ export function createSave(ctx, { writableSections = null } = {}) {
     return result;
   }
 
-  function replaceSections(replacement) {
-    const result = writeToStorage(new Map(), replacement);
+  function replaceSections(replacement, meta = {}) {
+    const result = writeToStorage(new Map(), replacement, meta);
     if (!result.ok) return false;
     const sampled = collectRegisteredChanges(new Map());
     if (sampled) {
@@ -445,7 +464,7 @@ export function createSave(ctx, { writableSections = null } = {}) {
       }
       const settings = pendingSections.has('settings') ? pendingSections.get('settings') : latest.settings;
       return settings === undefined ? {} : { settings };
-    });
+    }, { source: 'reset' });
   }
 
   function exportString(options = {}) {
@@ -457,15 +476,25 @@ export function createSave(ctx, { writableSections = null } = {}) {
     if (typeof str !== 'string' || !str.trim()) return false;
     const imported = migrateDocument(parseDocument(str));
     if (!hasSections(imported) || imported.version > SAVE_VERSION) return false;
+    const meta = {
+      source: 'import',
+      savedAt: (options?.preserveSavedAt && typeof imported.savedAt === 'number')
+        ? imported.savedAt
+        : undefined,
+    };
     const ok = replaceSections(latest => {
-      if (!allowedSections) return imported.sections;
+      if (!allowedSections) {
+        return options?.preserveUntouched
+          ? { ...latest, ...imported.sections }
+          : imported.sections;
+      }
       const sections = { ...latest };
       for (const section of allowedSections) {
         if (Object.hasOwn(imported.sections, section)) sections[section] = imported.sections[section];
-        else delete sections[section];
+        else if (!options?.preserveUntouched) delete sections[section];
       }
       return sections;
-    });
+    }, meta);
     if (ok) {
       for (const [section, entry] of registeredSections) {
         if (typeof entry.deserializer === 'function' && store.sections?.[section] !== undefined) {
@@ -476,6 +505,13 @@ export function createSave(ctx, { writableSections = null } = {}) {
           }
         }
       }
+      const resampled = collectRegisteredChanges(new Map());
+      if (resampled) {
+        for (const [section, snapshot] of resampled) registeredSections.get(section).snapshot = snapshot;
+      }
+      pendingSections.clear();
+      sampleRegistered = false;
+      dirtyTimer = 0;
       ctx?.bus?.emit?.('save:imported', {
         savedAt: store.savedAt,
         sections: Object.keys(store.sections || {}),
@@ -601,6 +637,18 @@ export function createSave(ctx, { writableSections = null } = {}) {
     });
   }
 
+  function onFlush(listener) {
+    if (typeof listener !== 'function') return () => {};
+    flushListeners.add(listener);
+    return () => {
+      flushListeners.delete(listener);
+    };
+  }
+
+  function getWritableSections() {
+    return allowedSections ? Array.from(allowedSections) : null;
+  }
+
   function update(dt) {
     if (!pendingSections.size && !sampleRegistered) return;
     dirtyTimer += dt;
@@ -617,6 +665,8 @@ export function createSave(ctx, { writableSections = null } = {}) {
     register,
     markDirty,
     flush,
+    onFlush,
+    getWritableSections,
     commitSection,
     getStatus: () => ({ ...status }),
     isReadOnly,

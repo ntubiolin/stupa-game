@@ -393,6 +393,14 @@ export function createCommunity(ctx, options = {}) {
     return resolveApiUrl(path, options?.apiBase);
   }
 
+  function buildAuthHeaders(baseHeaders = {}) {
+    const token = ctx?.cloudSave?.getSessionToken?.();
+    if (token) {
+      return { ...baseHeaders, Authorization: `Bearer ${token}` };
+    }
+    return baseHeaders;
+  }
+
   let backendOnline = false;
   let lastSyncAt = 0;
   const inFlightPromises = new Set();
@@ -592,6 +600,11 @@ export function createCommunity(ctx, options = {}) {
     bus.emit('community:changed', { type: 'reset' });
   });
 
+  bus.on('save:imported', () => {
+    loadFromSave();
+    bus.emit('community:changed', { type: 'import' });
+  });
+
   // ---------------------------------------------------------------- BroadcastChannel, WebSocket & Server Relay
   let channel = null;
   if (typeof BroadcastChannel !== 'undefined') {
@@ -659,7 +672,7 @@ export function createCommunity(ctx, options = {}) {
       try {
         const res = await fetch(getEndpointUrl('/api/community'), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          headers: buildAuthHeaders({ 'Content-Type': 'application/json', Accept: 'application/json' }),
           body: JSON.stringify({ action, payload }),
         });
         if (!res || !res.ok) {
@@ -1306,7 +1319,7 @@ export function createCommunity(ctx, options = {}) {
         try {
           const res = await fetch(getEndpointUrl('/api/community'), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            headers: buildAuthHeaders({ 'Content-Type': 'application/json', Accept: 'application/json' }),
             body: JSON.stringify({ action: item.action, payload: item.payload }),
           });
           if (!res || !res.ok) {
@@ -1354,7 +1367,7 @@ export function createCommunity(ctx, options = {}) {
     try {
       const res = await fetch(getEndpointUrl('/api/community'), {
         method: 'GET',
-        headers: { Accept: 'application/json' },
+        headers: buildAuthHeaders({ Accept: 'application/json' }),
       });
       if (!res || !res.ok) {
         backendOnline = false;

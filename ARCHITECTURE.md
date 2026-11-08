@@ -54,9 +54,10 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/gameplay/lamps.js`, `monkeys.js`, `npcs.js` | Gameplay | butter-lamp stations + floating prayer plaques, monkey wander/feeding, procedural 3D NPC builder (8 looks) & overhead quest markers (`!`/`?`) |
 | `src/gameplay/personalStupa.js`, `remotePilgrims.js` | Gameplay | procedural 3D Pilgrim Votive Stupa groves (`grove` & `samye`), Samye 1,008 perimeter consecration crowns, and 3D Co-op party teammates + ambient online pilgrims + Dharma Emote bubbles + Mantra Resonance VFX |
 | `src/systems/community.js`, `coop.js` | Gameplay | async social sync (`BroadcastChannel` + `/api/community` + WS relay + offline write queue + share codes) & real-time Zone Presence / 2–4 player Co-op room / AI companion system |
-| `server/store.js`, `handler.js`, `ws.js`, `index.js`, `api/*.js` | **Architect** | persistent JSON/in-memory community store (`.data/stupa-backend.json`), 12-player Zone Sharding (`stupa#1`, `wild#1`, …), public/private Co-op rooms, RFC 6455 WebSocket (`/ws/multiplayer`) & HTTP REST (`/api/community`, `/api/coop`, `/api/presence`) |
+| `src/systems/cloudSave.js` | Gameplay | Google account sign-in (`stupa.auth.v1`), 45s periodic + 3s milestone throttled cloud save sync (`/api/save`), orthogonal Adventure/Story section merge, and conflict resolution |
+| `server/store.js`, `saveStore.js`, `auth.js`, `handler.js`, `ws.js`, `index.js`, `api/*.js` | **Architect** | persistent JSON/in-memory community store (`.data/stupa-backend.json`), SQLite WAL cloud save store (`.data/stupa-saves.sqlite`), RS256 Google ID token & HMAC session verifier, 12-player Zone Sharding (`stupa#1`, `wild#1`, …), public/private Co-op rooms, RFC 6455 WebSocket (`/ws/multiplayer`) & HTTP REST (`/api/community`, `/api/coop`, `/api/presence`, `/api/auth/*`, `/api/save`) |
 | `src/systems/zones.js` | Gameplay | data-driven zone manager (`MAPS`), lazy `import()` loading, gate transitions, `ctx.world` API |
-| `src/systems/save.js` | Gameplay | unified v2 save system (`stupa.save.v2`), v1 migration, per-section fault tolerance, throttled writes |
+| `src/systems/save.js` | Gameplay | unified v2 save system (`stupa.save.v2`), v1 migration, per-section fault tolerance, throttled writes, `onFlush` cloud hooks |
 | `src/systems/vitals.js` | Gameplay | vitals system (HP/MP/EXP/ATK/DEF/Crit/Subdue/CDR/Find), Lv 1–40 curve, equipment stat aggregation |
 | `src/systems/loot.js`, `inventory.js`, `powers.js` | Gameplay | item generator, 30-slot bag & 8-slot equipment manager, Terma legendary passive power hooks |
 | `src/systems/skills.js` | Gameplay | skill cooldowns, MP cost, Rank 1–5 point allocation, Rank 3 A/B enhancement, ultimate charge (`0..30`), hub respec |
@@ -121,7 +122,8 @@ export function createX(ctx, ...extra) {
 | `colliders` | array; push `{type:'circle',x,z,r,zone:mapId}` or `{type:'box',minX,maxX,minZ,maxZ,zone:mapId}` |
 | `interactables` | array of Interactable (below) |
 | `input` | `{ update(), isDown(action), pressed(action), moveVec(), isTouch, setTouchMode(bool) }` |
-| `save` | `{ version: 2, get(section, fallback), set(section, data), markDirty(section), flush(), reset(), exportString(), importString(str) }` |
+| `save` | `{ version: 2, get(section, fallback), set(section, data), markDirty(section), flush(), onFlush(fn), getWritableSections(), reset(), exportString(), importString(str, opts?) }` |
+| `cloudSave` | `{ update(dt), getState(), isSignedIn(), getUser(), getSessionToken(), signInWithGoogle(cred?), signOut(), syncNow(opts?), pullFromCloud(opts?), resolveConflict(choice, opts?) }` |
 | `debug` | `{ enabled, register(name, api) }` |
 | `mantra` | `{ update(dt), cast(), showRadius(bool), getCooldownFraction() }` |
 | `skills` | `{ update(dt), cast(slotOrId), unlock(id), unlockAll(), spendPoint(id), chooseEnhancement(id, enh), setRank(id, rank, enh), respec(), list(), getPoints() }` |
@@ -243,6 +245,8 @@ state.interactionTarget  // currently targeted interactable or null
 | `terma:entered` / `terma:floor` / `terma:cleared` | `{ tier, floor, seed }` | dungeon → quests / UI / coop |
 | `community:lampOffered` / `community:lampRejoiced` / `community:stupaBuilt` / `community:samyeContributed` / `community:changed` | `{ id?, type? }` | community → lamps / personalStupa / UI |
 | `coop:joined` / `coop:left` / `coop:updated` / `coop:remoteSkill` / `coop:resonance` / `coop:memberHurt` / `coop:memberFainted` / `coop:revived` | `{ roomCode?, id?, x?, z? }` | coop → remotePilgrims / dungeon / UI |
+| `save:flushed` / `save:imported` | `{ savedAt, writeCount?, sections? }` | save → cloudSave / community |
+| `cloudSave:changed` / `cloudSave:conflict` | `{ signedIn, status, user, cloudSummary, conflict }` | cloudSave → settingsUi |
 | `credits:play` / `credits:opened` / `credits:closed` | `{}` | credits |
 
 ---
@@ -594,3 +598,15 @@ preserved.
   - **Field-Level Sanitization**: Strips control characters and `<`/`>`, enforces strict character limits (`pilgrimName <= 24`, `title <= 28`, `message <= 120`, `id <= 64`), rejects prototype-pollution keys (`__proto__`, `constructor`, `prototype`), clamps timestamps (`<= now + 5000ms`), and strictly whitelists pilgrim/co-op member snapshots (`sanitizeMemberSnapshot`), `dungeonState` (`sanitizeDungeonState`), and event payloads (`sanitizeEventPayload`).
   - **Network & Memory Guardrails**: `MAX_HTTP_BODY_BYTES = 64 KB` (returns `413` on oversized requests), per-IP sliding-window rate limiting on `POST /api/community` (`40 req / 10s`), `MAX_WS_FRAME_BYTES = 32 KB`, `MAX_WS_BUFFER_BYTES = 64 KB`, `MAX_WS_CLIENTS = 256`, `MAX_SHARDS_PER_ZONE = 20`, and `MAX_COOP_ROOMS = 200`.
 - **Regression**: `tests/multiplayer-backend.test.mjs` verifies disk persistence, 12-pilgrim zone sharding, co-op room host migration, RFC 6455 WebSocket broadcasts, and security/size bounds.
+
+## Google Account Authentication & SQLite Cloud Save Sync (#224)
+
+- **Backend Authentication & SQLite WAL Store (`server/auth.js`, `server/saveStore.js`, `server/handler.js`, `api/save.js`)**:
+  - **Google RS256 ID Token & Session Verification (`server/auth.js`)**: Verifies Google Identity Services (GIS) RS256 JWTs against Google's public JWKS (`https://www.googleapis.com/oauth2/v3/certs`) using zero-dependency `node:crypto`, plus dev/test profile fallback when `GOOGLE_CLIENT_ID` is unconfigured in local/test environments. Issues 30-day HMAC-SHA256 session tokens (`POST /api/auth/google`, `GET /api/auth/session`).
+  - **SQLite WAL Persistence (`server/saveStore.js`)**: Persists per-user `stupa.save.v2` documents in `.data/stupa-saves.sqlite` (`node:sqlite` `DatabaseSync` with `PRAGMA journal_mode = WAL`) with automatic `.json` / in-memory fallback (`GET /api/save`, `POST /api/save`, `DELETE /api/save`). Enforces `MAX_SAVE_BYTES = 64 KB` (`413`), schema validation, prototype-pollution stripping, and per-user rate limiting (`60 req / 10s`).
+  - **Community Offering Ownership**: Authenticated `POST /api/community` requests automatically bind `ownerUid` to butter lamps and votive stupas, preventing unauthorized overwrites of verified pilgrim stupas.
+- **Client Hybrid Cloud Sync (`src/systems/cloudSave.js`, `src/ui/settings.js`)**:
+  - **Local-First Zero-Latency Reads/Writes**: All gameplay and narrative systems continue reading/writing `localStorage['stupa.save.v2']` synchronously (`0 ms`); `cloudSave` subscribes via `ctx.save.onFlush()` and `save:flushed`.
+  - **Two-Tier Throttling**: Combines a `45s` periodic dirty sync (`CLOUD_SYNC_INTERVAL_SEC = 45.0`) with a `3s` debounced milestone sync (`quest:complete`, `level:up`, `boss:subdued`, `terma:cleared`, `story:chapter-change`, `story:phone-change`, `community:stupaBuilt`, `community:samyeContributed`) and `keepalive` flushes on `visibilitychange` (`hidden`), `pagehide`, and `online`.
+  - **Section-Aware Merging & Conflict Resolution**: Orthogonal updates between `?mode=adventure` and `?mode=story` merge without clobbering; divergent cross-device saves trigger `409 save-conflict` and present side-by-side Cloud vs. Local summary cards in `#game-settings` (`resolveConflict('cloud' | 'local')`).
+- **Regression**: `tests/cloud-save-backend.test.mjs` and `tests/cloud-save-client.test.mjs` verify RS256 JWK verification, SQLite WAL restart persistence, Adventure/Story orthogonal merging, conflict detection/resolution, and two-tier throttling.

@@ -4,6 +4,7 @@ import { CONFIG } from '../config.js';
 import { createBus } from '../core/events.js';
 import { createDebug } from '../core/debug.js';
 import { createSave } from '../systems/save.js';
+import { createCloudSave } from '../systems/cloudSave.js';
 import { i18n } from '../i18n.js';
 import '../i18n/storyRuntime.js';
 import '../i18n/storyDirector.js';
@@ -67,6 +68,7 @@ const state = { mode: 'story', zone: 'stupa', zoneType: 'hub', uiOpen: false, el
 const ctx = { THREE, scene, camera, renderer, isSoftwareWebGL, config: CONFIG, state, bus: createBus(), i18n, stupaGroup,
   zoneGroups: { stupa: stupaGroup }, colliders: [], interactables: [] };
 createDebug(ctx); createSave(ctx, { writableSections: ['story'] }); // Deliberately no i18n.bindSave: narrative writes only story.
+const cloudSave = createCloudSave(ctx);
 const mapInstances = {};
 let chapterScene = null, stagedScene = null, activeChapter = null, chapterCheckpoint = null, prepareToken = 0;
 let testingChapter = false, previewLoading = false;
@@ -583,7 +585,7 @@ function frame(now) {
   document.body.classList.toggle('story-quality-low', art.getState().quality === 'low');
   hud.querySelector('.story-save').textContent = ctx.save.getStatus().ok ? t('saved') : t('chapter.saveError');
   if (!testingChapter && !previewLoading && !debugPanel.isOpen()) story.update(dt);
-  phone.update(dt); documentary.update(dt); memory.update(dt); ctx.save.update(dt);
+  phone.update(dt); documentary.update(dt); memory.update(dt); ctx.save.update(dt); cloudSave.update(dt);
   const waypoint = hud.querySelector('.story-waypoint');
   if (currentTarget && !state.uiOpen) {
     camera.updateMatrixWorld();

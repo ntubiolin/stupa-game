@@ -9,8 +9,11 @@
 import { getDefaultStore } from './store.js';
 
 export const MAX_HTTP_BODY_BYTES = 64 * 1024;
+export const MAX_SAVE_HTTP_BODY_BYTES = 96 * 1024;
 export const COMMUNITY_RATE_WINDOW_MS = 10000;
 export const COMMUNITY_RATE_MAX_REQ = 40;
+export const SAVE_RATE_WINDOW_MS = 10000;
+export const SAVE_RATE_MAX_REQ = 60;
 
 export function readJsonBody(req, maxBytes = MAX_HTTP_BODY_BYTES) {
   if (req.body && typeof req.body === 'object') {
@@ -58,8 +61,11 @@ export function readJsonBody(req, maxBytes = MAX_HTTP_BODY_BYTES) {
 
 export function setCorsHeaders(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Accept, Authorization, X-Stupa-Session',
+  );
 }
 
 export function sendJson(res, data, status = 200) {
@@ -73,28 +79,50 @@ export function sendJson(res, data, status = 200) {
 export function createApiMiddleware(store = getDefaultStore(), wsHub = null) {
   let activeWsHub = wsHub;
   const communityRateBuckets = new Map();
+  const saveRateBuckets = new Map();
 
-  function checkCommunityRateLimit(req) {
-    const now = Date.now();
+  function getClientIp(req) {
     const xff = req.headers?.['x-forwarded-for'];
-    const ip =
+    return (
       (typeof xff === 'string' && xff.split(',')[0].trim()) ||
       req.socket?.remoteAddress ||
-      'unknown';
+      'unknown'
+    );
+  }
 
-    if (communityRateBuckets.size > 2000) {
-      communityRateBuckets.clear();
+  function checkRateBucket(bucketMap, key, windowMs, maxReq) {
+    const now = Date.now();
+    if (bucketMap.size > 2000) {
+      bucketMap.clear();
     }
-
-    const prev = communityRateBuckets.get(ip) || [];
-    const recent = prev.filter((ts) => now - ts < COMMUNITY_RATE_WINDOW_MS);
-    if (recent.length >= COMMUNITY_RATE_MAX_REQ) {
-      communityRateBuckets.set(ip, recent);
+    const prev = bucketMap.get(key) || [];
+    const recent = prev.filter((ts) => now - ts < windowMs);
+    if (recent.length >= maxReq) {
+      bucketMap.set(key, recent);
       return false;
     }
     recent.push(now);
-    communityRateBuckets.set(ip, recent);
+    bucketMap.set(key, recent);
     return true;
+  }
+
+  function checkCommunityRateLimit(req) {
+    return checkRateBucket(
+      communityRateBuckets,
+      getClientIp(req),
+      COMMUNITY_RATE_WINDOW_MS,
+      COMMUNITY_RATE_MAX_REQ,
+    );
+  }
+
+  function checkSaveRateLimit(req, uid = null) {
+    const key = uid ? `uid:${uid}` : `ip:${getClientIp(req)}`;
+    return checkRateBucket(
+      saveRateBuckets,
+      key,
+      SAVE_RATE_WINDOW_MS,
+      SAVE_RATE_MAX_REQ,
+    );
   }
 
   const middleware = async function apiMiddleware(req, res, next) {
@@ -143,11 +171,37 @@ export function createApiMiddleware(store = getDefaultStore(), wsHub = null) {
           sendJson(res, { ok: false, error: 'Payload too large' }, 413);
           return true;
         }
+        const authUser = store.auth?.extractAuthUser?.(req) || null;
         const action = body?.action || (Array.isArray(body?.actions) ? 'batch' : '');
-        const payload =
+        let payload =
           action === 'batch' && Array.isArray(body?.actions)
             ? { actions: body.actions }
             : body?.payload;
+
+        if (action === 'batch' && Array.isArray(payload?.actions)) {
+          payload = {
+            actions: payload.actions.map((item) => {
+              if (!item || typeof item !== 'object') return item;
+              const itemPayload =
+                item.payload && typeof item.payload === 'object'
+                  ? { ...item.payload }
+                  : {};
+              if (authUser?.uid) {
+                itemPayload.ownerUid = authUser.uid;
+              } else {
+                delete itemPayload.ownerUid;
+              }
+              return { ...item, payload: itemPayload };
+            }),
+          };
+        } else if (payload && typeof payload === 'object') {
+          payload = { ...payload };
+          if (authUser?.uid) {
+            payload.ownerUid = authUser.uid;
+          } else {
+            delete payload.ownerUid;
+          }
+        }
 
         const state = store.applyCommunityAction(action, payload);
         if (action) {
@@ -156,6 +210,132 @@ export function createApiMiddleware(store = getDefaultStore(), wsHub = null) {
         sendJson(res, { ok: true, ...state, data: state });
         return true;
       }
+      sendJson(res, { ok: false, error: 'Method not allowed' }, 405);
+      return true;
+    }
+
+    // 2b. Google Authentication & Session Verification (`/api/auth/google`, `/api/auth/session`)
+    if (pathname === '/api/auth/google') {
+      if (req.method !== 'POST') {
+        sendJson(res, { ok: false, error: 'Method not allowed' }, 405);
+        return true;
+      }
+      if (!checkSaveRateLimit(req)) {
+        sendJson(res, { ok: false, error: 'Too many requests' }, 429);
+        return true;
+      }
+      const body = await readJsonBody(req);
+      if (body?.__tooLarge) {
+        sendJson(res, { ok: false, error: 'Payload too large' }, 413);
+        return true;
+      }
+      const idToken = body?.idToken || body?.credential || null;
+      const devProfile = body?.devProfile || null;
+      const authResult = await store.auth.authenticateGoogle({
+        idToken,
+        devProfile,
+      });
+      if (!authResult.ok) {
+        sendJson(
+          res,
+          { ok: false, error: authResult.error || 'Unauthorized' },
+          authResult.status || 401,
+        );
+        return true;
+      }
+      sendJson(res, {
+        ok: true,
+        sessionToken: authResult.sessionToken,
+        expiresAt: authResult.expiresAt,
+        user: authResult.user,
+      });
+      return true;
+    }
+
+    if (pathname === '/api/auth/session') {
+      if (req.method !== 'GET') {
+        sendJson(res, { ok: false, error: 'Method not allowed' }, 405);
+        return true;
+      }
+      const user = store.auth?.extractAuthUser?.(req) || null;
+      sendJson(res, {
+        ok: true,
+        authenticated: Boolean(user),
+        user,
+      });
+      return true;
+    }
+
+    // 2c. Authenticated Cloud Save Persistence (`/api/save`)
+    if (pathname === '/api/save') {
+      const user = store.auth?.extractAuthUser?.(req) || null;
+      if (!user) {
+        sendJson(res, { ok: false, error: 'Unauthorized' }, 401);
+        return true;
+      }
+      if (!checkSaveRateLimit(req, user.uid)) {
+        sendJson(res, { ok: false, error: 'Too many requests' }, 429);
+        return true;
+      }
+
+      if (req.method === 'GET') {
+        const result = store.saves.getSave(user.uid, user);
+        sendJson(res, result, result.status || (result.ok ? 200 : 400));
+        return true;
+      }
+
+      if (req.method === 'POST') {
+        const body = await readJsonBody(req, MAX_SAVE_HTTP_BODY_BYTES);
+        if (body?.__tooLarge) {
+          sendJson(res, { ok: false, error: 'save-too-large' }, 413);
+          return true;
+        }
+        const queryMode = url.searchParams.get('mode') || '';
+        const saveData =
+          body?.saveData && typeof body.saveData === 'object'
+            ? body.saveData
+            : body?.sections && typeof body.sections === 'object'
+              ? {
+                  version: body.version ?? 2,
+                  savedAt: body.savedAt,
+                  sections: body.sections,
+                }
+              : body?.saveData;
+
+        const mode = body?.mode || queryMode || 'merge';
+        let writableSections = Array.isArray(body?.writableSections)
+          ? body.writableSections
+          : null;
+        if (!writableSections && (queryMode === 'story' || body?.gameMode === 'story')) {
+          writableSections = ['story'];
+        } else if (
+          !writableSections &&
+          (queryMode === 'adventure' || body?.gameMode === 'adventure')
+        ) {
+          writableSections = Object.keys(saveData?.sections || {}).filter(
+            (k) => k !== 'story',
+          );
+        }
+
+        const result = store.saves.putSave({
+          uid: user.uid,
+          profile: user,
+          saveData,
+          mode,
+          writableSections,
+          baseSavedAt: body?.baseSavedAt ?? null,
+          force: Boolean(body?.force),
+        });
+        sendJson(res, result, result.status || (result.ok ? 200 : 400));
+        return true;
+      }
+
+      if (req.method === 'DELETE') {
+        const result = store.saves.deleteSave(user.uid);
+        sendJson(res, result, result.status || (result.ok ? 200 : 400));
+        return true;
+      }
+
       sendJson(res, { ok: false, error: 'Method not allowed' }, 405);
       return true;
     }

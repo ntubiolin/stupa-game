@@ -44,6 +44,7 @@ import { createCameraRig } from './player/cameraRig.js';
 
 import { createZones } from './systems/zones.js';
 import { createSave } from './systems/save.js';
+import { createCloudSave } from './systems/cloudSave.js';
 import { createLoot } from './systems/loot.js';
 import { createInventory } from './systems/inventory.js';
 import { createVitals } from './systems/vitals.js';
@@ -235,6 +236,7 @@ const coopLobbyUi = createCoopLobbyUi(ctx);
 const skillbar = createSkillbar(ctx);
 const inventoryUi = createInventoryUi(ctx);
 const appearanceUi = createAppearanceUi(ctx);
+const cloudSave = createCloudSave(ctx);
 createSettingsUi(ctx);
 createModeSwitch(ctx, 'adventure', document.getElementById('settings-mode-mount'));
 const dialogue = createDialogue(ctx);
@@ -249,6 +251,7 @@ const credits = createCredits(ctx);
 const modules = [
   ctx.input,
   ctx.save,
+  cloudSave,
   sky, stupa, flags, environment,
   zones,
   player, mantra, enemies, bosses, dungeon, termaCaves, projectiles, targeting, loot, inventory, groundLoot, items,
