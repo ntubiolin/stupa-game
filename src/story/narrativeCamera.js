@@ -41,6 +41,8 @@ export function createNarrativeCamera(ctx) {
   let lookPointer = null;
   let enabled = true;
   let disposed = false;
+  let glide = null;
+  let bobPhase = 0;
 
   const indicator = document.createElement('div');
   indicator.className = 'story-joystick';
@@ -49,8 +51,14 @@ export function createNarrativeCamera(ctx) {
   canvas.parentElement.appendChild(indicator);
   canvas.style.touchAction = 'none';
 
-  function syncView() {
-    camera.position.set(position.x, position.y + EYE_HEIGHT, position.z);
+  function isReducedMotion(options) {
+    if (options?.reducedMotion !== undefined) return Boolean(options.reducedMotion);
+    if (ctx.reducedMotion !== undefined) return Boolean(ctx.reducedMotion);
+    return Boolean(window?.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches);
+  }
+
+  function syncView(bobOffset = 0) {
+    camera.position.set(position.x, position.y + EYE_HEIGHT + bobOffset, position.z);
     camera.rotation.set(pitch, yaw, 0, 'YXZ');
     state.player.heading = yaw;
   }
@@ -80,7 +88,10 @@ export function createNarrativeCamera(ctx) {
     if (target?.closest?.('input, select, textarea, [contenteditable]')) return;
     if (code.startsWith('Arrow') && target?.closest?.('button, a')) return;
     keys.add(code);
-    if (!shift) event.preventDefault();
+    if (!shift) {
+      glide = null;
+      event.preventDefault();
+    }
   }
 
   function onKeyUp(event) {
@@ -93,6 +104,7 @@ export function createNarrativeCamera(ctx) {
     const bounds = canvas.getBoundingClientRect();
     const isMove = event.pointerType === 'touch' && x < bounds.left + bounds.width / 2;
     if (isMove ? joystick : lookPointer) return;
+    glide = null;
     if (isMove) {
       joystick = { id, x, y, dx: 0, dy: 0 };
       indicator.style.left = `${x}px`;
@@ -186,7 +198,9 @@ export function createNarrativeCamera(ctx) {
       state.player.isMoving = false;
       if (inputBlocked()) {
         if (keys.size || joystick || lookPointer || lookX || lookY) clearInput();
-        syncView();
+        glide = null;
+        bobPhase = 0;
+        syncView(0);
         return;
       }
 
@@ -206,6 +220,43 @@ export function createNarrativeCamera(ctx) {
           tilt += look[1];
         }
       }
+      if (strafe || forward || turn || tilt || lookX || lookY || joystick) {
+        glide = null;
+      }
+
+      if (glide) {
+        const glideDt = Number.isFinite(dt) ? Math.max(0, dt) : 0;
+        if (glideDt > 0) {
+          glide.elapsed += glideDt;
+          const t = clamp(glide.elapsed / glide.duration, 0, 1);
+          const ease = t * t * (3 - 2 * t);
+          position.x = glide.startX + (glide.targetX - glide.startX) * ease;
+          position.y = (glide.startY + (glide.targetY - glide.startY) * ease) - EYE_HEIGHT;
+          position.z = glide.startZ + (glide.targetZ - glide.startZ) * ease;
+          yaw = wrapAngle(glide.startYaw + glide.deltaYaw * ease);
+          pitch = clamp(glide.startPitch + (glide.targetPitch - glide.startPitch) * ease, -MAX_PITCH, MAX_PITCH);
+          if (glide.targetFov !== glide.startFov) {
+            camera.fov = clamp(glide.startFov + (glide.targetFov - glide.startFov) * ease, 25, 95);
+            camera.updateProjectionMatrix();
+          }
+          const distMoved = Math.hypot(glide.targetX - glide.startX, glide.targetZ - glide.startZ);
+          state.player.isMoving = t < 1 && distMoved > 1e-4;
+          if (t >= 1) {
+            const onComplete = glide.onComplete;
+            glide = null;
+            state.player.isMoving = false;
+            syncView(0);
+            onComplete?.();
+          } else {
+            const bob = (!isReducedMotion() && state.player.isMoving) ? Math.sin(glide.elapsed * 9) * 0.018 : 0;
+            syncView(bob);
+          }
+        } else {
+          syncView(0);
+        }
+        return;
+      }
+
       yaw = wrapAngle(yaw - lookX * LOOK_SENSITIVITY + turn * seconds * 1.35);
       pitch = clamp(pitch - lookY * LOOK_SENSITIVITY + tilt * seconds, -MAX_PITCH, MAX_PITCH);
       lookX = 0;
@@ -217,8 +268,8 @@ export function createNarrativeCamera(ctx) {
       }
       strafe = clamp(strafe, -1, 1);
       forward = clamp(forward, -1, 1);
+      const fastWalk = !joystick && (keys.has('ShiftLeft') || keys.has('ShiftRight'));
       if (seconds > 0 && (strafe || forward)) {
-        const fastWalk = !joystick && (keys.has('ShiftLeft') || keys.has('ShiftRight'));
         const speed = fastWalk ? FAST_WALK_SPEED : WALK_SPEED;
         const distance = speed * seconds / Math.max(1, Math.hypot(strafe, forward));
         const dx = (Math.cos(yaw) * strafe - Math.sin(yaw) * forward) * distance;
@@ -238,14 +289,21 @@ export function createNarrativeCamera(ctx) {
         state.player.isMoving = Math.hypot(position.x - x, position.z - z) > 1e-5;
         if (state.player.isMoving) position.y = ctx.world.getHeight(position.x, position.z, zone);
       }
-      syncView();
+      if (state.player.isMoving && !isReducedMotion()) {
+        bobPhase += seconds * (fastWalk ? 11 : 8);
+        syncView(Math.sin(bobPhase) * 0.02);
+      } else {
+        bobPhase = 0;
+        syncView(0);
+      }
     },
     getPose() {
-      const { x, y, z } = camera.position;
-      return { x, y, z, yaw, pitch, fov: camera.fov };
+      return { x: position.x, y: position.y + EYE_HEIGHT, z: position.z, yaw, pitch, fov: camera.fov };
     },
     setPose(pose) {
       if (disposed) return;
+      glide = null;
+      bobPhase = 0;
       lookX = 0;
       lookY = 0;
       if (Number.isFinite(pose.x)) position.x = pose.x;
@@ -257,15 +315,65 @@ export function createNarrativeCamera(ctx) {
         camera.fov = clamp(pose.fov, 25, 95);
         camera.updateProjectionMatrix();
       }
-      syncView();
+      syncView(0);
+    },
+    glideTo(pose = {}, options = {}) {
+      if (disposed) return false;
+      const duration = options.duration ?? 0.85;
+      if (isReducedMotion(options) || !(duration > 0)) {
+        glide = null;
+        this.setPose(pose);
+        options.onComplete?.();
+        return false;
+      }
+      lookX = 0;
+      lookY = 0;
+      const startX = position.x;
+      const startY = position.y + EYE_HEIGHT;
+      const startZ = position.z;
+      const startYaw = yaw;
+      const startPitch = pitch;
+      const startFov = camera.fov;
+      const targetX = Number.isFinite(pose.x) ? pose.x : startX;
+      const targetY = Number.isFinite(pose.y) ? pose.y : startY;
+      const targetZ = Number.isFinite(pose.z) ? pose.z : startZ;
+      const targetYaw = Number.isFinite(pose.yaw) ? wrapAngle(pose.yaw) : startYaw;
+      const targetPitch = Number.isFinite(pose.pitch) ? clamp(pose.pitch, -MAX_PITCH, MAX_PITCH) : startPitch;
+      const targetFov = Number.isFinite(pose.fov) ? clamp(pose.fov, 25, 95) : startFov;
+      glide = {
+        elapsed: 0,
+        duration,
+        startX,
+        startY,
+        startZ,
+        startYaw,
+        startPitch,
+        startFov,
+        targetX,
+        targetY,
+        targetZ,
+        targetYaw,
+        deltaYaw: wrapAngle(targetYaw - startYaw),
+        targetPitch,
+        targetFov,
+        onComplete: options.onComplete || null,
+      };
+      return true;
+    },
+    isGliding() {
+      return Boolean(glide);
     },
     setEnabled(value) {
       enabled = Boolean(value);
-      if (!enabled) clearInput();
+      if (!enabled) {
+        glide = null;
+        clearInput();
+      }
     },
     dispose() {
       if (disposed) return;
       disposed = true;
+      glide = null;
       clearInput();
       for (const [target, name, handler] of listeners) target.removeEventListener(name, handler);
       indicator.remove();

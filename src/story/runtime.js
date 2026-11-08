@@ -21,7 +21,7 @@ import { HANDOVER_QR_SVG, unreadPhoneThreads } from '../data/story/phoneThreads.
 import { createPhone } from '../ui/story/phone.js';
 import { createDocumentary } from '../ui/story/documentary.js';
 import { createLosangStill } from '../ui/story/losangStill.js';
-import { createChapterStill } from '../ui/story/chapterStills.js';
+import { createChapterStill, createStoryMuralScroll } from '../ui/story/chapterStills.js';
 import { DOCUMENTARY_CLIPS } from '../data/story/documentary.js';
 import { createMemorySystem } from './memorySystem.js';
 import { createLosang } from './characters/losang.js';
@@ -99,7 +99,7 @@ const modeSwitchMount = document.createElement('div');
 const modeSwitch = createModeSwitch(ctx, 'story', modeSwitchMount, { onBeforeOpen: closeModal });
 const modal = document.createElement('section'); modal.className = 'story-modal'; modal.hidden = true; modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true'); root.append(modal);
 let modalCallback = null, modalKeys = null, previousFocus = null;
-let modalStill = null;
+let modalStill = null, modalMural = null;
 let arrivalCount = 0, visionCount = 0, losangLine = 0;
 let currentTarget = null, currentLabel = '', currentAction = null;
 let loading = false, beatToken = 0, currentBeat = 'prologue';
@@ -108,6 +108,7 @@ let soundOn = true;
 function closeModal() {
   if (modal.hidden) return;
   modalStill?.dispose(); modalStill = null;
+  modalMural?.dispose(); modalMural = null;
   modal.hidden = true; modalCallback = null; modalKeys = null;
   state.uiOpen = isAnyModalOpen();
   renderer.domElement.focus({ preventScroll: true });
@@ -122,14 +123,30 @@ function showCard(titleKey, bodyKey, actionKey, callback, category = 'fiction', 
   storyAudio.pageTurn();
   renderCard();
 }
+function renderChapterDirectorCard(cardEl, bodyKey) {
+  modalMural?.dispose(); modalMural = null;
+  if (!activeChapter || activeChapter === 'finale') return;
+  const isIntro = bodyKey === `chapter.${activeChapter}.intro`;
+  const isComplete = chapterCheckpoint === 'complete' || chapterCheckpoint === 'diary' || bodyKey.endsWith('.complete.body') || bodyKey.endsWith('.diary.body');
+  if (!isIntro && !isComplete) return;
+  modalMural = createStoryMuralScroll(activeChapter, isComplete ? 'complete' : 'intro', ctx);
+  if (modalMural && cardEl) {
+    const prose = cardEl.querySelector('.story-prose');
+    if (prose) prose.before(modalMural.element);
+    else cardEl.prepend(modalMural.element);
+  }
+}
 function renderCard() {
   modalStill?.dispose(); modalStill = null;
+  modalMural?.dispose(); modalMural = null;
   const session = modalKeys;
   const { titleKey, bodyKey, actionKey, category, extra, choices } = modalKeys;
   const letterCode = titleKey.startsWith('chapter.finale.letter') ? extra : '';
   const illustration = letterCode ? '' : extra;
   modal.innerHTML = `<div class="story-card"><p class="story-category">${t(category)}</p><h2 id="story-card-title">${t(titleKey)}</h2>${illustration}<p class="story-prose">${t(bodyKey)}</p>${letterCode}<div class="story-card-actions">${choices ? choices.map((id,index)=>`<button class="${index ? '' : 'story-primary'}" data-card-choice="${id}">${t(`chapter.${activeChapter}.${chapterCheckpoint}.${id}`)}</button>`).join('') : `<button class="story-primary" data-card="continue">${t(actionKey)}</button>`}<button data-card="close">${t('close')}</button></div></div>`;
   modal.setAttribute('aria-labelledby', 'story-card-title');
+  const card = modal.querySelector('.story-card');
+  renderChapterDirectorCard(card, bodyKey);
   if (bodyKey === 'losang.5') {
     modalStill = createLosangStill(t);
     modal.querySelector('.story-prose').before(modalStill.element);
@@ -137,7 +154,6 @@ function renderCard() {
     modalStill = createChapterStill(bodyKey, t);
     if (modalStill) modal.querySelector('.story-prose').before(modalStill.element);
   }
-  const card = modal.querySelector('.story-card');
   let completed = false;
   const finish = choice => {
     // A removed button must never consume the next card's callback on repeat clicks.
@@ -156,6 +172,7 @@ function renderCard() {
 }
 function showLoading(error = false) {
   modalStill?.dispose(); modalStill = null;
+  modalMural?.dispose(); modalMural = null;
   modal.hidden = false; state.uiOpen = true; modalKeys = null;
   modal.innerHTML = `<div class="story-card"><p>${t(error ? 'loadError' : 'loading')}</p>${error ? `<button>${t('retry')}</button>` : ''}</div>`;
   if (error) modal.querySelector('button').onclick = () => enterBeat({ beat: story.getState().beat });
@@ -183,6 +200,7 @@ window.addEventListener('pagehide', event => {
   if (!event.persisted) {
     pageDisposed = true;
     modalStill?.dispose(); modalStill = null;
+    modalMural?.dispose(); modalMural = null;
     losangCharacter.dispose();
     renderer.dispose();
   }
@@ -323,11 +341,20 @@ function distanceToTarget() { return currentTarget ? Math.hypot(state.player.pos
 function guide() {
   if (isAnyModalOpen() || !currentTarget) return;
   const { x, z } = currentTarget;
+  const eyeY = ctx.world.getHeight(x, z) + 1.68;
   const facingLosang = currentBeat === 'losang';
-  storyCamera.setPose({ x, y: ctx.world.getHeight(x, z) + 1.68, z,
-    yaw: facingLosang ? Math.atan2(x - losang.position.x, z - losang.position.z) : state.zone === 'stupa' ? Math.atan2(x, z) : 0,
-    pitch: facingLosang ? -.14 : .18 });
-  if (currentTarget.lookAt) faceTarget(currentTarget.lookAt);
+  let yaw = facingLosang ? Math.atan2(x - losang.position.x, z - losang.position.z) : state.zone === 'stupa' ? Math.atan2(x, z) : 0;
+  let pitch = facingLosang ? -.14 : .18;
+  if (currentTarget.lookAt) {
+    const pt = currentTarget.lookAt;
+    const dist = Math.hypot(pt.x - x, pt.z - z);
+    yaw = Math.atan2(x - pt.x, z - pt.z);
+    if (Number.isFinite(pt.y)) pitch = Math.atan2(pt.y - eyeY, dist);
+  }
+  storyCamera.glideTo(
+    { x, y: eyeY, z, yaw, pitch },
+    { duration: reducedMotion.matches ? 0 : 0.9, reducedMotion: reducedMotion.matches }
+  );
   renderer.domElement.focus({ preventScroll: true });
 }
 function showSettings() {
@@ -383,10 +410,17 @@ window.addEventListener('keydown', e => {
   if (e.code === 'Escape' && !isAnyModalOpen()) showSettings();
 });
 i18n.onChange(() => { refreshHud(); if (modalKeys) renderCard(); });
-function faceTarget(point) {
-  const pose=storyCamera.getPose();
-  const distance=Math.hypot(point.x-pose.x,point.z-pose.z);
-  storyCamera.setPose({yaw:Math.atan2(pose.x-point.x,pose.z-point.z),pitch:Math.atan2(point.y-pose.y,distance)});
+function faceTarget(point, duration = 0) {
+  if (!point) return;
+  const pose = storyCamera.getPose();
+  const distance = Math.hypot(point.x - pose.x, point.z - pose.z);
+  const yaw = distance > 1e-4 ? Math.atan2(pose.x - point.x, pose.z - point.z) : pose.yaw;
+  const pitch = Number.isFinite(point.y) && distance > 1e-4 ? Math.atan2(point.y - pose.y, distance) : pose.pitch;
+  if (duration > 0 && !reducedMotion.matches) {
+    storyCamera.glideTo({ yaw, pitch }, { duration, reducedMotion: reducedMotion.matches });
+  } else {
+    storyCamera.setPose({ yaw, pitch });
+  }
 }
 function chapterError(retry) {
   loading=false; closeModal();
@@ -512,7 +546,14 @@ function chapterInteract(){
       ? `<figure class="story-letter-qr">${HANDOVER_QR_SVG}<figcaption>${i18n.t('phone.handover.code')}</figcaption></figure>` : '';
     showCard(`${prefix}.title`, `${prefix}.body`, `${prefix}.action`, advance, category, extra, checkpoint.choices);
   }
-  else advance();
+  else {
+    const target = currentTarget;
+    if (target) {
+      const lookPoint = target.lookAt || { x: target.x, y: ctx.world.getHeight(target.x, target.z) + 1.2, z: target.z };
+      faceTarget(lookPoint, 0.45);
+    }
+    advance();
+  }
 }
 ctx.bus.on('story:chapter-change',({chapterId,checkpointId,replaying,testing=false})=>{
   const fresh=Boolean(stagedScene);loading=false;clearModals();++beatToken;
