@@ -168,3 +168,49 @@ test('story map installs no browser bindings while default adventure still does'
   map.dispose();
   assert.deepEqual(events[1], ['remove', 'keydown', events[0][2]]);
 });
+
+test('Mangyul snow spirits and Twelve Tenma Goddesses respond to cairn checkpoints and pacification', async t => {
+  const scene = await createMangyulScene({ colliders: [] });
+  const monsters = scene.group.getObjectByName('StoryMangyulMonsters');
+  const goddesses = scene.group.getObjectByName('StoryTenmaGoddesses');
+  const spriteA = scene.group.getObjectByName('StorySnowSpriteA');
+  const brute = scene.group.getObjectByName('StoryAvalancheBrute');
+  assert.ok(monsters && goddesses && spriteA && brute);
+  assert.equal(goddesses.children.length, 12);
+
+  // Before altar1, all 12 goddess silhouettes are hidden while snow spirits swirl
+  scene.restore('message');
+  assert.equal(goddesses.children.filter(g => g.visible).length, 0);
+  assert.equal(spriteA.scale.x, 1);
+
+  // As altar1..altar12 are stacked, the corresponding Tenma Goddesses illuminate
+  scene.restore('altar1');
+  assert.equal(goddesses.children.filter(g => g.visible).length, 1);
+  scene.restore('altar6');
+  assert.equal(goddesses.children.filter(g => g.visible).length, 6);
+  scene.restore('altar12');
+  assert.equal(goddesses.children.filter(g => g.visible).length, 12);
+
+  const g1Y = goddesses.children[0].position.y;
+  scene.update(0.3);
+  assert.notEqual(goddesses.children[0].position.y, g1Y);
+
+  // At flags and clearing, snow monsters calm/bow while all 12 goddesses shine
+  scene.restore('clearing');
+  assert.ok(spriteA.scale.x < 0.75);
+  assert.ok(brute.scale.x < 0.75);
+  assert.equal(goddesses.children.filter(g => g.visible).length, 12);
+
+  const resources = new Set();
+  scene.group.traverse(object => {
+    assert.equal(Boolean(object.isPointLight), false);
+    if (object.geometry) resources.add(object.geometry);
+    if (object.material) {
+      for (const m of [object.material].flat()) resources.add(m);
+    }
+  });
+  let disposed = 0;
+  for (const r of resources) r.addEventListener('dispose', () => { disposed++; });
+  scene.dispose();
+  assert.equal(disposed, resources.size);
+});

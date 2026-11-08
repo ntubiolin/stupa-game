@@ -140,3 +140,46 @@ test('Pharping water observation and lamp lighting restore across checkpoints an
   assert.equal(scene.getSnapshot().waterSettled, false);
   assert.equal(scene.getSnapshot().lampLit, false);
 });
+
+test('Pharping renders 3D drought monsters and Drought Lord that pacify across checkpoints', async (t) => {
+  const scene = await createPharpingScene({ colliders: [] });
+  t.after(() => scene.dispose());
+  const object = (name) => scene.group.getObjectByName(name);
+
+  const monsters = object('StoryPharpingMonsters');
+  const sprite = object('StoryDroughtSprite');
+  const devil = object('StoryDustDevil');
+  const preta = object('StoryThirstyPreta');
+  const lord = object('StoryDroughtLord');
+  const practitioner = object('StoryPharpingPractitioner');
+  assert.ok(monsters && sprite && devil && preta && lord && practitioner);
+
+  scene.restore('spring1');
+  assert.equal(sprite.scale.x, 1);
+  assert.equal(devil.scale.x, 1);
+  const initialPractitionerScaleY = practitioner.scale.y;
+  scene.update(0.35);
+  assert.notEqual(practitioner.scale.y, initialPractitionerScaleY);
+
+  // Clearing spring stones pacifies the spring drought sprite
+  scene.restore('channel1');
+  assert.ok(sprite.scale.x < 0.7);
+  assert.equal(devil.scale.x, 1);
+
+  // Clearing channel debris subsides the dust devil
+  scene.restore('manuscript');
+  assert.ok(devil.scale.x < 0.5);
+
+  // At shadow, Drought Lord looms larger from the dry well
+  scene.restore('shadow');
+  assert.ok(lord.scale.x > 0.7);
+  const shadowY = lord.position.y;
+
+  // At release and rain, Drought Lord and spirits bow in pacified subjugation
+  scene.restore('release');
+  assert.ok(lord.scale.x < 0.7);
+  assert.ok(lord.position.y < shadowY);
+
+  scene.restore('rain');
+  assert.ok(lord.scale.x < 0.5);
+});
