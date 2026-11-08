@@ -48,7 +48,7 @@ jobs:
             mangyul|yarlung|samye|chimphu|finale) CHAPTER_SUITE="$STORY_SUITE" node scripts/chapter-browser-test.mjs ;;
             modes) node scripts/mode-switch-browser-test.mjs ;;
             debug) node scripts/story-debug-browser-test.mjs ;;
-            media) node scripts/story-media-browser-test.mjs ;;
+            media) node scripts/story-media-browser-test.mjs && node scripts/losang-still-browser-test.mjs ;;
             adventure) node scripts/adventure-compat-test.mjs ;;
             *) npm run test:browser ;;
           esac

@@ -20,6 +20,7 @@ import '../i18n/storyArt.js';
 import { HANDOVER_QR_SVG, unreadPhoneThreads } from '../data/story/phoneThreads.js';
 import { createPhone } from '../ui/story/phone.js';
 import { createDocumentary } from '../ui/story/documentary.js';
+import { createLosangStill } from '../ui/story/losangStill.js';
 import { DOCUMENTARY_CLIPS } from '../data/story/documentary.js';
 import { createMemorySystem } from './memorySystem.js';
 import { createLosang } from './characters/losang.js';
@@ -97,6 +98,7 @@ const modeSwitchMount = document.createElement('div');
 const modeSwitch = createModeSwitch(ctx, 'story', modeSwitchMount, { onBeforeOpen: closeModal });
 const modal = document.createElement('section'); modal.className = 'story-modal'; modal.hidden = true; modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true'); root.append(modal);
 let modalCallback = null, modalKeys = null, previousFocus = null;
+let modalStill = null;
 let arrivalCount = 0, visionCount = 0, losangLine = 0;
 let currentTarget = null, currentLabel = '', currentAction = null;
 let loading = false, beatToken = 0, currentBeat = 'prologue';
@@ -104,6 +106,7 @@ let soundOn = true;
 
 function closeModal() {
   if (modal.hidden) return;
+  modalStill?.dispose(); modalStill = null;
   modal.hidden = true; modalCallback = null; modalKeys = null;
   state.uiOpen = isAnyModalOpen();
   renderer.domElement.focus({ preventScroll: true });
@@ -119,19 +122,36 @@ function showCard(titleKey, bodyKey, actionKey, callback, category = 'fiction', 
   renderCard();
 }
 function renderCard() {
+  modalStill?.dispose(); modalStill = null;
+  const session = modalKeys;
   const { titleKey, bodyKey, actionKey, category, extra, choices } = modalKeys;
   const letterCode = titleKey.startsWith('chapter.finale.letter') ? extra : '';
   const illustration = letterCode ? '' : extra;
   modal.innerHTML = `<div class="story-card"><p class="story-category">${t(category)}</p><h2 id="story-card-title">${t(titleKey)}</h2>${illustration}<p class="story-prose">${t(bodyKey)}</p>${letterCode}<div class="story-card-actions">${choices ? choices.map((id,index)=>`<button class="${index ? '' : 'story-primary'}" data-card-choice="${id}">${t(`chapter.${activeChapter}.${chapterCheckpoint}.${id}`)}</button>`).join('') : `<button class="story-primary" data-card="continue">${t(actionKey)}</button>`}<button data-card="close">${t('close')}</button></div></div>`;
   modal.setAttribute('aria-labelledby', 'story-card-title');
+  if (bodyKey === 'losang.5') {
+    modalStill = createLosangStill(t);
+    modal.querySelector('.story-prose').before(modalStill.element);
+  }
+  const card = modal.querySelector('.story-card');
+  let completed = false;
+  const finish = choice => {
+    // A removed button must never consume the next card's callback on repeat clicks.
+    if (completed || modal.hidden || modalKeys !== session || !card.isConnected) return;
+    completed = true;
+    const cb = modalCallback; closeModal(); cb?.(choice);
+  };
   const nextButton=modal.querySelector('[data-card="continue"]');
-  if(nextButton)nextButton.onclick = () => { const cb = modalCallback; closeModal(); cb?.(); };
-  for(const button of modal.querySelectorAll('[data-card-choice]'))button.onclick=()=>{const cb=modalCallback;closeModal();cb?.(button.dataset.cardChoice);};
-  modal.querySelector('[data-card="close"]').onclick = closeModal;
+  if(nextButton)nextButton.onclick = () => finish();
+  for(const button of modal.querySelectorAll('[data-card-choice]'))button.onclick=()=>finish(button.dataset.cardChoice);
+  modal.querySelector('[data-card="close"]').onclick = () => {
+    if (modalKeys === session && card.isConnected) closeModal();
+  };
   const heading=modal.querySelector('h2');heading.tabIndex=-1;heading.focus({preventScroll:true});
   modal.scrollTop=0;modal.querySelector('.story-card').scrollTop=0;
 }
 function showLoading(error = false) {
+  modalStill?.dispose(); modalStill = null;
   modal.hidden = false; state.uiOpen = true; modalKeys = null;
   modal.innerHTML = `<div class="story-card"><p>${t(error ? 'loadError' : 'loading')}</p>${error ? `<button>${t('retry')}</button>` : ''}</div>`;
   if (error) modal.querySelector('button').onclick = () => enterBeat({ beat: story.getState().beat });
@@ -158,6 +178,7 @@ window.addEventListener('pagehide', event => {
   // A bfcache page may return with its existing scene, so keep those resources.
   if (!event.persisted) {
     pageDisposed = true;
+    modalStill?.dispose(); modalStill = null;
     losangCharacter.dispose();
     renderer.dispose();
   }
