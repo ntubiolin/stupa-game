@@ -66,7 +66,19 @@ async function runModeSwitch(mobile) {
   const documentId = () => page.evaluate(() => window.modeTestDocument);
   const screenshot = suffix => page.screenshot({ path: join(output, `${name}-${suffix}.png`) });
 
+  async function ensureSettingsOpen(currentMode) {
+    if (await menu().isVisible()) return;
+    if (currentMode === 'adventure') {
+      await activate(page.locator('#top-controls [data-settings-open]'));
+      await page.locator('#game-settings[open]').waitFor();
+    } else if (currentMode === 'story') {
+      await activate(page.locator('[data-action="settings"]'));
+      await page.locator('.story-settings').waitFor();
+    }
+  }
+
   async function openMenu(currentMode) {
+    await ensureSettingsOpen(currentMode);
     await activate(menu());
     await dialog().waitFor();
     assert.equal(await target(currentMode).isDisabled(), true);
@@ -92,10 +104,11 @@ async function runModeSwitch(mobile) {
   await page.goto(`${base}/`);
   await startAdventureWithInput(page, { mobile });
   assert.equal(await page.evaluate(() => Boolean(window.__stupa.story)), false);
+  await screenshot('default-adventure');
+  await ensureSettingsOpen('adventure');
   assert.match(await menu().innerText(), /switch to story mode/i);
   const entryBox = await menu().boundingBox();
   assert(entryBox.height >= 44 && entryBox.x >= 0 && entryBox.x + entryBox.width <= (mobile ? 390 : 1000));
-  await screenshot('default-adventure');
   await openMenu('adventure');
   await navigateWithMenu('story');
   await waitForCheckpoint(page, 'spring2');

@@ -55,6 +55,12 @@ export function createSettingsUi(ctx) {
       <p id="mantra-voice-hint" class="settings-hint" aria-live="polite"></p>
     </fieldset>
 
+    <section class="settings-group settings-mode" aria-labelledby="settings-mode-heading">
+      <h3 id="settings-mode-heading" class="settings-backup__title" data-i18n="mirror.chapter.mode.title"></h3>
+      <p class="settings-note" data-i18n="mirror.chapter.mode.note"></p>
+      <div id="settings-mode-mount" class="settings-mode__actions"></div>
+    </section>
+
     <section class="settings-group settings-backup" aria-labelledby="settings-backup-heading">
       <h3 id="settings-backup-heading" class="settings-backup__title" data-i18n="settings.backup.title"></h3>
       <p class="settings-note" data-i18n="settings.backup.desc"></p>

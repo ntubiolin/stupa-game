@@ -228,6 +228,7 @@ export function createHud(ctx) {
               <div id="stat-total-points" class="merit-summary__points">0</div>
               <div id="stat-kora-pct" class="merit-summary__sub"></div>
             </div>
+            <span class="merit-toggle-chevron" aria-hidden="true">▾</span>
           </div>
 
           <div class="merit-grid">
@@ -270,6 +271,7 @@ export function createHud(ctx) {
             <span id="clock-icon" class="clock-icon" aria-hidden="true"></span>
             <span id="clock-display" class="clock-display">07:12</span>
             <span id="clock-phase" class="clock-phase"></span>
+            <span class="time-toggle-chevron" aria-hidden="true">▾</span>
             <div class="speed-group" role="group" aria-label="Time speed">
               <button id="btn-speed-0" type="button" class="speed-btn" data-speed="0">⏸</button>
               <button id="btn-speed-1" type="button" class="speed-btn is-active" data-speed="1">1×</button>
@@ -300,6 +302,9 @@ export function createHud(ctx) {
           </button>
           <button id="btn-hud-hide" type="button" class="icon-btn" aria-label="Hide HUD">
             <span>👁</span>
+          </button>
+          <button id="btn-utility-more" type="button" class="icon-btn utility-more-btn" aria-label="More tools" title="More">
+            <span>⋯</span>
           </button>
         </div>
       </aside>
@@ -619,6 +624,32 @@ export function createHud(ctx) {
   const btnHelpToggle = root.querySelector('#btn-help-toggle');
   const btnHudHide = root.querySelector('#btn-hud-hide');
   const btnHudRestore = root.querySelector('#btn-hud-restore');
+  const btnUtilityMore = root.querySelector('#btn-utility-more');
+  const meritPanelEl = root.querySelector('#merit-panel');
+  const timePanelEl = root.querySelector('.time-panel');
+  const timeRowEl = root.querySelector('.time-row');
+  const utilityBarEl = root.querySelector('.utility-bar');
+
+  if (meritPanelEl) {
+    meritPanelEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      meritPanelEl.classList.toggle('is-mobile-expanded');
+    });
+  }
+  if (timeRowEl && timePanelEl) {
+    timeRowEl.addEventListener('click', (e) => {
+      if (e.target.closest?.('.speed-group')) return;
+      e.stopPropagation();
+      timePanelEl.classList.toggle('is-mobile-expanded');
+    });
+  }
+  if (btnUtilityMore && utilityBarEl) {
+    btnUtilityMore.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const expanded = utilityBarEl.classList.toggle('is-mobile-expanded');
+      btnUtilityMore.querySelector('span').textContent = expanded ? '✕' : '⋯';
+    });
+  }
 
   const promptBtn = root.querySelector('#interaction-prompt');
   const promptKey = root.querySelector('#prompt-key');
@@ -1742,6 +1773,10 @@ export function createHud(ctx) {
 
   // ---------------------------------------------------------------- per-frame update
   function update(dt) {
+    const curZone = state.zone || 'stupa';
+    if (playHud && playHud.dataset.zone !== curZone) {
+      playHud.dataset.zone = curZone;
+    }
     if (levelupRemaining > 0) {
       levelupRemaining -= dt;
       if (levelupRemaining <= 0 && levelupBanner) {
