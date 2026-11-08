@@ -288,6 +288,10 @@ export function createSettingsUi(ctx) {
       cloudSignedInEl.classList.toggle('is-hidden', !cloudState.signedIn);
     }
 
+    if (btnGoogleSignIn) {
+      btnGoogleSignIn.classList.toggle('is-hidden', Boolean(cloudState.signedIn) || devFormOpen);
+    }
+
     if (devFormEl) {
       devFormEl.classList.toggle('is-hidden', Boolean(cloudState.signedIn) || !devFormOpen);
     }
@@ -422,21 +426,33 @@ export function createSettingsUi(ctx) {
     });
   }
 
+  async function submitDevSignIn() {
+    if (!ctx.cloudSave) return;
+    const email = inputDevEmail?.value?.trim() || 'pilgrim@gmail.com';
+    const displayName = inputDevName?.value?.trim() || email.split('@')[0] || 'Pilgrim';
+    const res = await ctx.cloudSave.signInWithGoogle({
+      devProfile: { email, displayName },
+    });
+    if (res?.ok) {
+      devFormOpen = false;
+      showCloudStatus(i18n.t('settings.cloud.toastSynced'), false);
+      render();
+    } else {
+      showCloudStatus(i18n.t('settings.cloud.statusError'), true);
+      render();
+    }
+  }
+
   if (btnDevSubmit) {
-    btnDevSubmit.addEventListener('click', async () => {
-      if (!ctx.cloudSave) return;
-      const email = inputDevEmail?.value?.trim() || 'pilgrim@gmail.com';
-      const displayName = inputDevName?.value?.trim() || email.split('@')[0] || 'Pilgrim';
-      const res = await ctx.cloudSave.signInWithGoogle({
-        devProfile: { email, displayName },
-      });
-      if (res?.ok) {
-        devFormOpen = false;
-        showCloudStatus(i18n.t('settings.cloud.toastSynced'), false);
-        render();
-      } else {
-        showCloudStatus(i18n.t('settings.cloud.statusError'), true);
-        render();
+    btnDevSubmit.addEventListener('click', submitDevSignIn);
+  }
+
+  for (const inp of [inputDevEmail, inputDevName]) {
+    if (!inp) continue;
+    inp.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        submitDevSignIn();
       }
     });
   }

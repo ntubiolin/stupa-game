@@ -6834,6 +6834,9 @@ body.is-touch-device .mobile-skill-pad {
 }
 
 /* Google Account & Cloud Save UI (#224) */
+.game-settings .is-hidden {
+  display: none !important;
+}
 .settings-cloud__google-btn {
   display: inline-flex;
   align-items: center;
