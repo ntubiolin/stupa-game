@@ -61,6 +61,76 @@ export function createSettingsUi(ctx) {
       <div id="settings-mode-mount" class="settings-mode__actions"></div>
     </section>
 
+    <section id="settings-cloud" class="settings-group settings-cloud" aria-labelledby="settings-cloud-heading">
+      <h3 id="settings-cloud-heading" class="settings-backup__title" data-i18n="settings.cloud.title"></h3>
+      <p class="settings-note" data-i18n="settings.cloud.desc"></p>
+
+      <div id="cloud-signed-out" class="settings-cloud__signed-out">
+        <button type="button" id="btn-google-signin" class="settings-cloud__google-btn" data-cloud-signin>
+          <span class="settings-cloud__google-icon" aria-hidden="true">G</span>
+          <span data-i18n="settings.cloud.signInBtn"></span>
+        </button>
+
+        <div id="cloud-dev-signin-form" class="settings-cloud__dev-form is-hidden">
+          <p class="settings-note" data-i18n="settings.cloud.devFormHint"></p>
+          <div class="settings-cloud__dev-fields">
+            <label class="settings-cloud__field">
+              <span data-i18n="settings.cloud.devEmailLabel"></span>
+              <input type="email" id="input-cloud-dev-email" data-cloud-dev-email value="pilgrim@gmail.com" autocomplete="email" />
+            </label>
+            <label class="settings-cloud__field">
+              <span data-i18n="settings.cloud.devNameLabel"></span>
+              <input type="text" id="input-cloud-dev-name" data-cloud-dev-name value="丹增行者" autocomplete="name" />
+            </label>
+          </div>
+          <div class="settings-backup__actions">
+            <button type="button" id="btn-cloud-dev-submit" class="settings-backup__btn" data-cloud-dev-submit data-i18n="settings.cloud.devSubmitBtn"></button>
+            <button type="button" id="btn-cloud-dev-cancel" class="settings-backup__btn settings-cloud__btn--subtle" data-cloud-dev-cancel data-i18n="settings.cloud.devCancelBtn"></button>
+          </div>
+        </div>
+      </div>
+
+      <div id="cloud-signed-in" class="settings-cloud__signed-in is-hidden">
+        <div class="settings-cloud__account-row">
+          <div class="settings-cloud__user">
+            <span id="cloud-user-avatar" class="settings-cloud__avatar" aria-hidden="true">G</span>
+            <div class="settings-cloud__user-meta">
+              <strong id="cloud-user-name" class="settings-cloud__user-name"></strong>
+              <span id="cloud-user-email" class="settings-cloud__user-email"></span>
+            </div>
+          </div>
+          <span id="cloud-sync-badge" class="settings-cloud__badge"></span>
+        </div>
+
+        <p id="settings-cloud-summary" class="settings-backup__summary"></p>
+
+        <div id="cloud-conflict-box" class="settings-cloud__conflict is-hidden" role="region" aria-labelledby="cloud-conflict-heading">
+          <h4 id="cloud-conflict-heading" class="settings-cloud__conflict-title" data-i18n="settings.cloud.conflict.title"></h4>
+          <p class="settings-note" data-i18n="settings.cloud.conflict.desc"></p>
+          <div class="settings-cloud__conflict-grid">
+            <div class="settings-cloud__conflict-card">
+              <div class="settings-cloud__conflict-card-head" data-i18n="settings.cloud.conflict.cloudTitle"></div>
+              <p id="cloud-conflict-cloud-summary" class="settings-cloud__conflict-card-meta"></p>
+              <button type="button" id="btn-conflict-use-cloud" class="settings-backup__btn settings-backup__btn--import" data-conflict-resolve="cloud" data-i18n="settings.cloud.conflict.useCloudBtn"></button>
+            </div>
+            <div class="settings-cloud__conflict-card">
+              <div class="settings-cloud__conflict-card-head" data-i18n="settings.cloud.conflict.localTitle"></div>
+              <p id="cloud-conflict-local-summary" class="settings-cloud__conflict-card-meta"></p>
+              <button type="button" id="btn-conflict-use-local" class="settings-backup__btn" data-conflict-resolve="local" data-i18n="settings.cloud.conflict.useLocalBtn"></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-backup__actions">
+          <button type="button" id="btn-cloud-sync" class="settings-backup__btn" data-cloud-sync data-i18n="settings.cloud.syncNowBtn"></button>
+          <button type="button" id="btn-cloud-pull" class="settings-backup__btn settings-backup__btn--import" data-cloud-pull data-i18n="settings.cloud.pullBtn"></button>
+          <button type="button" id="btn-cloud-signout" class="settings-backup__btn settings-cloud__btn--subtle" data-cloud-signout data-i18n="settings.cloud.signOutBtn"></button>
+        </div>
+      </div>
+
+      <p id="settings-cloud-status" class="settings-backup__status is-hidden" aria-live="polite"></p>
+    </section>
+
     <section class="settings-group settings-backup" aria-labelledby="settings-backup-heading">
       <h3 id="settings-backup-heading" class="settings-backup__title" data-i18n="settings.backup.title"></h3>
       <p class="settings-note" data-i18n="settings.backup.desc"></p>
@@ -80,7 +150,23 @@ export function createSettingsUi(ctx) {
   document.body.appendChild(dialog);
 
   const buttons = [];
-  for (const parent of [document.querySelector('.title-actions'), document.querySelector('#top-controls .utility-bar')]) {
+  let titleCloudBtn = null;
+  const titleActions = document.querySelector('.title-actions');
+  if (titleActions) {
+    titleCloudBtn = document.createElement('button');
+    titleCloudBtn.type = 'button';
+    titleCloudBtn.id = 'btn-title-cloud';
+    titleCloudBtn.className = 'btn-title-settings btn-title-cloud';
+    titleCloudBtn.setAttribute('data-cloud-title-open', '');
+    titleCloudBtn.addEventListener('click', () => {
+      open();
+      const cloudSec = dialog.querySelector('#settings-cloud');
+      cloudSec?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+    });
+    titleActions.appendChild(titleCloudBtn);
+  }
+
+  for (const parent of [titleActions, document.querySelector('#top-controls .utility-bar')]) {
     if (!parent) continue;
     const button = document.createElement('button');
     button.type = 'button';
@@ -98,11 +184,44 @@ export function createSettingsUi(ctx) {
   const btnImport = dialog.querySelector('[data-save-import]');
   const fileInput = dialog.querySelector('[data-save-file-input]');
 
+  // Cloud Save UI elements
+  const cloudSignedOutEl = dialog.querySelector('#cloud-signed-out');
+  const cloudSignedInEl = dialog.querySelector('#cloud-signed-in');
+  const btnGoogleSignIn = dialog.querySelector('[data-cloud-signin]');
+  const devFormEl = dialog.querySelector('#cloud-dev-signin-form');
+  const inputDevEmail = dialog.querySelector('[data-cloud-dev-email]');
+  const inputDevName = dialog.querySelector('[data-cloud-dev-name]');
+  const btnDevSubmit = dialog.querySelector('[data-cloud-dev-submit]');
+  const btnDevCancel = dialog.querySelector('[data-cloud-dev-cancel]');
+  const userAvatarEl = dialog.querySelector('#cloud-user-avatar');
+  const userNameEl = dialog.querySelector('#cloud-user-name');
+  const userEmailEl = dialog.querySelector('#cloud-user-email');
+  const syncBadgeEl = dialog.querySelector('#cloud-sync-badge');
+  const cloudSummaryEl = dialog.querySelector('#settings-cloud-summary');
+  const conflictBoxEl = dialog.querySelector('#cloud-conflict-box');
+  const conflictCloudSummaryEl = dialog.querySelector('#cloud-conflict-cloud-summary');
+  const conflictLocalSummaryEl = dialog.querySelector('#cloud-conflict-local-summary');
+  const btnConflictCloud = dialog.querySelector('[data-conflict-resolve="cloud"]');
+  const btnConflictLocal = dialog.querySelector('[data-conflict-resolve="local"]');
+  const btnCloudSync = dialog.querySelector('[data-cloud-sync]');
+  const btnCloudPull = dialog.querySelector('[data-cloud-pull]');
+  const btnCloudSignOut = dialog.querySelector('[data-cloud-signout]');
+  const cloudStatusEl = dialog.querySelector('#settings-cloud-status');
+
+  let devFormOpen = false;
+
   function showBackupStatus(text, isError = false) {
     if (!backupStatusEl) return;
     backupStatusEl.textContent = text;
     backupStatusEl.classList.remove('is-hidden', 'is-error', 'is-ok');
     backupStatusEl.classList.add(isError ? 'is-error' : 'is-ok');
+  }
+
+  function showCloudStatus(text, isError = false) {
+    if (!cloudStatusEl) return;
+    cloudStatusEl.textContent = text;
+    cloudStatusEl.classList.remove('is-hidden', 'is-error', 'is-ok');
+    cloudStatusEl.classList.add(isError ? 'is-error' : 'is-ok');
   }
 
   function formatSavedTime(savedAt) {
@@ -121,6 +240,9 @@ export function createSettingsUi(ctx) {
     for (const el of dialog.querySelectorAll('[data-i18n]')) {
       el.textContent = i18n.t(el.dataset.i18n);
     }
+    if (inputDevEmail) inputDevEmail.placeholder = i18n.t('settings.cloud.devEmailPlaceholder');
+    if (inputDevName) inputDevName.placeholder = i18n.t('settings.cloud.devNamePlaceholder');
+
     const savedSettings = ctx.save?.get?.('settings', {}) || {};
     const preset = getDifficulty(ctx);
     const camMode = normalizeCameraMode(savedSettings.cameraAutoFollow);
@@ -152,6 +274,91 @@ export function createSettingsUi(ctx) {
       });
     }
 
+    // Cloud Save section render
+    const cloudState = ctx.cloudSave?.getState?.() || {
+      signedIn: false,
+      status: 'signed-out',
+      user: null,
+      cloudSummary: null,
+      conflict: null,
+    };
+
+    if (cloudSignedOutEl && cloudSignedInEl) {
+      cloudSignedOutEl.classList.toggle('is-hidden', Boolean(cloudState.signedIn));
+      cloudSignedInEl.classList.toggle('is-hidden', !cloudState.signedIn);
+    }
+
+    if (devFormEl) {
+      devFormEl.classList.toggle('is-hidden', Boolean(cloudState.signedIn) || !devFormOpen);
+    }
+
+    if (cloudState.signedIn && cloudState.user) {
+      const displayName = cloudState.user.displayName || cloudState.user.email || 'Pilgrim';
+      const initial = displayName.trim().charAt(0).toUpperCase() || 'G';
+      if (userAvatarEl) userAvatarEl.textContent = initial;
+      if (userNameEl) userNameEl.textContent = displayName;
+      if (userEmailEl) userEmailEl.textContent = cloudState.user.email || '';
+
+      if (syncBadgeEl) {
+        const st = cloudState.status || 'synced';
+        const statusKey = `settings.cloud.status.${st}`;
+        syncBadgeEl.textContent = i18n.t(statusKey);
+        syncBadgeEl.dataset.status = st;
+      }
+
+      if (cloudSummaryEl) {
+        const cs = cloudState.cloudSummary;
+        if (cs) {
+          cloudSummaryEl.textContent = i18n.t('settings.cloud.summary', {
+            level: cs.level || 1,
+            points: cs.points || 0,
+            kora: cs.kora || 0,
+            time: formatSavedTime(cs.savedAt || cloudState.lastSyncedSavedAt),
+          });
+        } else {
+          cloudSummaryEl.textContent = i18n.t('settings.cloud.summaryEmpty');
+        }
+      }
+
+      const hasConflict = cloudState.status === 'conflict' && Boolean(cloudState.conflict);
+      if (conflictBoxEl) {
+        conflictBoxEl.classList.toggle('is-hidden', !hasConflict);
+      }
+      if (hasConflict && cloudState.conflict) {
+        const cSum = cloudState.conflict.cloudSummary || {};
+        const lSum = cloudState.conflict.localSummary || {};
+        if (conflictCloudSummaryEl) {
+          conflictCloudSummaryEl.textContent = i18n.t('settings.cloud.conflict.cardSummary', {
+            level: cSum.level || 1,
+            points: cSum.points || 0,
+            kora: cSum.kora || 0,
+            time: formatSavedTime(cSum.savedAt),
+          });
+        }
+        if (conflictLocalSummaryEl) {
+          conflictLocalSummaryEl.textContent = i18n.t('settings.cloud.conflict.cardSummary', {
+            level: lSum.level || 1,
+            points: lSum.points || 0,
+            kora: lSum.kora || 0,
+            time: formatSavedTime(lSum.savedAt),
+          });
+        }
+      }
+    }
+
+    if (titleCloudBtn) {
+      if (cloudState.signedIn && cloudState.user) {
+        const name = cloudState.user.displayName || cloudState.user.email || 'Pilgrim';
+        titleCloudBtn.textContent = i18n.t('settings.cloud.titleBtnSignedIn', { name });
+        titleCloudBtn.classList.add('is-signed-in');
+      } else {
+        titleCloudBtn.textContent = i18n.t('settings.cloud.titleBtnSignedOut');
+        titleCloudBtn.classList.remove('is-signed-in');
+      }
+      titleCloudBtn.title = i18n.t('settings.cloud.title');
+      titleCloudBtn.setAttribute('aria-label', i18n.t('settings.cloud.title'));
+    }
+
     for (const button of buttons) {
       button.textContent = button.classList.contains('icon-btn') ? '⚙' : i18n.t('settings.title');
       button.title = i18n.t('settings.title');
@@ -162,6 +369,7 @@ export function createSettingsUi(ctx) {
   function open() {
     if (dialog.open) return;
     if (backupStatusEl) backupStatusEl.classList.add('is-hidden');
+    if (cloudStatusEl) cloudStatusEl.classList.add('is-hidden');
     render();
     previousUiOpen = Boolean(state.uiOpen);
     state.uiOpen = true;
@@ -197,6 +405,107 @@ export function createSettingsUi(ctx) {
     render();
   });
 
+  // Cloud Save button handlers
+  if (btnGoogleSignIn) {
+    btnGoogleSignIn.addEventListener('click', async () => {
+      if (!ctx.cloudSave) return;
+      const res = await ctx.cloudSave.signInWithGoogle();
+      if (res?.needsDevPrompt) {
+        devFormOpen = true;
+        render();
+        inputDevEmail?.focus?.();
+      } else if (res?.ok) {
+        devFormOpen = false;
+        showCloudStatus(i18n.t('settings.cloud.toastSynced'), false);
+        render();
+      }
+    });
+  }
+
+  if (btnDevSubmit) {
+    btnDevSubmit.addEventListener('click', async () => {
+      if (!ctx.cloudSave) return;
+      const email = inputDevEmail?.value?.trim() || 'pilgrim@gmail.com';
+      const displayName = inputDevName?.value?.trim() || email.split('@')[0] || 'Pilgrim';
+      const res = await ctx.cloudSave.signInWithGoogle({
+        devProfile: { email, displayName },
+      });
+      if (res?.ok) {
+        devFormOpen = false;
+        showCloudStatus(i18n.t('settings.cloud.toastSynced'), false);
+        render();
+      } else {
+        showCloudStatus(i18n.t('settings.cloud.statusError'), true);
+        render();
+      }
+    });
+  }
+
+  if (btnDevCancel) {
+    btnDevCancel.addEventListener('click', () => {
+      devFormOpen = false;
+      render();
+    });
+  }
+
+  if (btnCloudSync) {
+    btnCloudSync.addEventListener('click', async () => {
+      if (!ctx.cloudSave) return;
+      const res = await ctx.cloudSave.syncNow({ silentToast: false });
+      if (res?.ok) {
+        showCloudStatus(i18n.t('settings.cloud.toastSynced'), false);
+      } else if (res?.error !== 'save-conflict') {
+        showCloudStatus(i18n.t('settings.cloud.statusError'), true);
+      }
+      render();
+    });
+  }
+
+  if (btnCloudPull) {
+    btnCloudPull.addEventListener('click', async () => {
+      if (!ctx.cloudSave) return;
+      const res = await ctx.cloudSave.pullFromCloud({ reload: false });
+      if (res?.ok) {
+        showCloudStatus(i18n.t('settings.cloud.toastLoaded'), false);
+      } else {
+        showCloudStatus(i18n.t('settings.cloud.statusError'), true);
+      }
+      render();
+    });
+  }
+
+  if (btnCloudSignOut) {
+    btnCloudSignOut.addEventListener('click', () => {
+      if (!ctx.cloudSave) return;
+      ctx.cloudSave.signOut();
+      devFormOpen = false;
+      showCloudStatus(i18n.t('settings.cloud.toastSignedOut'), false);
+      render();
+    });
+  }
+
+  if (btnConflictCloud) {
+    btnConflictCloud.addEventListener('click', async () => {
+      if (!ctx.cloudSave) return;
+      const res = await ctx.cloudSave.resolveConflict('cloud', { reload: false });
+      if (res?.ok) {
+        showCloudStatus(i18n.t('settings.cloud.toastConflictCloud'), false);
+      }
+      render();
+    });
+  }
+
+  if (btnConflictLocal) {
+    btnConflictLocal.addEventListener('click', async () => {
+      if (!ctx.cloudSave) return;
+      const res = await ctx.cloudSave.resolveConflict('local', { reload: false });
+      if (res?.ok) {
+        showCloudStatus(i18n.t('settings.cloud.toastConflictLocal'), false);
+      }
+      render();
+    });
+  }
+
   if (btnDownload) {
     btnDownload.addEventListener('click', () => {
       if (!ctx.save?.downloadBackup) return;
@@ -226,6 +535,19 @@ export function createSettingsUi(ctx) {
     });
   }
 
+  ctx.bus?.on?.('cloudSave:changed', () => render());
+  ctx.bus?.on?.('cloudSave:conflict', () => {
+    render();
+    if (!dialog.open) open();
+  });
+  ctx.bus?.on?.('cloudSave:requestDevPrompt', () => {
+    devFormOpen = true;
+    render();
+    if (!dialog.open) open();
+  });
+  ctx.bus?.on?.('save:imported', () => render());
+  ctx.bus?.on?.('save:flushed', () => render());
+
   // Native modal focus/inert handling; keep gameplay hotkeys from stealing radio arrows/Tab.
   dialog.addEventListener('keydown', event => event.stopPropagation());
   dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
@@ -237,7 +559,7 @@ export function createSettingsUi(ctx) {
   });
   i18n.onChange(render);
   render();
-  const api = { open, close, isOpen: () => dialog.open };
+  const api = { open, close, render, isOpen: () => dialog.open };
   ctx.settingsUi = api;
   return api;
 }

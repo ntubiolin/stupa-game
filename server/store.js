@@ -12,6 +12,8 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { createAuthManager } from './auth.js';
+import { createSaveStore } from './saveStore.js';
 
 export const SAMYE_TARGET_STUPAS = 1008;
 export const MAX_DB_BYTES = 256 * 1024;
@@ -195,8 +197,10 @@ function sanitizeLampEntry(raw, now = Date.now(), maxRejoice = 50, maxBurn = 600
     data.id,
     `lamp-${now}-${Math.random().toString(36).slice(2, 7)}`,
   );
+  const ownerUid = sanitizeId(data.ownerUid, '');
   return {
     id,
+    ...(ownerUid ? { ownerUid } : {}),
     stationIdx: Math.max(0, Math.min(2, Math.round(Number(data.stationIdx) || 0))),
     lampIdx: Math.max(0, Math.min(11, Math.round(Number(data.lampIdx) || 0))),
     pilgrimName: sanitizeText(data.pilgrimName, 24, '朝聖行者'),
@@ -214,9 +218,11 @@ function sanitizeStupaEntry(raw, now = Date.now(), maxRejoice = 50) {
     data.id,
     `stupa-${now}-${Math.random().toString(36).slice(2, 7)}`,
   );
+  const ownerUid = sanitizeId(data.ownerUid, '');
   const spec = data.spec && typeof data.spec === 'object' ? data.spec : {};
   return {
     id,
+    ...(ownerUid ? { ownerUid } : {}),
     pilgrimName: sanitizeText(data.pilgrimName, 24, '朝聖行者'),
     title: sanitizeText(data.title, 28, '祈願功德塔'),
     message: sanitizeText(data.message, 120, ''),
@@ -235,8 +241,10 @@ function sanitizeStupaEntry(raw, now = Date.now(), maxRejoice = 50) {
 
 function sanitizeContributorEntry(raw, now = Date.now()) {
   const data = raw && typeof raw === 'object' ? raw : {};
+  const ownerUid = sanitizeId(data.ownerUid, '');
   return {
     id: sanitizeId(data.id, `samye-${now}-${Math.random().toString(36).slice(2, 6)}`),
+    ...(ownerUid ? { ownerUid } : {}),
     pilgrimName: sanitizeText(data.pilgrimName, 24, '朝聖行者'),
     stupas: Math.max(1, Math.min(50, Math.round(Number(data.stupas) || 1))),
     kora: Math.max(0, Math.min(5000, Math.round(Number(data.kora) || 0))),
@@ -274,6 +282,20 @@ export function createMultiplayerStore(options = {}) {
   const presenceTtlMs = Number(options.presenceTtlMs) || 12000;
   const roomTtlMs = Number(options.roomTtlMs) || 15000;
   const shardCapacity = Math.max(1, Number(options.shardCapacity) || 12);
+
+  const auth = options.auth || createAuthManager(options.authOptions || {});
+  const resolvedSaveDbPath =
+    options.saveDbPath ||
+    process.env.STUPA_SAVE_DB_PATH ||
+    (options.dbPath
+      ? path.join(path.dirname(options.dbPath), 'stupa-saves.sqlite')
+      : path.resolve(process.cwd(), '.data/stupa-saves.sqlite'));
+  const saves =
+    options.saveStore ||
+    createSaveStore({
+      inMemoryOnly,
+      saveDbPath: resolvedSaveDbPath,
+    });
 
   let community = createInitialCommunityState();
 
@@ -418,9 +440,15 @@ export function createMultiplayerStore(options = {}) {
       const idx = community.lamps.findIndex((l) => l.id === entry.id);
       if (idx >= 0) {
         const prev = community.lamps[idx];
+        if (prev.ownerUid && entry.ownerUid !== prev.ownerUid) {
+          return false;
+        }
         community.lamps[idx] = {
           ...prev,
           ...entry,
+          ...(prev.ownerUid || entry.ownerUid
+            ? { ownerUid: prev.ownerUid || entry.ownerUid }
+            : {}),
           rejoiceCount: Math.max(prev.rejoiceCount || 0, entry.rejoiceCount),
           burnBonusSec: Math.max(prev.burnBonusSec || 0, entry.burnBonusSec),
         };
@@ -467,12 +495,25 @@ export function createMultiplayerStore(options = {}) {
 
     if (action === 'stupa') {
       const entry = sanitizeStupaEntry(data, now, 50);
-      const idx = community.stupas.findIndex((s) => s.id === entry.id);
+      let idx = community.stupas.findIndex((s) => s.id === entry.id);
+      if (idx >= 0) {
+        const prev = community.stupas[idx];
+        if (prev.ownerUid && entry.ownerUid !== prev.ownerUid) {
+          return false;
+        }
+      } else if (entry.ownerUid) {
+        idx = community.stupas.findIndex((s) => s.ownerUid === entry.ownerUid);
+      }
+
       if (idx >= 0) {
         const prev = community.stupas[idx];
         community.stupas[idx] = {
           ...prev,
           ...entry,
+          id: prev.id,
+          ...(prev.ownerUid || entry.ownerUid
+            ? { ownerUid: prev.ownerUid || entry.ownerUid }
+            : {}),
           rejoiceCount: Math.max(prev.rejoiceCount || 0, entry.rejoiceCount),
         };
       } else {
@@ -1080,6 +1121,13 @@ export function createMultiplayerStore(options = {}) {
     dbPath,
     inMemoryOnly,
     shardCapacity,
+    auth,
+    saves,
+    saveStore: saves,
+    getSave: (...args) => saves.getSave(...args),
+    putSave: (...args) => saves.putSave(...args),
+    deleteSave: (...args) => saves.deleteSave(...args),
+    close: () => saves.close?.(),
     applyCommunityAction,
     getCommunityState,
     updatePresence,
