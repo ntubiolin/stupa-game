@@ -575,3 +575,15 @@ preserved.
 - `src/gameplay/termaCaves.js`: 5 Chapter Terma Caves (`pharping`, `mangyul`, `yarlung`, `samye`, `chimphu`) with `DORMANT -> GUARDED -> UNSEALED -> EXTRACTED` state machine, Yeshe Tsogyal's Shogser Scroll Table in `chimphu`, and `0` PointLights.
 - `src/gameplay/dungeon.js`: procedural Vault Room (`AncientTermaVaultReliquary`) on every floor and interactive Floor 3 `TermaTreasureChest`.
 - Regression: `npm run test:terma-caves` (`scripts/terma-caves-test.mjs` and `tests/termaCaves.test.mjs`) verifies all 12 Terma Legendaries (`thokchaVajra`, `dakiniMirror`, `uddiyanaLotusHat`), Ch1–Ch5 Terma Cave trials & extraction, Mendrup permanent stats, Shogser Grand Empowerment, Tertön's Compass, Dungeon Vault Room, Floor 3 Terma Chest, `stupa.save.v2` persistence, and strict `0` PointLight budget.
+
+## Persistent Community & Real-Time Multiplayer Backend (#173 #206)
+
+- **Production Deployment Architecture**:
+  - **Frontend CDN**: Hosted on **Vercel** (`stupa-game-prod.vercel.app`), built with `VITE_BACKEND_URL=https://168-110-4-202.sslip.io`.
+  - **Real-Time Backend**: Hosted on **Oracle Cloud (Tokyo)** behind Caddy Auto-TLS (`https://168-110-4-202.sslip.io` & `wss://168-110-4-202.sslip.io/ws/multiplayer`), managed by `systemd` (`stupa-backend.service`).
+  - **Persistence & Offsite Backup**: Atomic JSON file persistence at `.data/stupa-backend.json`, backed up every 6 hours to Google Drive (`stupa_game_backups/stupa-backend.json`).
+- **Strict Storage, Memory & Security Bounds (`server/store.js`, `server/handler.js`, `server/ws.js`)**:
+  - **Hard-Capped Database Size (`< 100 KB` typical, `MAX_DB_BYTES = 256 KB` ceiling)**: Caps `lamps <= 100`, `stupas <= 80`, `samye.contributors <= 50`, `lampRejoiceDeltas <= 120`, and `stupaRejoiceDeltas <= 100` (rejecting non-existent IDs). If serialized payload exceeds `256 KB`, arrays auto-trim (`60 / 50 / 30`) before atomic write.
+  - **Field-Level Sanitization**: Strips control characters and `<`/`>`, enforces strict character limits (`pilgrimName <= 24`, `title <= 28`, `message <= 120`, `id <= 64`), rejects prototype-pollution keys (`__proto__`, `constructor`, `prototype`), clamps timestamps (`<= now + 5000ms`), and strictly whitelists pilgrim/co-op member snapshots (`sanitizeMemberSnapshot`), `dungeonState` (`sanitizeDungeonState`), and event payloads (`sanitizeEventPayload`).
+  - **Network & Memory Guardrails**: `MAX_HTTP_BODY_BYTES = 64 KB` (returns `413` on oversized requests), per-IP sliding-window rate limiting on `POST /api/community` (`40 req / 10s`), `MAX_WS_FRAME_BYTES = 32 KB`, `MAX_WS_BUFFER_BYTES = 64 KB`, `MAX_WS_CLIENTS = 256`, `MAX_SHARDS_PER_ZONE = 20`, and `MAX_COOP_ROOMS = 200`.
+- **Regression**: `tests/multiplayer-backend.test.mjs` verifies disk persistence, 12-pilgrim zone sharding, co-op room host migration, RFC 6455 WebSocket broadcasts, and security/size bounds.
