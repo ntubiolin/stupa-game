@@ -664,13 +664,31 @@ export function createEnvironment(ctx) {
 
   if (colliders) {
     for (const s of [-1, 1]) {
+      for (const [x, radius] of [[pillarX, 0.58], [4.1, 0.48]]) {
+        colliders.push({
+          type: 'circle',
+          x: s * x,
+          z: 37.2,
+          r: radius,
+          zone: 'stupa',
+        });
+      }
       colliders.push({
         type: 'circle',
-        x: s * pillarX,
-        z: 37.2,
-        r: 0.55,
+        x: s * 3.8,
+        z: 35.6,
+        r: 0.46,
         zone: 'stupa',
       });
+      for (const lz of [13.2, 8.7, 4.2, 1.0]) {
+        colliders.push({
+          type: 'circle',
+          x: s * 2.8,
+          z: 37.2 - lz,
+          r: 0.32,
+          zone: 'stupa',
+        });
+      }
     }
   }
 
