@@ -590,6 +590,36 @@ export function renderZoneRadarCanvas(canvas, ctx, opts = {}) {
   // 9. Tracked Quest Targets (Golden diamond, clamped to circle edge when outside radius!)
   const targets = ctx.quests?.getTrackedTargets?.(curZone) || [];
   for (const t of targets) {
+    if (t.koraRing && typeof t.koraRing.cx === 'number' && typeof t.koraRing.cz === 'number') {
+      const kCenter = toCanvas(t.koraRing.cx, t.koraRing.cz);
+      const kRadiusPx = (t.koraRing.radius || 22.5) * scale;
+      g.save();
+      g.strokeStyle = 'rgba(253, 224, 71, 0.85)';
+      g.lineWidth = 2.0;
+      if (typeof g.setLineDash === 'function') g.setLineDash([5, 4]);
+      g.beginPath();
+      g.arc(kCenter.x, kCenter.y, kRadiusPx, 0, Math.PI * 2);
+      g.stroke();
+      if (typeof g.setLineDash === 'function') g.setLineDash([]);
+      // 4 clockwise directional arrowheads along the kora ring
+      for (let k = 0; k < 4; k++) {
+        const ang = (k * Math.PI) / 2 + Math.PI / 4;
+        const ax = kCenter.x + Math.cos(ang) * kRadiusPx;
+        const ay = kCenter.y + Math.sin(ang) * kRadiusPx;
+        g.save();
+        g.translate(ax, ay);
+        g.rotate(ang + Math.PI / 2);
+        g.fillStyle = '#fde047';
+        g.beginPath();
+        g.moveTo(4.2, 0);
+        g.lineTo(-3.2, -2.8);
+        g.lineTo(-3.2, 2.8);
+        g.closePath();
+        g.fill();
+        g.restore();
+      }
+      g.restore();
+    }
     if (typeof t.x !== 'number' || typeof t.z !== 'number') continue;
     let dx = (t.x - refX) * scale;
     let dy = (t.z - refZ) * scale;

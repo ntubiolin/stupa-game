@@ -95,8 +95,8 @@ export const DEBUG_QUESTS = [
         type: 'light',
         count: 2,
         map: 'stupa',
-        x: 0,
-        z: 22,
+        x: 15.91,
+        z: 15.91,
         textKey: 'quest.debug.ritual.step.light',
       },
       {
