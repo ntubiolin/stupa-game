@@ -4,10 +4,10 @@
 // Landmarks (relative to origin (4000, 0)):
 //   - Entrance & Waypoint:    (0, 85)    -> world (4000, 85), safe zone r = 12m
 //   - Yarlung Village:        (25, 45)   -> world (4025, 45), safe zone r = 12m
-//                             (barley fields, watermill with rotating wheel, calmed yaks)
-//   - Yumbulagang Palace:     (-45, 20)  -> world (3955, 20), ridge palace + switchback trail
+//                             (terraced barley fields, watermill + threshing court, calmed yaks)
+//   - Yumbulagang Palace:     (-45, 20)  -> world (3955, 20), Tibetan royal Dzong + switchback stairs
 //   - Sheldrak Crystal Cave:  (60, -30)  -> world (4060, -30), 4-pillar light-reflection puzzle
-//   - Alpine Pasture Arena:   (0, -75)   -> world (4000, -75), r = 22m
+//   - Alpine Pasture Arena:   (0, -75)   -> world (4000, -75), r = 22m (frost mandala, steles & spires)
 //   - Mount Yarlha Shampo:    (0, -155)  -> world (4000, -155), northern snow peak backdrop
 //
 // Strictly 0 PointLights. Draw calls < 400, Triangles < 600k.
@@ -25,9 +25,7 @@ import {
 const TWO_PI = Math.PI * 2;
 const STEP_RAD = Math.PI / 4; // 45 degrees per crystal pillar rotation
 
-let _yarlungGlowTex = null;
-function getYarlungGlowTexture() {
-  if (_yarlungGlowTex) return _yarlungGlowTex;
+function makeYarlungGlowTexture() {
   if (typeof document === 'undefined') return null;
   const canvas = document.createElement('canvas');
   canvas.width = 64;
@@ -44,7 +42,6 @@ function getYarlungGlowTexture() {
   }
   const tex = new THREE.CanvasTexture(canvas);
   tex.needsUpdate = true;
-  _yarlungGlowTex = tex;
   return tex;
 }
 
@@ -59,17 +56,92 @@ function makeRiverTexture() {
   c.fillStyle = '#1b6ca8';
   c.fillRect(0, 0, 128, 256);
 
-  for (let i = 0; i < 36; i++) {
+  for (let i = 0; i < 42; i++) {
     const x = (i * 37) % 120;
     const y = (i * 53) % 256;
-    c.fillStyle = i % 2 === 0 ? 'rgba(125, 211, 252, 0.35)' : 'rgba(224, 242, 254, 0.25)';
-    c.fillRect(x, y, 14, 26);
+    c.fillStyle = i % 2 === 0 ? 'rgba(125, 211, 252, 0.38)' : 'rgba(224, 242, 254, 0.28)';
+    c.fillRect(x, y, 12, 28);
   }
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(2, 14);
+  return tex;
+}
+
+function makeArenaMandalaTexture() {
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const c = canvas.getContext('2d');
+  if (!c) return null;
+
+  const cx = 256;
+  const cy = 256;
+  c.clearRect(0, 0, 512, 512);
+
+  // Subtle frost radial glow
+  const bgGrad = c.createRadialGradient(cx, cy, 18, cx, cy, 248);
+  bgGrad.addColorStop(0.0, 'rgba(56, 189, 248, 0.28)');
+  bgGrad.addColorStop(0.55, 'rgba(125, 211, 252, 0.16)');
+  bgGrad.addColorStop(0.88, 'rgba(250, 204, 21, 0.14)');
+  bgGrad.addColorStop(1.0, 'rgba(56, 189, 248, 0.0)');
+  c.fillStyle = bgGrad;
+  c.fillRect(0, 0, 512, 512);
+
+  // Concentric sacred Tibetan mandala & glacier rings
+  const rings = [
+    { r: 238, w: 5, stroke: 'rgba(125, 211, 252, 0.65)' },
+    { r: 222, w: 3, stroke: 'rgba(250, 204, 21, 0.62)' },
+    { r: 184, w: 4, stroke: 'rgba(56, 189, 248, 0.55)' },
+    { r: 132, w: 3, stroke: 'rgba(250, 204, 21, 0.52)' },
+    { r: 78, w: 3, stroke: 'rgba(224, 242, 254, 0.68)' },
+    { r: 34, w: 3, stroke: 'rgba(250, 204, 21, 0.75)' },
+  ];
+  for (const rg of rings) {
+    c.beginPath();
+    c.arc(cx, cy, rg.r, 0, TWO_PI);
+    c.lineWidth = rg.w;
+    c.strokeStyle = rg.stroke;
+    c.stroke();
+  }
+
+  // 16 snow-lotus petals & 8-spoked glacier dharma rays
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * TWO_PI;
+    const isMajor = i % 2 === 0;
+    c.save();
+    c.translate(cx, cy);
+    c.rotate(a);
+    c.beginPath();
+    c.moveTo(36, 0);
+    c.quadraticCurveTo(110, isMajor ? 24 : 14, isMajor ? 218 : 178, 0);
+    c.quadraticCurveTo(110, isMajor ? -24 : -14, 36, 0);
+    c.strokeStyle = isMajor ? 'rgba(250, 204, 21, 0.58)' : 'rgba(125, 211, 252, 0.48)';
+    c.lineWidth = isMajor ? 3 : 2;
+    c.stroke();
+    c.restore();
+  }
+
+  // 24 outer Tibetan royal border key notches
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * TWO_PI;
+    const x1 = cx + Math.cos(a) * 222;
+    const y1 = cy + Math.sin(a) * 222;
+    const x2 = cx + Math.cos(a) * 238;
+    const y2 = cy + Math.sin(a) * 238;
+    c.beginPath();
+    c.moveTo(x1, y1);
+    c.lineTo(x2, y2);
+    c.lineWidth = 3;
+    c.strokeStyle = i % 2 === 0 ? 'rgba(250, 204, 21, 0.68)' : 'rgba(186, 230, 253, 0.6)';
+    c.stroke();
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
   return tex;
 }
 
@@ -212,6 +284,43 @@ export function createMap(ctx) {
     heightRange: [40, 78],
   });
 
+  // Shared Tibetan architectural & natural materials (instantiated per createMap call)
+  const stoneWallMat = new THREE.MeshStandardMaterial({ color: 0xe7dfd3, roughness: 0.86 });
+  const dressedStoneMat = new THREE.MeshStandardMaterial({ color: 0x9b9284, roughness: 0.9 });
+  const redFriezeMat = new THREE.MeshStandardMaterial({ color: 0x881d16, roughness: 0.78 });
+  const darkWoodMat = new THREE.MeshStandardMaterial({ color: 0x2f1d12, roughness: 0.86 });
+  const timberMat = new THREE.MeshStandardMaterial({ color: 0x5c3d28, roughness: 0.86 });
+  const goldRoofMat = new THREE.MeshStandardMaterial({
+    color: 0xfacc15,
+    roughness: 0.26,
+    metalness: 0.8,
+    emissive: new THREE.Color(0xb45309),
+    emissiveIntensity: 0.38,
+  });
+  const warmWindowMat = new THREE.MeshStandardMaterial({
+    color: 0xfde68a,
+    roughness: 0.35,
+    emissive: new THREE.Color(0xf59e0b),
+    emissiveIntensity: 0.55,
+  });
+  const bannerClothMat = new THREE.MeshStandardMaterial({
+    color: 0x1e293b,
+    roughness: 0.72,
+    emissive: new THREE.Color(0x0f172a),
+    emissiveIntensity: 0.2,
+  });
+  const prayerFlagPalette = [0x2563eb, 0xf8fafc, 0xdc2626, 0x16a34a, 0xeab308];
+  const prayerFlagMats = prayerFlagPalette.map(
+    (hex) =>
+      new THREE.MeshStandardMaterial({
+        color: hex,
+        roughness: 0.65,
+        side: THREE.DoubleSide,
+        emissive: new THREE.Color(hex),
+        emissiveIntensity: 0.16,
+      }),
+  );
+
   // ---------------------------------------------------------------- 2. Mount Yarlha Shampo (Northern Backdrop Peak at z ~ -155)
   const shampoGroup = new THREE.Group();
   shampoGroup.name = 'MountYarlhaShampo';
@@ -219,15 +328,29 @@ export function createMap(ctx) {
   group.add(shampoGroup);
 
   const mtnBaseMat = new THREE.MeshStandardMaterial({
-    color: 0x4b5563,
+    color: 0x475569,
     roughness: 0.88,
   });
   const mtnSnowMat = new THREE.MeshStandardMaterial({
     color: 0xf8fafc,
-    roughness: 0.45,
-    metalness: 0.08,
+    roughness: 0.42,
+    metalness: 0.1,
     emissive: new THREE.Color(0x38bdf8),
-    emissiveIntensity: 0.22,
+    emissiveIntensity: 0.24,
+  });
+  const glacierSeracMat = new THREE.MeshStandardMaterial({
+    color: 0xbae6fd,
+    roughness: 0.22,
+    metalness: 0.38,
+    emissive: new THREE.Color(0x0284c7),
+    emissiveIntensity: 0.48,
+  });
+  const summitGoldSnowMat = new THREE.MeshStandardMaterial({
+    color: 0xfef3c7,
+    roughness: 0.32,
+    metalness: 0.25,
+    emissive: new THREE.Color(0xf59e0b),
+    emissiveIntensity: 0.45,
   });
   const cloudBandMat = new THREE.MeshBasicMaterial({
     color: 0xe2e8f0,
@@ -236,16 +359,37 @@ export function createMap(ctx) {
     depthWrite: false,
   });
 
-  // Main colossal pyramid peak + flanking glacial shoulders
-  const mainPeakBase = new THREE.Mesh(new THREE.ConeGeometry(54, 68, 7), mtnBaseMat);
-  mainPeakBase.position.set(0, 34, 0);
-  const mainPeakSnow = new THREE.Mesh(new THREE.ConeGeometry(35, 46, 7), mtnSnowMat);
+  // Main colossal pyramid peak + golden-lit sacred summit + flanking glacial shoulders
+  const mainPeakBase = new THREE.Mesh(new THREE.ConeGeometry(56, 70, 7), mtnBaseMat);
+  mainPeakBase.position.set(0, 35, 0);
+  const mainPeakSnow = new THREE.Mesh(new THREE.ConeGeometry(36, 48, 7), mtnSnowMat);
   mainPeakSnow.position.set(0, 58, 0);
+  const summitGoldCrown = new THREE.Mesh(new THREE.ConeGeometry(16.5, 22, 7), summitGoldSnowMat);
+  summitGoldCrown.position.set(0, 73.5, 0);
 
-  const westShoulder = new THREE.Mesh(new THREE.ConeGeometry(34, 52, 6), mtnSnowMat);
-  westShoulder.position.set(-42, 26, 8);
-  const eastShoulder = new THREE.Mesh(new THREE.ConeGeometry(34, 50, 6), mtnSnowMat);
-  eastShoulder.position.set(42, 25, 10);
+  const westShoulder = new THREE.Mesh(new THREE.ConeGeometry(35, 54, 6), mtnSnowMat);
+  westShoulder.position.set(-44, 27, 8);
+  const eastShoulder = new THREE.Mesh(new THREE.ConeGeometry(35, 52, 6), mtnSnowMat);
+  eastShoulder.position.set(44, 26, 10);
+
+  // Jagged faceted glacier ridges & ice seracs descending the south face toward the pasture arena
+  const glacierSpurSpecs = [
+    { x: -22, y: 18, z: 24, r: 16, h: 36, rotY: 0.35, mat: mtnSnowMat },
+    { x: 22, y: 17, z: 25, r: 15, h: 34, rotY: -0.35, mat: mtnSnowMat },
+    { x: 0, y: 15, z: 30, r: 18, h: 30, rotY: 0.12, mat: glacierSeracMat },
+    { x: -12, y: 10, z: 38, r: 9.5, h: 21, rotY: 0.48, mat: glacierSeracMat },
+    { x: 12, y: 10, z: 38, r: 9.5, h: 21, rotY: -0.42, mat: glacierSeracMat },
+    { x: -32, y: 12, z: 28, r: 11, h: 24, rotY: 0.22, mat: glacierSeracMat },
+    { x: 32, y: 12, z: 28, r: 11, h: 24, rotY: -0.22, mat: glacierSeracMat },
+  ];
+  const shampoSpurGeo = new THREE.ConeGeometry(1, 1, 5);
+  for (const sp of glacierSpurSpecs) {
+    const spur = new THREE.Mesh(shampoSpurGeo, sp.mat);
+    spur.position.set(sp.x, sp.y, sp.z);
+    spur.scale.set(sp.r, sp.h, sp.r * 0.85);
+    spur.rotation.y = sp.rotY;
+    shampoGroup.add(spur);
+  }
 
   const cloudRing1 = new THREE.Mesh(new THREE.TorusGeometry(36, 3.2, 8, 24), cloudBandMat);
   cloudRing1.rotation.x = Math.PI / 2;
@@ -255,15 +399,23 @@ export function createMap(ctx) {
   cloudRing2.rotation.x = Math.PI / 2 + 0.08;
   cloudRing2.position.set(0, 50, 0);
 
-  shampoGroup.add(mainPeakBase, mainPeakSnow, westShoulder, eastShoulder, cloudRing1, cloudRing2);
+  shampoGroup.add(
+    mainPeakBase,
+    mainPeakSnow,
+    summitGoldCrown,
+    westShoulder,
+    eastShoulder,
+    cloudRing1,
+    cloudRing2,
+  );
 
-  // ---------------------------------------------------------------- 3. Central Yarlung River & Wooden Bridge
+  // ---------------------------------------------------------------- 3. Central Yarlung River, Shimmering Banks & Bridge
   const riverTex = makeRiverTexture();
   const riverMat = new THREE.MeshStandardMaterial({
     color: 0x38bdf8,
     map: riverTex || null,
-    roughness: 0.16,
-    metalness: 0.42,
+    roughness: 0.15,
+    metalness: 0.45,
     emissive: new THREE.Color(0x0369a1),
     emissiveIntensity: 0.38,
     transparent: true,
@@ -275,8 +427,125 @@ export function createMap(ctx) {
   riverMesh.position.set(origin.x, 0.14, origin.z + 12);
   group.add(riverMesh);
 
-  // Wooden bridge across the river at (0, 42)
-  const timberMat = new THREE.MeshStandardMaterial({ color: 0x5c3d28, roughness: 0.86 });
+  // Shimmering white-cyan foam bank edges along West & East river margins
+  const foamEdgeMat = new THREE.MeshBasicMaterial({
+    color: 0xe0f2fe,
+    transparent: true,
+    opacity: 0.42,
+    depthWrite: false,
+  });
+  const foamStripGeo = new THREE.PlaneGeometry(0.55, 120, 1, 16);
+  foamStripGeo.rotateX(-Math.PI / 2);
+  for (const side of [-1, 1]) {
+    const foamStrip = new THREE.Mesh(foamStripGeo, foamEdgeMat);
+    foamStrip.position.set(origin.x + side * 4.45, 0.152, origin.z + 12);
+    group.add(foamStrip);
+  }
+
+  // Smooth river cobblestones scattered along both riverbanks (`InstancedMesh`, 0 colliders)
+  const cobbleCount = 180;
+  const cobbleGeo = new THREE.DodecahedronGeometry(0.28, 1);
+  const cobbleMat = new THREE.MeshStandardMaterial({
+    color: 0x8b8578,
+    roughness: 0.72,
+    metalness: 0.08,
+  });
+  const cobbleInstanced = new THREE.InstancedMesh(cobbleGeo, cobbleMat, cobbleCount);
+  cobbleInstanced.name = 'RiverCobblesInstanced';
+  const dummy = new THREE.Object3D();
+  const cRng = seededRandom(3417);
+  for (let i = 0; i < cobbleCount; i++) {
+    const side = i % 2 === 0 ? -1 : 1;
+    let lz = -45 + cRng() * 114;
+    if (Math.abs(lz - BRIDGE_LZ) < 3.4) {
+      lz += lz >= BRIDGE_LZ ? 3.6 : -3.6;
+    }
+    const lx = side * (4.3 + cRng() * 2.4);
+    const wx = origin.x + lx;
+    const wz = origin.z + lz;
+    const wy = getTerrainHeight(wx, wz);
+    dummy.position.set(wx, wy + 0.04, wz);
+    dummy.rotation.set(cRng() * 0.4, cRng() * TWO_PI, cRng() * 0.4);
+    const sx = 0.65 + cRng() * 0.9;
+    const sy = 0.35 + cRng() * 0.35;
+    const sz = 0.6 + cRng() * 0.85;
+    dummy.scale.set(sx, sy, sz);
+    dummy.updateMatrix();
+    cobbleInstanced.setMatrixAt(i, dummy.matrix);
+  }
+  cobbleInstanced.instanceMatrix.needsUpdate = true;
+  group.add(cobbleInstanced);
+
+  // Riverside reed clumps & sedge grass along the water's edge (`InstancedMesh`, 0 colliders)
+  const reedCount = 120;
+  const reedGeo = new THREE.ConeGeometry(0.14, 0.95, 5);
+  reedGeo.translate(0, 0.47, 0);
+  const reedMat = new THREE.MeshStandardMaterial({
+    color: 0x4d7c3f,
+    roughness: 0.82,
+    emissive: new THREE.Color(0x1e3a1a),
+    emissiveIntensity: 0.18,
+  });
+  const reedInstanced = new THREE.InstancedMesh(reedGeo, reedMat, reedCount);
+  reedInstanced.name = 'RiverReedsInstanced';
+  for (let i = 0; i < reedCount; i++) {
+    const side = i % 2 === 0 ? -1 : 1;
+    let lz = -38 + cRng() * 102;
+    if (Math.abs(lz - BRIDGE_LZ) < 4.2) {
+      lz += lz >= BRIDGE_LZ ? 4.4 : -4.4;
+    }
+    const lx = side * (4.6 + cRng() * 1.6);
+    const wx = origin.x + lx;
+    const wz = origin.z + lz;
+    const wy = getTerrainHeight(wx, wz);
+    dummy.position.set(wx, wy, wz);
+    dummy.rotation.set((cRng() - 0.5) * 0.22, cRng() * TWO_PI, (cRng() - 0.5) * 0.22);
+    const s = 0.75 + cRng() * 0.65;
+    dummy.scale.set(s, s * (0.9 + cRng() * 0.4), s);
+    dummy.updateMatrix();
+    reedInstanced.setMatrixAt(i, dummy.matrix);
+  }
+  reedInstanced.instanceMatrix.needsUpdate = true;
+  group.add(reedInstanced);
+
+  // Riverside Tibetan willow trees (`柳樹`, 0 colliders) framing the valley stream
+  const willowFoliageMat = new THREE.MeshStandardMaterial({
+    color: 0x5c8d40,
+    roughness: 0.8,
+    emissive: new THREE.Color(0x233d14),
+    emissiveIntensity: 0.16,
+  });
+  const willowTrunkGeo = new THREE.CylinderGeometry(0.18, 0.28, 2.3, 7);
+  const willowCrownGeo = new THREE.DodecahedronGeometry(1.45, 1);
+  const willowSpots = [
+    { lx: -7.4, lz: 56, s: 1.05 },
+    { lx: 7.6, lz: 58, s: 0.95 },
+    { lx: -7.8, lz: 28, s: 1.1 },
+    { lx: 7.5, lz: 24, s: 1.0 },
+    { lx: -7.2, lz: -6, s: 0.92 },
+    { lx: 7.4, lz: -12, s: 0.96 },
+  ];
+  for (const ws of willowSpots) {
+    const wx = origin.x + ws.lx;
+    const wz = origin.z + ws.lz;
+    const wy = getTerrainHeight(wx, wz);
+    const wTree = new THREE.Group();
+    wTree.position.set(wx, wy, wz);
+    wTree.scale.setScalar(ws.s);
+    const trunk = new THREE.Mesh(willowTrunkGeo, timberMat);
+    trunk.position.y = 1.1;
+    trunk.rotation.z = ws.lx < 0 ? -0.08 : 0.08;
+    const crownMain = new THREE.Mesh(willowCrownGeo, willowFoliageMat);
+    crownMain.position.set(0, 2.55, 0);
+    crownMain.scale.set(1.25, 0.92, 1.2);
+    const crownSide = new THREE.Mesh(willowCrownGeo, willowFoliageMat);
+    crownSide.position.set(ws.lx < 0 ? 0.65 : -0.65, 2.15, 0.3);
+    crownSide.scale.set(0.85, 0.78, 0.85);
+    wTree.add(trunk, crownMain, crownSide);
+    group.add(wTree);
+  }
+
+  // Wooden bridge across the river at (0, 42) — enhanced with carved Tibetan bridge gateposts & prayer flags
   const bridgeGroup = new THREE.Group();
   bridgeGroup.name = 'YarlungRiverBridge';
   bridgeGroup.position.set(origin.x, 0.38, origin.z + BRIDGE_LZ);
@@ -284,9 +553,18 @@ export function createMap(ctx) {
   bridgeDeck.castShadow = true;
   bridgeDeck.receiveShadow = true;
 
+  // Transverse timber deck planks & stone abutment pads at each bank
+  const plankGeo = new THREE.BoxGeometry(0.42, 0.04, 3.66);
+  for (let i = -9; i <= 9; i++) {
+    const plank = new THREE.Mesh(plankGeo, darkWoodMat);
+    plank.position.set(i * 0.56, 0.15, 0);
+    bridgeGroup.add(plank);
+  }
+
   // East & West sloped timber approach ramps connecting the 0.52m deck to the riverbanks
   const rampGeo = new THREE.BoxGeometry(1.62, 0.24, 3.8);
   const rampPitch = Math.atan2(0.42, 1.4);
+  const abutmentGeo = new THREE.BoxGeometry(1.2, 0.46, 4.3);
   for (const side of [-1, 1]) {
     const ramp = new THREE.Mesh(rampGeo, timberMat);
     ramp.position.set(side * 6.18, -0.18, 0);
@@ -294,6 +572,10 @@ export function createMap(ctx) {
     ramp.castShadow = true;
     ramp.receiveShadow = true;
     bridgeGroup.add(ramp);
+
+    const abutment = new THREE.Mesh(abutmentGeo, dressedStoneMat);
+    abutment.position.set(side * 5.45, -0.22, 0);
+    bridgeGroup.add(abutment);
   }
 
   const railN = new THREE.Mesh(new THREE.BoxGeometry(11.0, 0.65, 0.18), timberMat);
@@ -304,9 +586,14 @@ export function createMap(ctx) {
   railS.castShadow = true;
   bridgeGroup.add(bridgeDeck, railN, railS);
 
-  // Sloped ramp side rails & timber support piers anchored into riverbed and banks
+  // Sloped ramp side rails, timber support piers & carved Tibetan bridge gateposts with prayer flags
   const rampRailGeo = new THREE.BoxGeometry(1.55, 0.52, 0.18);
   const bridgePostGeo = new THREE.CylinderGeometry(0.13, 0.15, 1.35, 6);
+  const gatePostGeo = new THREE.BoxGeometry(0.38, 2.25, 0.38);
+  const gateCapGeo = new THREE.ConeGeometry(0.32, 0.42, 4);
+  const bridgeFlagGeo = new THREE.PlaneGeometry(0.38, 0.28);
+  const bridgeFlagMeshes = [];
+
   for (const rz of [-1.75, 1.75]) {
     for (const side of [-1, 1]) {
       const rampRail = new THREE.Mesh(rampRailGeo, timberMat);
@@ -314,13 +601,35 @@ export function createMap(ctx) {
       rampRail.rotation.z = -side * rampPitch;
       rampRail.castShadow = true;
       bridgeGroup.add(rampRail);
+
+      // Carved Tibetan bridge gatepost at each bridge corner
+      const gatePost = new THREE.Mesh(gatePostGeo, redFriezeMat);
+      gatePost.position.set(side * 5.35, 1.05, rz);
+      gatePost.castShadow = true;
+      const gateCap = new THREE.Mesh(gateCapGeo, goldRoofMat);
+      gateCap.position.set(side * 5.35, 2.32, rz);
+      gateCap.rotation.y = Math.PI / 4;
+      bridgeGroup.add(gatePost, gateCap);
     }
+
     for (const px of [-6.8, -5.4, -2.7, 0, 2.7, 5.4, 6.8]) {
       const isRampEnd = Math.abs(px) > 6.0;
       const post = new THREE.Mesh(bridgePostGeo, timberMat);
       post.position.set(px, isRampEnd ? -0.12 : 0.18, rz);
       post.castShadow = true;
       bridgeGroup.add(post);
+    }
+
+    // 10 fluttering prayer flags strung along the North & South bridge side railings
+    for (let f = 0; f < 10; f++) {
+      const u = (f + 0.5) / 10;
+      const fx = -5.1 + u * 10.2;
+      const sag = Math.sin(u * Math.PI) * 0.26;
+      const fy = 1.98 - sag;
+      const flag = new THREE.Mesh(bridgeFlagGeo, prayerFlagMats[f % 5]);
+      flag.position.set(fx, fy, rz);
+      bridgeGroup.add(flag);
+      bridgeFlagMeshes.push({ mesh: flag, baseZ: rz, phase: f * 0.7 + (rz > 0 ? 1.2 : 0) });
     }
   }
   group.add(bridgeGroup);
@@ -342,19 +651,39 @@ export function createMap(ctx) {
     maxZ: origin.z + BRIDGE_LZ + BRIDGE_HALF_Z,
   });
 
-  // ---------------------------------------------------------------- 4. Swaying Barley Fields on Both Riverbanks (`InstancedMesh`)
+  // ---------------------------------------------------------------- 4. Terraced Golden Barley Fields & Wildflowers (`InstancedMesh`, 0 colliders)
+  // Low dry-stone terrace field borders (`青稞梯田石埂`, 0 colliders) on both banks
+  const terraceWallGeo = new THREE.BoxGeometry(12.5, 0.28, 0.42);
+  const terracePlots = [
+    { lx: -15.5, lz: 48, rotY: 0.04 },
+    { lx: -15.5, lz: 28, rotY: -0.03 },
+    { lx: -15.5, lz: 8, rotY: 0.02 },
+    { lx: 15.5, lz: 28, rotY: -0.04 },
+    { lx: 15.5, lz: 10, rotY: 0.03 },
+    { lx: 15.5, lz: -8, rotY: -0.02 },
+  ];
+  for (const tp of terracePlots) {
+    const tx = origin.x + tp.lx;
+    const tz = origin.z + tp.lz;
+    const ty = getTerrainHeight(tx, tz);
+    const bund = new THREE.Mesh(terraceWallGeo, dressedStoneMat);
+    bund.position.set(tx, ty + 0.1, tz);
+    bund.rotation.y = tp.rotY;
+    group.add(bund);
+  }
+
+  // Dense swaying golden barley stalks (`青稞麥浪`, 320 instances in 1 draw call)
   const barleyCount = 320;
-  const stalkGeo = new THREE.ConeGeometry(0.16, 1.15, 5);
-  stalkGeo.translate(0, 0.57, 0);
+  const stalkGeo = new THREE.ConeGeometry(0.18, 1.24, 5);
+  stalkGeo.translate(0, 0.62, 0);
   const barleyMat = new THREE.MeshStandardMaterial({
-    color: 0xc5d84d,
-    roughness: 0.78,
-    emissive: new THREE.Color(0x3f4d12),
-    emissiveIntensity: 0.2,
+    color: 0xd4c246,
+    roughness: 0.72,
+    emissive: new THREE.Color(0x5c480e),
+    emissiveIntensity: 0.24,
   });
   const barleyInstanced = new THREE.InstancedMesh(stalkGeo, barleyMat, barleyCount);
   barleyInstanced.name = 'BarleyFieldsInstanced';
-  const dummy = new THREE.Object3D();
   const bRng = seededRandom(3401);
 
   for (let i = 0; i < barleyCount; i++) {
@@ -367,13 +696,49 @@ export function createMap(ctx) {
 
     dummy.position.set(wx, wy, wz);
     dummy.rotation.set((bRng() - 0.5) * 0.15, bRng() * TWO_PI, (bRng() - 0.5) * 0.15);
-    const s = 0.8 + bRng() * 0.55;
+    const s = 0.82 + bRng() * 0.58;
     dummy.scale.set(s, s, s);
     dummy.updateMatrix();
     barleyInstanced.setMatrixAt(i, dummy.matrix);
   }
   barleyInstanced.instanceMatrix.needsUpdate = true;
   group.add(barleyInstanced);
+
+  // Alpine wildflowers scattered across the valley meadows (`InstancedMesh`, 0 colliders)
+  const flowerCount = 140;
+  const flowerGeo = new THREE.DodecahedronGeometry(0.16, 0);
+  flowerGeo.translate(0, 0.14, 0);
+  const flowerMat = new THREE.MeshStandardMaterial({
+    color: 0xfef08a,
+    roughness: 0.6,
+    emissive: new THREE.Color(0xd97706),
+    emissiveIntensity: 0.28,
+  });
+  const flowerInstanced = new THREE.InstancedMesh(flowerGeo, flowerMat, flowerCount);
+  flowerInstanced.name = 'AlpineWildflowersInstanced';
+  const fCol = new THREE.Color();
+  const flowerPalette = [0xfef08a, 0x93c5fd, 0xf9a8d4, 0xfde047];
+  for (let i = 0; i < flowerCount; i++) {
+    const angle = bRng() * TWO_PI;
+    const dist = 14 + bRng() * 72;
+    const lx = Math.cos(angle) * dist;
+    const lz = Math.sin(angle) * dist;
+    if (Math.abs(lx) < 6.5) continue;
+    const wx = origin.x + lx;
+    const wz = origin.z + lz;
+    const wy = getTerrainHeight(wx, wz);
+    dummy.position.set(wx, wy, wz);
+    dummy.rotation.set(0, bRng() * TWO_PI, 0);
+    const s = 0.7 + bRng() * 0.65;
+    dummy.scale.set(s, s * 0.65, s);
+    dummy.updateMatrix();
+    flowerInstanced.setMatrixAt(i, dummy.matrix);
+    fCol.setHex(flowerPalette[i % flowerPalette.length]);
+    flowerInstanced.setColorAt(i, fCol);
+  }
+  flowerInstanced.instanceMatrix.needsUpdate = true;
+  if (flowerInstanced.instanceColor) flowerInstanced.instanceColor.needsUpdate = true;
+  group.add(flowerInstanced);
 
   // ---------------------------------------------------------------- 5. South Entrance Gate (4000, 89)
   const gateCfg = (mapDef.gates && mapDef.gates[0]) || { x: origin.x, z: origin.z + 89 };
@@ -384,14 +749,10 @@ export function createMap(ctx) {
     y: getHeight(gateCfg.x, gateCfg.z),
   });
 
-  // ---------------------------------------------------------------- 6. Yarlung Village (4025, 45) + Watermill + Calmed Grazing Yaks
+  // ---------------------------------------------------------------- 6. Yarlung Village (4025, 45) + Watermill + Threshing Courtyard
   const villageGroup = new THREE.Group();
   villageGroup.name = 'YarlungVillage';
   group.add(villageGroup);
-
-  const stoneWallMat = new THREE.MeshStandardMaterial({ color: 0xd6cfc2, roughness: 0.88 });
-  const redFriezeMat = new THREE.MeshStandardMaterial({ color: 0x8c2318, roughness: 0.82 });
-  const darkWoodMat = new THREE.MeshStandardMaterial({ color: 0x3e2718, roughness: 0.88 });
 
   const houseSpecs = [
     { lx: 18, lz: 52, w: 4.5, d: 3.8, h: 2.8, rot: 0.2 },
@@ -401,7 +762,16 @@ export function createMap(ctx) {
     { lx: 31, lz: 35, w: 4.0, d: 3.4, h: 2.5, rot: -0.15 },
   ];
 
-  for (const hs of houseSpecs) {
+  const winFrameGeo = new THREE.BoxGeometry(0.68, 0.76, 0.1);
+  const winPaneGeo = new THREE.BoxGeometry(0.44, 0.54, 0.12);
+  const winLintelGeo = new THREE.BoxGeometry(0.82, 0.14, 0.15);
+  const roofPoleGeo = new THREE.CylinderGeometry(0.035, 0.045, 1.35, 6);
+  const sangFurnaceGeo = new THREE.CylinderGeometry(0.18, 0.24, 0.45, 6);
+  const brassMirrorGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.06, 10);
+  brassMirrorGeo.rotateX(Math.PI / 2);
+
+  for (let hi = 0; hi < houseSpecs.length; hi++) {
+    const hs = houseSpecs[hi];
     const hx = origin.x + hs.lx;
     const hz = origin.z + hs.lz;
     const hy = getHeight(hx, hz);
@@ -409,19 +779,64 @@ export function createMap(ctx) {
     hGrp.position.set(hx, hy, hz);
     hGrp.rotation.y = hs.rot;
 
+    // Stone base plinth
+    const plinth = new THREE.Mesh(
+      new THREE.BoxGeometry(hs.w + 0.24, 0.34, hs.d + 0.24),
+      dressedStoneMat,
+    );
+    plinth.position.y = 0.17;
+    hGrp.add(plinth);
+
+    // Whitewashed stone main walls
     const body = new THREE.Mesh(new THREE.BoxGeometry(hs.w, hs.h, hs.d), stoneWallMat);
     body.position.y = hs.h * 0.5;
     body.castShadow = true;
     body.receiveShadow = true;
     hGrp.add(body);
 
-    const frieze = new THREE.Mesh(new THREE.BoxGeometry(hs.w + 0.16, 0.34, hs.d + 0.16), redFriezeMat);
-    frieze.position.y = hs.h - 0.12;
+    // Deep crimson Penma roof frieze + golden circular mirrors
+    const frieze = new THREE.Mesh(
+      new THREE.BoxGeometry(hs.w + 0.18, 0.38, hs.d + 0.18),
+      redFriezeMat,
+    );
+    frieze.position.y = hs.h - 0.14;
     hGrp.add(frieze);
 
-    const door = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.55, 0.12), darkWoodMat);
+    for (const mx of [-hs.w * 0.28, 0, hs.w * 0.28]) {
+      const mirror = new THREE.Mesh(brassMirrorGeo, goldRoofMat);
+      mirror.position.set(mx, hs.h - 0.14, hs.d * 0.5 + 0.08);
+      hGrp.add(mirror);
+    }
+
+    // Timber doorway with carved red lintel
+    const doorFrame = new THREE.Mesh(new THREE.BoxGeometry(1.06, 1.68, 0.1), darkWoodMat);
+    doorFrame.position.set(0, 0.84, hs.d * 0.5 + 0.03);
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.84, 1.54, 0.13), timberMat);
     door.position.set(0, 0.78, hs.d * 0.5 + 0.04);
-    hGrp.add(door);
+    const doorLintel = new THREE.Mesh(new THREE.BoxGeometry(1.22, 0.18, 0.18), redFriezeMat);
+    doorLintel.position.set(0, 1.72, hs.d * 0.5 + 0.06);
+    hGrp.add(doorFrame, door, doorLintel);
+
+    // Front Tibetan black-framed windows (`梯形黑框窗`)
+    for (const wxOff of [-hs.w * 0.3, hs.w * 0.3]) {
+      const wf = new THREE.Mesh(winFrameGeo, darkWoodMat);
+      wf.position.set(wxOff, hs.h * 0.62, hs.d * 0.5 + 0.03);
+      const wp = new THREE.Mesh(winPaneGeo, warmWindowMat);
+      wp.position.set(wxOff, hs.h * 0.62, hs.d * 0.5 + 0.04);
+      const wl = new THREE.Mesh(winLintelGeo, redFriezeMat);
+      wl.position.set(wxOff, hs.h * 0.62 + 0.42, hs.d * 0.5 + 0.06);
+      hGrp.add(wf, wp, wl);
+    }
+
+    // Rooftop corner incense burner (`煨桑爐`) & prayer flag pole (`風馬旗`)
+    const sang = new THREE.Mesh(sangFurnaceGeo, stoneWallMat);
+    sang.position.set(hs.w * 0.42, hs.h + 0.22, hs.d * 0.4);
+    const pole = new THREE.Mesh(roofPoleGeo, timberMat);
+    pole.position.set(-hs.w * 0.42, hs.h + 0.65, hs.d * 0.4);
+    const roofFlag = new THREE.Mesh(bridgeFlagGeo, prayerFlagMats[hi % 5]);
+    roofFlag.position.set(-hs.w * 0.42 + 0.2, hs.h + 1.05, hs.d * 0.4);
+    hGrp.add(sang, pole, roofFlag);
+    bridgeFlagMeshes.push({ mesh: roofFlag, baseZ: hs.d * 0.4, phase: hi * 1.1 });
 
     villageGroup.add(hGrp);
     pushCollider(ctx, 'yarlung', {
@@ -432,16 +847,50 @@ export function createMap(ctx) {
     });
   }
 
-  // Streamside Watermill with rotating waterwheel at local (11, 47)
+  // Streamside Watermill with rotating waterwheel & stone threshing courtyard at local (11, 47)
   const millX = origin.x + 11;
   const millZ = origin.z + 47;
   const millY = getHeight(millX, millZ);
   const millGroup = new THREE.Group();
   millGroup.position.set(millX, millY, millZ);
 
+  // Paved stone threshing courtyard (`打麥場`, 0 colliders) & wooden barley drying rack (`禾架`)
+  const threshingFloor = new THREE.Mesh(
+    new THREE.CircleGeometry(4.4, 24).rotateX(-Math.PI / 2),
+    dressedStoneMat,
+  );
+  threshingFloor.position.set(2.4, 0.02, -0.4);
+  threshingFloor.receiveShadow = true;
+  const threshingRim = new THREE.Mesh(
+    new THREE.RingGeometry(4.15, 4.45, 24).rotateX(-Math.PI / 2),
+    stoneWallMat,
+  );
+  threshingRim.position.set(2.4, 0.028, -0.4);
+  millGroup.add(threshingFloor, threshingRim);
+
+  // Barley drying rack (`青稞禾架`, 0 colliders) on edge of threshing court
+  const rackPostL = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 1.9, 6), timberMat);
+  rackPostL.position.set(4.6, 0.95, -2.8);
+  const rackPostR = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 1.9, 6), timberMat);
+  rackPostR.position.set(6.8, 0.95, -2.8);
+  const rackBarTop = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.1, 0.1), timberMat);
+  rackBarTop.position.set(5.7, 1.72, -2.8);
+  const rackBarMid = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.1, 0.1), timberMat);
+  rackBarMid.position.set(5.7, 1.15, -2.8);
+  const hangingSheaf = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.48, 0.28), barleyMat);
+  hangingSheaf.position.set(5.7, 1.42, -2.8);
+  millGroup.add(rackPostL, rackPostR, rackBarTop, rackBarMid, hangingSheaf);
+
+  // Mill house with crimson Penma frieze & stone water flume
   const millHouse = new THREE.Mesh(new THREE.BoxGeometry(3.6, 2.5, 3.2), stoneWallMat);
   millHouse.position.y = 1.25;
-  millGroup.add(millHouse);
+  millHouse.castShadow = true;
+  millHouse.receiveShadow = true;
+  const millFrieze = new THREE.Mesh(new THREE.BoxGeometry(3.76, 0.32, 3.36), redFriezeMat);
+  millFrieze.position.y = 2.38;
+  const millFlume = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.26, 0.9), dressedStoneMat);
+  millFlume.position.set(-2.1, 0.14, 0);
+  millGroup.add(millHouse, millFrieze, millFlume);
 
   const waterWheel = new THREE.Group();
   waterWheel.position.set(-2.05, 1.25, 0);
@@ -460,6 +909,8 @@ export function createMap(ctx) {
 
   // Two calmed domestic yaks grazing peacefully beside Herder Dawa at (25, 45)
   const calmYakMat = new THREE.MeshStandardMaterial({ color: 0x26211d, roughness: 0.9 });
+  const yakHornMat = new THREE.MeshStandardMaterial({ color: 0xd6cfc2, roughness: 0.55 });
+  const yakHornGeo = new THREE.ConeGeometry(0.06, 0.36, 6);
   const villageYakHeads = [];
   [
     { lx: 22.5, lz: 42.5, rot: 0.6 },
@@ -471,17 +922,25 @@ export function createMap(ctx) {
     const yGrp = new THREE.Group();
     yGrp.position.set(yx, yy, yz);
     yGrp.rotation.y = yk.rot;
-    const yBody = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.75, 1.4), calmYakMat);
-    yBody.position.y = 0.65;
-    const yHead = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.42, 0.52), calmYakMat);
+    const yBody = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.78, 1.48), calmYakMat);
+    yBody.position.y = 0.66;
+    const ySkirt = new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.38, 1.36), calmYakMat);
+    ySkirt.position.y = 0.34;
+    const yHead = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.42, 0.52), calmYakMat);
     yHead.position.set(0, 0.46, -0.78);
     yHead.rotation.x = 0.55;
-    yGrp.add(yBody, yHead);
+    for (const side of [-1, 1]) {
+      const horn = new THREE.Mesh(yakHornGeo, yakHornMat);
+      horn.position.set(side * 0.28, 0.18, -0.05);
+      horn.rotation.z = -side * 0.75;
+      yHead.add(horn);
+    }
+    yGrp.add(yBody, ySkirt, yHead);
     villageYakHeads.push(yHead);
     villageGroup.add(yGrp);
   });
 
-  // ---------------------------------------------------------------- 7. Yumbulagang Palace (-45, 20) on Western Ridge
+  // ---------------------------------------------------------------- 7. Yumbulagang Royal Fortress (-45, 20) on Western Ridge
   const palaceX = origin.x - 45;
   const palaceZ = origin.z + 20;
   const palaceY = getHeight(palaceX, palaceZ);
@@ -490,44 +949,200 @@ export function createMap(ctx) {
   palaceGroup.position.set(palaceX, palaceY, palaceZ);
   group.add(palaceGroup);
 
-  const goldRoofMat = new THREE.MeshStandardMaterial({
-    color: 0xfacc15,
-    roughness: 0.28,
-    metalness: 0.78,
-    emissive: new THREE.Color(0xb45309),
-    emissiveIntensity: 0.35,
-  });
-
-  // Switchback trail stone steps leading up from (-27, 24) to (-40, 20)
-  for (let s = 0; s < 8; s++) {
-    const u = s / 7;
-    const sx = origin.x - 26 - u * 14;
-    const sz = origin.z + 24 - Math.sin(u * Math.PI * 2) * 2.5 - u * 4;
+  // Stepped stone switchback staircase with low stone parapet walls leading up the ridge ramp
+  // from (-25, 24) to (-40, 20) (0 new colliders)
+  const stepTreadGeo = new THREE.BoxGeometry(2.3, 0.24, 1.75);
+  const stepParapetGeo = new THREE.BoxGeometry(1.65, 0.48, 0.24);
+  const stepCapGeo = new THREE.BoxGeometry(1.7, 0.1, 0.28);
+  const stepCount = 14;
+  for (let s = 0; s < stepCount; s++) {
+    const u = s / (stepCount - 1);
+    const sx = origin.x - 25.0 - u * 15.2;
+    const sz = origin.z + 24.2 - Math.sin(u * Math.PI * 2) * 2.4 - u * 4.2;
     const sy = getHeight(sx, sz);
-    const stepStone = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.22, 1.6), stoneWallMat);
-    stepStone.position.set(sx, sy + 0.06, sz);
-    group.add(stepStone);
+
+    const uNext = Math.min(1, (s + 1) / (stepCount - 1));
+    const nx = origin.x - 25.0 - uNext * 15.2;
+    const nz = origin.z + 24.2 - Math.sin(uNext * Math.PI * 2) * 2.4 - uNext * 4.2;
+    const yaw = Math.atan2(nz - sz, nx - sx);
+
+    const stepGrp = new THREE.Group();
+    stepGrp.position.set(sx, sy + 0.05, sz);
+    stepGrp.rotation.y = -yaw;
+
+    const tread = new THREE.Mesh(stepTreadGeo, stoneWallMat);
+    stepGrp.add(tread);
+
+    // Alternating low whitewashed stone parapet walls with crimson coping along the ridge steps
+    if (s % 2 === 0) {
+      for (const side of [-1, 1]) {
+        const parapet = new THREE.Mesh(stepParapetGeo, stoneWallMat);
+        parapet.position.set(0, 0.3, side * 0.98);
+        const cap = new THREE.Mesh(stepCapGeo, redFriezeMat);
+        cap.position.set(0, 0.56, side * 0.98);
+        stepGrp.add(parapet, cap);
+      }
+    }
+    group.add(stepGrp);
   }
 
-  // Fortress lower hall & iconic watchtower set slightly west (-6m) so (3955, 20) courtyard is open for Palace Keeper
-  const fortressHall = new THREE.Mesh(new THREE.BoxGeometry(6.8, 4.6, 5.4), stoneWallMat);
-  fortressHall.position.set(-5.8, 2.3, 0);
+  // Ridge plateau stone terrace pavement & low perimeter parapet (leaving eastern entry open)
+  const ridgePavement = new THREE.Mesh(
+    new THREE.CylinderGeometry(9.6, 10.4, 0.32, 12),
+    dressedStoneMat,
+  );
+  ridgePavement.position.set(-2.2, -0.12, 0);
+  ridgePavement.receiveShadow = true;
+  palaceGroup.add(ridgePavement);
+
+  // Battered whitewashed Tibetan Dzong walls (inward-tapering 4-sided frustums rotated 45°)
+  const makeBatteredWallGeo = (bottomW, topW, h, dRatio = 0.8) => {
+    const geo = new THREE.CylinderGeometry(topW * 0.7071, bottomW * 0.7071, h, 4);
+    geo.rotateY(Math.PI / 4);
+    geo.scale(1, 1, dRatio);
+    return geo;
+  };
+
+  // Lower Royal Hall (`下層宮殿`) at (-5.8, 0, 0) — battered stone walls + crimson Penma frieze
+  const lowerFoundation = new THREE.Mesh(
+    makeBatteredWallGeo(7.6, 7.1, 1.2, 0.82),
+    dressedStoneMat,
+  );
+  lowerFoundation.position.set(-5.8, 0.6, 0);
+
+  const fortressHall = new THREE.Mesh(makeBatteredWallGeo(7.1, 6.4, 4.4, 0.8), stoneWallMat);
+  fortressHall.position.set(-5.8, 2.7, 0);
   fortressHall.castShadow = true;
-  const fortressFrieze = new THREE.Mesh(new THREE.BoxGeometry(7.0, 0.65, 5.6), redFriezeMat);
-  fortressFrieze.position.set(-5.8, 4.35, 0);
+  fortressHall.receiveShadow = true;
 
-  const watchTower = new THREE.Mesh(new THREE.BoxGeometry(3.4, 8.2, 3.4), stoneWallMat);
-  watchTower.position.set(-6.5, 4.1, -1.2);
+  const fortressFrieze = new THREE.Mesh(new THREE.BoxGeometry(6.75, 0.72, 5.45), redFriezeMat);
+  fortressFrieze.position.set(-5.8, 4.62, 0);
+  const fortressCornice = new THREE.Mesh(new THREE.BoxGeometry(6.95, 0.18, 5.65), goldRoofMat);
+  fortressCornice.position.set(-5.8, 5.02, 0);
+
+  // Golden circular mirrors (`圓鏡`) studded along the Lower Hall crimson Penma frieze
+  const dzongMirrorGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.08, 12);
+  dzongMirrorGeo.rotateZ(Math.PI / 2);
+  for (const mz of [-1.8, -0.6, 0.6, 1.8]) {
+    const mirrorE = new THREE.Mesh(dzongMirrorGeo, goldRoofMat);
+    mirrorE.position.set(-2.4, 4.62, mz);
+    palaceGroup.add(mirrorE);
+  }
+
+  // East ceremonial entrance portico projecting from the lower hall at x = -2.45
+  const porticoRoof = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.34, 2.55), redFriezeMat);
+  porticoRoof.position.set(-2.35, 2.85, 0);
+  const porticoTrim = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.14, 2.68), goldRoofMat);
+  porticoTrim.position.set(-2.35, 3.06, 0);
+  const palaceDoor = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.25, 1.45), darkWoodMat);
+  palaceDoor.position.set(-2.48, 1.25, 0);
+  for (const pz of [-0.95, 0.95]) {
+    const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.16, 2.65, 8), redFriezeMat);
+    pillar.position.set(-1.85, 1.35, pz);
+    palaceGroup.add(pillar);
+  }
+  palaceGroup.add(
+    lowerFoundation,
+    fortressHall,
+    fortressFrieze,
+    fortressCornice,
+    porticoRoof,
+    porticoTrim,
+    palaceDoor,
+  );
+
+  // Soaring Central Watchtower (`Utse` / `紅宮主塔樓`) rising above the western ridge
+  const watchTower = new THREE.Mesh(makeBatteredWallGeo(4.1, 3.35, 8.8, 0.96), stoneWallMat);
+  watchTower.position.set(-6.5, 4.6, -1.1);
   watchTower.castShadow = true;
+  watchTower.receiveShadow = true;
 
-  const towerCrimson = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.8, 3.6), redFriezeMat);
-  towerCrimson.position.set(-6.5, 7.8, -1.2);
+  const towerCrimson = new THREE.Mesh(new THREE.BoxGeometry(3.65, 0.92, 3.55), redFriezeMat);
+  towerCrimson.position.set(-6.5, 8.65, -1.1);
+  const towerGoldCornice = new THREE.Mesh(new THREE.BoxGeometry(3.88, 0.18, 3.78), goldRoofMat);
+  towerGoldCornice.position.set(-6.5, 9.18, -1.1);
 
-  const goldenRoof = new THREE.Mesh(new THREE.ConeGeometry(2.8, 1.6, 4), goldRoofMat);
+  for (const mz of [-2.0, -1.1, -0.2]) {
+    const tMirror = new THREE.Mesh(dzongMirrorGeo, goldRoofMat);
+    tMirror.position.set(-4.65, 8.65, mz);
+    palaceGroup.add(tMirror);
+  }
+
+  // Multi-story Tibetan trapezoidal black-framed windows (`梯形黑框窗`) on East, North & South facades
+  const dzongWinFrameGeo = new THREE.BoxGeometry(0.14, 0.95, 0.72);
+  const dzongWinPaneGeo = new THREE.BoxGeometry(0.16, 0.68, 0.46);
+  const dzongWinBrowGeo = new THREE.BoxGeometry(0.22, 0.16, 0.86);
+  const eastWindowCoords = [
+    // Lower Hall East facade
+    { x: -2.55, y: 3.35, z: -1.65 },
+    { x: -2.55, y: 3.35, z: 1.65 },
+    // Watchtower East facade (3 stories)
+    { x: -4.75, y: 5.55, z: -1.85 },
+    { x: -4.75, y: 5.55, z: -0.35 },
+    { x: -4.82, y: 7.25, z: -1.85 },
+    { x: -4.82, y: 7.25, z: -0.35 },
+  ];
+  for (const wc of eastWindowCoords) {
+    const wf = new THREE.Mesh(dzongWinFrameGeo, darkWoodMat);
+    wf.position.set(wc.x, wc.y, wc.z);
+    const wp = new THREE.Mesh(dzongWinPaneGeo, warmWindowMat);
+    wp.position.set(wc.x + 0.01, wc.y, wc.z);
+    const wb = new THREE.Mesh(dzongWinBrowGeo, stoneWallMat);
+    wb.position.set(wc.x + 0.03, wc.y + 0.52, wc.z);
+    palaceGroup.add(wf, wp, wb);
+  }
+
+  // Double-tiered Gilded Tibetan Royal Pitched Roof (`金頂`), Dharma Wheel & Corner Victory Banners (`幢幡`)
+  const lowerGoldEave = new THREE.Mesh(new THREE.ConeGeometry(3.05, 1.15, 4), goldRoofMat);
+  lowerGoldEave.rotation.y = Math.PI / 4;
+  lowerGoldEave.position.set(-6.5, 9.75, -1.1);
+
+  const goldenRoof = new THREE.Mesh(new THREE.ConeGeometry(2.35, 1.55, 4), goldRoofMat);
   goldenRoof.rotation.y = Math.PI / 4;
-  goldenRoof.position.set(-6.5, 9.0, -1.2);
+  goldenRoof.position.set(-6.5, 10.65, -1.1);
 
-  palaceGroup.add(fortressHall, fortressFrieze, watchTower, towerCrimson, goldenRoof);
+  const roofSpire = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.22, 1.1, 8), goldRoofMat);
+  roofSpire.position.set(-6.5, 11.65, -1.1);
+
+  // Golden Dharma Wheel (`法輪雙鹿`) on the east-facing roof brow
+  const dharmaWheel = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.07, 8, 16), goldRoofMat);
+  dharmaWheel.rotation.y = Math.PI / 2;
+  dharmaWheel.position.set(-4.75, 9.62, -1.1);
+  const deerGeo = new THREE.ConeGeometry(0.16, 0.42, 5);
+  for (const side of [-1, 1]) {
+    const deer = new THREE.Mesh(deerGeo, goldRoofMat);
+    deer.position.set(-4.75, 9.38, -1.1 + side * 0.62);
+    deer.rotation.x = -side * 0.45;
+    palaceGroup.add(deer);
+  }
+
+  // 4 Corner Victory Banners (`Gyaltsen` / `幢幡`) on the watchtower parapet corners
+  const gyaltsenCylinderGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.95, 10);
+  const gyaltsenRingGeo = new THREE.CylinderGeometry(0.21, 0.21, 0.14, 10);
+  const gyaltsenTopGeo = new THREE.ConeGeometry(0.22, 0.35, 8);
+  for (const cxOff of [-1.72, 1.72]) {
+    for (const czOff of [-1.68, 1.68]) {
+      const gx = -6.5 + cxOff;
+      const gz = -1.1 + czOff;
+      const gBody = new THREE.Mesh(gyaltsenCylinderGeo, bannerClothMat);
+      gBody.position.set(gx, 9.72, gz);
+      const gBand = new THREE.Mesh(gyaltsenRingGeo, goldRoofMat);
+      gBand.position.set(gx, 9.72, gz);
+      const gCap = new THREE.Mesh(gyaltsenTopGeo, goldRoofMat);
+      gCap.position.set(gx, 10.35, gz);
+      palaceGroup.add(gBody, gBand, gCap);
+    }
+  }
+
+  palaceGroup.add(
+    watchTower,
+    towerCrimson,
+    towerGoldCornice,
+    lowerGoldEave,
+    goldenRoof,
+    roofSpire,
+    dharmaWheel,
+  );
   pushCollider(ctx, 'yarlung', { type: 'circle', x: palaceX - 6.0, z: palaceZ - 0.4, r: 3.4 });
 
   // ---------------------------------------------------------------- 8. Sheldrak Crystal Cave (4060, -30) & 4-Pillar Light-Reflection Puzzle
@@ -539,7 +1154,7 @@ export function createMap(ctx) {
   caveGroup.position.set(caveX, caveY, caveZ);
   group.add(caveGroup);
 
-  const glowTex = getYarlungGlowTexture();
+  const glowTex = makeYarlungGlowTexture();
   const cliffMat = new THREE.MeshStandardMaterial({
     color: 0x3b495e,
     roughness: 0.88,
@@ -786,7 +1401,10 @@ export function createMap(ctx) {
   casketGroup.position.set(casketPos.x, getHeight(casketPos.x, casketPos.z), casketPos.z);
   group.add(casketGroup);
 
-  const casketPedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.8, 0.55, 8), stoneWallMat);
+  const casketPedestal = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.65, 0.8, 0.55, 8),
+    stoneWallMat,
+  );
   casketPedestal.position.y = 0.275;
   const casketBase = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.45, 0.68), goldRoofMat);
   casketBase.position.y = 0.75;
@@ -829,7 +1447,10 @@ export function createMap(ctx) {
     pGrp.name = ps.id;
     pGrp.position.set(ps.wx, py, ps.wz);
 
-    const basePedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 0.45, 8), stoneWallMat);
+    const basePedestal = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.45, 0.55, 0.45, 8),
+      stoneWallMat,
+    );
     basePedestal.position.y = 0.225;
     pGrp.add(basePedestal);
 
@@ -1091,7 +1712,7 @@ export function createMap(ctx) {
     window.__stupa.sheldrak = sheldrakApi;
   }
 
-  // ---------------------------------------------------------------- 9. Alpine Pasture & Boss Arena (4000, -75, r = 22)
+  // ---------------------------------------------------------------- 9. Alpine Pasture & Yarlha Shampo Glacier Boss Arena (4000, -75, r = 22)
   const arenaX = origin.x;
   const arenaZ = origin.z - 75;
   const arenaY = getHeight(arenaX, arenaZ);
@@ -1100,6 +1721,7 @@ export function createMap(ctx) {
   pastureGroup.position.set(arenaX, arenaY, arenaZ);
   group.add(pastureGroup);
 
+  // First child MUST be the RingGeometry encounter ring (`yarlungScene.js` hides it in Story mode)
   const arenaRingGeo = new THREE.RingGeometry(21.2, 22.0, 56);
   arenaRingGeo.rotateX(-Math.PI / 2);
   const arenaRing = new THREE.Mesh(
@@ -1115,11 +1737,113 @@ export function createMap(ctx) {
   arenaRing.position.y = 0.04;
   pastureGroup.add(arenaRing);
 
+  // Sacred White Yak & Snow Mountain Mandala Floor Emblem (`CircleGeometry`, r = 18m, y + 0.03)
+  const mandalaTex = makeArenaMandalaTexture();
+  const arenaMandalaMat = new THREE.MeshBasicMaterial({
+    map: mandalaTex || null,
+    color: 0xe0f2fe,
+    transparent: true,
+    opacity: 0.72,
+    depthWrite: false,
+  });
+  const arenaMandalaGeo = new THREE.CircleGeometry(18.0, 48);
+  arenaMandalaGeo.rotateX(-Math.PI / 2);
+  const arenaMandalaMesh = new THREE.Mesh(arenaMandalaGeo, arenaMandalaMat);
+  arenaMandalaMesh.position.y = 0.03;
+  pastureGroup.add(arenaMandalaMesh);
+
+  // 10 Colossal Crystalline Glacier Ice Spires & Ancient Tibetan Royal Stone Steles (`吐蕃石碑`, r = 22.8m, 0 colliders)
+  const glacierVeinMat = new THREE.MeshStandardMaterial({
+    color: 0x7dd3fc,
+    roughness: 0.16,
+    metalness: 0.48,
+    emissive: new THREE.Color(0x38bdf8),
+    emissiveIntensity: 0.68,
+    transparent: true,
+    opacity: 0.92,
+  });
+  const steleRuneMat = new THREE.MeshStandardMaterial({
+    color: 0xfde047,
+    roughness: 0.25,
+    emissive: new THREE.Color(0x38bdf8),
+    emissiveIntensity: 0.85,
+  });
+
+  const spireMainGeo = new THREE.ConeGeometry(1.15, 5.8, 6);
+  const spireShardGeo = new THREE.ConeGeometry(0.68, 3.2, 5);
+  const stelePlinthGeo = new THREE.BoxGeometry(1.75, 0.55, 1.35);
+  const steleBodyGeo = new THREE.BoxGeometry(1.18, 3.85, 0.56);
+  const steleFriezeGeo = new THREE.BoxGeometry(1.34, 0.36, 0.68);
+  const steleCapGeo = new THREE.ConeGeometry(1.05, 0.65, 4);
+  const steleRuneGeo = new THREE.BoxGeometry(0.32, 2.35, 0.6);
+
+  const perimeterNodes = [];
+  for (let i = 0; i < 10; i++) {
+    // Arc from East-South-East around North to West-South-West (leaving South entry open)
+    const u = i / 9;
+    const ang = -Math.PI * 0.18 - u * Math.PI * 0.64; // -32° through -90° (North) to -148°
+    const r = 22.8;
+    const px = Math.cos(ang) * r;
+    const pz = Math.sin(ang) * r;
+    const nodeGrp = new THREE.Group();
+    nodeGrp.position.set(px, 0, pz);
+    nodeGrp.lookAt(0, 0, 0);
+
+    if (i % 2 === 0) {
+      // Crystalline Glacier Ice Spire (`冰川晶簇尖塔`)
+      const mainSpire = new THREE.Mesh(spireMainGeo, glacierVeinMat);
+      mainSpire.position.y = 2.85;
+      mainSpire.rotation.x = -0.1;
+      const sideShardL = new THREE.Mesh(spireShardGeo, mtnSnowMat);
+      sideShardL.position.set(-0.78, 1.45, 0.25);
+      sideShardL.rotation.z = 0.28;
+      const sideShardR = new THREE.Mesh(spireShardGeo, glacierSeracMat);
+      sideShardR.position.set(0.78, 1.55, -0.2);
+      sideShardR.rotation.z = -0.26;
+      nodeGrp.add(mainSpire, sideShardL, sideShardR);
+      perimeterNodes.push(new THREE.Vector3(px, 4.4, pz));
+    } else {
+      // Ancient Tibetan Royal Stone Stele (`吐蕃石碑`)
+      const plinth = new THREE.Mesh(stelePlinthGeo, dressedStoneMat);
+      plinth.position.y = 0.275;
+      const steleBody = new THREE.Mesh(steleBodyGeo, stoneWallMat);
+      steleBody.position.y = 2.35;
+      const steleFrieze = new THREE.Mesh(steleFriezeGeo, redFriezeMat);
+      steleFrieze.position.y = 4.18;
+      const steleCap = new THREE.Mesh(steleCapGeo, goldRoofMat);
+      steleCap.position.y = 4.65;
+      steleCap.rotation.y = Math.PI / 4;
+      const steleRune = new THREE.Mesh(steleRuneGeo, steleRuneMat);
+      steleRune.position.y = 2.35;
+      nodeGrp.add(plinth, steleBody, steleFrieze, steleCap, steleRune);
+      perimeterNodes.push(new THREE.Vector3(px, 4.35, pz));
+    }
+    pastureGroup.add(nodeGrp);
+  }
+
+  // Prayer flag lines (`五彩風馬旗`) stretching between the perimeter steles and glacier spires
+  const arenaFlagGeo = new THREE.PlaneGeometry(0.52, 0.36);
+  for (let i = 0; i < perimeterNodes.length - 1; i++) {
+    const pA = perimeterNodes[i];
+    const pB = perimeterNodes[i + 1];
+    for (let f = 1; f <= 5; f++) {
+      const t = f / 6;
+      const fx = THREE.MathUtils.lerp(pA.x, pB.x, t);
+      const fz = THREE.MathUtils.lerp(pA.z, pB.z, t);
+      const fy = THREE.MathUtils.lerp(pA.y, pB.y, t) - Math.sin(t * Math.PI) * 0.42;
+      const flag = new THREE.Mesh(arenaFlagGeo, prayerFlagMats[(i + f) % 5]);
+      flag.position.set(fx, fy, fz);
+      flag.lookAt(0, fy, 0);
+      pastureGroup.add(flag);
+      bridgeFlagMeshes.push({ mesh: flag, baseZ: fz, phase: i * 0.9 + f * 0.5 });
+    }
+  }
+
   // Ice-rimmed glacial boulders framing the northern edge of the pasture
   for (let i = 0; i < 6; i++) {
     const a = Math.PI * 0.2 + (i / 5) * Math.PI * 0.6;
     const iceCrag = new THREE.Mesh(new THREE.DodecahedronGeometry(2.8, 0), mtnSnowMat);
-    iceCrag.position.set(Math.cos(a + Math.PI) * 23.2, 1.8, Math.sin(a + Math.PI) * 23.2);
+    iceCrag.position.set(Math.cos(a + Math.PI) * 24.4, 1.8, Math.sin(a + Math.PI) * 24.4);
     iceCrag.scale.set(1.2, 1.3, 0.9);
     pastureGroup.add(iceCrag);
   }
@@ -1153,21 +1877,29 @@ export function createMap(ctx) {
   function update(dt) {
     animTime += dt;
 
-    // 1. Scroll river UV & shimmer
+    // 1. Scroll river UV & shimmer foam edges
     if (riverTex) {
       riverTex.offset.y -= dt * 0.35;
     }
     riverMat.emissiveIntensity = 0.34 + Math.sin(animTime * 2.8) * 0.1;
+    foamEdgeMat.opacity = 0.34 + Math.sin(animTime * 3.4) * 0.1;
 
     // 2. Rotate village watermill wheel
     waterWheel.rotation.x += dt * 1.45;
 
-    // 3. Gentle wind sway on barley field InstancedMesh
+    // 3. Gentle wind sway on barley field & riverside reeds InstancedMeshes + prayer flags
     barleyInstanced.rotation.z = Math.sin(animTime * 1.8) * 0.012;
+    reedInstanced.rotation.z = Math.cos(animTime * 2.1) * 0.014;
+    for (let i = 0; i < bridgeFlagMeshes.length; i++) {
+      const bf = bridgeFlagMeshes[i];
+      bf.mesh.rotation.z = Math.sin(animTime * 4.2 + bf.phase) * 0.14;
+    }
 
-    // 4. Drift cloud bands around Mount Yarlha Shampo
+    // 4. Drift cloud bands around Mount Yarlha Shampo & pulse glacier veins
     cloudRing1.rotation.z += dt * 0.12;
     cloudRing2.rotation.z -= dt * 0.16;
+    glacierVeinMat.emissiveIntensity = 0.62 + Math.sin(animTime * 2.0) * 0.16;
+    arenaMandalaMat.opacity = 0.66 + Math.sin(animTime * 1.6) * 0.08;
 
     // 5. Gentle grazing nod for village calmed yaks
     for (let i = 0; i < villageYakHeads.length; i++) {
