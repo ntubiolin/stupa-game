@@ -8,11 +8,20 @@
  */
 import { getDefaultStore } from './store.js';
 
-export function readJsonBody(req, maxBytes = 256 * 1024) {
+export const MAX_HTTP_BODY_BYTES = 64 * 1024;
+export const COMMUNITY_RATE_WINDOW_MS = 10000;
+export const COMMUNITY_RATE_MAX_REQ = 40;
+
+export function readJsonBody(req, maxBytes = MAX_HTTP_BODY_BYTES) {
   if (req.body && typeof req.body === 'object') {
+    const rawLen = Buffer.byteLength(JSON.stringify(req.body), 'utf8');
+    if (rawLen > maxBytes) return Promise.resolve({ __tooLarge: true });
     return Promise.resolve(req.body);
   }
   if (typeof req.body === 'string' && req.body.length > 0) {
+    if (Buffer.byteLength(req.body, 'utf8') > maxBytes) {
+      return Promise.resolve({ __tooLarge: true });
+    }
     try {
       return Promise.resolve(JSON.parse(req.body));
     } catch {
@@ -22,13 +31,21 @@ export function readJsonBody(req, maxBytes = 256 * 1024) {
   return new Promise((resolve) => {
     let body = '';
     let size = 0;
+    let tooLarge = false;
     req.on('data', (chunk) => {
       size += chunk.length;
-      if (size <= maxBytes) {
+      if (size > maxBytes) {
+        tooLarge = true;
+        body = '';
+      } else if (!tooLarge) {
         body += chunk.toString('utf8');
       }
     });
     req.on('end', () => {
+      if (tooLarge) {
+        resolve({ __tooLarge: true });
+        return;
+      }
       try {
         resolve(body ? JSON.parse(body) : {});
       } catch {
@@ -55,6 +72,30 @@ export function sendJson(res, data, status = 200) {
 
 export function createApiMiddleware(store = getDefaultStore(), wsHub = null) {
   let activeWsHub = wsHub;
+  const communityRateBuckets = new Map();
+
+  function checkCommunityRateLimit(req) {
+    const now = Date.now();
+    const xff = req.headers?.['x-forwarded-for'];
+    const ip =
+      (typeof xff === 'string' && xff.split(',')[0].trim()) ||
+      req.socket?.remoteAddress ||
+      'unknown';
+
+    if (communityRateBuckets.size > 2000) {
+      communityRateBuckets.clear();
+    }
+
+    const prev = communityRateBuckets.get(ip) || [];
+    const recent = prev.filter((ts) => now - ts < COMMUNITY_RATE_WINDOW_MS);
+    if (recent.length >= COMMUNITY_RATE_MAX_REQ) {
+      communityRateBuckets.set(ip, recent);
+      return false;
+    }
+    recent.push(now);
+    communityRateBuckets.set(ip, recent);
+    return true;
+  }
 
   const middleware = async function apiMiddleware(req, res, next) {
     const url = new URL(req.url || '/', 'http://localhost');
@@ -93,7 +134,15 @@ export function createApiMiddleware(store = getDefaultStore(), wsHub = null) {
         return true;
       }
       if (req.method === 'POST') {
+        if (!checkCommunityRateLimit(req)) {
+          sendJson(res, { ok: false, error: 'Too many requests' }, 429);
+          return true;
+        }
         const body = await readJsonBody(req);
+        if (body?.__tooLarge) {
+          sendJson(res, { ok: false, error: 'Payload too large' }, 413);
+          return true;
+        }
         const action = body?.action || (Array.isArray(body?.actions) ? 'batch' : '');
         const payload =
           action === 'batch' && Array.isArray(body?.actions)
@@ -127,6 +176,10 @@ export function createApiMiddleware(store = getDefaultStore(), wsHub = null) {
       }
       if (req.method === 'POST') {
         const body = await readJsonBody(req);
+        if (body?.__tooLarge) {
+          sendJson(res, { ok: false, error: 'Payload too large' }, 413);
+          return true;
+        }
         const result = store.syncCoopRoom(body || {});
         if (!result.ok) {
           sendJson(res, result, 400);
@@ -153,6 +206,10 @@ export function createApiMiddleware(store = getDefaultStore(), wsHub = null) {
       }
       if (req.method === 'POST') {
         const body = await readJsonBody(req);
+        if (body?.__tooLarge) {
+          sendJson(res, { ok: false, error: 'Payload too large' }, 413);
+          return true;
+        }
         if (body?.action === 'leave') {
           const result = store.leavePresence({ peerId: body.peerId });
           if (result.shardId) {

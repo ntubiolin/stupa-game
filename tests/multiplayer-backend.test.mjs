@@ -392,3 +392,123 @@ test('4. Live HTTP API & RFC 6455 WebSocket Server end-to-end integration', asyn
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test('5. Security & Size Bounds: rejects oversized strings, fake rejoice IDs, future timestamps, arbitrary member blobs, and oversized HTTP/WS payloads', async () => {
+  const store = createMultiplayerStore({ inMemoryOnly: true });
+  const now = Date.now();
+
+  // 5a. Oversized strings & future timestamp clamping
+  store.applyCommunityAction('lamp', {
+    id: 'lamp-sec-1',
+    pilgrimName: '<script>' + '名'.repeat(1000),
+    message: '<img onerror=alert(1)>' + '願'.repeat(10000),
+    createdAt: now + 999999999999,
+    rejoiceCount: 9999999,
+    burnBonusSec: 9999999,
+  });
+
+  store.applyCommunityAction('stupa', {
+    id: 'stupa-sec-1',
+    pilgrimName: '行'.repeat(500),
+    title: '塔'.repeat(500),
+    message: '善'.repeat(5000),
+    kora: 999999999,
+    prostrations: 999999999,
+    rejoiceCount: 9999999,
+    createdAt: now + 999999999999,
+  });
+
+  // 5b. Fake rejoice IDs must be rejected and must not pollute deltas or arrays
+  for (let i = 0; i < 50; i++) {
+    store.applyCommunityAction('rejoiceLamp', { id: `fake-lamp-id-${i}` });
+    store.applyCommunityAction('rejoiceStupa', { id: `fake-stupa-id-${i}` });
+  }
+  store.applyCommunityAction('rejoiceLamp', { id: '__proto__' });
+  store.applyCommunityAction('rejoiceStupa', { id: 'constructor' });
+
+  const comm = store.getCommunityState();
+  assert.equal(comm.lamps.length, 1);
+  assert.equal(comm.lamps[0].pilgrimName.length <= 24, true);
+  assert.equal(comm.lamps[0].message.length <= 120, true);
+  assert.equal(comm.lamps[0].createdAt <= now + 10000, true);
+  assert.equal(comm.lamps[0].rejoiceCount, 50);
+  assert.equal(comm.lamps[0].burnBonusSec, 600);
+  assert.equal(Object.keys(comm.lampRejoiceDeltas).length, 0);
+
+  assert.equal(comm.stupas.length, 1);
+  assert.equal(comm.stupas[0].title.length <= 28, true);
+  assert.equal(comm.stupas[0].message.length <= 120, true);
+  assert.equal(comm.stupas[0].kora, 10000);
+  assert.equal(comm.stupas[0].prostrations, 100000);
+  assert.equal(comm.stupas[0].rejoiceCount, 50);
+  assert.equal(Object.keys(comm.stupaRejoiceDeltas).length, 0);
+
+  // 5c. syncCoopRoom strips arbitrary extra properties from member, dungeonState & event payload
+  const coopRes = store.syncCoopRoom({
+    room: 'SEC-108',
+    peerId: 'sec_peer',
+    member: {
+      id: 'sec_peer',
+      name: '行者',
+      zone: 'stupa',
+      hugeBlob: 'x'.repeat(100000),
+      nested: { a: [1, 2, 3] },
+    },
+    dungeonState: {
+      active: true,
+      tier: 999,
+      floor: 99,
+      seed: 12345,
+      evilBlob: 'y'.repeat(100000),
+    },
+    events: [
+      {
+        id: 'ev-sec-1',
+        type: 'skill:cast',
+        payload: {
+          skillId: 'mantra',
+          hugeText: 'z'.repeat(5000),
+          nestedObj: { hack: true },
+        },
+        extraField: 'should-be-stripped',
+      },
+    ],
+  });
+
+  assert.equal(coopRes.ok, true);
+  assert.equal(coopRes.members[0].hugeBlob, undefined);
+  assert.equal(coopRes.members[0].nested, undefined);
+  assert.deepEqual(coopRes.dungeonState, {
+    active: true,
+    tier: 20,
+    floor: 10,
+    seed: 12345,
+  });
+  assert.equal(coopRes.events[0].extraField, undefined);
+  assert.equal(coopRes.events[0].payload.nestedObj, undefined);
+  assert.equal(coopRes.events[0].payload.hugeText.length, 120);
+
+  // 5d. HTTP POST > 64 KB returns 413 Payload too large
+  const apiMiddleware = createApiMiddleware(store, null);
+  const server = http.createServer((req, res) => {
+    apiMiddleware(req, res);
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address();
+
+  try {
+    const oversizedRes = await fetch(`http://127.0.0.1:${port}/api/community`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'lamp',
+        payload: { message: 'x'.repeat(80 * 1024) },
+      }),
+    });
+    assert.equal(oversizedRes.status, 413);
+    const errJson = await oversizedRes.json();
+    assert.equal(errJson.ok, false);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

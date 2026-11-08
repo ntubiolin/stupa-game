@@ -163,7 +163,23 @@ npm run build
 
 # 本地預覽建置成果
 npm run preview
+
+# 啟動獨立多人共修與社群持久化後端（HTTP API + RFC 6455 WebSocket）
+npm run server
 ```
+
+## 🌐 全球共修持久化與即時連線架構 / Persistent Community & Real-Time Multiplayer
+
+- **前端與後端分離部署**：
+  - **前端 CDN（Vercel）**：部署於 `stupa-game-prod.vercel.app`，編譯時注入 `VITE_BACKEND_URL=https://168-110-4-202.sslip.io`。
+  - **即時共修後端（Oracle Cloud Tokyo）**：Node.js HTTP REST（`/api/community`、`/api/presence`、`/api/coop`）與原生 RFC 6455 WebSocket（`/ws/multiplayer`），由 Caddy 自動簽發 Let's Encrypt HTTPS/WSS 憑證並透過 `systemd` 常駐守護。
+- **核心連線與共修功能**：
+  - **跨裝置持久化**：酥油燈祈願牆（`🪔`）、個人祈願佛塔林（`🏛️`）與桑耶寺千八小塔全球共建進度原子寫入 `.data/stupa-backend.json`，並每 6 小時自動異地備份至 Google Drive。
+  - **12 人區域自動分流（Zone Sharding）**：各章節地圖自動維持每分流上限 12 名行者（如 `stupa#1`、`stupa#2`），即時同步周遭行者位置、大禮拜與咒輪共鳴。
+  - **2–4 人公開／私密小隊（Co-op Rooms）**：支援公開房間大廳配對、隊長斷線自動移交（Host Migration）與伏藏秘境種子同步。
+- **嚴格容量上限與防濫用保護**：
+  - 持久化資料庫硬性限制於 `< 100 KB`（`MAX_DB_BYTES = 256 KB` 上限），自動修剪陣列（酥油燈 $\le 100$、佛塔 $\le 80$、桑耶芳名錄 $\le 50$）並拒絕不存在 ID 之隨喜注入。
+  - 所有文字欄位皆剝除控制字元與 HTML 標籤並強制字數上限（祈願文 $\le 120$ 字、芳名 $\le 24$ 字）、時間戳防未來置頂釘選、小隊狀態欄位白名單過濾，並具備 `64 KB` HTTP/WS 封包上限與 IP 速率限制。
 
 ## 📜 架構規範 / Architecture Highlights
 

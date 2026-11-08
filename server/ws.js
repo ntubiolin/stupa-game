@@ -7,9 +7,12 @@
  *  - Co-op party room synchronization (`coop:state`)
  */
 import crypto from 'node:crypto';
-import { getDefaultStore } from './store.js';
+import { getDefaultStore, sanitizeId, normalizeZone } from './store.js';
 
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
+export const MAX_WS_FRAME_BYTES = 32 * 1024;
+export const MAX_WS_BUFFER_BYTES = 64 * 1024;
+export const MAX_WS_CLIENTS = 256;
 
 export function encodeWsFrame(payload, opcode = 0x01) {
   const data = Buffer.isBuffer(payload)
@@ -57,6 +60,14 @@ export function decodeWsFrames(buffer) {
       if (offset + 10 > buffer.length) break;
       payloadLen = Number(buffer.readBigUInt64BE(offset + 2));
       headerLen = 10;
+    }
+
+    if (payloadLen > MAX_WS_FRAME_BYTES) {
+      return {
+        frames: [],
+        remaining: Buffer.alloc(0),
+        error: 'Frame too large',
+      };
     }
 
     const maskLen = masked ? 4 : 0;
@@ -192,9 +203,15 @@ export function attachWebSocketServer(
     }
 
     if (type === 'hello') {
-      if (msg.peerId) client.peerId = String(msg.peerId);
-      if (msg.zone) client.zone = String(msg.zone);
-      if (msg.room) client.room = String(msg.room).toUpperCase();
+      if (msg.peerId) client.peerId = sanitizeId(String(msg.peerId), '') || client.peerId;
+      if (msg.zone) client.zone = normalizeZone(String(msg.zone));
+      if (msg.room) {
+        client.room =
+          String(msg.room)
+            .replace(/[^a-zA-Z0-9_-]/g, '')
+            .toUpperCase()
+            .slice(0, 20) || null;
+      }
 
       const pres = msg.pilgrim
         ? store.updatePresence({
@@ -239,10 +256,11 @@ export function attachWebSocketServer(
 
     if (type === 'presence:update') {
       if (msg.peerId || msg.pilgrim?.id) {
-        client.peerId = String(msg.peerId || msg.pilgrim.id);
+        client.peerId =
+          sanitizeId(String(msg.peerId || msg.pilgrim.id), '') || client.peerId;
       }
       if (msg.zone || msg.pilgrim?.zone) {
-        client.zone = String(msg.zone || msg.pilgrim.zone);
+        client.zone = normalizeZone(String(msg.zone || msg.pilgrim.zone));
       }
       const res = store.updatePresence({
         peerId: client.peerId,
@@ -264,7 +282,7 @@ export function attachWebSocketServer(
     }
 
     if (type === 'presence:leave') {
-      const targetPeer = msg.peerId || client.peerId;
+      const targetPeer = sanitizeId(String(msg.peerId || client.peerId || ''), '');
       const prevShard = client.shardId;
       const res = store.leavePresence({ peerId: targetPeer });
       const shardToNotify = res.shardId || prevShard;
@@ -296,10 +314,15 @@ export function attachWebSocketServer(
 
     if (type === 'coop:sync') {
       if (msg.peerId || msg.member?.id) {
-        client.peerId = String(msg.peerId || msg.member.id);
+        client.peerId =
+          sanitizeId(String(msg.peerId || msg.member.id), '') || client.peerId;
       }
       if (msg.room) {
-        client.room = String(msg.room).toUpperCase();
+        client.room =
+          String(msg.room)
+            .replace(/[^a-zA-Z0-9_-]/g, '')
+            .toUpperCase()
+            .slice(0, 20) || null;
       }
       const res = store.syncCoopRoom({
         ...msg,
@@ -313,8 +336,11 @@ export function attachWebSocketServer(
     }
 
     if (type === 'coop:leave') {
-      const targetRoom = String(msg.room || client.room || '').toUpperCase();
-      const targetPeer = msg.peerId || client.peerId;
+      const targetRoom = String(msg.room || client.room || '')
+        .replace(/[^a-zA-Z0-9_-]/g, '')
+        .toUpperCase()
+        .slice(0, 20);
+      const targetPeer = sanitizeId(String(msg.peerId || client.peerId || ''), '');
       if (targetRoom && targetPeer) {
         const res = store.leaveCoopRoom({ room: targetRoom, peerId: targetPeer });
         broadcastCoop(targetRoom, res);
@@ -383,6 +409,12 @@ export function attachWebSocketServer(
         return;
       }
 
+      if (clients.size >= MAX_WS_CLIENTS) {
+        socket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+
       const key = req.headers['sec-websocket-key'];
       if (!key || typeof key !== 'string') {
         socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
@@ -406,15 +438,23 @@ export function attachWebSocketServer(
       socket.write(responseHeaders);
       socket.setNoDelay?.(true);
 
+      const initialHead =
+        head && head.length > 0 && head.length <= MAX_WS_BUFFER_BYTES
+          ? Buffer.from(head)
+          : Buffer.alloc(0);
+
       const client = {
         socket,
-        peerId: url.searchParams.get('peerId') || null,
-        zone: url.searchParams.get('zone') || 'stupa',
+        peerId: sanitizeId(url.searchParams.get('peerId') || '', '') || null,
+        zone: normalizeZone(url.searchParams.get('zone') || 'stupa'),
         shardId: null,
         room: url.searchParams.get('room')
-          ? String(url.searchParams.get('room')).toUpperCase()
+          ? String(url.searchParams.get('room'))
+              .replace(/[^a-zA-Z0-9_-]/g, '')
+              .toUpperCase()
+              .slice(0, 20) || null
           : null,
-        buffer: head && head.length > 0 ? Buffer.from(head) : Buffer.alloc(0),
+        buffer: initialHead,
         closed: false,
       };
 
@@ -422,8 +462,16 @@ export function attachWebSocketServer(
 
       socket.on('data', (chunk) => {
         if (client.closed) return;
+        if (client.buffer.length + chunk.length > MAX_WS_BUFFER_BYTES) {
+          cleanupClient(client);
+          return;
+        }
         client.buffer = Buffer.concat([client.buffer, chunk]);
-        const { frames, remaining } = decodeWsFrames(client.buffer);
+        const { frames, remaining, error } = decodeWsFrames(client.buffer);
+        if (error) {
+          cleanupClient(client);
+          return;
+        }
         client.buffer = remaining;
 
         for (const frame of frames) {

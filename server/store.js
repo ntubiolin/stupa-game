@@ -14,8 +14,20 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const SAMYE_TARGET_STUPAS = 1008;
+export const MAX_DB_BYTES = 256 * 1024;
+export const MAX_BATCH_ACTIONS = 25;
+export const MAX_SHARDS_PER_ZONE = 20;
+export const MAX_COOP_ROOMS = 200;
 
 export const VALID_TAGS = new Set(['peace', 'wisdom', 'obstacle', 'beings', 'bodhicitta']);
+
+const FORBIDDEN_IDS = new Set([
+  '__proto__',
+  'constructor',
+  'prototype',
+  'toString',
+  'valueOf',
+]);
 
 export const VALID_ZONES = [
   'stupa',
@@ -69,8 +81,22 @@ export function sanitizeText(str, maxLen = 120, fallback = '') {
 
 export function sanitizeId(str, fallback = '') {
   if (typeof str !== 'string') return fallback;
-  const cleaned = str.replace(/[^a-zA-Z0-9_:.-]/g, '').trim();
-  return cleaned ? cleaned.slice(0, 64) : fallback;
+  const cleaned = str.replace(/[^a-zA-Z0-9_:.-]/g, '').trim().slice(0, 64);
+  if (!cleaned || FORBIDDEN_IDS.has(cleaned)) return fallback;
+  return cleaned;
+}
+
+export function clampTimestamp(ts, now = Date.now()) {
+  const n = Number(ts);
+  if (!Number.isFinite(n)) return now;
+  return Math.max(1700000000000, Math.min(now + 5000, Math.round(n)));
+}
+
+export function clampCoord(val, fallback = 0) {
+  const n = Number(val);
+  return Number.isFinite(n)
+    ? Number(Math.max(-20000, Math.min(20000, n)).toFixed(2))
+    : fallback;
 }
 
 export function normalizeZone(zone) {
@@ -83,8 +109,140 @@ function sanitizeLook(look) {
   return {
     robeColor: Number.isFinite(Number(l.robeColor)) ? Number(l.robeColor) : 0x7a1c24,
     shawlColor: Number.isFinite(Number(l.shawlColor)) ? Number(l.shawlColor) : 0xe08a1e,
-    hatType: sanitizeId(l.hatType, 'none'),
+    hatType: sanitizeId(l.hatType, 'none').slice(0, 24),
     auraColor: Number.isFinite(Number(l.auraColor)) ? Number(l.auraColor) : 0xfbbf24,
+  };
+}
+
+function sanitizeEmote(raw, now = Date.now()) {
+  if (!raw) return null;
+  if (typeof raw === 'string') {
+    return sanitizeId(raw, '').slice(0, 24) || null;
+  }
+  if (typeof raw === 'object' && !Array.isArray(raw)) {
+    const id = sanitizeId(raw.id, '').slice(0, 24);
+    if (!id) return null;
+    return {
+      id,
+      icon: sanitizeText(raw.icon, 8, ''),
+      textKey: sanitizeId(raw.textKey, '').slice(0, 48),
+      expiresAt: clampTimestamp(raw.expiresAt, now + 60000),
+    };
+  }
+  return null;
+}
+
+export function sanitizeEventPayload(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out = {};
+  for (const [rawKey, v] of Object.entries(raw).slice(0, 12)) {
+    const key = sanitizeId(rawKey, '').slice(0, 32);
+    if (!key || FORBIDDEN_IDS.has(key)) continue;
+    if (typeof v === 'string') {
+      out[key] = sanitizeText(v, 120, '');
+    } else if (typeof v === 'number') {
+      out[key] = Number.isFinite(v) ? v : 0;
+    } else if (typeof v === 'boolean') {
+      out[key] = v;
+    }
+  }
+  return out;
+}
+
+export function sanitizeDungeonState(ds) {
+  if (!ds || typeof ds !== 'object' || Array.isArray(ds)) return null;
+  return {
+    active: Boolean(ds.active),
+    tier: Math.max(1, Math.min(20, Math.round(Number(ds.tier) || 1))),
+    floor: Math.max(1, Math.min(10, Math.round(Number(ds.floor) || 1))),
+    seed:
+      typeof ds.seed === 'number' && Number.isFinite(ds.seed)
+        ? ds.seed
+        : sanitizeId(String(ds.seed ?? ''), '0').slice(0, 32),
+  };
+}
+
+function sanitizeMemberSnapshot(raw, fallbackId, prevSnap = null, now = Date.now()) {
+  const r = raw && typeof raw === 'object' ? raw : {};
+  const headingRaw = Number(r.heading ?? prevSnap?.heading ?? 0);
+  const heading = Number.isFinite(headingRaw)
+    ? Number(Math.max(-Math.PI * 4, Math.min(Math.PI * 4, headingRaw)).toFixed(3))
+    : 0;
+  return {
+    id: fallbackId,
+    name: sanitizeText(r.name ?? prevSnap?.name, 24, '朝聖行者'),
+    level: Math.max(1, Math.min(99, Math.round(Number(r.level ?? prevSnap?.level) || 1))),
+    zone: normalizeZone(r.zone ?? prevSnap?.zone),
+    x: clampCoord(r.x ?? prevSnap?.x, 0),
+    y: clampCoord(r.y ?? prevSnap?.y, 0),
+    z: clampCoord(r.z ?? prevSnap?.z, 0),
+    heading,
+    action: sanitizeId(r.action ?? prevSnap?.action, 'idle').slice(0, 24),
+    hp: Math.max(0, Math.min(999999, Math.round(Number(r.hp ?? prevSnap?.hp ?? 100) || 0))),
+    maxHp: Math.max(1, Math.min(999999, Math.round(Number(r.maxHp ?? prevSnap?.maxHp ?? 100) || 100))),
+    mp: Math.max(0, Math.min(999999, Math.round(Number(r.mp ?? prevSnap?.mp ?? 60) || 0))),
+    maxMp: Math.max(1, Math.min(999999, Math.round(Number(r.maxMp ?? prevSnap?.maxMp ?? 60) || 60))),
+    fainted: Boolean(r.fainted ?? prevSnap?.fainted ?? false),
+    isAi: Boolean(r.isAi ?? prevSnap?.isAi ?? false),
+    look: sanitizeLook(r.look ?? prevSnap?.look),
+    emote: sanitizeEmote(r.emote !== undefined ? r.emote : prevSnap?.emote, now),
+  };
+}
+
+function sanitizeLampEntry(raw, now = Date.now(), maxRejoice = 50, maxBurn = 600) {
+  const data = raw && typeof raw === 'object' ? raw : {};
+  const id = sanitizeId(
+    data.id,
+    `lamp-${now}-${Math.random().toString(36).slice(2, 7)}`,
+  );
+  return {
+    id,
+    stationIdx: Math.max(0, Math.min(2, Math.round(Number(data.stationIdx) || 0))),
+    lampIdx: Math.max(0, Math.min(11, Math.round(Number(data.lampIdx) || 0))),
+    pilgrimName: sanitizeText(data.pilgrimName, 24, '朝聖行者'),
+    tag: VALID_TAGS.has(data.tag) ? data.tag : 'peace',
+    message: sanitizeText(data.message, 120, ''),
+    createdAt: clampTimestamp(data.createdAt, now),
+    rejoiceCount: Math.max(1, Math.min(maxRejoice, Math.round(Number(data.rejoiceCount) || 1))),
+    burnBonusSec: Math.max(120, Math.min(maxBurn, Math.round(Number(data.burnBonusSec) || 120))),
+  };
+}
+
+function sanitizeStupaEntry(raw, now = Date.now(), maxRejoice = 50) {
+  const data = raw && typeof raw === 'object' ? raw : {};
+  const id = sanitizeId(
+    data.id,
+    `stupa-${now}-${Math.random().toString(36).slice(2, 7)}`,
+  );
+  const spec = data.spec && typeof data.spec === 'object' ? data.spec : {};
+  return {
+    id,
+    pilgrimName: sanitizeText(data.pilgrimName, 24, '朝聖行者'),
+    title: sanitizeText(data.title, 28, '祈願功德塔'),
+    message: sanitizeText(data.message, 120, ''),
+    kora: Math.max(0, Math.min(10000, Math.round(Number(data.kora) || 0))),
+    prostrations: Math.max(0, Math.min(100000, Math.round(Number(data.prostrations) || 0))),
+    spec: {
+      plinth: sanitizeId(spec.plinth, 'lotus').slice(0, 24),
+      dome: sanitizeId(spec.dome, 'white').slice(0, 24),
+      spire: sanitizeId(spec.spire, 'gold13').slice(0, 24),
+      ornament: sanitizeId(spec.ornament, 'moonSun').slice(0, 24),
+    },
+    rejoiceCount: Math.max(1, Math.min(maxRejoice, Math.round(Number(data.rejoiceCount) || 1))),
+    createdAt: clampTimestamp(data.createdAt, now),
+  };
+}
+
+function sanitizeContributorEntry(raw, now = Date.now()) {
+  const data = raw && typeof raw === 'object' ? raw : {};
+  return {
+    id: sanitizeId(data.id, `samye-${now}-${Math.random().toString(36).slice(2, 6)}`),
+    pilgrimName: sanitizeText(data.pilgrimName, 24, '朝聖行者'),
+    stupas: Math.max(1, Math.min(50, Math.round(Number(data.stupas) || 1))),
+    kora: Math.max(0, Math.min(5000, Math.round(Number(data.kora) || 0))),
+    prostrations: Math.max(0, Math.min(5000, Math.round(Number(data.prostrations) || 0))),
+    message: sanitizeText(data.message, 120, ''),
+    createdAt: clampTimestamp(data.createdAt, now),
   };
 }
 
@@ -119,32 +277,76 @@ export function createMultiplayerStore(options = {}) {
 
   let community = createInitialCommunityState();
 
+  function pruneRejoiceDeltas() {
+    const validLampIds = new Set(community.lamps.map((l) => l.id));
+    const cleanLampDeltas = {};
+    for (const [rawKey, val] of Object.entries(community.lampRejoiceDeltas || {})) {
+      const k = sanitizeId(rawKey, '');
+      const n = Math.min(100000, Math.max(0, Math.round(Number(val) || 0)));
+      if (k && n > 0 && (validLampIds.has(k) || SEEDED_LAMP_BASES.has(k))) {
+        cleanLampDeltas[k] = n;
+      }
+      if (Object.keys(cleanLampDeltas).length >= 120) break;
+    }
+    community.lampRejoiceDeltas = cleanLampDeltas;
+
+    const validStupaIds = new Set(community.stupas.map((s) => s.id));
+    const cleanStupaDeltas = {};
+    for (const [rawKey, val] of Object.entries(community.stupaRejoiceDeltas || {})) {
+      const k = sanitizeId(rawKey, '');
+      const n = Math.min(100000, Math.max(0, Math.round(Number(val) || 0)));
+      if (k && n > 0 && (validStupaIds.has(k) || SEEDED_STUPA_BASES.has(k))) {
+        cleanStupaDeltas[k] = n;
+      }
+      if (Object.keys(cleanStupaDeltas).length >= 100) break;
+    }
+    community.stupaRejoiceDeltas = cleanStupaDeltas;
+  }
+
   function loadFromDisk() {
     if (inMemoryOnly || !dbPath) return;
     try {
       if (!fs.existsSync(dbPath)) return;
+      const stat = fs.statSync(dbPath);
+      if (stat.size > MAX_DB_BYTES * 2) return;
       const raw = fs.readFileSync(dbPath, 'utf8');
       if (!raw) return;
       const parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== 'object') return;
 
+      const now = Date.now();
       if (Array.isArray(parsed.lamps)) {
-        community.lamps = parsed.lamps.slice(0, 100);
+        community.lamps = parsed.lamps
+          .slice(0, 100)
+          .filter((l) => l && typeof l === 'object')
+          .map((l) => sanitizeLampEntry(l, now, 100000, 86400 * 30));
       }
       if (Array.isArray(parsed.stupas)) {
-        community.stupas = parsed.stupas.slice(0, 80);
+        community.stupas = parsed.stupas
+          .slice(0, 80)
+          .filter((s) => s && typeof s === 'object')
+          .map((s) => sanitizeStupaEntry(s, now, 100000));
       }
       if (parsed.samye && typeof parsed.samye === 'object') {
         community.samye = {
           contributedStupas: Math.min(
             SAMYE_TARGET_STUPAS,
-            Math.max(324, Number(parsed.samye.contributedStupas) || 324),
+            Math.max(324, Math.round(Number(parsed.samye.contributedStupas) || 324)),
           ),
           targetStupas: SAMYE_TARGET_STUPAS,
-          totalKora: Math.max(1080, Number(parsed.samye.totalKora) || 1080),
-          totalProstrations: Math.max(4320, Number(parsed.samye.totalProstrations) || 4320),
+          totalKora: Math.min(
+            10000000,
+            Math.max(1080, Math.round(Number(parsed.samye.totalKora) || 1080)),
+          ),
+          totalProstrations: Math.min(
+            50000000,
+            Math.max(4320, Math.round(Number(parsed.samye.totalProstrations) || 4320)),
+          ),
           contributors: Array.isArray(parsed.samye.contributors)
-            ? parsed.samye.contributors.slice(0, 50)
+            ? parsed.samye.contributors
+                .slice(0, 50)
+                .filter((c) => c && typeof c === 'object')
+                .map((c) => sanitizeContributorEntry(c, now))
             : [],
         };
       }
@@ -154,30 +356,48 @@ export function createMultiplayerStore(options = {}) {
       if (parsed.stupaRejoiceDeltas && typeof parsed.stupaRejoiceDeltas === 'object') {
         community.stupaRejoiceDeltas = { ...parsed.stupaRejoiceDeltas };
       }
+      pruneRejoiceDeltas();
     } catch {
       // Ignore corrupted or missing file on boot
     }
   }
 
+  function serializeCommunityDb() {
+    return JSON.stringify(
+      {
+        version: 1,
+        updatedAt: Date.now(),
+        lamps: community.lamps,
+        stupas: community.stupas,
+        samye: community.samye,
+        lampRejoiceDeltas: community.lampRejoiceDeltas,
+        stupaRejoiceDeltas: community.stupaRejoiceDeltas,
+      },
+      null,
+      2,
+    );
+  }
+
   function saveToDisk() {
     if (inMemoryOnly || !dbPath) return;
     try {
+      pruneRejoiceDeltas();
+      let payload = serializeCommunityDb();
+      if (Buffer.byteLength(payload, 'utf8') > MAX_DB_BYTES) {
+        if (community.lamps.length > 60) community.lamps.length = 60;
+        if (community.stupas.length > 50) community.stupas.length = 50;
+        if (community.samye.contributors.length > 30) {
+          community.samye.contributors.length = 30;
+        }
+        pruneRejoiceDeltas();
+        payload = serializeCommunityDb();
+      }
+      if (Buffer.byteLength(payload, 'utf8') > MAX_DB_BYTES) {
+        return;
+      }
       const dir = path.dirname(dbPath);
       fs.mkdirSync(dir, { recursive: true });
       const tmpPath = `${dbPath}.${process.pid}.${Date.now()}.tmp`;
-      const payload = JSON.stringify(
-        {
-          version: 1,
-          updatedAt: Date.now(),
-          lamps: community.lamps,
-          stupas: community.stupas,
-          samye: community.samye,
-          lampRejoiceDeltas: community.lampRejoiceDeltas,
-          stupaRejoiceDeltas: community.stupaRejoiceDeltas,
-        },
-        null,
-        2,
-      );
       fs.writeFileSync(tmpPath, payload, 'utf8');
       fs.renameSync(tmpPath, dbPath);
     } catch {
@@ -191,24 +411,11 @@ export function createMultiplayerStore(options = {}) {
   function applySingleCommunityAction(action, payload) {
     if (!action || typeof action !== 'string') return false;
     const data = payload && typeof payload === 'object' ? payload : {};
+    const now = Date.now();
 
     if (action === 'lamp') {
-      const id = sanitizeId(
-        data.id,
-        `lamp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      );
-      const entry = {
-        id,
-        stationIdx: Math.max(0, Math.min(2, Math.round(Number(data.stationIdx) || 0))),
-        lampIdx: Math.max(0, Math.min(11, Math.round(Number(data.lampIdx) || 0))),
-        pilgrimName: sanitizeText(data.pilgrimName, 24, '朝聖行者'),
-        tag: VALID_TAGS.has(data.tag) ? data.tag : 'peace',
-        message: sanitizeText(data.message, 120, ''),
-        createdAt: Number(data.createdAt) || Date.now(),
-        rejoiceCount: Math.max(1, Math.round(Number(data.rejoiceCount) || 1)),
-        burnBonusSec: Math.max(120, Math.round(Number(data.burnBonusSec) || 120)),
-      };
-      const idx = community.lamps.findIndex((l) => l.id === id);
+      const entry = sanitizeLampEntry(data, now, 50, 600);
+      const idx = community.lamps.findIndex((l) => l.id === entry.id);
       if (idx >= 0) {
         const prev = community.lamps[idx];
         community.lamps[idx] = {
@@ -228,24 +435,30 @@ export function createMultiplayerStore(options = {}) {
     if (action === 'rejoiceLamp') {
       const id = sanitizeId(data.id, '');
       if (!id) return false;
-      community.lampRejoiceDeltas[id] = (Number(community.lampRejoiceDeltas[id]) || 0) + 1;
       const target = community.lamps.find((l) => l.id === id);
+      const seed = SEEDED_LAMP_BASES.get(id);
+      if (!target && !seed) return false;
+
+      const nextDelta = Math.min(100000, (Number(community.lampRejoiceDeltas[id]) || 0) + 1);
+      community.lampRejoiceDeltas[id] = nextDelta;
+      if (Object.keys(community.lampRejoiceDeltas).length > 120) {
+        pruneRejoiceDeltas();
+      }
+
       if (target) {
-        target.rejoiceCount = (Number(target.rejoiceCount) || 0) + 1;
-        target.burnBonusSec = (Number(target.burnBonusSec) || 0) + 120;
-      } else {
-        const seed = SEEDED_LAMP_BASES.get(id);
-        const delta = community.lampRejoiceDeltas[id];
+        target.rejoiceCount = Math.min(100000, (Number(target.rejoiceCount) || 0) + 1);
+        target.burnBonusSec = Math.min(86400 * 30, (Number(target.burnBonusSec) || 0) + 120);
+      } else if (seed) {
         community.lamps.unshift({
           id,
-          stationIdx: seed ? seed.stationIdx : 0,
-          lampIdx: seed ? seed.lampIdx : 0,
-          pilgrimName: seed ? seed.pilgrimName : sanitizeText(data.pilgrimName, 24, '朝聖行者'),
-          tag: seed ? seed.tag : 'peace',
-          message: seed ? seed.message : sanitizeText(data.message, 120, ''),
-          createdAt: seed ? seed.createdAt : Date.now(),
-          rejoiceCount: (seed ? seed.rejoiceCount : 0) + delta,
-          burnBonusSec: (seed ? seed.burnBonusSec : 0) + delta * 120,
+          stationIdx: seed.stationIdx,
+          lampIdx: seed.lampIdx,
+          pilgrimName: seed.pilgrimName,
+          tag: seed.tag,
+          message: seed.message,
+          createdAt: seed.createdAt,
+          rejoiceCount: seed.rejoiceCount + nextDelta,
+          burnBonusSec: seed.burnBonusSec + nextDelta * 120,
         });
         if (community.lamps.length > 100) community.lamps.length = 100;
       }
@@ -253,28 +466,8 @@ export function createMultiplayerStore(options = {}) {
     }
 
     if (action === 'stupa') {
-      const id = sanitizeId(
-        data.id,
-        `stupa-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      );
-      const spec = data.spec && typeof data.spec === 'object' ? data.spec : {};
-      const entry = {
-        id,
-        pilgrimName: sanitizeText(data.pilgrimName, 24, '朝聖行者'),
-        title: sanitizeText(data.title, 28, '祈願功德塔'),
-        message: sanitizeText(data.message, 120, ''),
-        kora: Math.max(0, Math.round(Number(data.kora) || 0)),
-        prostrations: Math.max(0, Math.round(Number(data.prostrations) || 0)),
-        spec: {
-          plinth: sanitizeId(spec.plinth, 'lotus'),
-          dome: sanitizeId(spec.dome, 'white'),
-          spire: sanitizeId(spec.spire, 'gold13'),
-          ornament: sanitizeId(spec.ornament, 'moonSun'),
-        },
-        rejoiceCount: Math.max(1, Math.round(Number(data.rejoiceCount) || 1)),
-        createdAt: Number(data.createdAt) || Date.now(),
-      };
-      const idx = community.stupas.findIndex((s) => s.id === id);
+      const entry = sanitizeStupaEntry(data, now, 50);
+      const idx = community.stupas.findIndex((s) => s.id === entry.id);
       if (idx >= 0) {
         const prev = community.stupas[idx];
         community.stupas[idx] = {
@@ -293,25 +486,29 @@ export function createMultiplayerStore(options = {}) {
     if (action === 'rejoiceStupa') {
       const id = sanitizeId(data.id, '');
       if (!id) return false;
-      community.stupaRejoiceDeltas[id] = (Number(community.stupaRejoiceDeltas[id]) || 0) + 1;
       const target = community.stupas.find((s) => s.id === id);
+      const seed = SEEDED_STUPA_BASES.get(id);
+      if (!target && !seed) return false;
+
+      const nextDelta = Math.min(100000, (Number(community.stupaRejoiceDeltas[id]) || 0) + 1);
+      community.stupaRejoiceDeltas[id] = nextDelta;
+      if (Object.keys(community.stupaRejoiceDeltas).length > 100) {
+        pruneRejoiceDeltas();
+      }
+
       if (target) {
-        target.rejoiceCount = (Number(target.rejoiceCount) || 0) + 1;
-      } else {
-        const seed = SEEDED_STUPA_BASES.get(id);
-        const delta = community.stupaRejoiceDeltas[id];
+        target.rejoiceCount = Math.min(100000, (Number(target.rejoiceCount) || 0) + 1);
+      } else if (seed) {
         community.stupas.unshift({
           id,
-          pilgrimName: seed ? seed.pilgrimName : sanitizeText(data.pilgrimName, 24, '朝聖行者'),
-          title: seed ? seed.title : sanitizeText(data.title, 28, '祈願功德塔'),
-          message: seed ? seed.message : sanitizeText(data.message, 120, ''),
-          kora: seed ? seed.kora : 0,
-          prostrations: seed ? seed.prostrations : 0,
-          spec: seed
-            ? { ...seed.spec }
-            : { plinth: 'lotus', dome: 'white', spire: 'gold13', ornament: 'moonSun' },
-          rejoiceCount: (seed ? seed.rejoiceCount : 0) + delta,
-          createdAt: seed ? seed.createdAt : Date.now(),
+          pilgrimName: seed.pilgrimName,
+          title: seed.title,
+          message: seed.message,
+          kora: seed.kora,
+          prostrations: seed.prostrations,
+          spec: { ...seed.spec },
+          rejoiceCount: seed.rejoiceCount + nextDelta,
+          createdAt: seed.createdAt,
         });
         if (community.stupas.length > 80) community.stupas.length = 80;
       }
@@ -319,32 +516,24 @@ export function createMultiplayerStore(options = {}) {
     }
 
     if (action === 'samyeContribute') {
-      const addStupas = Math.max(1, Math.min(50, Math.round(Number(data.stupas) || 1)));
-      const addKora = Math.max(0, Math.min(5000, Math.round(Number(data.kora) || 0)));
-      const addPros = Math.max(0, Math.min(5000, Math.round(Number(data.prostrations) || 0)));
+      const entry = sanitizeContributorEntry(data, now);
 
       community.samye.contributedStupas = Math.min(
         SAMYE_TARGET_STUPAS,
-        community.samye.contributedStupas + addStupas,
+        community.samye.contributedStupas + entry.stupas,
       );
       community.samye.targetStupas = SAMYE_TARGET_STUPAS;
-      community.samye.totalKora += addKora;
-      community.samye.totalProstrations += addPros;
-
-      const contribId = sanitizeId(
-        data.id,
-        `samye-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      community.samye.totalKora = Math.min(
+        10000000,
+        community.samye.totalKora + entry.kora,
       );
-      if (!community.samye.contributors.some((c) => c.id === contribId)) {
-        community.samye.contributors.unshift({
-          id: contribId,
-          pilgrimName: sanitizeText(data.pilgrimName, 24, '朝聖行者'),
-          stupas: addStupas,
-          kora: addKora,
-          prostrations: addPros,
-          message: sanitizeText(data.message, 120, ''),
-          createdAt: Number(data.createdAt) || Date.now(),
-        });
+      community.samye.totalProstrations = Math.min(
+        50000000,
+        community.samye.totalProstrations + entry.prostrations,
+      );
+
+      if (!community.samye.contributors.some((c) => c.id === entry.id)) {
+        community.samye.contributors.unshift(entry);
         if (community.samye.contributors.length > 50) {
           community.samye.contributors.length = 50;
         }
@@ -358,11 +547,12 @@ export function createMultiplayerStore(options = {}) {
   function applyCommunityAction(action, payload) {
     let mutated = false;
     if (action === 'batch') {
-      const list = Array.isArray(payload)
+      const rawList = Array.isArray(payload)
         ? payload
         : Array.isArray(payload?.actions)
           ? payload.actions
           : [];
+      const list = rawList.slice(0, MAX_BATCH_ACTIONS);
       for (const item of list) {
         if (item && typeof item === 'object' && item.action !== 'batch') {
           if (applySingleCommunityAction(item.action, item.payload)) {
@@ -438,6 +628,10 @@ export function createMultiplayerStore(options = {}) {
       if (s.pilgrims.size < shardCapacity) {
         return s;
       }
+    }
+
+    if (shards.length >= MAX_SHARDS_PER_ZONE) {
+      return shards[shards.length - 1];
     }
 
     const nextIdx = shards[shards.length - 1].index + 1;
@@ -526,24 +720,11 @@ export function createMultiplayerStore(options = {}) {
     );
 
     const prevSnap = shard.pilgrims.get(effectivePeerId);
+    const baseSnap = sanitizeMemberSnapshot(rawPilgrim, effectivePeerId, prevSnap, now);
     const snap = {
-      id: effectivePeerId,
-      name: sanitizeText(rawPilgrim.name ?? prevSnap?.name, 24, '朝聖行者'),
-      level: Math.max(1, Math.min(99, Math.round(Number(rawPilgrim.level ?? prevSnap?.level) || 1))),
+      ...baseSnap,
       zone: targetZone,
       shardId: shard.id,
-      x: Number(Number(rawPilgrim.x ?? prevSnap?.x ?? 0).toFixed(2)),
-      y: Number(Number(rawPilgrim.y ?? prevSnap?.y ?? 0).toFixed(2)),
-      z: Number(Number(rawPilgrim.z ?? prevSnap?.z ?? 0).toFixed(2)),
-      heading: Number(Number(rawPilgrim.heading ?? prevSnap?.heading ?? 0).toFixed(3)),
-      action: sanitizeId(rawPilgrim.action ?? prevSnap?.action, 'idle'),
-      hp: Math.max(0, Math.round(Number(rawPilgrim.hp ?? prevSnap?.hp ?? 100))),
-      maxHp: Math.max(1, Math.round(Number(rawPilgrim.maxHp ?? prevSnap?.maxHp ?? 100))),
-      mp: Math.max(0, Math.round(Number(rawPilgrim.mp ?? prevSnap?.mp ?? 60))),
-      maxMp: Math.max(1, Math.round(Number(rawPilgrim.maxMp ?? prevSnap?.maxMp ?? 60))),
-      fainted: Boolean(rawPilgrim.fainted ?? prevSnap?.fainted ?? false),
-      look: sanitizeLook(rawPilgrim.look ?? prevSnap?.look),
-      emote: rawPilgrim.emote ? sanitizeId(rawPilgrim.emote, '') : null,
       updatedAt: now,
     };
 
@@ -551,7 +732,7 @@ export function createMultiplayerStore(options = {}) {
     peerLocations.set(effectivePeerId, { zone: targetZone, shardId: shard.id });
 
     if (Array.isArray(events) && events.length > 0) {
-      for (const ev of events) {
+      for (const ev of events.slice(0, 20)) {
         if (!ev || typeof ev !== 'object') continue;
         const evId = sanitizeId(
           ev.id,
@@ -563,9 +744,9 @@ export function createMultiplayerStore(options = {}) {
           senderId: sanitizeId(ev.senderId, effectivePeerId),
           zone: targetZone,
           shardId: shard.id,
-          type: sanitizeId(ev.type, 'event'),
-          payload: ev.payload && typeof ev.payload === 'object' ? ev.payload : {},
-          ts: Number(ev.ts) || now,
+          type: sanitizeId(ev.type, 'event').slice(0, 32),
+          payload: sanitizeEventPayload(ev.payload),
+          ts: clampTimestamp(ev.ts, now),
         });
       }
       if (shard.events.length > 100) {
@@ -756,6 +937,10 @@ export function createMultiplayerStore(options = {}) {
     }
 
     if (!roomObj) {
+      if (coopRooms.size >= MAX_COOP_ROOMS) {
+        const oldestKey = coopRooms.keys().next().value;
+        if (oldestKey) coopRooms.delete(oldestKey);
+      }
       roomObj = {
         room: roomCode,
         hostId: sanitizeId(member?.id || peerId, '') || null,
@@ -783,11 +968,10 @@ export function createMultiplayerStore(options = {}) {
         const canJoin =
           roomObj.members.has(memberId) || roomObj.members.size < 4;
         if (canJoin) {
+          const prevMember = roomObj.members.get(memberId);
+          const cleanMember = sanitizeMemberSnapshot(member, memberId, prevMember, now);
           roomObj.members.set(memberId, {
-            ...member,
-            id: memberId,
-            name: sanitizeText(member.name, 24, '朝聖行者'),
-            zone: normalizeZone(member.zone),
+            ...cleanMember,
             isHost: roomObj.hostId === memberId,
             updatedAt: now,
           });
@@ -798,17 +982,27 @@ export function createMultiplayerStore(options = {}) {
     }
 
     if (dungeonState && typeof dungeonState === 'object') {
-      roomObj.dungeonState = dungeonState;
+      roomObj.dungeonState = sanitizeDungeonState(dungeonState);
       roomObj.updatedAt = now;
     }
 
     if (Array.isArray(events) && events.length > 0) {
-      for (const ev of events) {
+      for (const ev of events.slice(0, 20)) {
         if (!ev || typeof ev !== 'object') continue;
-        if (ev.id && roomObj.events.some((existing) => existing.id === ev.id)) continue;
+        const evId = sanitizeId(
+          ev.id,
+          `${roomCode}-${now}-${Math.random().toString(36).slice(2, 6)}`,
+        );
+        if (evId && roomObj.events.some((existing) => existing.id === evId)) continue;
         roomObj.events.push({
-          ...ev,
-          ts: Number(ev.ts) || now,
+          id: evId,
+          room: roomCode,
+          zone: normalizeZone(ev.zone),
+          senderId: sanitizeId(ev.senderId, sanitizeId(peerId || member?.id, '')),
+          senderName: sanitizeText(ev.senderName, 24, '朝聖行者'),
+          type: sanitizeId(ev.type, 'event').slice(0, 32),
+          payload: sanitizeEventPayload(ev.payload),
+          ts: clampTimestamp(ev.ts, now),
         });
       }
       if (roomObj.events.length > 80) {
