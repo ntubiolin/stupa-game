@@ -9,7 +9,8 @@
 //   - Yangleshö Cave:      (20, -45) -> world (2020, -45) with 7 butter lamp niches
 //   - Asura Cave Arena:    (-10, -80) -> world (1990, -80), r = 16m
 //   - Rain Transformation: Triggered by `ch1.rain` flag (falling rain, green terrain,
-//                          tree foliage canopies, full springs/well, rain soundscape)
+//                          valley terrace crops/foliage, tree foliage canopies & blossoms,
+//                          full springs/well, cooled boss arena runes, rain soundscape)
 //
 // Strictly 0 PointLights.
 // ============================================================================
@@ -45,6 +46,71 @@ function getPharpingGlowTexture() {
   const tex = new THREE.CanvasTexture(canvas);
   tex.needsUpdate = true;
   _pharpingGlowTex = tex;
+  return tex;
+}
+
+let _kilayaMandalaTex = null;
+function getKilayaMandalaTexture() {
+  if (_kilayaMandalaTex) return _kilayaMandalaTex;
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const c = canvas.getContext('2d');
+  if (c) {
+    c.clearRect(0, 0, 256, 256);
+    const cx = 128;
+    const cy = 128;
+
+    // Soft radial aura
+    const bg = c.createRadialGradient(cx, cy, 8, cx, cy, 122);
+    bg.addColorStop(0.0, 'rgba(251, 146, 60, 0.42)');
+    bg.addColorStop(0.55, 'rgba(217, 119, 6, 0.22)');
+    bg.addColorStop(0.88, 'rgba(180, 83, 9, 0.12)');
+    bg.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
+    c.fillStyle = bg;
+    c.fillRect(0, 0, 256, 256);
+
+    // Outer & inner sacred geometric rings
+    c.strokeStyle = 'rgba(253, 186, 116, 0.78)';
+    c.lineWidth = 3;
+    for (const r of [116, 98, 68, 36]) {
+      c.beginPath();
+      c.arc(cx, cy, r, 0, TWO_PI);
+      c.stroke();
+    }
+
+    // 8 Lotus petals & Vajra spokes
+    c.strokeStyle = 'rgba(251, 191, 36, 0.65)';
+    c.lineWidth = 2;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * TWO_PI;
+      c.beginPath();
+      c.moveTo(cx + Math.cos(a) * 36, cy + Math.sin(a) * 36);
+      c.lineTo(cx + Math.cos(a) * 114, cy + Math.sin(a) * 114);
+      c.stroke();
+    }
+
+    // Sacred Vajra Kilaya (Phurba) triangular blade star
+    c.strokeStyle = 'rgba(254, 215, 170, 0.88)';
+    c.lineWidth = 3.2;
+    for (let t = 0; t < 2; t++) {
+      const rot = t * (Math.PI / 3) - Math.PI / 2;
+      c.beginPath();
+      for (let k = 0; k < 3; k++) {
+        const a = rot + (k * TWO_PI) / 3;
+        const px = cx + Math.cos(a) * 86;
+        const py = cy + Math.sin(a) * 86;
+        if (k === 0) c.moveTo(px, py);
+        else c.lineTo(px, py);
+      }
+      c.closePath();
+      c.stroke();
+    }
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  _kilayaMandalaTex = tex;
   return tex;
 }
 
@@ -159,6 +225,7 @@ export function createMap(ctx) {
     heightFn: getHeight,
     colorFn: (wx, wz, y, lx, lz) => computeDryWetColor(wx, wz, y, lx, lz, 0),
   });
+  // CRITICAL INVARIANT: terrainMesh MUST remain group.children[0]
   group.add(terrainMesh);
 
   function updateTerrainColors(rainMix) {
@@ -193,14 +260,152 @@ export function createMap(ctx) {
     y: getHeight(gateCfg.x, gateCfg.z),
   });
 
+  // ---------------------------------------------------------------- 2b. Stepped Agricultural Terrace Walls & Valley Foliage (InstancedMesh, 0 Colliders)
+  const terraceWallGeo = new THREE.BoxGeometry(2.6, 0.52, 0.56);
+  const terraceWallMat = new THREE.MeshStandardMaterial({
+    color: 0x7a6855,
+    roughness: 0.92,
+  });
+  const terraceArcs = [
+    { cx: -28, cz: 32, r: 22, start: -0.65, end: 0.55, segs: 14 },
+    { cx: -32, cz: 18, r: 28, start: -0.55, end: 0.62, segs: 16 },
+    { cx: 28, cz: 46, r: 19, start: 2.1, end: 3.3, segs: 12 },
+    { cx: 32, cz: 10, r: 24, start: 1.9, end: 3.2, segs: 14 },
+    { cx: -18, cz: -8, r: 21, start: -0.4, end: 0.75, segs: 12 },
+    { cx: 14, cz: -32, r: 24, start: 0.25, end: 1.35, segs: 12 },
+  ];
+  const totalTerraceStones = terraceArcs.reduce((acc, a) => acc + a.segs, 0);
+  const terraceInst = new THREE.InstancedMesh(terraceWallGeo, terraceWallMat, totalTerraceStones);
+  terraceInst.name = 'PharpingTerraceWalls';
+  terraceInst.castShadow = true;
+  terraceInst.receiveShadow = true;
+  const dummyObj = new THREE.Object3D();
+  const terraceColor = new THREE.Color();
+  let tIdx = 0;
+  for (const arc of terraceArcs) {
+    for (let s = 0; s < arc.segs; s++) {
+      const u = s / Math.max(1, arc.segs - 1);
+      const ang = arc.start + u * (arc.end - arc.start);
+      const wx = origin.x + arc.cx + Math.cos(ang) * arc.r;
+      const wz = origin.z + arc.cz + Math.sin(ang) * arc.r;
+      const wy = getHeight(wx, wz);
+      dummyObj.position.set(wx, wy + 0.22, wz);
+      dummyObj.rotation.set(0, -ang + Math.PI / 2, 0);
+      dummyObj.scale.set(1.0 + (s % 3) * 0.08, 0.85 + (s % 2) * 0.24, 1.0);
+      dummyObj.updateMatrix();
+      terraceInst.setMatrixAt(tIdx, dummyObj.matrix);
+      const shade = 0.86 + ((s * 17) % 7) * 0.035;
+      terraceInst.setColorAt(tIdx, terraceColor.setRGB(shade, shade * 0.96, shade * 0.92));
+      tIdx++;
+    }
+  }
+  terraceInst.instanceMatrix.needsUpdate = true;
+  if (terraceInst.instanceColor) terraceInst.instanceColor.needsUpdate = true;
+  group.add(terraceInst);
+
+  // Valley Grass / Barley Crop Clumps (reacts from drought parched brown -> emerald green on ch1.rain)
+  const foliageCount = 240;
+  const foliageGeo = new THREE.ConeGeometry(0.32, 0.58, 5);
+  const dryFoliageCol = new THREE.Color(0x9a6b38);
+  const wetFoliageCol = new THREE.Color(0x3f8f42);
+  const foliageMat = new THREE.MeshStandardMaterial({
+    color: dryFoliageCol.clone(),
+    roughness: 0.84,
+    emissive: 0x0d260e,
+    emissiveIntensity: 0.0,
+  });
+  const foliageInst = new THREE.InstancedMesh(foliageGeo, foliageMat, foliageCount);
+  foliageInst.name = 'PharpingValleyFoliage';
+  const folRng = seededRandom(5109);
+  let fPlaced = 0;
+  let fAttempts = 0;
+  while (fPlaced < foliageCount && fAttempts < foliageCount * 5) {
+    fAttempts++;
+    const lx = (folRng() - 0.5) * 168;
+    const lz = -72 + folRng() * 148;
+    // Keep clear of village center, cave interior, and boss arena center
+    if (Math.hypot(lx + 30, lz - 55) < 11) continue;
+    if (Math.hypot(lx - 20, lz + 45) < 9.5) continue;
+    if (Math.hypot(lx + 10, lz + 80) < 15.5) continue;
+    if (Math.hypot(lx, lz - 80) < 9) continue;
+    const wx = origin.x + lx;
+    const wz = origin.z + lz;
+    const wy = getHeight(wx, wz);
+    dummyObj.position.set(wx, wy + 0.22, wz);
+    dummyObj.rotation.set((folRng() - 0.5) * 0.25, folRng() * TWO_PI, (folRng() - 0.5) * 0.25);
+    const sc = 0.65 + folRng() * 0.85;
+    dummyObj.scale.set(sc, sc * (0.75 + folRng() * 0.5), sc);
+    dummyObj.updateMatrix();
+    foliageInst.setMatrixAt(fPlaced, dummyObj.matrix);
+    const tint = 0.85 + folRng() * 0.3;
+    foliageInst.setColorAt(fPlaced, terraceColor.setRGB(tint, tint, tint));
+    fPlaced++;
+  }
+  foliageInst.count = fPlaced;
+  foliageInst.instanceMatrix.needsUpdate = true;
+  if (foliageInst.instanceColor) foliageInst.instanceColor.needsUpdate = true;
+  group.add(foliageInst);
+
   // ---------------------------------------------------------------- 3. Pharping Village (-30, 55) + Dry Stone Well
   const villageGroup = new THREE.Group();
   villageGroup.name = 'PharpingVillage';
   group.add(villageGroup);
 
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0x9c8468, roughness: 0.9 });
-  const roofMat = new THREE.MeshStandardMaterial({ color: 0x5c3d28, roughness: 0.85 });
-  const timberMat = new THREE.MeshStandardMaterial({ color: 0x3e2718, roughness: 0.88 });
+  const plinthMat = new THREE.MeshStandardMaterial({ color: 0x6e6256, roughness: 0.94 });
+  const wallMat = new THREE.MeshStandardMaterial({ color: 0xa86444, roughness: 0.88 });
+  const upperWallMat = new THREE.MeshStandardMaterial({ color: 0xede4d3, roughness: 0.85 });
+  const roofMat = new THREE.MeshStandardMaterial({ color: 0x5c3824, roughness: 0.82 });
+  const timberMat = new THREE.MeshStandardMaterial({ color: 0x3b2314, roughness: 0.88 });
+  const brassFinialMat = new THREE.MeshStandardMaterial({
+    color: 0xd4a238,
+    roughness: 0.32,
+    metalness: 0.72,
+    emissive: 0x4a2c06,
+    emissiveIntensity: 0.22,
+  });
+  const windowGlowMat = new THREE.MeshStandardMaterial({
+    color: 0xfbbf24,
+    roughness: 0.4,
+    emissive: 0xd97706,
+    emissiveIntensity: 0.38,
+  });
+  const clayJarMat = new THREE.MeshStandardMaterial({ color: 0x9c4a2d, roughness: 0.78 });
+  const prayerFlagColors = [0x3b82f6, 0xf8fafc, 0xef4444, 0x22c55e, 0xeab308];
+  const prayerFlagMats = prayerFlagColors.map(
+    (col) =>
+      new THREE.MeshStandardMaterial({
+        color: col,
+        roughness: 0.8,
+        side: THREE.DoubleSide,
+      }),
+  );
+
+  // Shared decorative geometries for village houses
+  const winFrameGeo = new THREE.BoxGeometry(0.68, 0.74, 0.1);
+  const winPaneGeo = new THREE.PlaneGeometry(0.46, 0.52);
+  const rafterGeo = new THREE.BoxGeometry(0.1, 0.08, 0.42);
+  const jarGeo = new THREE.CylinderGeometry(0.16, 0.22, 0.44, 8);
+  const flagPoleGeo = new THREE.CylinderGeometry(0.035, 0.05, 1.9, 6);
+  const flagClothGeo = new THREE.PlaneGeometry(0.38, 0.48);
+
+  // Cobbled stone village plaza floor inlay around (-30, 54)
+  const plazaX = origin.x - 30;
+  const plazaZ = origin.z + 54;
+  const plazaY = getHeight(plazaX, plazaZ);
+  const plazaDisc = new THREE.Mesh(
+    new THREE.CircleGeometry(7.2, 24),
+    new THREE.MeshStandardMaterial({ color: 0x857564, roughness: 0.94 }),
+  );
+  plazaDisc.rotation.x = -Math.PI / 2;
+  plazaDisc.position.set(plazaX, plazaY + 0.015, plazaZ);
+  plazaDisc.receiveShadow = true;
+  villageGroup.add(plazaDisc);
+
+  const plazaRingGeo = new THREE.RingGeometry(6.85, 7.35, 24);
+  plazaRingGeo.rotateX(-Math.PI / 2);
+  const plazaRing = new THREE.Mesh(plazaRingGeo, plinthMat);
+  plazaRing.position.set(plazaX, plazaY + 0.022, plazaZ);
+  villageGroup.add(plazaRing);
 
   const houseSpecs = [
     { lx: -40, lz: 62, w: 4.4, d: 3.6, h: 2.7, rot: 0.25 },
@@ -212,7 +417,7 @@ export function createMap(ctx) {
     { lx: -25, lz: 44, w: 3.8, d: 3.2, h: 2.4, rot: -0.22 },
   ];
 
-  for (const hs of houseSpecs) {
+  for (const [hIdx, hs] of houseSpecs.entries()) {
     const hx = origin.x + hs.lx;
     const hz = origin.z + hs.lz;
     const hy = getHeight(hx, hz);
@@ -220,22 +425,115 @@ export function createMap(ctx) {
     hGrp.position.set(hx, hy, hz);
     hGrp.rotation.y = hs.rot;
 
-    const body = new THREE.Mesh(new THREE.BoxGeometry(hs.w, hs.h, hs.d), wallMat);
-    body.position.y = hs.h * 0.5;
+    // 1. Stepped stone foundation plinth
+    const plinth = new THREE.Mesh(
+      new THREE.BoxGeometry(hs.w + 0.36, 0.36, hs.d + 0.36),
+      plinthMat,
+    );
+    plinth.position.y = 0.18;
+    plinth.receiveShadow = true;
+    hGrp.add(plinth);
+
+    // 2. Lower warm terracotta brick wall + upper whitewashed Himalayan frieze band
+    const lowerH = hs.h * 0.64;
+    const upperH = hs.h * 0.36;
+    const body = new THREE.Mesh(new THREE.BoxGeometry(hs.w, lowerH, hs.d), wallMat);
+    body.position.y = 0.32 + lowerH * 0.5;
     body.castShadow = true;
     body.receiveShadow = true;
     hGrp.add(body);
 
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(hs.w + 0.5, 0.32, hs.d + 0.5), roofMat);
-    roof.position.y = hs.h + 0.16;
-    roof.castShadow = true;
-    hGrp.add(roof);
+    const upperBody = new THREE.Mesh(
+      new THREE.BoxGeometry(hs.w + 0.04, upperH, hs.d + 0.04),
+      upperWallMat,
+    );
+    upperBody.position.y = 0.32 + lowerH + upperH * 0.5;
+    upperBody.castShadow = true;
+    upperBody.receiveShadow = true;
+    hGrp.add(upperBody);
 
-    const door = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.55, 0.12), timberMat);
-    door.position.set(0, 0.78, hs.d * 0.5 + 0.04);
-    hGrp.add(door);
+    // Timber belt band between stories
+    const timberBelt = new THREE.Mesh(
+      new THREE.BoxGeometry(hs.w + 0.14, 0.14, hs.d + 0.14),
+      timberMat,
+    );
+    timberBelt.position.y = 0.32 + lowerH;
+    hGrp.add(timberBelt);
+
+    // 3. Overhanging two-tier Newar pitched roof with timber rafters & brass finial
+    const lowerRoof = new THREE.Mesh(
+      new THREE.BoxGeometry(hs.w + 0.72, 0.26, hs.d + 0.72),
+      roofMat,
+    );
+    lowerRoof.position.y = hs.h + 0.38;
+    lowerRoof.castShadow = true;
+    hGrp.add(lowerRoof);
+
+    const atticTier = new THREE.Mesh(
+      new THREE.BoxGeometry(hs.w * 0.62, 0.52, hs.d * 0.62),
+      upperWallMat,
+    );
+    atticTier.position.y = hs.h + 0.72;
+    hGrp.add(atticTier);
+
+    const upperRoof = new THREE.Mesh(
+      new THREE.ConeGeometry(Math.max(hs.w, hs.d) * 0.54, 0.72, 4),
+      roofMat,
+    );
+    upperRoof.position.y = hs.h + 1.28;
+    upperRoof.rotation.y = Math.PI / 4;
+    upperRoof.scale.set(1.12, 1.0, (hs.d / hs.w) * 1.12);
+    upperRoof.castShadow = true;
+    hGrp.add(upperRoof);
+
+    const finial = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.34, 8), brassFinialMat);
+    finial.position.y = hs.h + 1.76;
+    hGrp.add(finial);
+
+    // Front & back eaves rafters
+    for (let r = -2; r <= 2; r++) {
+      const rafterF = new THREE.Mesh(rafterGeo, timberMat);
+      rafterF.position.set(r * (hs.w * 0.2), hs.h + 0.24, hs.d * 0.5 + 0.16);
+      const rafterB = new THREE.Mesh(rafterGeo, timberMat);
+      rafterB.position.set(r * (hs.w * 0.2), hs.h + 0.24, -hs.d * 0.5 - 0.16);
+      hGrp.add(rafterF, rafterB);
+    }
+
+    // 4. Carved wooden front door + lintel + stone doorstep
+    const doorStep = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.22, 0.45), plinthMat);
+    doorStep.position.set(0, 0.11, hs.d * 0.5 + 0.22);
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.92, 1.58, 0.14), timberMat);
+    door.position.set(0, 0.32 + 0.79, hs.d * 0.5 + 0.04);
+    const doorLintel = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.18, 0.22), timberMat);
+    doorLintel.position.set(0, 0.32 + 1.62, hs.d * 0.5 + 0.06);
+    hGrp.add(doorStep, door, doorLintel);
+
+    // 5. Carved Newar wooden lattice windows (पेँझ्याः) with warm interior glow
+    for (const side of [-1, 1]) {
+      const wxOff = side * (hs.w * 0.29);
+      const wyOff = 0.32 + hs.h * 0.62;
+      const wzOff = hs.d * 0.5 + 0.03;
+      const winFrame = new THREE.Mesh(winFrameGeo, timberMat);
+      winFrame.position.set(wxOff, wyOff, wzOff);
+      const winPane = new THREE.Mesh(winPaneGeo, windowGlowMat);
+      winPane.position.set(wxOff, wyOff, wzOff + 0.06);
+      hGrp.add(winFrame, winPane);
+    }
+
+    // 6. Rooftop prayer flag pole + clay water jar prop outside
+    const pole = new THREE.Mesh(flagPoleGeo, timberMat);
+    pole.position.set(hs.w * 0.46, hs.h + 1.15, hs.d * 0.42);
+    const flagCloth = new THREE.Mesh(
+      flagClothGeo,
+      prayerFlagMats[hIdx % prayerFlagMats.length],
+    );
+    flagCloth.position.set(hs.w * 0.46 + 0.2, hs.h + 1.65, hs.d * 0.42);
+    const clayJar = new THREE.Mesh(jarGeo, clayJarMat);
+    clayJar.position.set(-hs.w * 0.38, 0.54, hs.d * 0.5 + 0.26);
+    hGrp.add(pole, flagCloth, clayJar);
 
     villageGroup.add(hGrp);
+    // Keep exact existing collider
     pushCollider(ctx, 'pharping', {
       type: 'circle',
       x: hx,
@@ -244,18 +542,55 @@ export function createMap(ctx) {
     });
   }
 
-  // Village stone well at (-30, 53)
+  // Village stone well + carved wooden canopy pavilion at (-30, 53)
   const wellX = origin.x - 30;
   const wellZ = origin.z + 53;
   const wellY = getHeight(wellX, wellZ);
   const wellGroup = new THREE.Group();
   wellGroup.position.set(wellX, wellY, wellZ);
+
+  const wellBaseStep = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.72, 1.88, 0.22, 16),
+    plinthMat,
+  );
+  wellBaseStep.position.y = 0.11;
+  wellGroup.add(wellBaseStep);
+
   const wellRim = new THREE.Mesh(
     new THREE.CylinderGeometry(1.35, 1.48, 0.85, 12, 1, true),
     wallMat,
   );
   wellRim.position.y = 0.42;
   wellGroup.add(wellRim);
+
+  // Carved wooden well canopy pillars, crossbeam, pulley wheel, and pitched pavilion roof
+  const wellPillarGeo = new THREE.CylinderGeometry(0.09, 0.11, 2.35, 8);
+  for (const [px, pz] of [
+    [-1.15, -1.15],
+    [1.15, -1.15],
+    [-1.15, 1.15],
+    [1.15, 1.15],
+  ]) {
+    const post = new THREE.Mesh(wellPillarGeo, timberMat);
+    post.position.set(px, 1.25, pz);
+    post.castShadow = true;
+    wellGroup.add(post);
+  }
+  const wellCrossbeam = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.16, 0.18), timberMat);
+  wellCrossbeam.position.set(0, 2.25, 0);
+  const pulleyWheel = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.24, 0.24, 0.1, 12),
+    brassFinialMat,
+  );
+  pulleyWheel.rotation.x = Math.PI / 2;
+  pulleyWheel.position.set(0, 2.02, 0);
+  const wellCanopyRoof = new THREE.Mesh(new THREE.ConeGeometry(2.15, 0.85, 4), roofMat);
+  wellCanopyRoof.position.set(0, 2.78, 0);
+  wellCanopyRoof.rotation.y = Math.PI / 4;
+  wellCanopyRoof.castShadow = true;
+  const wellFinial = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.36, 8), brassFinialMat);
+  wellFinial.position.set(0, 3.32, 0);
+  wellGroup.add(wellCrossbeam, pulleyWheel, wellCanopyRoof, wellFinial);
 
   const wellWaterMat = new THREE.MeshStandardMaterial({
     color: 0x2ec4b6,
@@ -274,7 +609,7 @@ export function createMap(ctx) {
   villageGroup.add(wellGroup);
   pushCollider(ctx, 'pharping', { type: 'circle', x: wellX, z: wellZ, r: 1.4 });
 
-  // ---------------------------------------------------------------- 4. Three Dry Springs (三處泉眼)
+  // ---------------------------------------------------------------- 4. Three Sacred Naga Springs (三處龍王泉眼)
   const springSpecs = [
     { id: 'spring1', lx: -55, lz: 10, tag: 'spring1' },
     { id: 'spring2', lx: 40, lz: 30, tag: 'spring2' },
@@ -282,6 +617,19 @@ export function createMap(ctx) {
   ];
   const springs = [];
   const springStoneMat = new THREE.MeshStandardMaterial({ color: 0x7a6c5d, roughness: 0.88 });
+  const mossySlabMat = new THREE.MeshStandardMaterial({ color: 0x5d6e54, roughness: 0.86 });
+  const nagaCarvingMat = new THREE.MeshStandardMaterial({
+    color: 0x8c7d6b,
+    roughness: 0.78,
+    metalness: 0.12,
+  });
+  const nagaJewelMat = new THREE.MeshStandardMaterial({
+    color: 0x38bdf8,
+    roughness: 0.25,
+    metalness: 0.5,
+    emissive: 0x0284c7,
+    emissiveIntensity: 0.55,
+  });
   const springWaterMat = new THREE.MeshStandardMaterial({
     color: 0x38bdf8,
     roughness: 0.2,
@@ -292,6 +640,13 @@ export function createMap(ctx) {
     opacity: 0.86,
   });
 
+  const boulderGeo = new THREE.DodecahedronGeometry(0.45, 0);
+  const rimSlabGeo = new THREE.BoxGeometry(0.95, 0.26, 0.52);
+  const steleBodyGeo = new THREE.BoxGeometry(1.15, 1.65, 0.38);
+  const steleHoodGeo = new THREE.ConeGeometry(0.82, 0.75, 5);
+  const spoutGeo = new THREE.CylinderGeometry(0.12, 0.16, 0.55, 8);
+  const lotusPedestalGeo = new THREE.CylinderGeometry(0.38, 0.48, 0.22, 8);
+
   for (const sp of springSpecs) {
     const sx = origin.x + sp.lx;
     const sz = origin.z + sp.lz;
@@ -299,14 +654,35 @@ export function createMap(ctx) {
     const sGrp = new THREE.Group();
     sGrp.position.set(sx, sy, sz);
 
-    // Stone-lined basin ring of 10 boulders
+    // Stone-lined basin ring of 10 boulders + alternating mossy stepped stone slabs
     for (let i = 0; i < 10; i++) {
       const a = (i / 10) * TWO_PI;
-      const stone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.45, 0), springStoneMat);
+      const stone = new THREE.Mesh(boulderGeo, springStoneMat);
       stone.position.set(Math.cos(a) * 2.1, 0.24, Math.sin(a) * 2.1);
       stone.scale.set(1.1, 0.65, 1.1);
       sGrp.add(stone);
+
+      const slab = new THREE.Mesh(rimSlabGeo, i % 2 === 0 ? mossySlabMat : springStoneMat);
+      slab.position.set(Math.cos(a + 0.31) * 2.42, 0.13, Math.sin(a + 0.31) * 2.42);
+      slab.rotation.y = -a - 0.31 + Math.PI / 2;
+      sGrp.add(slab);
     }
+
+    // Ancient carved Naga Spirit Stele & Makara water spout on the north rim (z = -2.25)
+    const steleBody = new THREE.Mesh(steleBodyGeo, nagaCarvingMat);
+    steleBody.position.set(0, 0.82, -2.25);
+    steleBody.castShadow = true;
+    const steleHood = new THREE.Mesh(steleHoodGeo, nagaCarvingMat);
+    steleHood.position.set(0, 1.92, -2.22);
+    steleHood.scale.set(1.15, 1.0, 0.55);
+    const nagaJewel = new THREE.Mesh(new THREE.OctahedronGeometry(0.16, 0), nagaJewelMat);
+    nagaJewel.position.set(0, 1.38, -2.02);
+    const makaraSpout = new THREE.Mesh(spoutGeo, nagaCarvingMat);
+    makaraSpout.rotation.x = Math.PI / 2.2;
+    makaraSpout.position.set(0, 0.52, -1.92);
+    const lotusCenter = new THREE.Mesh(lotusPedestalGeo, nagaCarvingMat);
+    lotusCenter.position.set(0, 0.1, 0);
+    sGrp.add(steleBody, steleHood, nagaJewel, makaraSpout, lotusCenter);
 
     // Dry mud bed
     const mudBed = new THREE.Mesh(
@@ -383,7 +759,7 @@ export function createMap(ctx) {
     });
   }
 
-  // ---------------------------------------------------------------- 5. Procedural Dead/Lush Trees (Sprout Foliage on `ch1.rain`)
+  // ---------------------------------------------------------------- 5. Procedural Dead/Lush Trees (Sprout Foliage & Blossoms on `ch1.rain`)
   const treeCanopies = [];
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4d3624, roughness: 0.92 });
   const canopyMat = new THREE.MeshStandardMaterial({
@@ -392,6 +768,26 @@ export function createMap(ctx) {
     emissive: 0x143316,
     emissiveIntensity: 0.2,
   });
+  const canopyHighlightMat = new THREE.MeshStandardMaterial({
+    color: 0x529e49,
+    roughness: 0.74,
+    emissive: 0x1a3d1c,
+    emissiveIntensity: 0.22,
+  });
+  const blossomMat = new THREE.MeshStandardMaterial({
+    color: 0xf472b6,
+    roughness: 0.6,
+    emissive: 0xbe185d,
+    emissiveIntensity: 0.28,
+  });
+
+  const trunkGeo = new THREE.CylinderGeometry(0.18, 0.34, 2.8, 7);
+  const rootGeo = new THREE.CylinderGeometry(0.06, 0.16, 0.75, 5);
+  const branchGeo1 = new THREE.CylinderGeometry(0.08, 0.14, 1.4, 6);
+  const branchGeo2 = new THREE.CylinderGeometry(0.07, 0.13, 1.3, 6);
+  const canopyMainGeo = new THREE.DodecahedronGeometry(1.35, 1);
+  const canopySubGeo = new THREE.DodecahedronGeometry(0.95, 1);
+  const blossomGeo = new THREE.DodecahedronGeometry(0.28, 0);
 
   const treeCoords = [
     { lx: -48, lz: 28 },
@@ -408,37 +804,58 @@ export function createMap(ctx) {
     { lx: 28, lz: -72 },
   ];
 
-  for (const tc of treeCoords) {
+  for (const [tIdx, tc] of treeCoords.entries()) {
     const tx = origin.x + tc.lx;
     const tz = origin.z + tc.lz;
     const ty = getHeight(tx, tz);
     const tGrp = new THREE.Group();
     tGrp.position.set(tx, ty, tz);
+    tGrp.rotation.y = tIdx * 0.85;
 
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.32, 2.8, 7), trunkMat);
+    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
     trunk.position.y = 1.4;
     trunk.castShadow = true;
     tGrp.add(trunk);
 
-    const b1 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.14, 1.4, 6), trunkMat);
+    // Gnarled root buttresses
+    for (let r = 0; r < 3; r++) {
+      const ra = (r / 3) * TWO_PI + 0.3;
+      const root = new THREE.Mesh(rootGeo, trunkMat);
+      root.position.set(Math.cos(ra) * 0.25, 0.3, Math.sin(ra) * 0.25);
+      root.rotation.z = -Math.cos(ra) * 0.55;
+      root.rotation.x = Math.sin(ra) * 0.55;
+      tGrp.add(root);
+    }
+
+    const b1 = new THREE.Mesh(branchGeo1, trunkMat);
     b1.position.set(0.35, 2.35, 0);
     b1.rotation.z = -0.65;
-    const b2 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.14, 1.3, 6), trunkMat);
+    const b2 = new THREE.Mesh(branchGeo2, trunkMat);
     b2.position.set(-0.32, 2.2, 0.15);
     b2.rotation.z = 0.58;
-    tGrp.add(b1, b2);
+    const b3 = new THREE.Mesh(branchGeo2, trunkMat);
+    b3.position.set(0.05, 2.25, -0.34);
+    b3.rotation.x = -0.6;
+    tGrp.add(b1, b2, b3);
 
-    // Lush green foliage canopy (hidden during drought, blooms when ch1.rain is true)
+    // Lush green foliage canopy + Himalayan rhododendron blossoms (blooms when ch1.rain is true)
     const canopy = new THREE.Group();
     canopy.position.y = 2.85;
     canopy.visible = false;
-    const cMain = new THREE.Mesh(new THREE.DodecahedronGeometry(1.35, 1), canopyMat);
+    const cMain = new THREE.Mesh(canopyMainGeo, canopyMat);
     cMain.scale.set(1.15, 0.85, 1.15);
-    const cLeft = new THREE.Mesh(new THREE.DodecahedronGeometry(0.95, 1), canopyMat);
+    const cLeft = new THREE.Mesh(canopySubGeo, canopyHighlightMat);
     cLeft.position.set(-0.75, -0.25, 0.2);
-    const cRight = new THREE.Mesh(new THREE.DodecahedronGeometry(0.95, 1), canopyMat);
+    const cRight = new THREE.Mesh(canopySubGeo, canopyMat);
     cRight.position.set(0.75, -0.2, -0.15);
-    canopy.add(cMain, cLeft, cRight);
+    const cTop = new THREE.Mesh(canopySubGeo, canopyHighlightMat);
+    cTop.position.set(0.0, 0.55, 0.1);
+    cTop.scale.set(0.85, 0.72, 0.85);
+    const bl1 = new THREE.Mesh(blossomGeo, blossomMat);
+    bl1.position.set(0.58, 0.42, 0.62);
+    const bl2 = new THREE.Mesh(blossomGeo, blossomMat);
+    bl2.position.set(-0.64, 0.28, -0.48);
+    canopy.add(cMain, cLeft, cRight, cTop, bl1, bl2);
     tGrp.add(canopy);
     treeCanopies.push(canopy);
 
@@ -850,20 +1267,63 @@ export function createMap(ctx) {
     depthWrite: false,
     toneMapped: false,
   });
+
+  // Outer ritual boundary ring
   const arenaRingGeo = new THREE.RingGeometry(15.2, 16.0, 48);
   arenaRingGeo.rotateX(-Math.PI / 2);
-  const arenaRing = new THREE.Mesh(
-    arenaRingGeo,
-    new THREE.MeshBasicMaterial({
-      color: 0xd97706,
-      transparent: true,
-      opacity: 0.4,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    }),
-  );
+  const arenaRingMat = new THREE.MeshBasicMaterial({
+    color: 0xd97706,
+    transparent: true,
+    opacity: 0.44,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const arenaRing = new THREE.Mesh(arenaRingGeo, arenaRingMat);
   arenaRing.position.y = 0.04;
   asuraGroup.add(arenaRing);
+
+  // Sacred Vajra Kilaya (普巴金剛) mandala floor decal at center of Boss Arena
+  const kilayaTex = getKilayaMandalaTexture();
+  const arenaMandalaMat = new THREE.MeshBasicMaterial({
+    map: kilayaTex,
+    color: 0xf59e0b,
+    transparent: true,
+    opacity: 0.56,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const arenaMandalaDisc = new THREE.Mesh(poolGeo, arenaMandalaMat);
+  arenaMandalaDisc.position.set(0, 0.032, 0);
+  arenaMandalaDisc.scale.set(22.0, 1, 22.0);
+  asuraGroup.add(arenaMandalaDisc);
+
+  // 8 Jagged Volcanic/Sandstone Monolith Pillars encircling the Boss Arena perimeter (r = 16.5m, 0 colliders)
+  const monolithBodyGeo = new THREE.CylinderGeometry(0.62, 1.05, 4.6, 6);
+  const monolithCapGeo = new THREE.ConeGeometry(0.75, 1.5, 6);
+  const monolithRuneGeo = new THREE.BoxGeometry(0.18, 2.5, 0.18);
+  for (let m = 0; m < 8; m++) {
+    const ma = (m / 8) * TWO_PI + Math.PI / 8;
+    // Leave south entrance approach clear
+    if (Math.sin(ma) > 0.82) continue;
+    const mr = 16.5;
+    const mx = Math.cos(ma) * mr;
+    const mz = Math.sin(ma) * mr;
+    const mGrp = new THREE.Group();
+    mGrp.position.set(mx, 0, mz);
+    mGrp.rotation.y = -ma + Math.PI / 2;
+
+    const mBody = new THREE.Mesh(monolithBodyGeo, charredMat);
+    mBody.position.y = 2.2;
+    mBody.rotation.z = (m % 2 === 0 ? 1 : -1) * 0.08;
+    mBody.castShadow = true;
+    const mCap = new THREE.Mesh(monolithCapGeo, charredMat);
+    mCap.position.y = 5.1;
+    const mRune = new THREE.Mesh(monolithRuneGeo, asuraVeinMat);
+    mRune.position.set(0, 2.3, 0.72);
+    mGrp.add(mBody, mCap, mRune);
+    asuraGroup.add(mGrp);
+  }
 
   // Deep Asura Volcanic Cavern Grotto on the north rim of the arena
   const asuraInnerDome = new THREE.Mesh(
@@ -901,21 +1361,47 @@ export function createMap(ctx) {
     vein.rotation.z = i * 0.22;
     asuraGroup.add(vein);
   }
-  const asuraMouthPool = new THREE.Mesh(
-    poolGeo,
-    new THREE.MeshBasicMaterial({
-      map: glowTex,
-      color: 0xea580c,
-      transparent: true,
-      opacity: 0.45,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      toneMapped: false,
-    }),
-  );
+  const asuraMouthPoolMat = new THREE.MeshBasicMaterial({
+    map: glowTex,
+    color: 0xea580c,
+    transparent: true,
+    opacity: 0.45,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const asuraMouthPool = new THREE.Mesh(poolGeo, asuraMouthPoolMat);
   asuraMouthPool.position.set(0, 0.05, -13.5);
   asuraMouthPool.scale.set(11.0, 1, 8.5);
   asuraGroup.add(asuraMouthPool);
+
+  // Escort Canyon Craggy Rock Arches along the western ambush canyon route (0 colliders)
+  const canyonArchGeo = new THREE.DodecahedronGeometry(2.4, 1);
+  const canyonArchSpecs = [
+    { lx: -56, lz: -41, span: 5.8, h: 4.8, rot: 0.12 },
+    { lx: -34, lz: -42.5, span: 6.2, h: 5.2, rot: -0.08 },
+    { lx: -10, lz: -44, span: 5.6, h: 4.6, rot: 0.05 },
+  ];
+  for (const ca of canyonArchSpecs) {
+    const ax = origin.x + ca.lx;
+    const az = origin.z + ca.lz;
+    const ay = getHeight(ax, az);
+    const archGrp = new THREE.Group();
+    archGrp.position.set(ax, ay, az);
+    archGrp.rotation.y = ca.rot;
+
+    const pNorth = new THREE.Mesh(canyonArchGeo, cliffMat);
+    pNorth.position.set(0, ca.h * 0.48, -ca.span);
+    pNorth.scale.set(0.95, 1.35, 0.95);
+    const pSouth = new THREE.Mesh(canyonArchGeo, cliffMat);
+    pSouth.position.set(0, ca.h * 0.48, ca.span);
+    pSouth.scale.set(0.95, 1.35, 0.95);
+    const lintel = new THREE.Mesh(canyonArchGeo, cliffMat);
+    lintel.position.set(0, ca.h + 0.8, 0);
+    lintel.scale.set(0.75, 0.42, 2.65);
+    archGrp.add(pNorth, pSouth, lintel);
+    group.add(archGrp);
+  }
 
   // ---------------------------------------------------------------- 8. Scatter Valley Rocks
   const rng = seededRandom(3201);
@@ -1090,6 +1576,23 @@ export function createMap(ctx) {
   let rainMix = 0;
   let rainChimeTimer = 0;
 
+  function updateRainVisuals(mix) {
+    updateTerrainColors(mix);
+    foliageMat.color.lerpColors(dryFoliageCol, wetFoliageCol, mix);
+    foliageMat.emissiveIntensity = mix * 0.18;
+    for (const c of treeCanopies) {
+      c.scale.setScalar(Math.max(0.05, mix));
+    }
+    // Cool Asura Cave arena veins from scorched amber to serene Naga water-spirit turquoise
+    asuraVeinMat.color.setRGB(
+      THREE.MathUtils.lerp(2.0, 0.35, mix),
+      THREE.MathUtils.lerp(0.65, 1.55, mix),
+      THREE.MathUtils.lerp(0.15, 1.85, mix),
+    );
+    arenaRingMat.color.setHex(mix > 0.5 ? 0x2dd4bf : 0xd97706);
+    asuraMouthPoolMat.color.setHex(mix > 0.5 ? 0x0d9488 : 0xea580c);
+  }
+
   function applyRainTransformation(immediate = false) {
     if (!rainActive) {
       rainActive = true;
@@ -1106,7 +1609,7 @@ export function createMap(ctx) {
     }
     if (immediate && rainMix < 1) {
       rainMix = 1;
-      updateTerrainColors(1);
+      updateRainVisuals(1);
     }
   }
 
@@ -1168,6 +1671,9 @@ export function createMap(ctx) {
       0.44 + lampProgress * 0.24 + Math.sin(animTime * 4.0) * 0.04;
     shaftMat.opacity = 0.09 + Math.sin(animTime * 1.9) * 0.025;
 
+    // Subtle pulse on Asura Cave Boss Arena mandala & runes
+    arenaMandalaMat.opacity = 0.48 + Math.sin(animTime * 2.4) * 0.1;
+
     // Gentle upward drift for Yangleshö Cave dust motes
     const dustArr = caveDustGeo.attributes.position.array;
     for (let i = 0; i < caveDustCount; i++) {
@@ -1210,10 +1716,7 @@ export function createMap(ctx) {
     if (rainActive) {
       if (rainMix < 1) {
         rainMix = Math.min(1, rainMix + dt * 0.45);
-        updateTerrainColors(rainMix);
-        for (const c of treeCanopies) {
-          c.scale.setScalar(Math.max(0.05, rainMix));
-        }
+        updateRainVisuals(rainMix);
       }
 
       const pPos = ctx.state?.player?.position || origin;
