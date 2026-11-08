@@ -23,6 +23,8 @@ export function createDocumentary(ctx) {
   let session = null;
   let image = null;
   let video = null;
+  let memoryCanvas = null;
+  let memoryRaf = null;
   let disposed = false;
 
   const dialog = element('dialog', 'story-documentary');
@@ -120,6 +122,218 @@ export function createDocumentary(ctx) {
     image.src = src || poster;
   }
 
+  function clearCanvas() {
+    if (memoryRaf && typeof globalThis.window?.cancelAnimationFrame === 'function') {
+      globalThis.window.cancelAnimationFrame(memoryRaf);
+    }
+    memoryRaf = null;
+    memoryCanvas?.remove();
+    memoryCanvas = null;
+  }
+
+  function getClipElapsed() {
+    if (!session) return 0;
+    let total = session.elapsed || 0;
+    for (let i = 0; i < session.index; i++) {
+      total += session.clip.cues[i]?.duration || 0;
+    }
+    return total;
+  }
+
+  function drawMemoryFrame() {
+    if (!memoryCanvas || !session) return;
+    const g = memoryCanvas.getContext?.('2d');
+    if (!g) return;
+    const w = memoryCanvas.width || 640;
+    const h = memoryCanvas.height || 360;
+    const time = getClipElapsed();
+    const cueIndex = session.index;
+
+    g.save();
+    // 1. Warm afternoon dormitory room backdrop
+    const roomGrad = g.createLinearGradient?.(0, 0, w, h);
+    if (roomGrad) {
+      roomGrad.addColorStop(0, '#462c1c');
+      roomGrad.addColorStop(0.55, '#6b4226');
+      roomGrad.addColorStop(1, '#2b1b12');
+      g.fillStyle = roomGrad;
+    } else {
+      g.fillStyle = '#462c1c';
+    }
+    g.fillRect?.(0, 0, w, h);
+
+    // 2. Dormitory window frame on left with golden afternoon sky
+    const winX = 56, winY = 28, winW = 210, winH = 235;
+    const skyGrad = g.createLinearGradient?.(winX, winY, winX, winY + winH);
+    if (skyGrad) {
+      skyGrad.addColorStop(0, '#fff7dc');
+      skyGrad.addColorStop(0.6, '#f7c873');
+      skyGrad.addColorStop(1, '#e5954b');
+      g.fillStyle = skyGrad;
+    } else {
+      g.fillStyle = '#f7c873';
+    }
+    g.fillRect?.(winX, winY, winW, winH);
+
+    // Window muntins (panes)
+    g.strokeStyle = '#3d2517';
+    g.lineWidth = 5;
+    g.strokeRect?.(winX, winY, winW, winH);
+    g.beginPath?.();
+    g.moveTo?.(winX + winW * 0.5, winY);
+    g.lineTo?.(winX + winW * 0.5, winY + winH);
+    g.moveTo?.(winX, winY + winH * 0.52);
+    g.lineTo?.(winX + winW, winY + winH * 0.52);
+    g.stroke?.();
+
+    // 3. Golden afternoon sunbeams streaming diagonally across the dorm
+    const beamGrad = g.createLinearGradient?.(winX + 40, winY + 20, w * 0.88, h);
+    if (beamGrad) {
+      beamGrad.addColorStop(0, 'rgba(255, 240, 190, 0.42)');
+      beamGrad.addColorStop(0.55, 'rgba(247, 198, 112, 0.22)');
+      beamGrad.addColorStop(1, 'rgba(247, 198, 112, 0)');
+      g.fillStyle = beamGrad;
+    } else {
+      g.fillStyle = 'rgba(255, 240, 190, 0.28)';
+    }
+    g.beginPath?.();
+    g.moveTo?.(winX + 12, winY + 10);
+    g.lineTo?.(winX + winW, winY + 6);
+    g.lineTo?.(w - 20, h);
+    g.lineTo?.(160, h);
+    g.closePath?.();
+    g.fill?.();
+
+    // 4. Gently swaying translucent curtains
+    const sway = Math.sin(time * 1.45) * 14;
+    g.fillStyle = 'rgba(255, 246, 224, 0.34)';
+    g.beginPath?.();
+    g.moveTo?.(winX - 8, winY);
+    g.quadraticCurveTo?.(winX + 34 + sway, winY + winH * 0.5, winX + 18 + sway * 1.2, winY + winH + 18);
+    g.lineTo?.(winX - 12, winY + winH + 18);
+    g.closePath?.();
+    g.fill?.();
+
+    g.beginPath?.();
+    g.moveTo?.(winX + winW + 8, winY);
+    g.quadraticCurveTo?.(winX + winW - 28 + sway * 0.8, winY + winH * 0.5, winX + winW - 10 + sway, winY + winH + 18);
+    g.lineTo?.(winX + winW + 12, winY + winH + 18);
+    g.closePath?.();
+    g.fill?.();
+
+    // 5. Silhouette of Yingzhen with freshly cut short hair, turning & laughing
+    const turnProgress = Math.min(1, Math.max(0, (time - 1.2) / 5.5));
+    const laughBob = cueIndex >= 1 ? Math.sin(time * 5.2) * 2.2 : Math.sin(time * 2.1) * 1.0;
+    const cx = 415 - turnProgress * 12;
+    const cy = 172 + laughBob;
+
+    // Warm golden rim-light halo around her short hair
+    const haloGrad = g.createRadialGradient?.(cx - 8, cy - 18, 12, cx, cy, 88);
+    if (haloGrad) {
+      haloGrad.addColorStop(0, 'rgba(255, 232, 168, 0.55)');
+      haloGrad.addColorStop(0.6, 'rgba(243, 182, 92, 0.18)');
+      haloGrad.addColorStop(1, 'rgba(243, 182, 92, 0)');
+      g.fillStyle = haloGrad;
+      g.beginPath?.();
+      g.arc?.(cx, cy - 10, 88, 0, Math.PI * 2);
+      g.fill?.();
+    }
+
+    // Shoulders & dormitory cardigan silhouette
+    g.fillStyle = '#2d1a11';
+    g.beginPath?.();
+    g.moveTo?.(cx - 64, h);
+    g.quadraticCurveTo?.(cx - 58, cy + 52, cx - 22, cy + 44);
+    g.lineTo?.(cx + 26, cy + 44);
+    g.quadraticCurveTo?.(cx + 62, cy + 54, cx + 68, h);
+    g.closePath?.();
+    g.fill?.();
+
+    // Neck & head with freshly cut short bob hair
+    g.fillRect?.(cx - 10, cy + 20, 20, 28);
+    g.beginPath?.();
+    g.arc?.(cx, cy - 4, 34, 0, Math.PI * 2);
+    g.fill?.();
+
+    // Short cropped hair tips catching golden afternoon light
+    g.strokeStyle = '#f5c77e';
+    g.lineWidth = 2.6;
+    g.beginPath?.();
+    g.arc?.(cx - 2, cy - 6, 35, Math.PI * 0.72, Math.PI * 1.75);
+    g.stroke?.();
+
+    // Raised hand touching her freshly cut short hair near her ear (Cue 1 & 2)
+    const handLift = Math.min(1, Math.max(0.15, (time - 2.0) / 4.0));
+    const handX = cx - 30 - (1 - handLift) * 14;
+    const handY = cy + 12 + (1 - handLift) * 42;
+    g.strokeStyle = '#3a2216';
+    g.lineWidth = 13;
+    g.lineCap = 'round';
+    g.beginPath?.();
+    g.moveTo?.(cx - 44, cy + 78);
+    g.quadraticCurveTo?.(cx - 56, cy + 44, handX, handY);
+    g.stroke?.();
+
+    // Bright warm smile line when she turns toward the camera
+    if (turnProgress > 0.35) {
+      g.strokeStyle = '#f7d8a8';
+      g.lineWidth = 2.0;
+      g.beginPath?.();
+      g.arc?.(cx - 8, cy + 4, 9, 0.15 * Math.PI, 0.85 * Math.PI);
+      g.stroke?.();
+    }
+
+    // 6. Floating warm dust motes in the sunbeams
+    g.fillStyle = 'rgba(255, 243, 198, 0.72)';
+    for (let i = 0; i < 26; i++) {
+      const mx = (90 + i * 21 + Math.sin(time * 0.7 + i * 1.3) * 18) % (w - 40);
+      const my = (36 + ((i * 37 - time * 11) % (h - 60)) + (h - 60)) % (h - 60);
+      const r = 1.2 + (i % 3) * 0.85;
+      g.beginPath?.();
+      g.arc?.(mx, my, r, 0, Math.PI * 2);
+      g.fill?.();
+    }
+
+    // 7. Subtle 17-second handheld camera frame counter & warm vignette
+    g.strokeStyle = 'rgba(255, 238, 205, 0.42)';
+    g.lineWidth = 1.5;
+    g.strokeRect?.(18, 16, w - 36, h - 32);
+
+    g.fillStyle = 'rgba(255, 238, 205, 0.78)';
+    g.font = '600 12px monospace';
+    const sec = Math.min(17, Math.max(0, Math.floor(time)));
+    const tc = `REC ● 00:${String(sec).padStart(2, '0')} / 00:17`;
+    g.fillText?.(tc, 30, 36);
+
+    g.restore();
+  }
+
+  function startMemoryCanvas() {
+    if (memoryCanvas || !session) return;
+    const cue = session.clip.cues[session.index];
+    const isDormMemory = session.id === 'dorm-memory' || cue?.id === 'dorm-memory';
+    const isFallbackCue = !cue?.image && !cue?.video?.src && Boolean(cue?.fallbackKey);
+    if (!isDormMemory && !isFallbackCue) return;
+    const node = element('canvas', 'story-documentary__canvas');
+    node.width = 640;
+    node.height = 360;
+    node.dataset.testid = 'story-documentary-canvas';
+    node.setAttribute('data-testid', 'story-documentary-canvas');
+    node.setAttribute('aria-hidden', 'true');
+    still.append(node);
+    memoryCanvas = node;
+    drawMemoryFrame();
+
+    if (typeof globalThis.window?.requestAnimationFrame === 'function' && !session.staticDefault) {
+      const tick = () => {
+        if (!memoryCanvas || !session || disposed) return;
+        if (!session.paused) drawMemoryFrame();
+        memoryRaf = globalThis.window.requestAnimationFrame(tick);
+      };
+      memoryRaf = globalThis.window.requestAnimationFrame(tick);
+    }
+  }
+
   function clearVideo() {
     video?.dispose();
     video = null;
@@ -157,12 +371,14 @@ export function createDocumentary(ctx) {
   function renderCue() {
     const cue = session.clip.cues[session.index];
     clearVideo();
+    clearCanvas();
     session.videoFailed = false;
     session.staticDefault = Boolean(preferStill());
     still.dataset.frame = cue.frame;
     still.dataset.video = String(Boolean(cue.video?.src));
     showStill(cue.image, cue.video?.poster);
     if ((cue.video?.src || cue.fallbackKey) && !image) fallback.hidden = false;
+    startMemoryCanvas();
     if (dialog.open && !session.paused && !session.staticDefault) startVideo();
     refreshLabels();
   }
@@ -206,6 +422,7 @@ export function createDocumentary(ctx) {
     const { id } = session;
     session = null;
     clearVideo();
+    clearCanvas();
     clearImage();
     state.uiOpen = false;
     dialog.close();
@@ -236,6 +453,7 @@ export function createDocumentary(ctx) {
   function update(dt) {
     if (!session || session.paused || !Number.isFinite(dt) || dt <= 0) return;
     session.elapsed += dt;
+    if (memoryCanvas) drawMemoryFrame();
     const { duration } = session.clip.cues[session.index];
     if (session.elapsed >= duration) advance(session.elapsed - duration);
   }
@@ -269,10 +487,11 @@ export function createDocumentary(ctx) {
     offClip();
     offLang();
     close();
+    clearCanvas();
     dialog.remove();
   }
 
-  const api = { play, pause, resume, skip, close, isOpen: () => Boolean(session), update, dispose };
+  const api = { play, pause, resume, skip, close, stop: close, isOpen: () => Boolean(session), update, dispose, destroy: dispose };
   ctx.documentary = api;
   return api;
 }

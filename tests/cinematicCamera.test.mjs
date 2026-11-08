@@ -228,3 +228,54 @@ test('editable controls and browser key modifiers retain their native shortcuts'
   camera.update(0.1);
   assert.deepEqual(camera.getPose(), pose);
 });
+
+test('glideTo interpolates smoothly over duration and cancels on manual movement input', () => {
+  const { camera, key } = setup();
+  let completed = 0;
+  camera.setPose({ x: 0, y: 1.68, z: 31, yaw: 0, pitch: 0 });
+  assert.equal(camera.isGliding(), false);
+
+  assert.equal(camera.glideTo({ x: 10, y: 2.68, z: 25, yaw: 0.6, pitch: 0.2 }, {
+    duration: 1.0,
+    onComplete: () => { completed += 1; },
+  }), true);
+  assert.equal(camera.isGliding(), true);
+
+  camera.update(0.5);
+  const mid = camera.getPose();
+  assert.equal(camera.isGliding(), true);
+  assert.ok(Math.abs(mid.x - 5) < 1e-6);
+  assert.ok(Math.abs(mid.y - 2.18) < 1e-6);
+  assert.ok(Math.abs(mid.z - 28) < 1e-6);
+  assert.equal(completed, 0);
+
+  camera.update(0.5);
+  const end = camera.getPose();
+  assert.equal(camera.isGliding(), false);
+  assert.equal(completed, 1);
+  assert.ok(Math.abs(end.x - 10) < 1e-6);
+  assert.ok(Math.abs(end.y - 2.68) < 1e-6);
+  assert.ok(Math.abs(end.z - 25) < 1e-6);
+  assert.ok(Math.abs(end.yaw - 0.6) < 1e-6);
+  assert.ok(Math.abs(end.pitch - 0.2) < 1e-6);
+
+  // Manual movement input cancels an active glide immediately.
+  camera.glideTo({ x: 0, y: 1.68, z: 31, yaw: 0, pitch: 0 }, { duration: 1.0 });
+  assert.equal(camera.isGliding(), true);
+  key('keydown', 'KeyW');
+  assert.equal(camera.isGliding(), false);
+});
+
+test('glideTo snaps immediately when reducedMotion is enabled or duration is zero', () => {
+  const { camera } = setup();
+  let completed = 0;
+  const target = { x: -8, y: 1.68, z: 29, yaw: -0.4, pitch: 0.15, fov: 55 };
+  assert.equal(camera.glideTo(target, {
+    reducedMotion: true,
+    duration: 0.9,
+    onComplete: () => { completed += 1; },
+  }), false);
+  assert.equal(camera.isGliding(), false);
+  assert.equal(completed, 1);
+  assert.deepEqual(camera.getPose(), target);
+});
