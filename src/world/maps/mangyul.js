@@ -18,6 +18,134 @@ const ORIGIN_Z = MANGYUL_MAP.origin.z; // 0
 const LUNGTA_COLORS = [0x2563eb, 0xf8fafc, 0xdc2626, 0x16a34a, 0xeab308];
 const FADED_FLAG_COLOR = 0x8b8e92;
 
+// Elemental accent colors for the 4 Tenma trial types
+const TENMA_ELEMENT_COLORS = {
+  hail: { color: 0x38bdf8, emissive: 0x0284c7 },
+  avalanche: { color: 0x93c5fd, emissive: 0x2563eb },
+  fog: { color: 0x5eead4, emissive: 0x0d9488 },
+  lightning: { color: 0xc084fc, emissive: 0x9333ea },
+};
+
+/**
+ * Procedural tileable alpine snow-and-slate micro-relief texture (`CanvasTexture`).
+ * Returns `null` in headless Node environments where `document` is unavailable.
+ */
+function createMangyulTerrainTexture() {
+  if (typeof document === 'undefined' || typeof document.createElement !== 'function') {
+    return null;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const c2d = canvas.getContext?.('2d');
+  if (!c2d) return null;
+
+  c2d.fillStyle = '#dde5ed';
+  c2d.fillRect(0, 0, 128, 128);
+
+  // Deterministic LCG for crisp slate fractures & frost grain
+  let seed = 21401;
+  const rand = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 0xffffffff;
+  };
+
+  // Subtle wind-swept snow ripples & slate strata lines
+  for (let i = 0; i < 42; i++) {
+    const y = Math.floor(rand() * 128);
+    const w = 18 + Math.floor(rand() * 48);
+    const x = Math.floor(rand() * 128);
+    c2d.fillStyle = rand() > 0.45 ? 'rgba(255,255,255,0.22)' : 'rgba(100,116,139,0.18)';
+    c2d.fillRect(x, y, w, 2);
+    if (x + w > 128) c2d.fillRect(0, y, (x + w) - 128, 2);
+  }
+
+  // Fine mineral & ice crystal speckles
+  for (let i = 0; i < 1100; i++) {
+    const x = Math.floor(rand() * 128);
+    const y = Math.floor(rand() * 128);
+    const v = 185 + Math.floor(rand() * 68);
+    c2d.fillStyle = `rgb(${v},${v + 2},${Math.min(255, v + 6)})`;
+    c2d.fillRect(x, y, 2, 2);
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(30, 30);
+  return tex;
+}
+
+/**
+ * Procedural Twelve Tenma wind-mandala floor emblem for the Pass Latse Boss Arena.
+ * Returns `null` in headless Node environments where `document` is unavailable.
+ */
+function createTenmaArenaMandalaTexture() {
+  if (typeof document === 'undefined' || typeof document.createElement !== 'function') {
+    return null;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const c2d = canvas.getContext?.('2d');
+  if (!c2d) return null;
+
+  const cx = 128;
+  const cy = 128;
+  c2d.clearRect(0, 0, 256, 256);
+
+  // Soft icy radial aura
+  const grad = c2d.createRadialGradient(cx, cy, 12, cx, cy, 122);
+  grad.addColorStop(0, 'rgba(56, 189, 248, 0.42)');
+  grad.addColorStop(0.55, 'rgba(30, 58, 138, 0.28)');
+  grad.addColorStop(0.88, 'rgba(125, 211, 252, 0.36)');
+  grad.addColorStop(1, 'rgba(15, 23, 42, 0.0)');
+  c2d.fillStyle = grad;
+  c2d.beginPath();
+  c2d.arc(cx, cy, 122, 0, Math.PI * 2);
+  c2d.fill();
+
+  // Concentric sacred geometry rings
+  c2d.strokeStyle = 'rgba(186, 230, 253, 0.85)';
+  for (const [r, lw] of [
+    [116, 3.0],
+    [104, 1.5],
+    [82, 2.2],
+    [54, 1.8],
+    [26, 2.2],
+  ]) {
+    c2d.lineWidth = lw;
+    c2d.beginPath();
+    c2d.arc(cx, cy, r, 0, Math.PI * 2);
+    c2d.stroke();
+  }
+
+  // 12 Tenma directional spokes & lotus petals
+  for (let i = 0; i < 12; i++) {
+    const ang = (i / 12) * Math.PI * 2;
+    const cos = Math.cos(ang);
+    const sin = Math.sin(ang);
+
+    c2d.strokeStyle = i % 3 === 0 ? 'rgba(250, 204, 21, 0.85)' : 'rgba(125, 211, 252, 0.72)';
+    c2d.lineWidth = i % 3 === 0 ? 2.4 : 1.4;
+    c2d.beginPath();
+    c2d.moveTo(cx + cos * 26, cy + sin * 26);
+    c2d.lineTo(cx + cos * 116, cy + sin * 116);
+    c2d.stroke();
+
+    // Outer 12 Tenma rune diamonds
+    const rx = cx + cos * 93;
+    const ry = cy + sin * 93;
+    c2d.fillStyle = i % 2 === 0 ? 'rgba(56, 189, 248, 0.88)' : 'rgba(250, 204, 21, 0.82)';
+    c2d.beginPath();
+    c2d.arc(rx, ry, 4.5, 0, Math.PI * 2);
+    c2d.fill();
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  return tex;
+}
+
 // 12 Tenma Altars along the switchback mountain trail and side valleys
 // (3 each of 'hail', 'avalanche', 'fog', 'lightning')
 const TENMA_ALTAR_DEFS = [
@@ -147,6 +275,8 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   // Track resources for clean disposal
   const geometries = [];
   const materials = [];
+  const textures = [];
+  const instancedMeshes = [];
   const trackGeo = (g) => {
     geometries.push(g);
     return g;
@@ -155,9 +285,24 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
     materials.push(m);
     return m;
   };
+  const trackTex = (t) => {
+    if (t) textures.push(t);
+    return t;
+  };
+  const trackInst = (im) => {
+    if (im) instancedMeshes.push(im);
+    return im;
+  };
+
+  // Helper for switchback trail center X at local Z
+  function getTrailCenterX(lz) {
+    if (lz > 40) return smoothstep(85, 45, lz) * 8;
+    if (lz > -45) return Math.sin(lz * 0.14) * 14;
+    return 0;
+  }
 
   // ==========================================================================
-  // 1. Terrain Mesh with South-to-North Biome Vertex Colors
+  // 1. Terrain Mesh with South-to-North Biome Vertex Colors & Bump Relief
   // ==========================================================================
   const terrainSize = 240;
   const terrainSegs = 96;
@@ -169,6 +314,7 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   const posAttr = terrainGeo.attributes.position;
   const colorArr = new Float32Array(posAttr.count * 3);
   const cForest = new THREE.Color(0x2f4f38); // Kyirong conifer valley moss
+  const cStreamBank = new THREE.Color(0x3b5249); // Damp pebble & moss bank
   const cTrail = new THREE.Color(0x6e685f);  // Switchback stone path
   const cSlate = new THREE.Color(0x566370);  // Mountain slate rock
   const cSnow = new THREE.Color(0xe6f0fa);   // High alpine snow
@@ -186,22 +332,26 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
     tmpColor.copy(cForest).lerp(cSlate, smoothstep(55, 5, lz));
     tmpColor.lerp(cSnow, snowBlend);
 
+    // Damp river pebble tint along the Kyirong stream bed
+    if (lz > 58 && lz < 75) {
+      const streamZ = 67 + Math.sin(lx * 0.08) * 2.5;
+      const ds = Math.abs(lz - streamZ);
+      if (ds < 5.0) {
+        tmpColor.lerp(cStreamBank, (1 - ds / 5.0) * 0.55);
+      }
+    }
+
     // Switchback trail ribbon: x oscillates with sin(lz) between lz = 45 and lz = -55
-    const trailCenterX =
-      lz > 40
-        ? smoothstep(85, 45, lz) * 8
-        : lz > -45
-          ? Math.sin(lz * 0.14) * 14
-          : 0;
+    const trailCenterX = getTrailCenterX(lz);
     const distToTrail = Math.abs(lx - trailCenterX);
     if (distToTrail < 3.4 && lz > -65 && lz < 88) {
       const trailMix = (1 - distToTrail / 3.4) * 0.65;
       tmpColor.lerp(cTrail, trailMix);
     }
 
-    // Glacier tint on northern flanks
-    if (lz < -25 && Math.abs(lx) > 22) {
-      const gMix = smoothstep(22, 42, Math.abs(lx)) * smoothstep(-20, -45, lz);
+    // Glacier tint on northern and upper valley flanks
+    if (lz < 5 && Math.abs(lx) > 22) {
+      const gMix = smoothstep(22, 42, Math.abs(lx)) * smoothstep(5, -45, lz);
       tmpColor.lerp(cGlacier, gMix * 0.75);
     }
 
@@ -212,12 +362,15 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   terrainGeo.setAttribute('color', new THREE.BufferAttribute(colorArr, 3));
   terrainGeo.computeVertexNormals();
 
+  const terrainDetailTex = trackTex(createMangyulTerrainTexture());
   const terrainMat = trackMat(
     new THREE.MeshStandardMaterial({
       vertexColors: true,
-      roughness: 0.88,
+      map: terrainDetailTex,
+      bumpMap: terrainDetailTex,
+      bumpScale: 0.07,
+      roughness: 0.86,
       metalness: 0.05,
-      flatShading: true,
     })
   );
   const terrainMesh = new THREE.Mesh(terrainGeo, terrainMat);
@@ -225,7 +378,7 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   root.add(terrainMesh);
 
   // ==========================================================================
-  // 2. Southern Kyirong Valley: Stream, Bridge, Waypoint & Conifer Forest
+  // 2. Southern Kyirong Valley: Stream, Bridge, Waypoint, Trail & Conifer Forest
   // ==========================================================================
   const streamGeo = trackGeo(new THREE.PlaneGeometry(90, 4.2, 24, 2));
   streamGeo.rotateX(-Math.PI / 2);
@@ -251,24 +404,145 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   const streamMesh = new THREE.Mesh(streamGeo, streamMat);
   root.add(streamMesh);
 
-  // Wooden footbridge over the Kyirong stream at (0, 67)
+  // Whitewater foam ripples along the Kyirong stream bed (InstancedMesh, 0 colliders)
+  const FOAM_COUNT = 28;
+  const foamGeo = trackGeo(new THREE.RingGeometry(0.22, 0.56, 12));
+  foamGeo.rotateX(-Math.PI / 2);
+  const foamMat = trackMat(
+    new THREE.MeshBasicMaterial({
+      color: 0xe0f2fe,
+      transparent: true,
+      opacity: 0.48,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    })
+  );
+  const foamInst = trackInst(new THREE.InstancedMesh(foamGeo, foamMat, FOAM_COUNT));
+  const dummy = new THREE.Object3D();
+  for (let i = 0; i < FOAM_COUNT; i++) {
+    const fx = -40 + (i / (FOAM_COUNT - 1)) * 80;
+    const fz = 67 + Math.sin(fx * 0.08) * 2.5 + Math.cos(i * 1.9) * 0.75;
+    const fy = mangyulHeightFn(ORIGIN_X + fx, fz) + 0.14;
+    dummy.position.set(fx, fy, fz);
+    dummy.rotation.set(0, i * 0.7, 0);
+    dummy.scale.set(1.3 + (i % 3) * 0.35, 1, 0.7 + (i % 2) * 0.25);
+    dummy.updateMatrix();
+    foamInst.setMatrixAt(i, dummy.matrix);
+  }
+  foamInst.instanceMatrix.needsUpdate = true;
+  root.add(foamInst);
+
+  // Wooden footbridge over the Kyirong stream at (0, 67) with stone abutments & rope rails
   const woodMat = trackMat(
     new THREE.MeshStandardMaterial({ color: 0x6b4423, roughness: 0.85, flatShading: true })
+  );
+  const bridgeStoneMat = trackMat(
+    new THREE.MeshStandardMaterial({ color: 0x52606d, roughness: 0.88, flatShading: true })
+  );
+  const bridgeRopeMat = trackMat(
+    new THREE.MeshStandardMaterial({ color: 0xb49264, roughness: 0.92, flatShading: true })
+  );
+  const brassCapMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      color: 0xd97706,
+      emissive: 0x78350f,
+      emissiveIntensity: 0.25,
+      roughness: 0.45,
+      metalness: 0.4,
+      flatShading: true,
+    })
   );
   const bridgeGroup = new THREE.Group();
   const bridgeY = mangyulHeightFn(ORIGIN_X, 67) + 0.28;
   bridgeGroup.position.set(0, bridgeY, 67);
   const deck = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(3.8, 0.22, 6.2)), woodMat);
   bridgeGroup.add(deck);
+
+  // Stone bridge abutments at north & south banks
+  const abutmentGeo = trackGeo(new THREE.BoxGeometry(4.3, 0.65, 0.85));
+  for (const az of [-3.05, 3.05]) {
+    const abutment = new THREE.Mesh(abutmentGeo, bridgeStoneMat);
+    abutment.position.set(0, -0.18, az);
+    bridgeGroup.add(abutment);
+  }
+
+  // Timber side curbs & twin rope handrails
+  const curbBeamGeo = trackGeo(new THREE.BoxGeometry(0.18, 0.18, 6.2));
+  const railRopeGeo = trackGeo(new THREE.CylinderGeometry(0.04, 0.04, 5.3, 6));
+  railRopeGeo.rotateX(Math.PI / 2);
   const postGeo = trackGeo(new THREE.CylinderGeometry(0.12, 0.14, 1.3, 6));
+  const postCapGeo = trackGeo(new THREE.OctahedronGeometry(0.15, 0));
   for (const px of [-1.75, 1.75]) {
+    const curbBeam = new THREE.Mesh(curbBeamGeo, woodMat);
+    curbBeam.position.set(px, 0.16, 0);
+    const upperRope = new THREE.Mesh(railRopeGeo, bridgeRopeMat);
+    upperRope.position.set(px, 1.05, 0);
+    const lowerRope = new THREE.Mesh(railRopeGeo, bridgeRopeMat);
+    lowerRope.position.set(px, 0.65, 0);
+    bridgeGroup.add(curbBeam, upperRope, lowerRope);
     for (const pz of [-2.6, 0, 2.6]) {
       const post = new THREE.Mesh(postGeo, woodMat);
       post.position.set(px, 0.6, pz);
-      bridgeGroup.add(post);
+      const cap = new THREE.Mesh(postCapGeo, brassCapMat);
+      cap.position.set(px, 1.32, pz);
+      bridgeGroup.add(post, cap);
     }
   }
   root.add(bridgeGroup);
+
+  // Weathered Flagstone Stepping Slabs & Switchback Retaining Curbs / Cairns (InstancedMesh, 0 colliders)
+  const FLAGSTONE_COUNT = 84;
+  const flagstoneGeo = trackGeo(new THREE.CylinderGeometry(0.85, 0.95, 0.1, 7));
+  const flagstoneMat = trackMat(
+    new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.9, flatShading: true })
+  );
+  const flagstoneInst = trackInst(
+    new THREE.InstancedMesh(flagstoneGeo, flagstoneMat, FLAGSTONE_COUNT)
+  );
+  for (let i = 0; i < FLAGSTONE_COUNT; i++) {
+    const lz = 82 - (i / (FLAGSTONE_COUNT - 1)) * 138; // lz from 82 down to -56
+    // Skip the stream crossing directly under the wooden bridge
+    const safeLz = Math.abs(lz - 67) < 3.6 ? lz + 4.2 : lz;
+    const cx = getTrailCenterX(safeLz) + Math.sin(i * 2.3) * 0.45;
+    const cy = mangyulHeightFn(ORIGIN_X + cx, safeLz);
+    dummy.position.set(cx, cy + 0.02, safeLz);
+    dummy.rotation.set(0, i * 0.85, 0);
+    dummy.scale.set(1.1 + (i % 3) * 0.2, 1, 0.78 + (i % 2) * 0.18);
+    dummy.updateMatrix();
+    flagstoneInst.setMatrixAt(i, dummy.matrix);
+  }
+  flagstoneInst.instanceMatrix.needsUpdate = true;
+  root.add(flagstoneInst);
+
+  // Trailside stacked mini mani cairns flanking the switchback bends (0 colliders)
+  const TRAIL_CAIRN_COUNT = 28;
+  const trailCairnBaseGeo = trackGeo(new THREE.CylinderGeometry(0.28, 0.42, 0.48, 6));
+  const trailCairnTopGeo = trackGeo(new THREE.DodecahedronGeometry(0.22, 0));
+  const trailCairnBaseInst = trackInst(
+    new THREE.InstancedMesh(trailCairnBaseGeo, bridgeStoneMat, TRAIL_CAIRN_COUNT)
+  );
+  const trailCairnTopInst = trackInst(
+    new THREE.InstancedMesh(trailCairnTopGeo, flagstoneMat, TRAIL_CAIRN_COUNT)
+  );
+  for (let i = 0; i < TRAIL_CAIRN_COUNT; i++) {
+    const lz = 58 - (i / (TRAIL_CAIRN_COUNT - 1)) * 110;
+    const side = i % 2 === 0 ? -1 : 1;
+    const cx = getTrailCenterX(lz) + side * (3.8 + (i % 3) * 0.45);
+    const cy = mangyulHeightFn(ORIGIN_X + cx, lz);
+    dummy.position.set(cx, cy + 0.22, lz);
+    dummy.rotation.set(0, i * 0.6, 0);
+    dummy.scale.setScalar(0.9 + (i % 3) * 0.12);
+    dummy.updateMatrix();
+    trailCairnBaseInst.setMatrixAt(i, dummy.matrix);
+
+    dummy.position.set(cx, cy + 0.54, lz);
+    dummy.rotation.set(i * 0.3, i * 0.8, 0);
+    dummy.updateMatrix();
+    trailCairnTopInst.setMatrixAt(i, dummy.matrix);
+  }
+  trailCairnBaseInst.instanceMatrix.needsUpdate = true;
+  trailCairnTopInst.instanceMatrix.needsUpdate = true;
+  root.add(trailCairnBaseInst, trailCairnTopInst);
 
   // Southern Entrance Waypoint Shrine at (3000, 85) -> local (0, 85)
   const waypointGlowMat = trackMat(
@@ -286,13 +560,18 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
     trackMat(new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.8, flatShading: true }))
   );
   wpBase.position.y = 0.22;
+  const wpLotusRing = new THREE.Mesh(
+    trackGeo(new THREE.CylinderGeometry(0.95, 1.15, 0.24, 8)),
+    brassCapMat
+  );
+  wpLotusRing.position.y = 0.52;
   const wpPillar = new THREE.Mesh(
     trackGeo(new THREE.OctahedronGeometry(0.55, 0)),
     waypointGlowMat
   );
   wpPillar.scale.set(0.7, 1.6, 0.7);
-  wpPillar.position.y = 1.25;
-  wpGroup.add(wpBase, wpPillar);
+  wpPillar.position.y = 1.35;
+  wpGroup.add(wpBase, wpLotusRing, wpPillar);
   root.add(wpGroup);
 
   // InstancedMesh Conifer Pines in Southern Valley & Lower Trail (72 trees = 3 draw calls)
@@ -310,14 +589,15 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
     new THREE.MeshStandardMaterial({ color: 0x4b7265, roughness: 0.75, flatShading: true })
   );
 
-  const trunkInst = new THREE.InstancedMesh(trunkGeo, trunkMat, PINE_COUNT);
-  const foliageLowInst = new THREE.InstancedMesh(foliageGeo1, foliageMat, PINE_COUNT);
-  const foliageHighInst = new THREE.InstancedMesh(foliageGeo2, snowFoliageMat, PINE_COUNT);
+  const trunkInst = trackInst(new THREE.InstancedMesh(trunkGeo, trunkMat, PINE_COUNT));
+  const foliageLowInst = trackInst(new THREE.InstancedMesh(foliageGeo1, foliageMat, PINE_COUNT));
+  const foliageHighInst = trackInst(
+    new THREE.InstancedMesh(foliageGeo2, snowFoliageMat, PINE_COUNT)
+  );
   trunkInst.castShadow = true;
   foliageLowInst.castShadow = true;
   foliageHighInst.castShadow = true;
 
-  const dummy = new THREE.Object3D();
   let pineIdx = 0;
   for (let i = 0; i < PINE_COUNT; i++) {
     // Place mostly in south (lz 15..95), avoiding entrance, camp, and central trail
@@ -356,6 +636,52 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   foliageHighInst.instanceMatrix.needsUpdate = true;
   root.add(trunkInst, foliageLowInst, foliageHighInst);
 
+  // Alpine Understory Flora: Frost-Dusted Juniper Shrubs & Ferns in Southern Valley (InstancedMesh, 0 colliders)
+  const JUNIPER_COUNT = 56;
+  const juniperGeo = trackGeo(new THREE.DodecahedronGeometry(0.68, 1));
+  const juniperMat = trackMat(
+    new THREE.MeshStandardMaterial({ color: 0x285442, roughness: 0.85, flatShading: true })
+  );
+  const juniperInst = trackInst(new THREE.InstancedMesh(juniperGeo, juniperMat, JUNIPER_COUNT));
+  for (let i = 0; i < JUNIPER_COUNT; i++) {
+    const side = i % 2 === 0 ? -1 : 1;
+    let lx = side * (9 + ((i * 13) % 36)) + Math.cos(i * 1.9) * 3;
+    const lz = 8 + (i / JUNIPER_COUNT) * 84;
+    if (Math.hypot(lx - 10, lz - 50) < 11) lx += side * 11;
+    const jy = mangyulHeightFn(ORIGIN_X + lx, lz);
+    const sx = 0.75 + (i % 4) * 0.22;
+    const sy = 0.42 + (i % 3) * 0.14;
+    dummy.position.set(lx, jy + sy * 0.45, lz);
+    dummy.rotation.set(0, i * 0.9, 0);
+    dummy.scale.set(sx, sy, sx);
+    dummy.updateMatrix();
+    juniperInst.setMatrixAt(i, dummy.matrix);
+  }
+  juniperInst.instanceMatrix.needsUpdate = true;
+  root.add(juniperInst);
+
+  const FERN_COUNT = 60;
+  const fernGeo = trackGeo(new THREE.ConeGeometry(0.55, 0.62, 5));
+  const fernMat = trackMat(
+    new THREE.MeshStandardMaterial({ color: 0x2d6a4f, roughness: 0.8, flatShading: true })
+  );
+  const fernInst = trackInst(new THREE.InstancedMesh(fernGeo, fernMat, FERN_COUNT));
+  for (let i = 0; i < FERN_COUNT; i++) {
+    const side = i % 2 === 0 ? 1 : -1;
+    let lx = side * (7 + ((i * 19) % 34)) + Math.sin(i * 2.7) * 2.5;
+    const lz = 18 + (i / FERN_COUNT) * 74;
+    if (Math.hypot(lx - 10, lz - 50) < 10) lx += side * 10;
+    const fy = mangyulHeightFn(ORIGIN_X + lx, lz);
+    const s = 0.7 + (i % 4) * 0.18;
+    dummy.position.set(lx, fy + 0.25 * s, lz);
+    dummy.rotation.set(0.08, i * 1.3, -0.06);
+    dummy.scale.set(s * 1.2, s * 0.85, s * 1.2);
+    dummy.updateMatrix();
+    fernInst.setMatrixAt(i, dummy.matrix);
+  }
+  fernInst.instanceMatrix.needsUpdate = true;
+  root.add(fernInst);
+
   // ==========================================================================
   // 3. Envoy Camp at (3010, 50) -> local (10, 50): Tents, Horses, Emissive Campfire
   // ==========================================================================
@@ -378,14 +704,23 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
       flatShading: true,
     })
   );
+  const yakSkirtMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      color: 0x292524,
+      roughness: 0.92,
+      flatShading: true,
+    })
+  );
 
-  // Two Tibetan envoy tents
+  // Two Tibetan envoy tents with yak-hair lower skirts, golden finials & entrance canopies
   const tentPositions = [
     { x: -4.2, z: -2.8, rot: 0.4 },
     { x: 4.5, z: -2.2, rot: -0.45 },
   ];
   const tentConeGeo = trackGeo(new THREE.ConeGeometry(2.3, 2.6, 6));
   const tentRoofTrimGeo = trackGeo(new THREE.CylinderGeometry(0.4, 2.35, 0.35, 6));
+  const tentSkirtGeo = trackGeo(new THREE.CylinderGeometry(2.26, 2.42, 0.48, 6));
+  const tentCanopyGeo = trackGeo(new THREE.BoxGeometry(1.15, 0.08, 0.95));
   for (const tp of tentPositions) {
     const tGrp = new THREE.Group();
     tGrp.position.set(tp.x, 0, tp.z);
@@ -395,9 +730,31 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
     cone.castShadow = true;
     const trim = new THREE.Mesh(tentRoofTrimGeo, tentTrimMat);
     trim.position.y = 0.35;
-    tGrp.add(cone, trim);
+    const skirt = new THREE.Mesh(tentSkirtGeo, yakSkirtMat);
+    skirt.position.y = 0.24;
+    const finial = new THREE.Mesh(postCapGeo, brassCapMat);
+    finial.position.y = 2.68;
+    const canopy = new THREE.Mesh(tentCanopyGeo, tentTrimMat);
+    canopy.position.set(0, 1.38, 1.85);
+    canopy.rotation.x = 0.22;
+    tGrp.add(cone, trim, skirt, finial, canopy);
     campGroup.add(tGrp);
     base.addCollider({ x: ORIGIN_X + 10 + tp.x, z: 50 + tp.z, r: 2.0 });
+  }
+
+  // Envoy supply crates & tea barrels near the tents (0 colliders)
+  const crateGeo = trackGeo(new THREE.BoxGeometry(0.76, 0.52, 0.56));
+  const barrelGeo = trackGeo(new THREE.CylinderGeometry(0.26, 0.28, 0.66, 8));
+  for (const [cx, cz, crot] of [
+    [-1.5, -3.2, 0.25],
+    [1.6, -2.9, -0.35],
+  ]) {
+    const crate = new THREE.Mesh(crateGeo, woodMat);
+    crate.position.set(cx, 0.26, cz);
+    crate.rotation.y = crot;
+    const barrel = new THREE.Mesh(barrelGeo, bridgeRopeMat);
+    barrel.position.set(cx + 0.62, 0.33, cz + 0.18);
+    campGroup.add(crate, barrel);
   }
 
   // Two pack horses at the Envoy Camp
@@ -438,7 +795,7 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
     campGroup.add(hGrp);
   }
 
-  // Emissive Campfire (ZERO PointLights — emissive flame cones + glowing ground disc)
+  // Emissive Campfire (ZERO PointLights — emissive flame cones + glowing ground disc + tripod kettle)
   const campfireGroup = new THREE.Group();
   campfireGroup.position.set(0, 0, 1.2);
   campGroup.add(campfireGroup);
@@ -484,6 +841,26 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
     st.position.set(Math.cos(ang) * 0.65, 0.1, Math.sin(ang) * 0.65);
     campfireGroup.add(st);
   }
+  // Crossed firewood logs & cooking tripod over campfire
+  const fireLogGeo = trackGeo(new THREE.CylinderGeometry(0.08, 0.09, 1.05, 6));
+  for (let i = 0; i < 3; i++) {
+    const logMesh = new THREE.Mesh(fireLogGeo, trunkMat);
+    logMesh.position.y = 0.12;
+    logMesh.rotation.set(Math.PI / 2, (i / 3) * Math.PI, 0);
+    campfireGroup.add(logMesh);
+  }
+  const tripodLegGeo = trackGeo(new THREE.CylinderGeometry(0.03, 0.04, 1.45, 5));
+  for (let i = 0; i < 3; i++) {
+    const ang = (i / 3) * Math.PI * 2;
+    const leg = new THREE.Mesh(tripodLegGeo, woodMat);
+    leg.position.set(Math.cos(ang) * 0.42, 0.62, Math.sin(ang) * 0.42);
+    leg.rotation.set(-Math.sin(ang) * 0.35, 0, Math.cos(ang) * 0.35);
+    campfireGroup.add(leg);
+  }
+  const kettleMesh = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.2, 8, 6)), brassCapMat);
+  kettleMesh.position.y = 0.82;
+  campfireGroup.add(kettleMesh);
+
   const emberCore = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.38, 8, 6)), emberMat);
   emberCore.scale.set(1, 0.45, 1);
   emberCore.position.y = 0.12;
@@ -497,14 +874,14 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   campfireGroup.add(emberCore, flameOuter, flameInner, fireGlowDisc);
 
   // ==========================================================================
-  // 4. Instanced Rocks, Boulders & Northern Glaciers
+  // 4. Instanced Rocks, Boulders, Snowdrifts & Glacial Ice Curtains
   // ==========================================================================
   const ROCK_COUNT = 84;
   const rockGeo = trackGeo(new THREE.DodecahedronGeometry(1.0, 0));
   const rockMat = trackMat(
     new THREE.MeshStandardMaterial({ color: 0x52606d, roughness: 0.88, flatShading: true })
   );
-  const rockInst = new THREE.InstancedMesh(rockGeo, rockMat, ROCK_COUNT);
+  const rockInst = trackInst(new THREE.InstancedMesh(rockGeo, rockMat, ROCK_COUNT));
   rockInst.castShadow = true;
   for (let i = 0; i < ROCK_COUNT; i++) {
     const side = i % 2 === 0 ? -1 : 1;
@@ -523,12 +900,12 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   rockInst.instanceMatrix.needsUpdate = true;
   root.add(rockInst);
 
-  // East & West Glaciers in the Northern Pass (z < -30)
+  // East & West Glaciers in the Northern Pass & Upper Valley Flanks
   const glacierMat = trackMat(
     new THREE.MeshStandardMaterial({
       color: 0x99dcff,
-      emissive: 0x164e63,
-      emissiveIntensity: 0.35,
+      emissive: 0x0ea5e9,
+      emissiveIntensity: 0.28,
       roughness: 0.18,
       metalness: 0.25,
       transparent: true,
@@ -536,13 +913,15 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
       flatShading: true,
     })
   );
-  const GLACIER_SPIRE_COUNT = 36;
-  const glacierGeo = trackGeo(new THREE.ConeGeometry(2.6, 9.5, 5));
-  const glacierInst = new THREE.InstancedMesh(glacierGeo, glacierMat, GLACIER_SPIRE_COUNT);
+  const GLACIER_SPIRE_COUNT = 48;
+  const glacierGeo = trackGeo(new THREE.ConeGeometry(2.6, 9.8, 6));
+  const glacierInst = trackInst(
+    new THREE.InstancedMesh(glacierGeo, glacierMat, GLACIER_SPIRE_COUNT)
+  );
   for (let i = 0; i < GLACIER_SPIRE_COUNT; i++) {
     const side = i % 2 === 0 ? -1 : 1;
-    const lx = side * (26 + ((i * 11) % 28));
-    const lz = -34 - ((i * 17) % 58);
+    const lx = side * (26 + ((i * 11) % 30));
+    const lz = -10 - ((i * 17) % 82);
     const gy = mangyulHeightFn(ORIGIN_X + lx, lz);
     const s = 0.75 + ((i * 7) % 9) * 0.16;
     dummy.position.set(lx, gy + 3.8 * s, lz);
@@ -558,6 +937,55 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   glacierInst.instanceMatrix.needsUpdate = true;
   root.add(glacierInst);
 
+  // Frozen Waterfall Ice Curtains along the East/West Valley Cliffs (InstancedMesh, 0 colliders)
+  const ICE_CURTAIN_COUNT = 36;
+  const iceCurtainGeo = trackGeo(new THREE.CylinderGeometry(0.75, 1.45, 6.8, 6));
+  const iceCurtainInst = trackInst(
+    new THREE.InstancedMesh(iceCurtainGeo, glacierMat, ICE_CURTAIN_COUNT)
+  );
+  for (let i = 0; i < ICE_CURTAIN_COUNT; i++) {
+    const side = i % 2 === 0 ? -1 : 1;
+    const lx = side * (28 + ((i * 13) % 24));
+    const lz = 18 - (i / ICE_CURTAIN_COUNT) * 105;
+    const gy = mangyulHeightFn(ORIGIN_X + lx, lz);
+    const s = 0.8 + (i % 4) * 0.22;
+    dummy.position.set(lx, gy + 2.6 * s, lz);
+    dummy.rotation.set(0, i * 0.5, side * 0.12);
+    dummy.scale.set(s * 0.85, s * 1.25, s * 0.85);
+    dummy.updateMatrix();
+    iceCurtainInst.setMatrixAt(i, dummy.matrix);
+  }
+  iceCurtainInst.instanceMatrix.needsUpdate = true;
+  root.add(iceCurtainInst);
+
+  // Wind-Sculpted Snowdrifts along Upper Trail & Northern Pass (InstancedMesh, 0 colliders)
+  const SNOWDRIFT_COUNT = 44;
+  const snowdriftGeo = trackGeo(new THREE.SphereGeometry(1.4, 8, 6));
+  const snowdriftMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      color: 0xeff6ff,
+      emissive: 0x1e3a8a,
+      emissiveIntensity: 0.12,
+      roughness: 0.72,
+    })
+  );
+  const snowdriftInst = trackInst(
+    new THREE.InstancedMesh(snowdriftGeo, snowdriftMat, SNOWDRIFT_COUNT)
+  );
+  for (let i = 0; i < SNOWDRIFT_COUNT; i++) {
+    const side = i % 2 === 0 ? -1 : 1;
+    const lz = 12 - (i / SNOWDRIFT_COUNT) * 98;
+    const lx = side * (19 + ((i * 9) % 24)) + Math.sin(i * 1.7) * 3;
+    const sy = mangyulHeightFn(ORIGIN_X + lx, lz);
+    dummy.position.set(lx, sy + 0.15, lz);
+    dummy.rotation.set(0, (i * 0.4) % Math.PI, 0);
+    dummy.scale.set(1.8 + (i % 3) * 0.4, 0.28 + (i % 2) * 0.1, 0.95 + (i % 3) * 0.25);
+    dummy.updateMatrix();
+    snowdriftInst.setMatrixAt(i, dummy.matrix);
+  }
+  snowdriftInst.instanceMatrix.needsUpdate = true;
+  root.add(snowdriftInst);
+
   // ==========================================================================
   // 5. Pass Latse (山口拉則) + Boss Arena at (3000, -65), r = 18
   // ==========================================================================
@@ -566,21 +994,91 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   latseGroup.position.set(0, passY, -65);
   root.add(latseGroup);
 
-  // Arena perimeter stone ring markers (radius 18m)
+  // Twelve Tenma Wind-Mandala Floor Emblem (r = 15.5m)
+  const arenaMandalaTex = trackTex(createTenmaArenaMandalaTexture());
+  const arenaMandalaGeo = trackGeo(new THREE.CircleGeometry(15.5, 48));
+  arenaMandalaGeo.rotateX(-Math.PI / 2);
+  const arenaMandalaMat = trackMat(
+    new THREE.MeshBasicMaterial({
+      color: 0xbae6fd,
+      map: arenaMandalaTex,
+      transparent: true,
+      opacity: arenaMandalaTex ? 0.82 : 0.18,
+      depthWrite: false,
+    })
+  );
+  const arenaMandalaMesh = new THREE.Mesh(arenaMandalaGeo, arenaMandalaMat);
+  arenaMandalaMesh.position.y = 0.04;
+  latseGroup.add(arenaMandalaMesh);
+
+  // Arena perimeter stone ring markers (radius 18m & inner 15.5m ring)
   const arenaRingGeo = trackGeo(new THREE.RingGeometry(17.6, 18.1, 48));
   arenaRingGeo.rotateX(-Math.PI / 2);
+  const arenaInnerRingGeo = trackGeo(new THREE.RingGeometry(15.2, 15.6, 48));
+  arenaInnerRingGeo.rotateX(-Math.PI / 2);
   const arenaRingMat = trackMat(
     new THREE.MeshBasicMaterial({
       color: 0x7dd3fc,
       transparent: true,
-      opacity: 0.26,
+      opacity: 0.34,
       side: THREE.DoubleSide,
       depthWrite: false,
     })
   );
   const arenaRingMesh = new THREE.Mesh(arenaRingGeo, arenaRingMat);
   arenaRingMesh.position.y = 0.06;
-  latseGroup.add(arenaRingMesh);
+  const arenaInnerRingMesh = new THREE.Mesh(arenaInnerRingGeo, arenaRingMat);
+  arenaInnerRingMesh.position.y = 0.05;
+  latseGroup.add(arenaRingMesh, arenaInnerRingMesh);
+
+  // Perimeter Ring of 12 Ancient Tenma Guardian Monoliths (r = 18.8m, 0 colliders)
+  const MONOLITH_COUNT = 12;
+  const monolithBaseGeo = trackGeo(new THREE.CylinderGeometry(0.68, 0.85, 0.48, 6));
+  const monolithShaftGeo = trackGeo(new THREE.BoxGeometry(0.58, 2.65, 0.58));
+  const monolithCrystalGeo = trackGeo(new THREE.OctahedronGeometry(0.32, 0));
+  const monolithCrystalMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      color: 0x38bdf8,
+      emissive: 0x0ea5e9,
+      emissiveIntensity: 0.95,
+      roughness: 0.2,
+      flatShading: true,
+    })
+  );
+  const monolithBaseInst = trackInst(
+    new THREE.InstancedMesh(monolithBaseGeo, bridgeStoneMat, MONOLITH_COUNT)
+  );
+  const monolithShaftInst = trackInst(
+    new THREE.InstancedMesh(monolithShaftGeo, flagstoneMat, MONOLITH_COUNT)
+  );
+  const monolithCrystalInst = trackInst(
+    new THREE.InstancedMesh(monolithCrystalGeo, monolithCrystalMat, MONOLITH_COUNT)
+  );
+  for (let i = 0; i < MONOLITH_COUNT; i++) {
+    // Offset by half-step so the southern approach at angle = PI/2 is wide open
+    const ang = ((i + 0.5) / MONOLITH_COUNT) * Math.PI * 2;
+    const mx = Math.cos(ang) * 18.8;
+    const mz = Math.sin(ang) * 18.8;
+    dummy.position.set(mx, 0.24, mz);
+    dummy.rotation.set(0, -ang, 0);
+    dummy.scale.setScalar(1);
+    dummy.updateMatrix();
+    monolithBaseInst.setMatrixAt(i, dummy.matrix);
+
+    dummy.position.set(mx, 1.65, mz);
+    dummy.rotation.set(0, -ang + Math.PI / 4, 0);
+    dummy.updateMatrix();
+    monolithShaftInst.setMatrixAt(i, dummy.matrix);
+
+    dummy.position.set(mx, 3.28, mz);
+    dummy.rotation.set(0, ang * 2, 0);
+    dummy.updateMatrix();
+    monolithCrystalInst.setMatrixAt(i, dummy.matrix);
+  }
+  monolithBaseInst.instanceMatrix.needsUpdate = true;
+  monolithShaftInst.instanceMatrix.needsUpdate = true;
+  monolithCrystalInst.instanceMatrix.needsUpdate = true;
+  latseGroup.add(monolithBaseInst, monolithShaftInst, monolithCrystalInst);
 
   // Monumental Latse Cairn (placed at northern rim of the arena z = -72 so center is open for combat,
   // while still inside the pass plaza!)
@@ -588,6 +1086,14 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   cairnCenter.position.set(0, 0, -6.5);
   latseGroup.add(cairnCenter);
   base.addCollider({ x: ORIGIN_X, z: -71.5, r: 2.8 });
+
+  // Carved octagonal stone pedestal beneath the Latse cairn
+  const cairnPlinth = new THREE.Mesh(
+    trackGeo(new THREE.CylinderGeometry(2.55, 2.85, 0.42, 8)),
+    bridgeStoneMat
+  );
+  cairnPlinth.position.y = 0.21;
+  cairnCenter.add(cairnPlinth);
 
   // Instanced stacked white quartz & slate stones for the Latse (64 stones = 1 draw call)
   const LATSE_STONE_COUNT = 64;
@@ -601,7 +1107,9 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
       flatShading: true,
     })
   );
-  const latseStoneInst = new THREE.InstancedMesh(latseStoneGeo, latseStoneMat, LATSE_STONE_COUNT);
+  const latseStoneInst = trackInst(
+    new THREE.InstancedMesh(latseStoneGeo, latseStoneMat, LATSE_STONE_COUNT)
+  );
   for (let i = 0; i < LATSE_STONE_COUNT; i++) {
     const tier = Math.floor(i / 16); // 4 tiers
     const idxInTier = i % 16;
@@ -617,13 +1125,24 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   latseStoneInst.instanceMatrix.needsUpdate = true;
   cairnCenter.add(latseStoneInst);
 
-  // Central wooden arrows / spears ("Dadar") crowning the Latse
+  // Central wooden arrows / spears ("Dadar") crowning the Latse with golden finial & turquoise ring
   const spirePole = new THREE.Mesh(
     trackGeo(new THREE.CylinderGeometry(0.1, 0.16, 4.8, 6)),
     woodMat
   );
   spirePole.position.y = 2.6;
-  cairnCenter.add(spirePole);
+  const spireCrown = new THREE.Mesh(
+    trackGeo(new THREE.ConeGeometry(0.28, 0.65, 6)),
+    brassCapMat
+  );
+  spireCrown.position.y = 5.15;
+  const spireTurquoiseRing = new THREE.Mesh(
+    trackGeo(new THREE.TorusGeometry(0.42, 0.055, 6, 16)),
+    monolithCrystalMat
+  );
+  spireTurquoiseRing.rotation.x = Math.PI / 2;
+  spireTurquoiseRing.position.y = 4.45;
+  cairnCenter.add(spirePole, spireCrown, spireTurquoiseRing);
 
   // Prayer flag arrays radiating from the Latse cairn
   const animatedFlags = [];
@@ -698,8 +1217,27 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
     })
   );
 
+  // Per-element crystal & rune materials for the 4 Tenma trial types
+  const elementCrystalMats = {};
+  for (const [elType, elCols] of Object.entries(TENMA_ELEMENT_COLORS)) {
+    elementCrystalMats[elType] = trackMat(
+      new THREE.MeshStandardMaterial({
+        color: elCols.color,
+        emissive: elCols.emissive,
+        emissiveIntensity: 0.65,
+        roughness: 0.25,
+        flatShading: true,
+      })
+    );
+  }
+
   const altarBaseGeo = trackGeo(new THREE.CylinderGeometry(1.15, 1.35, 0.55, 7));
+  const altarMandalaPlinthGeo = trackGeo(new THREE.CylinderGeometry(1.65, 1.82, 0.12, 12));
+  const altarRuneRingGeo = trackGeo(new THREE.RingGeometry(1.38, 1.56, 24));
+  altarRuneRingGeo.rotateX(-Math.PI / 2);
   const altarTableGeo = trackGeo(new THREE.BoxGeometry(1.2, 0.38, 0.9));
+  const altarManiSlateGeo = trackGeo(new THREE.BoxGeometry(0.46, 0.08, 0.3));
+  const altarCrystalInlayGeo = trackGeo(new THREE.OctahedronGeometry(0.16, 0));
   const oathStoneGeo = trackGeo(new THREE.OctahedronGeometry(0.28, 0));
   const altarPoleGeo = trackGeo(new THREE.CylinderGeometry(0.06, 0.08, 2.7, 5));
 
@@ -724,6 +1262,25 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
     const poleR = new THREE.Mesh(altarPoleGeo, woodMat);
     poleR.position.set(1.15, 1.35, -0.35);
     aGrp.add(poleL, poleR);
+
+    // Carved mandala plinth, elemental rune ring, crystal inlays & stacked mani slates
+    // (added directly as Meshes with non-PlaneGeometry so every child has .geometry and PlaneGeometry count stays 5)
+    const elMat = elementCrystalMats[def.type] || oathStoneMat;
+    const mandalaPlinth = new THREE.Mesh(altarMandalaPlinthGeo, bridgeStoneMat);
+    mandalaPlinth.position.y = 0.06;
+    const runeRing = new THREE.Mesh(altarRuneRingGeo, elMat);
+    runeRing.position.y = 0.13;
+    const maniSlate = new THREE.Mesh(altarManiSlateGeo, latseStoneMat);
+    maniSlate.position.set(0, 0.95, 0);
+    const crystalL = new THREE.Mesh(altarCrystalInlayGeo, elMat);
+    crystalL.position.set(-0.46, 1.02, 0.22);
+    const crystalR = new THREE.Mesh(altarCrystalInlayGeo, elMat);
+    crystalR.position.set(0.46, 1.02, 0.22);
+    const poleCapL = new THREE.Mesh(altarCrystalInlayGeo, elMat);
+    poleCapL.position.set(-1.15, 2.76, -0.35);
+    const poleCapR = new THREE.Mesh(altarCrystalInlayGeo, elMat);
+    poleCapR.position.set(1.15, 2.76, -0.35);
+    aGrp.add(mandalaPlinth, runeRing, maniSlate, crystalL, crystalR, poleCapL, poleCapR);
 
     // Oath stone (visible once placed)
     const oathStoneMesh = new THREE.Mesh(oathStoneGeo, oathStoneMat);
@@ -1600,6 +2157,8 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
       scene.fog.far = savedFogFar;
     }
     base.dispose();
+    for (const im of instancedMeshes) im.dispose?.();
+    for (const t of textures) t.dispose?.();
     for (const g of geometries) g.dispose?.();
     for (const m of materials) m.dispose?.();
   }
