@@ -113,7 +113,7 @@ test('cues distinguish historical context, fiction and the novel’s repair quot
   assert.match(cues[0].sourceKey, /history$/);
   assert.ok(cues.slice(1).every(cue => cue.sourceKey.endsWith('.novel')));
   assert.equal(strings.zh[cues[2].subtitleKey], '「因為我們知道它會壞，還是願意把它建好。」');
-  assert.match(strings.en[cues[3].subtitleKey], /age and origin were uncertain/);
+  assert.match(strings.en[cues[3].subtitleKey], /Tibetan script|Potowa/i);
 });
 
 test('lazy still failure leaves captions readable through pause, replay and completion', t => {
