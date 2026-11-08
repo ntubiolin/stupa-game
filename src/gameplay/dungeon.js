@@ -280,6 +280,157 @@ export function generateFloorLayout(floorSeed, floorNum = 1) {
   };
 }
 
+function mergeBufferGeometries(geometries) {
+  const nonIndexed = geometries.map((g) => (g.index ? g.toNonIndexed() : g.clone()));
+  let totalVerts = 0;
+  for (const g of nonIndexed) {
+    totalVerts += g.attributes.position.count;
+  }
+  const positions = new Float32Array(totalVerts * 3);
+  const normals = new Float32Array(totalVerts * 3);
+  const uvs = new Float32Array(totalVerts * 2);
+  let vOffset = 0;
+  for (const g of nonIndexed) {
+    const pos = g.attributes.position;
+    const norm = g.attributes.normal;
+    const uv = g.attributes.uv;
+    positions.set(pos.array, vOffset * 3);
+    if (norm) normals.set(norm.array, vOffset * 3);
+    if (uv) uvs.set(uv.array, vOffset * 2);
+    vOffset += pos.count;
+  }
+  const merged = new THREE.BufferGeometry();
+  merged.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  merged.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+  merged.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  return merged;
+}
+
+function createTibetanPillarShaftGeometry() {
+  // Spans local y in [-3.8, +3.8] (total height 7.6m)
+  const baseSlab = new THREE.BoxGeometry(1.52, 0.38, 1.52);
+  baseSlab.translate(0, -3.61, 0);
+
+  const lowerShaft = new THREE.CylinderGeometry(0.50, 0.60, 6.1, 8);
+  lowerShaft.translate(0, -0.15, 0);
+
+  const upperNeck = new THREE.CylinderGeometry(0.46, 0.50, 0.65, 8);
+  upperNeck.translate(0, 3.05, 0);
+
+  return mergeBufferGeometries([baseSlab, lowerShaft, upperNeck]);
+}
+
+function createTibetanPillarCapitalGeometry() {
+  // Stepped lotus plinth molding, shaft rings, and crossed Tibetan corbel brackets (斗拱弓木)
+  const lotusPlinth = new THREE.CylinderGeometry(0.68, 0.82, 0.30, 8);
+  lotusPlinth.translate(0, -3.26, 0);
+
+  const midBand = new THREE.CylinderGeometry(0.57, 0.57, 0.22, 8);
+  midBand.translate(0, 0.35, 0);
+
+  const neckBand = new THREE.CylinderGeometry(0.54, 0.54, 0.18, 8);
+  neckBand.translate(0, 2.25, 0);
+
+  const abacus = new THREE.CylinderGeometry(0.76, 0.52, 0.34, 8);
+  abacus.translate(0, 2.85, 0);
+
+  const corbelLowX = new THREE.BoxGeometry(1.76, 0.28, 0.68);
+  corbelLowX.translate(0, 3.22, 0);
+  const corbelLowZ = new THREE.BoxGeometry(0.68, 0.28, 1.76);
+  corbelLowZ.translate(0, 3.22, 0);
+
+  const corbelHighX = new THREE.BoxGeometry(2.36, 0.34, 0.78);
+  corbelHighX.translate(0, 3.56, 0);
+  const corbelHighZ = new THREE.BoxGeometry(0.78, 0.34, 2.36);
+  corbelHighZ.translate(0, 3.56, 0);
+
+  return mergeBufferGeometries([
+    lotusPlinth,
+    midBand,
+    neckBand,
+    abacus,
+    corbelLowX,
+    corbelLowZ,
+    corbelHighX,
+    corbelHighZ,
+  ]);
+}
+
+function createDoorwayArchFrameGeometry() {
+  // Frames a 5.8m wide, 4.35m tall doorway in local space (origin at floor center of doorway)
+  const halfGap = DOOR_WIDTH * 0.5;
+  const leftPlinth = new THREE.BoxGeometry(0.68, 0.48, 1.42);
+  leftPlinth.translate(-halfGap - 0.16, 0.24, 0);
+  const rightPlinth = new THREE.BoxGeometry(0.68, 0.48, 1.42);
+  rightPlinth.translate(halfGap + 0.16, 0.24, 0);
+
+  const leftJamb = new THREE.BoxGeometry(0.46, 3.95, 1.28);
+  leftJamb.translate(-halfGap - 0.12, 2.35, 0);
+  const rightJamb = new THREE.BoxGeometry(0.46, 3.95, 1.28);
+  rightJamb.translate(halfGap + 0.12, 2.35, 0);
+
+  const lintelBeam = new THREE.BoxGeometry(DOOR_WIDTH + 1.35, 0.42, 1.46);
+  lintelBeam.translate(0, 4.42, 0);
+
+  const upperCornice = new THREE.BoxGeometry(DOOR_WIDTH + 1.85, 0.28, 1.62);
+  upperCornice.translate(0, 4.82, 0);
+
+  const khorloCrest = new THREE.CylinderGeometry(0.68, 0.68, 1.56, 12);
+  khorloCrest.rotateX(Math.PI * 0.5);
+  khorloCrest.translate(0, 4.72, 0);
+
+  const finial = new THREE.ConeGeometry(0.32, 0.55, 8);
+  finial.translate(0, 5.58, 0);
+
+  return mergeBufferGeometries([
+    leftPlinth,
+    rightPlinth,
+    leftJamb,
+    rightJamb,
+    lintelBeam,
+    upperCornice,
+    khorloCrest,
+    finial,
+  ]);
+}
+
+function createRitualVajraColumnGeometry() {
+  // 3.4m tall ceremonial Tibetan Vajra pillar (origin at floor y = 0)
+  const basePlinth = new THREE.CylinderGeometry(0.54, 0.68, 0.42, 8);
+  basePlinth.translate(0, 0.21, 0);
+
+  const lotusSeat = new THREE.CylinderGeometry(0.58, 0.42, 0.26, 8);
+  lotusSeat.translate(0, 0.55, 0);
+
+  const shaft = new THREE.CylinderGeometry(0.24, 0.30, 1.35, 8);
+  shaft.translate(0, 1.35, 0);
+
+  const hub = new THREE.OctahedronGeometry(0.42, 1);
+  hub.translate(0, 2.22, 0);
+
+  const upperLotus = new THREE.CylinderGeometry(0.46, 0.28, 0.24, 8);
+  upperLotus.translate(0, 2.62, 0);
+
+  const centerProng = new THREE.ConeGeometry(0.18, 0.82, 6);
+  centerProng.translate(0, 3.12, 0);
+
+  const outerRing = new THREE.BoxGeometry(0.82, 0.52, 0.14);
+  outerRing.translate(0, 3.02, 0);
+  const outerRingCross = new THREE.BoxGeometry(0.14, 0.52, 0.82);
+  outerRingCross.translate(0, 3.02, 0);
+
+  return mergeBufferGeometries([
+    basePlinth,
+    lotusSeat,
+    shaft,
+    hub,
+    upperLotus,
+    centerProng,
+    outerRing,
+    outerRingCross,
+  ]);
+}
+
 function makeWallSyllableTexture() {
   if (typeof document === 'undefined') return null;
   const canvas = document.createElement('canvas');
@@ -292,6 +443,9 @@ function makeWallSyllableTexture() {
   g.strokeStyle = '#fbbf24';
   g.lineWidth = 6;
   g.strokeRect(14, 14, 228, 228);
+  g.strokeStyle = 'rgba(45, 212, 191, 0.55)';
+  g.lineWidth = 2;
+  g.strokeRect(24, 24, 208, 208);
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.shadowColor = '#2dd4bf';
@@ -337,6 +491,284 @@ function makeCavernStoneTexture() {
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(3, 3);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function makeFloorTileTextures() {
+  if (typeof document === 'undefined') return { map: null, bumpMap: null };
+  const colorCanvas = document.createElement('canvas');
+  colorCanvas.width = 512;
+  colorCanvas.height = 512;
+  const cg = colorCanvas.getContext('2d');
+
+  const bumpCanvas = document.createElement('canvas');
+  bumpCanvas.width = 512;
+  bumpCanvas.height = 512;
+  const bg = bumpCanvas.getContext('2d');
+  if (!cg || !bg) return { map: null, bumpMap: null };
+
+  cg.fillStyle = '#524c66';
+  cg.fillRect(0, 0, 512, 512);
+  bg.fillStyle = '#909090';
+  bg.fillRect(0, 0, 512, 512);
+
+  // 4x4 carved Tibetan flagstone grid with beveled mortar & corner fretwork
+  const grid = 4;
+  const step = 512 / grid;
+  for (let gz = 0; gz < grid; gz++) {
+    for (let gx = 0; gx < grid; gx++) {
+      const x0 = gx * step;
+      const y0 = gz * step;
+      const shade = ((gx * 7 + gz * 13) % 5) * 6 - 10;
+      cg.fillStyle = `rgb(${84 + shade}, ${78 + shade}, ${104 + shade})`;
+      cg.fillRect(x0 + 4, y0 + 4, step - 8, step - 8);
+
+      bg.fillStyle = '#b8b8b8';
+      bg.fillRect(x0 + 5, y0 + 5, step - 10, step - 10);
+
+      // Recessed mortar groove
+      cg.strokeStyle = 'rgba(18, 15, 28, 0.72)';
+      cg.lineWidth = 5;
+      cg.strokeRect(x0 + 2.5, y0 + 2.5, step - 5, step - 5);
+
+      bg.strokeStyle = '#303030';
+      bg.lineWidth = 6;
+      bg.strokeRect(x0 + 2.5, y0 + 2.5, step - 5, step - 5);
+
+      // Subtle inner carved border & lotus/dorje corner inlay
+      cg.strokeStyle = 'rgba(214, 180, 112, 0.28)';
+      cg.lineWidth = 2;
+      cg.strokeRect(x0 + 14, y0 + 14, step - 28, step - 28);
+
+      bg.strokeStyle = '#e0e0e0';
+      bg.lineWidth = 2;
+      bg.strokeRect(x0 + 14, y0 + 14, step - 28, step - 28);
+
+      // Center diamond/lotus relief per flagstone
+      const cx = x0 + step * 0.5;
+      const cy = y0 + step * 0.5;
+      cg.save();
+      cg.translate(cx, cy);
+      cg.rotate(Math.PI * 0.25);
+      cg.strokeStyle = 'rgba(196, 164, 104, 0.32)';
+      cg.lineWidth = 2;
+      cg.strokeRect(-16, -16, 32, 32);
+      cg.restore();
+
+      bg.save();
+      bg.translate(cx, cy);
+      bg.rotate(Math.PI * 0.25);
+      bg.strokeStyle = '#ececec';
+      bg.lineWidth = 3;
+      bg.strokeRect(-16, -16, 32, 32);
+      bg.restore();
+    }
+  }
+
+  // Outer perimeter Tibetan fretwork border band
+  cg.strokeStyle = 'rgba(234, 196, 116, 0.42)';
+  cg.lineWidth = 6;
+  cg.strokeRect(10, 10, 492, 492);
+
+  // Central grand lotus-dorje medallion at tile quad center
+  cg.save();
+  cg.translate(256, 256);
+  cg.strokeStyle = 'rgba(245, 208, 125, 0.48)';
+  cg.lineWidth = 4;
+  cg.beginPath();
+  cg.arc(0, 0, 54, 0, Math.PI * 2);
+  cg.stroke();
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    cg.beginPath();
+    cg.moveTo(Math.cos(a) * 18, Math.sin(a) * 18);
+    cg.lineTo(Math.cos(a) * 52, Math.sin(a) * 52);
+    cg.stroke();
+  }
+  cg.restore();
+
+  const map = new THREE.CanvasTexture(colorCanvas);
+  map.wrapS = THREE.RepeatWrapping;
+  map.wrapT = THREE.RepeatWrapping;
+  map.repeat.set(2, 2);
+  map.colorSpace = THREE.SRGBColorSpace;
+  map.needsUpdate = true;
+
+  const bumpMap = new THREE.CanvasTexture(bumpCanvas);
+  bumpMap.wrapS = THREE.RepeatWrapping;
+  bumpMap.wrapT = THREE.RepeatWrapping;
+  bumpMap.repeat.set(2, 2);
+  bumpMap.needsUpdate = true;
+
+  return { map, bumpMap };
+}
+
+function makeWallMasonryTextures() {
+  if (typeof document === 'undefined') return { map: null, bumpMap: null };
+  const colorCanvas = document.createElement('canvas');
+  colorCanvas.width = 512;
+  colorCanvas.height = 512;
+  const cg = colorCanvas.getContext('2d');
+
+  const bumpCanvas = document.createElement('canvas');
+  bumpCanvas.width = 512;
+  bumpCanvas.height = 512;
+  const bg = bumpCanvas.getContext('2d');
+  if (!cg || !bg) return { map: null, bumpMap: null };
+
+  cg.fillStyle = '#58526e';
+  cg.fillRect(0, 0, 512, 512);
+  bg.fillStyle = '#888888';
+  bg.fillRect(0, 0, 512, 512);
+
+  // Coursed Tibetan ashlar stone masonry (8 horizontal courses)
+  const courses = 8;
+  const rowH = 512 / courses;
+  for (let r = 0; r < courses; r++) {
+    const y0 = r * rowH;
+    const cols = r % 2 === 0 ? 4 : 5;
+    const colW = 512 / cols;
+    const offset = r % 2 === 0 ? 0 : colW * 0.5;
+    for (let c = -1; c <= cols; c++) {
+      const x0 = c * colW + offset;
+      const v = ((r * 11 + c * 7) & 7) * 4 - 12;
+      cg.fillStyle = `rgb(${90 + v}, ${84 + v}, ${112 + v})`;
+      cg.fillRect(x0 + 3, y0 + 3, colW - 6, rowH - 6);
+
+      bg.fillStyle = `rgb(${155 + v}, ${155 + v}, ${155 + v})`;
+      bg.fillRect(x0 + 4, y0 + 4, colW - 8, rowH - 8);
+
+      cg.strokeStyle = 'rgba(20, 16, 30, 0.65)';
+      cg.lineWidth = 4;
+      cg.strokeRect(x0 + 2, y0 + 2, colW - 4, rowH - 4);
+
+      bg.strokeStyle = '#2a2a2a';
+      bg.lineWidth = 5;
+      bg.strokeRect(x0 + 2, y0 + 2, colW - 4, rowH - 4);
+    }
+  }
+
+  // Traditional Tibetan Monastery Pemba Frieze Band (邊瑪腰線 + 圓鏡) near upper wall
+  const bandY = 68;
+  const bandH = 68;
+  cg.fillStyle = 'rgba(136, 36, 48, 0.82)';
+  cg.fillRect(0, bandY, 512, bandH);
+  cg.fillStyle = 'rgba(234, 179, 8, 0.78)';
+  cg.fillRect(0, bandY - 6, 512, 6);
+  cg.fillRect(0, bandY + bandH, 512, 6);
+
+  bg.fillStyle = '#d8d8d8';
+  bg.fillRect(0, bandY - 6, 512, 8);
+  bg.fillRect(0, bandY + bandH - 2, 512, 8);
+
+  // Golden Melong Mirror bosses along the frieze band
+  for (let m = 0; m < 8; m++) {
+    const mx = (m + 0.5) * (512 / 8);
+    const my = bandY + bandH * 0.5;
+    cg.fillStyle = 'rgba(253, 224, 71, 0.85)';
+    cg.beginPath();
+    cg.arc(mx, my, 15, 0, Math.PI * 2);
+    cg.fill();
+    cg.strokeStyle = 'rgba(120, 53, 15, 0.9)';
+    cg.lineWidth = 3;
+    cg.stroke();
+
+    bg.fillStyle = '#ffffff';
+    bg.beginPath();
+    bg.arc(mx, my, 15, 0, Math.PI * 2);
+    bg.fill();
+  }
+
+  const map = new THREE.CanvasTexture(colorCanvas);
+  map.wrapS = THREE.RepeatWrapping;
+  map.wrapT = THREE.RepeatWrapping;
+  map.repeat.set(2, 1);
+  map.colorSpace = THREE.SRGBColorSpace;
+  map.needsUpdate = true;
+
+  const bumpMap = new THREE.CanvasTexture(bumpCanvas);
+  bumpMap.wrapS = THREE.RepeatWrapping;
+  bumpMap.wrapT = THREE.RepeatWrapping;
+  bumpMap.repeat.set(2, 1);
+  bumpMap.needsUpdate = true;
+
+  return { map, bumpMap };
+}
+
+function makeMandalaDecalTexture() {
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const g = canvas.getContext('2d');
+  if (!g) return null;
+
+  const cx = 256;
+  const cy = 256;
+  g.clearRect(0, 0, 512, 512);
+
+  // Radial sacred background glow
+  const bgGrad = g.createRadialGradient(cx, cy, 12, cx, cy, 248);
+  bgGrad.addColorStop(0.0, 'rgba(251, 191, 36, 0.95)');
+  bgGrad.addColorStop(0.35, 'rgba(180, 83, 9, 0.85)');
+  bgGrad.addColorStop(0.68, 'rgba(15, 118, 110, 0.82)');
+  bgGrad.addColorStop(0.92, 'rgba(127, 29, 29, 0.88)');
+  bgGrad.addColorStop(1.0, 'rgba(18, 16, 28, 0.0)');
+  g.fillStyle = bgGrad;
+  g.beginPath();
+  g.arc(cx, cy, 248, 0, Math.PI * 2);
+  g.fill();
+
+  // Concentric Tibetan Mandala circles
+  const radii = [238, 216, 178, 138, 96, 54];
+  const colors = ['#fbbf24', '#2dd4bf', '#fde047', '#f87171', '#5eead4', '#fef08a'];
+  for (let i = 0; i < radii.length; i++) {
+    g.strokeStyle = colors[i];
+    g.lineWidth = i % 2 === 0 ? 5 : 3;
+    g.beginPath();
+    g.arc(cx, cy, radii[i], 0, Math.PI * 2);
+    g.stroke();
+  }
+
+  // 16 outer lotus petals
+  g.save();
+  g.translate(cx, cy);
+  for (let p = 0; p < 16; p++) {
+    const a = (p / 16) * Math.PI * 2;
+    g.save();
+    g.rotate(a);
+    g.fillStyle = p % 2 === 0 ? 'rgba(251, 191, 36, 0.65)' : 'rgba(45, 212, 191, 0.65)';
+    g.beginPath();
+    g.moveTo(0, -140);
+    g.quadraticCurveTo(22, -162, 0, -176);
+    g.quadraticCurveTo(-22, -162, 0, -140);
+    g.fill();
+    g.restore();
+  }
+
+  // Four-gated Tibetan Mandala Palace Square
+  g.strokeStyle = '#fef08a';
+  g.lineWidth = 5;
+  g.strokeRect(-102, -102, 204, 204);
+  g.strokeStyle = '#2dd4bf';
+  g.lineWidth = 3;
+  g.strokeRect(-92, -92, 184, 184);
+
+  // 8-spoked Golden Dharmachakra & Crossed Double Vajra
+  g.strokeStyle = '#fef9c3';
+  g.lineWidth = 5;
+  for (let s = 0; s < 8; s++) {
+    const a = (s / 8) * Math.PI * 2;
+    g.beginPath();
+    g.moveTo(0, 0);
+    g.lineTo(Math.cos(a) * 92, Math.sin(a) * 92);
+    g.stroke();
+  }
+  g.restore();
+
+  const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.needsUpdate = true;
   return tex;
@@ -435,32 +867,81 @@ export function createDungeon(ctx) {
   let vaultCoreMesh = null;
   let vaultRingMat = null;
   let vaultBeamMesh = null;
+  let bossMandalaOuterRing = null;
+  let bossMandalaInnerRing = null;
+  let bossAltarLotusCrown = null;
 
   // Shared Geometries & Materials for InstancedMeshes (Zero PointLights; textures built lazily on dungeon entry)
   let stoneTex = null;
+  let floorTileTex = null;
+  let floorBumpTex = null;
+  let wallStoneTex = null;
+  let wallBumpTex = null;
+  let mandalaDecalTex = null;
   let warmGlowTex = null;
   let coolGlowTex = null;
   let syllableTex = null;
 
   const floorTileGeo = new THREE.BoxGeometry(15.4, 0.45, 15.4);
   const floorTileMat = new THREE.MeshStandardMaterial({
-    color: 0x38334c,
-    roughness: 0.84,
-    metalness: 0.14,
+    color: 0x2d2842,
+    roughness: 0.78,
+    metalness: 0.18,
+    bumpScale: 0.05,
   });
 
   const wallSegGeo = new THREE.BoxGeometry(1.0, 1.0, 1.0);
   const wallSegMat = new THREE.MeshStandardMaterial({
-    color: 0x463f5e,
-    roughness: 0.82,
+    color: 0x3b3454,
+    roughness: 0.80,
     metalness: 0.16,
+    bumpScale: 0.06,
   });
 
-  const pillarGeo = new THREE.CylinderGeometry(0.54, 0.66, 7.6, 8);
+  const pillarGeo = createTibetanPillarShaftGeometry();
   const pillarMat = new THREE.MeshStandardMaterial({
-    color: 0x584f78,
-    roughness: 0.74,
-    metalness: 0.24,
+    color: 0x4c4368,
+    roughness: 0.66,
+    metalness: 0.28,
+    bumpScale: 0.04,
+  });
+
+  const pillarCapitalGeo = createTibetanPillarCapitalGeometry();
+  const pillarCapitalMat = new THREE.MeshStandardMaterial({
+    color: 0xd97706,
+    roughness: 0.32,
+    metalness: 0.76,
+    emissive: 0x78350f,
+    emissiveIntensity: 0.42,
+  });
+
+  const doorArchFrameGeo = createDoorwayArchFrameGeometry();
+  const doorArchFrameMat = new THREE.MeshStandardMaterial({
+    color: 0xb45309,
+    roughness: 0.38,
+    metalness: 0.68,
+    emissive: 0x78350f,
+    emissiveIntensity: 0.35,
+  });
+
+  const vajraColumnGeo = createRitualVajraColumnGeometry();
+  const vajraColumnMat = new THREE.MeshStandardMaterial({
+    color: 0xfbbf24,
+    roughness: 0.28,
+    metalness: 0.80,
+    emissive: 0xb45309,
+    emissiveIntensity: 0.55,
+  });
+
+  const mandalaMedallionGeo = new THREE.CylinderGeometry(3.25, 3.38, 0.08, 32);
+  const mandalaMedallionMat = new THREE.MeshStandardMaterial({
+    color: 0xfef08a,
+    roughness: 0.30,
+    metalness: 0.62,
+    emissive: 0xd97706,
+    emissiveIntensity: 0.52,
+    transparent: true,
+    opacity: 0.96,
   });
 
   // Craggy subterranean rock formations & vaulted cavern ceiling
@@ -477,6 +958,11 @@ export function createDungeon(ctx) {
     color: 0x211d30,
     roughness: 0.92,
     metalness: 0.08,
+  });
+  const ceilingArchMat = new THREE.MeshStandardMaterial({
+    color: 0x2c2640,
+    roughness: 0.78,
+    metalness: 0.22,
   });
 
   const stalactiteGeo = new THREE.ConeGeometry(0.46, 2.35, 6);
@@ -541,6 +1027,14 @@ export function createDungeon(ctx) {
   function ensureDungeonTextures() {
     if (stoneTex) return;
     stoneTex = makeCavernStoneTexture();
+    const floorTexPair = makeFloorTileTextures();
+    floorTileTex = floorTexPair.map;
+    floorBumpTex = floorTexPair.bumpMap;
+    const wallTexPair = makeWallMasonryTextures();
+    wallStoneTex = wallTexPair.map;
+    wallBumpTex = wallTexPair.bumpMap;
+    mandalaDecalTex = makeMandalaDecalTexture();
+
     warmGlowTex = makeRadialGlowTexture(
       'rgba(255, 198, 92, 0.85)',
       'rgba(217, 119, 6, 0.34)',
@@ -552,10 +1046,31 @@ export function createDungeon(ctx) {
       'rgba(15, 118, 110, 0.0)',
     );
     syllableTex = makeWallSyllableTexture();
-    for (const mat of [floorTileMat, wallSegMat, pillarMat, rockCragMat, ceilingVaultMat]) {
+
+    floorTileMat.map = floorTileTex || stoneTex || null;
+    floorTileMat.bumpMap = floorBumpTex || null;
+    floorTileMat.bumpScale = 0.05;
+    floorTileMat.needsUpdate = true;
+
+    wallSegMat.map = wallStoneTex || stoneTex || null;
+    wallSegMat.bumpMap = wallBumpTex || null;
+    wallSegMat.bumpScale = 0.06;
+    wallSegMat.needsUpdate = true;
+
+    pillarMat.map = wallStoneTex || stoneTex || null;
+    pillarMat.bumpMap = wallBumpTex || null;
+    pillarMat.bumpScale = 0.04;
+    pillarMat.needsUpdate = true;
+
+    for (const mat of [rockCragMat, ceilingVaultMat, ceilingArchMat]) {
       mat.map = stoneTex || null;
       mat.needsUpdate = true;
     }
+
+    mandalaMedallionMat.map = mandalaDecalTex || null;
+    mandalaMedallionMat.emissiveMap = mandalaDecalTex || null;
+    mandalaMedallionMat.needsUpdate = true;
+
     warmPoolMat.map = warmGlowTex || null;
     warmPoolMat.needsUpdate = true;
     coolPoolMat.map = coolGlowTex || null;
@@ -599,6 +1114,189 @@ export function createDungeon(ctx) {
     emissive: 0xd97706,
     emissiveIntensity: 0.8,
   });
+
+  /**
+   * Styles all floor materials for the 3-Floor Visual Biome Progression:
+   *   - Floor 1: Subterranean Turquoise Mineral Cavern (`伏藏岩窟`)
+   *   - Floor 2: Glacial Rime & Crystal Sanctum (`寒晶冰窟`)
+   *   - Floor 3: Golden Mandala Imperial Vault (`金剛壇城密殿`)
+   */
+  function applyFloorBiomeTheme(floorNum = 1) {
+    if (floorNum === 2) {
+      // Floor 2 — Glacial Rime & Crystal Sanctum (`寒晶冰窟`)
+      floorTileMat.color.setHex(0x243b55);
+      floorTileMat.roughness = 0.58;
+      floorTileMat.metalness = 0.26;
+
+      wallSegMat.color.setHex(0x2b4663);
+      wallSegMat.roughness = 0.66;
+      wallSegMat.metalness = 0.24;
+
+      pillarMat.color.setHex(0x365577);
+      pillarMat.roughness = 0.44;
+      pillarMat.metalness = 0.34;
+
+      pillarCapitalMat.color.setHex(0x7dd3fc);
+      pillarCapitalMat.roughness = 0.22;
+      pillarCapitalMat.metalness = 0.72;
+      pillarCapitalMat.emissive.setHex(0x0284c7);
+      pillarCapitalMat.emissiveIntensity = 0.48;
+
+      doorArchFrameMat.color.setHex(0x38bdf8);
+      doorArchFrameMat.emissive.setHex(0x0369a1);
+      doorArchFrameMat.emissiveIntensity = 0.42;
+
+      vajraColumnMat.color.setHex(0xbae6fd);
+      vajraColumnMat.emissive.setHex(0x0284c7);
+      vajraColumnMat.emissiveIntensity = 0.62;
+
+      rockCragMat.color.setHex(0x1b2e44);
+      rockCragMat.roughness = 0.74;
+
+      ceilingVaultMat.color.setHex(0x152538);
+      ceilingArchMat.color.setHex(0x223b57);
+
+      stalactiteMat.color.setHex(0x38bdf8);
+      stalactiteMat.roughness = 0.18;
+      stalactiteMat.metalness = 0.38;
+      stalactiteMat.emissive.setHex(0x0369a1);
+      stalactiteMat.emissiveIntensity = 0.45;
+
+      veinMat.color.setHex(0x38bdf8);
+      veinMat.roughness = 0.16;
+      veinMat.emissive.setHex(0x0ea5e9);
+      veinMat.emissiveIntensity = 1.65;
+
+      warmPoolMat.color.setHex(0xfde68a);
+      coolPoolMat.color.setHex(0x38bdf8);
+      lightShaftMat.color.setHex(0x7dd3fc);
+      decorRingMat.color.setHex(0x7dd3fc);
+      decorRingMat.emissive.setHex(0x0284c7);
+
+      return {
+        abyssColor: 0x07111e,
+        shellColor: 0x0c1b2e,
+        warmMote: [0.88, 0.95, 1.0],
+        coolMote: [0.22, 0.74, 0.97],
+      };
+    }
+
+    if (floorNum >= 3) {
+      // Floor 3 — Golden Mandala Imperial Vault (`金剛壇城密殿`)
+      floorTileMat.color.setHex(0x3b1d2e);
+      floorTileMat.roughness = 0.64;
+      floorTileMat.metalness = 0.30;
+
+      wallSegMat.color.setHex(0x4a2034);
+      wallSegMat.roughness = 0.70;
+      wallSegMat.metalness = 0.26;
+
+      pillarMat.color.setHex(0x6b2138);
+      pillarMat.roughness = 0.46;
+      pillarMat.metalness = 0.38;
+
+      pillarCapitalMat.color.setHex(0xfbbf24);
+      pillarCapitalMat.roughness = 0.24;
+      pillarCapitalMat.metalness = 0.85;
+      pillarCapitalMat.emissive.setHex(0xd97706);
+      pillarCapitalMat.emissiveIntensity = 0.72;
+
+      doorArchFrameMat.color.setHex(0xfbbf24);
+      doorArchFrameMat.emissive.setHex(0xb45309);
+      doorArchFrameMat.emissiveIntensity = 0.65;
+
+      vajraColumnMat.color.setHex(0xfde047);
+      vajraColumnMat.emissive.setHex(0xd97706);
+      vajraColumnMat.emissiveIntensity = 0.78;
+
+      rockCragMat.color.setHex(0x2a1220);
+      rockCragMat.roughness = 0.84;
+
+      ceilingVaultMat.color.setHex(0x1f0d18);
+      ceilingArchMat.color.setHex(0x854d0e);
+
+      stalactiteMat.color.setHex(0xb45309);
+      stalactiteMat.roughness = 0.36;
+      stalactiteMat.metalness = 0.62;
+      stalactiteMat.emissive.setHex(0x78350f);
+      stalactiteMat.emissiveIntensity = 0.32;
+
+      veinMat.color.setHex(0xfbbf24);
+      veinMat.roughness = 0.18;
+      veinMat.emissive.setHex(0xf59e0b);
+      veinMat.emissiveIntensity = 1.70;
+
+      warmPoolMat.color.setHex(0xfbbf24);
+      coolPoolMat.color.setHex(0xf59e0b);
+      lightShaftMat.color.setHex(0xfde68a);
+      decorRingMat.color.setHex(0xfde047);
+      decorRingMat.emissive.setHex(0xd97706);
+
+      return {
+        abyssColor: 0x14080e,
+        shellColor: 0x1f0b16,
+        warmMote: [1.0, 0.88, 0.32],
+        coolMote: [0.98, 0.56, 0.24],
+      };
+    }
+
+    // Floor 1 — Subterranean Turquoise Mineral Cavern (`伏藏岩窟`)
+    floorTileMat.color.setHex(0x2d2842);
+    floorTileMat.roughness = 0.80;
+    floorTileMat.metalness = 0.16;
+
+    wallSegMat.color.setHex(0x3d3656);
+    wallSegMat.roughness = 0.82;
+    wallSegMat.metalness = 0.16;
+
+    pillarMat.color.setHex(0x4e456b);
+    pillarMat.roughness = 0.68;
+    pillarMat.metalness = 0.24;
+
+    pillarCapitalMat.color.setHex(0xd97706);
+    pillarCapitalMat.roughness = 0.34;
+    pillarCapitalMat.metalness = 0.74;
+    pillarCapitalMat.emissive.setHex(0x78350f);
+    pillarCapitalMat.emissiveIntensity = 0.42;
+
+    doorArchFrameMat.color.setHex(0xb45309);
+    doorArchFrameMat.emissive.setHex(0x78350f);
+    doorArchFrameMat.emissiveIntensity = 0.36;
+
+    vajraColumnMat.color.setHex(0xfbbf24);
+    vajraColumnMat.emissive.setHex(0xb45309);
+    vajraColumnMat.emissiveIntensity = 0.55;
+
+    rockCragMat.color.setHex(0x262138);
+    rockCragMat.roughness = 0.90;
+
+    ceilingVaultMat.color.setHex(0x1d192b);
+    ceilingArchMat.color.setHex(0x2e2844);
+
+    stalactiteMat.color.setHex(0x352f4b);
+    stalactiteMat.roughness = 0.84;
+    stalactiteMat.metalness = 0.16;
+    stalactiteMat.emissive.setHex(0x0f766e);
+    stalactiteMat.emissiveIntensity = 0.14;
+
+    veinMat.color.setHex(0x2dd4bf);
+    veinMat.roughness = 0.20;
+    veinMat.emissive.setHex(0x14b8a6);
+    veinMat.emissiveIntensity = 1.50;
+
+    warmPoolMat.color.setHex(0xffb74d);
+    coolPoolMat.color.setHex(0x5eead4);
+    lightShaftMat.color.setHex(0x5eead4);
+    decorRingMat.color.setHex(0xfbbf24);
+    decorRingMat.emissive.setHex(0xb45309);
+
+    return {
+      abyssColor: 0x0b0914,
+      shellColor: 0x120f20,
+      warmMote: [1.0, 0.82, 0.38],
+      coolMote: [0.37, 0.92, 0.83],
+    };
+  }
 
   function syncState() {
     const monsterLevel = 30 + currentTier;
@@ -682,6 +1380,9 @@ export function createDungeon(ctx) {
     vaultCoreMesh = null;
     vaultRingMat = null;
     vaultBeamMesh = null;
+    bossMandalaOuterRing = null;
+    bossMandalaInnerRing = null;
+    bossAltarLotusCrown = null;
     floorEnemyIds.clear();
     liberatedEnemyIds.clear();
 
@@ -739,12 +1440,13 @@ export function createDungeon(ctx) {
   function buildFloorScene(layout) {
     ensureDungeonTextures();
     clearFloorEntities();
+    const biome = applyFloorBiomeTheme(layout.floor || currentFloor);
 
     // 0. Outer Subterranean Cavern Shell & Abyssal Floor (100% sky-proof enclosure)
     const abyssGeo = new THREE.PlaneGeometry(210, 210);
     abyssGeo.rotateX(-Math.PI / 2);
     const abyssMat = new THREE.MeshStandardMaterial({
-      color: 0x0b0914,
+      color: biome.abyssColor,
       roughness: 0.96,
       metalness: 0.04,
     });
@@ -756,7 +1458,7 @@ export function createDungeon(ctx) {
 
     const cavernShellGeo = new THREE.SphereGeometry(122, 32, 20, 0, Math.PI * 2, 0, Math.PI * 0.62);
     const cavernShellMat = new THREE.MeshStandardMaterial({
-      color: 0x120f20,
+      color: biome.shellColor,
       map: stoneTex || null,
       roughness: 0.95,
       metalness: 0.06,
@@ -770,6 +1472,9 @@ export function createDungeon(ctx) {
     const floorMatrices = [];
     const wallMatrices = [];
     const pillarMatrices = [];
+    const doorArchMatrices = [];
+    const vajraColumnMatrices = [];
+    const mandalaMedallionMatrices = [];
     const plaqueMatrices = [];
     const veinMatrices = [];
     const decorMatrices = [];
@@ -836,7 +1541,7 @@ export function createDungeon(ctx) {
         stalactiteMatrices.push(dummy.matrix.clone());
       }
 
-      // Bridge slabs & tunnel ceiling slabs on East and South doorways
+      // Bridge slabs, tunnel ceiling slabs & carved Tibetan doorway arch frames on East and South doorways
       if (doors.E) {
         dummy.position.set(wx + halfCell, -0.19, wz);
         dummy.rotation.set(0, 0, 0);
@@ -849,6 +1554,18 @@ export function createDungeon(ctx) {
         dummy.scale.set(0.28, 1.1, 0.52);
         dummy.updateMatrix();
         ceilingVaultMatrices.push(dummy.matrix.clone());
+
+        dummy.position.set(wx + halfCell, 0, wz);
+        dummy.rotation.set(0, Math.PI * 0.5, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        doorArchMatrices.push(dummy.matrix.clone());
+
+        dummy.position.set(wx + halfCell - 0.62, 5.75, wz);
+        dummy.rotation.set(0, -Math.PI * 0.5, 0);
+        dummy.scale.set(0.68, 0.68, 1);
+        dummy.updateMatrix();
+        plaqueMatrices.push(dummy.matrix.clone());
       }
       if (doors.S) {
         dummy.position.set(wx, -0.19, wz + halfCell);
@@ -862,6 +1579,18 @@ export function createDungeon(ctx) {
         dummy.scale.set(0.52, 1.1, 0.28);
         dummy.updateMatrix();
         ceilingVaultMatrices.push(dummy.matrix.clone());
+
+        dummy.position.set(wx, 0, wz + halfCell);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        doorArchMatrices.push(dummy.matrix.clone());
+
+        dummy.position.set(wx, 5.75, wz + halfCell - 0.62);
+        dummy.rotation.set(0, Math.PI, 0);
+        dummy.scale.set(0.68, 0.68, 1);
+        dummy.updateMatrix();
+        plaqueMatrices.push(dummy.matrix.clone());
       }
 
       // 2. Four Corner Pillars + Sacred Butter-Lamp Braziers & Warm Floor Light Pools per room
@@ -971,6 +1700,12 @@ export function createDungeon(ctx) {
           dummy.updateMatrix();
           rockCragMatrices.push(dummy.matrix.clone());
         }
+
+        dummy.position.set(wx, 2.55, wz + halfCell - 0.58);
+        dummy.rotation.set(0, Math.PI, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        plaqueMatrices.push(dummy.matrix.clone());
       } else {
         const offset = doorGap * 0.5 + sideSegLen * 0.5;
         for (const s of [-1, 1]) {
@@ -1011,6 +1746,12 @@ export function createDungeon(ctx) {
           dummy.updateMatrix();
           rockCragMatrices.push(dummy.matrix.clone());
         }
+
+        dummy.position.set(wx - halfCell + 0.58, 2.55, wz);
+        dummy.rotation.set(0, Math.PI * 0.5, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        plaqueMatrices.push(dummy.matrix.clone());
       } else {
         const offset = doorGap * 0.5 + sideSegLen * 0.5;
         for (const s of [-1, 1]) {
@@ -1051,6 +1792,12 @@ export function createDungeon(ctx) {
           dummy.updateMatrix();
           rockCragMatrices.push(dummy.matrix.clone());
         }
+
+        dummy.position.set(wx + halfCell - 0.58, 2.55, wz);
+        dummy.rotation.set(0, -Math.PI * 0.5, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        plaqueMatrices.push(dummy.matrix.clone());
       } else {
         const offset = doorGap * 0.5 + sideSegLen * 0.5;
         for (const s of [-1, 1]) {
@@ -1075,6 +1822,21 @@ export function createDungeon(ctx) {
         wallMatrices.push(dummy.matrix.clone());
       }
 
+      // Ceremonial ring of 8 ritual Vajra columns around start, exit, vault, and boss rooms
+      if (role === 'boss' || role === 'start' || role === 'exit' || role === 'vault') {
+        const vRad = role === 'boss' ? 6.25 : 5.45;
+        const vScale = role === 'boss' ? 1.18 : 0.92;
+        for (let vc = 0; vc < 8; vc++) {
+          // Offset by 22.5 deg (PI/8) so columns never block N/S/E/W doorways!
+          const vAng = (vc / 8) * Math.PI * 2 + Math.PI * 0.125;
+          dummy.position.set(wx + Math.cos(vAng) * vRad, 0, wz + Math.sin(vAng) * vRad);
+          dummy.rotation.set(0, -vAng, 0);
+          dummy.scale.set(vScale, vScale, vScale);
+          dummy.updateMatrix();
+          vajraColumnMatrices.push(dummy.matrix.clone());
+        }
+      }
+
       // 4. Room Template Interior Features (only for non-boss rooms so Boss Arena is open)
       if (role !== 'boss') {
         if (template === 'colonnade') {
@@ -1090,12 +1852,18 @@ export function createDungeon(ctx) {
             dummy.updateMatrix();
             pillarMatrices.push(dummy.matrix.clone());
           }
-        } else if (template === 'mandala' || template === 'pool' || template === 'hall') {
+        } else if (template === 'mandala' || template === 'pool' || template === 'hall' || role === 'vault') {
           dummy.position.set(wx, 0.08, wz);
           dummy.rotation.set(0, 0, 0);
           dummy.scale.set(template === 'pool' ? 1.2 : 1.0, 1, template === 'pool' ? 1.2 : 1.0);
           dummy.updateMatrix();
           decorMatrices.push(dummy.matrix.clone());
+
+          dummy.position.set(wx, 0.045, wz);
+          dummy.rotation.set(0, roomIndex * 0.39, 0);
+          dummy.scale.set(template === 'mandala' ? 1.25 : 0.95, 1, template === 'mandala' ? 1.25 : 0.95);
+          dummy.updateMatrix();
+          mandalaMedallionMatrices.push(dummy.matrix.clone());
 
           // Center radial light pool & subtle overhead cavern light shaft
           dummy.position.set(wx, 0.04, wz);
@@ -1108,7 +1876,13 @@ export function createDungeon(ctx) {
             warmPoolMatrices.push(dummy.matrix.clone());
           }
 
-          if (role === 'start' || role === 'exit' || template === 'mandala' || template === 'pool') {
+          if (
+            role === 'start' ||
+            role === 'exit' ||
+            role === 'vault' ||
+            template === 'mandala' ||
+            template === 'pool'
+          ) {
             dummy.position.set(wx, 3.8, wz);
             dummy.rotation.set(0, 0, 0.06);
             dummy.scale.set(1, 1, 1);
@@ -1161,9 +1935,15 @@ export function createDungeon(ctx) {
         // Boss Room grand mandala centerpiece & dramatic cavern light shaft
         dummy.position.set(wx, 0.06, wz);
         dummy.rotation.set(0, 0, 0);
-        dummy.scale.set(1.8, 1, 1.8);
+        dummy.scale.set(1.85, 1, 1.85);
         dummy.updateMatrix();
         decorMatrices.push(dummy.matrix.clone());
+
+        dummy.position.set(wx, 0.05, wz);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1.65, 1, 1.65);
+        dummy.updateMatrix();
+        mandalaMedallionMatrices.push(dummy.matrix.clone());
 
         dummy.position.set(wx, 0.04, wz);
         dummy.rotation.set(0, 0, 0);
@@ -1205,8 +1985,23 @@ export function createDungeon(ctx) {
     addInstanced(floorTileGeo, floorTileMat, floorMatrices, 'TermaFloorsInst', { receiveShadow: true });
     addInstanced(wallSegGeo, wallSegMat, wallMatrices, 'TermaWallsInst', { castShadow: true, receiveShadow: true });
     addInstanced(pillarGeo, pillarMat, pillarMatrices, 'TermaPillarsInst', { castShadow: true, receiveShadow: true });
+    addInstanced(pillarCapitalGeo, pillarCapitalMat, pillarMatrices, 'TermaPillarCapitalsInst', {
+      castShadow: true,
+      receiveShadow: true,
+    });
+    addInstanced(doorArchFrameGeo, doorArchFrameMat, doorArchMatrices, 'TermaDoorJambsInst', {
+      castShadow: true,
+      receiveShadow: true,
+    });
+    addInstanced(vajraColumnGeo, vajraColumnMat, vajraColumnMatrices, 'TermaVajraColumnsInst', {
+      castShadow: true,
+      receiveShadow: true,
+    });
+    addInstanced(mandalaMedallionGeo, mandalaMedallionMat, mandalaMedallionMatrices, 'TermaMandalaMedallionInst', {
+      receiveShadow: true,
+    });
     addInstanced(ceilingVaultGeo, ceilingVaultMat, ceilingVaultMatrices, 'TermaCeilingVaultInst', { receiveShadow: true });
-    addInstanced(ceilingArchGeo, ceilingVaultMat, ceilingArchMatrices, 'TermaCeilingArchInst', { receiveShadow: true });
+    addInstanced(ceilingArchGeo, ceilingArchMat, ceilingArchMatrices, 'TermaCeilingArchInst', { receiveShadow: true });
     addInstanced(rockCragGeo, rockCragMat, rockCragMatrices, 'TermaRockCragsInst', { castShadow: true, receiveShadow: true });
     addInstanced(stalactiteGeo, stalactiteMat, stalactiteMatrices, 'TermaStalactitesInst');
     addInstanced(brazierStandGeo, brazierStandMat, brazierMatrices, 'TermaBraziersInst');
@@ -1233,9 +2028,10 @@ export function createDungeon(ctx) {
           motePos[idx * 3 + 1] = 0.6 + mRng() * 5.6;
           motePos[idx * 3 + 2] = r.wz + (mRng() - 0.5) * 13.0;
           const isWarm = m % 2 === 0;
-          moteCol[idx * 3 + 0] = isWarm ? 1.0 : 0.37;
-          moteCol[idx * 3 + 1] = isWarm ? 0.82 : 0.92;
-          moteCol[idx * 3 + 2] = isWarm ? 0.38 : 0.83;
+          const mc = isWarm ? biome.warmMote : biome.coolMote;
+          moteCol[idx * 3 + 0] = mc[0];
+          moteCol[idx * 3 + 1] = mc[1];
+          moteCol[idx * 3 + 2] = mc[2];
           idx += 1;
         }
       }
@@ -1296,7 +2092,7 @@ export function createDungeon(ctx) {
       });
     }
 
-    // 6. Exit Room: Gate of Descent (Floors 1 & 2) OR Boss Altar (Floor 3)
+    // 6. Exit Room: Gate of Descent (Floors 1 & 2) OR Boss Altar & Multi-Ring Golden Mandala (Floor 3)
     const exit = layout.exitRoom;
     if (layout.floor < 3) {
       gateMeshGroup = new THREE.Group();
@@ -1305,9 +2101,15 @@ export function createDungeon(ctx) {
 
       const arch = new THREE.Mesh(
         new THREE.TorusGeometry(2.1, 0.26, 10, 28, Math.PI),
-        pillarMat,
+        pillarCapitalMat,
       );
       arch.position.y = 0.1;
+
+      const dais = new THREE.Mesh(
+        new THREE.CylinderGeometry(2.45, 2.75, 0.22, 16),
+        pillarMat,
+      );
+      dais.position.y = 0.11;
 
       gatePortalMat = new THREE.MeshBasicMaterial({
         color: 0x334155,
@@ -1330,9 +2132,9 @@ export function createDungeon(ctx) {
       });
       const floorRing = new THREE.Mesh(new THREE.RingGeometry(1.6, 2.3, 32), gateRingMat);
       floorRing.rotation.x = -Math.PI / 2;
-      floorRing.position.y = 0.05;
+      floorRing.position.y = 0.24;
 
-      gateMeshGroup.add(arch, portalDisc, floorRing);
+      gateMeshGroup.add(dais, arch, portalDisc, floorRing);
       dungeonGroup.add(gateMeshGroup);
 
       const gatePosVec = new THREE.Vector3(exit.wx, 0, exit.wz);
@@ -1370,6 +2172,57 @@ export function createDungeon(ctx) {
         },
       });
     } else {
+      // Floor 3 Boss Room Multi-Ring Rotating Golden Mandala Centerpiece & Imperial Altar
+      const bossCenterGroup = new THREE.Group();
+      bossCenterGroup.name = 'TermaBossMandalaCenterpiece';
+      bossCenterGroup.position.set(exit.wx, 0, exit.wz);
+
+      bossMandalaOuterRing = new THREE.Group();
+      bossMandalaOuterRing.position.y = 0.10;
+      const outerWheel = new THREE.Mesh(
+        new THREE.TorusGeometry(5.35, 0.14, 10, 48),
+        pillarCapitalMat,
+      );
+      outerWheel.rotation.x = Math.PI * 0.5;
+      bossMandalaOuterRing.add(outerWheel);
+      for (let sp = 0; sp < 8; sp++) {
+        const spoke = new THREE.Mesh(
+          new THREE.BoxGeometry(0.18, 0.10, 10.6),
+          pillarCapitalMat,
+        );
+        spoke.rotation.y = (sp / 8) * Math.PI;
+        bossMandalaOuterRing.add(spoke);
+      }
+
+      bossMandalaInnerRing = new THREE.Group();
+      bossMandalaInnerRing.position.y = 0.14;
+      const innerWheel = new THREE.Mesh(
+        new THREE.TorusGeometry(3.45, 0.12, 10, 36),
+        crystalBaseMat,
+      );
+      innerWheel.rotation.x = Math.PI * 0.5;
+      bossMandalaInnerRing.add(innerWheel);
+
+      const altarThrone = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.15, 1.48, 0.52, 8),
+        pillarCapitalMat,
+      );
+      altarThrone.position.y = 0.26;
+
+      bossAltarLotusCrown = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.46, 0),
+        veinMat,
+      );
+      bossAltarLotusCrown.position.y = 1.28;
+
+      bossCenterGroup.add(
+        bossMandalaOuterRing,
+        bossMandalaInnerRing,
+        altarThrone,
+        bossAltarLotusCrown,
+      );
+      dungeonGroup.add(bossCenterGroup);
+
       // Floor 3 Boss Altar / Trigger in Boss Room
       const altarPosVec = new THREE.Vector3(exit.wx, 0, exit.wz);
       addDungeonInteractable({
@@ -2702,6 +3555,17 @@ export function createDungeon(ctx) {
     if (vaultCoreMesh && vaultCoreMesh.visible) {
       vaultCoreMesh.rotation.y = elapsed * 1.8;
       vaultCoreMesh.position.y = 1.5 + Math.sin(elapsed * 3.0) * 0.1;
+    }
+    if (bossMandalaOuterRing) {
+      bossMandalaOuterRing.rotation.y = elapsed * 0.25;
+    }
+    if (bossMandalaInnerRing) {
+      bossMandalaInnerRing.rotation.y = -elapsed * 0.42;
+    }
+    if (bossAltarLotusCrown) {
+      bossAltarLotusCrown.rotation.y = elapsed * 1.1;
+      bossAltarLotusCrown.position.y = 1.28 + Math.sin(elapsed * 2.4) * 0.12;
+      bossAltarLotusCrown.visible = !bossSubduedOnFloor;
     }
     if (!vaultUnsealed && vaultGuardIds.size > 0 && ctx.enemies?.getActiveEnemies) {
       const aliveIds = new Set(ctx.enemies.getActiveEnemies().map((e) => e.id));
