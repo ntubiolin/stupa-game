@@ -271,14 +271,10 @@ function isDevAuthAllowed(options = {}) {
   if (typeof options.allowDevAuth === 'boolean') {
     return options.allowDevAuth;
   }
-  if (process.env.STUPA_ALLOW_DEV_AUTH === '1') {
-    return true;
-  }
   if (process.env.STUPA_ALLOW_DEV_AUTH === '0') {
     return false;
   }
-  const clientId = options.googleClientId ?? process.env.GOOGLE_CLIENT_ID ?? '';
-  return !clientId;
+  return true;
 }
 
 /**

@@ -90,11 +90,15 @@ export function isFreshSave(doc) {
 export function createCloudSave(ctx, options = {}) {
   const bus = ctx?.bus;
 
+  let useSameOriginFallback = false;
+
   function getAuthEndpoint() {
+    if (useSameOriginFallback) return '/api/auth/google';
     return resolveApiUrl('/api/auth/google', options?.apiBase);
   }
 
   function getSaveEndpoint() {
+    if (useSameOriginFallback) return '/api/save';
     return resolveApiUrl('/api/save', options?.apiBase);
   }
 
@@ -657,14 +661,23 @@ export function createCloudSave(ctx, options = {}) {
       return { ok: false, error: 'fetch-unavailable' };
     }
     try {
-      const res = await fetch(getAuthEndpoint(), {
+      const primaryUrl = getAuthEndpoint();
+      const reqInit = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
         },
         body: JSON.stringify(authPayload),
-      });
+      };
+      let res = await fetch(primaryUrl, reqInit).catch(() => null);
+      if ((!res || !res.ok) && primaryUrl !== '/api/auth/google') {
+        const fallbackRes = await fetch('/api/auth/google', reqInit).catch(() => null);
+        if (fallbackRes && fallbackRes.ok) {
+          useSameOriginFallback = true;
+          res = fallbackRes;
+        }
+      }
       if (!res || !res.ok) {
         return { ok: false, error: 'auth-failed' };
       }
@@ -722,18 +735,31 @@ export function createCloudSave(ctx, options = {}) {
       }
     }
 
-    // 2. If Google Client ID is configured, attempt Google Identity Services (GIS)
+    // 2. If Google Client ID is configured and no top-layer modal dialog blocks passive One Tap, attempt GIS
     const clientId = getGoogleClientId();
-    if (clientId) {
+    const topLayerModalOpen =
+      typeof document !== 'undefined' &&
+      typeof document.querySelector === 'function' &&
+      Boolean(document.querySelector('dialog#game-settings[open]'));
+
+    if (clientId && !topLayerModalOpen) {
       const gisReady = await loadGoogleGisScript();
       if (gisReady && typeof window !== 'undefined' && window.google?.accounts?.id) {
         return await new Promise((resolve) => {
           let settled = false;
+          const finishDevPrompt = () => {
+            if (settled) return;
+            settled = true;
+            bus?.emit?.('cloudSave:requestDevPrompt', {});
+            resolve({ ok: false, needsDevPrompt: true });
+          };
+          const timer = setTimeout(finishDevPrompt, 1500);
           window.google.accounts.id.initialize({
             client_id: clientId,
             callback: async (response) => {
               if (settled) return;
               settled = true;
+              clearTimeout(timer);
               if (response?.credential) {
                 const res = await exchangeAuthWithBackend({ idToken: response.credential });
                 resolve(res);
@@ -744,10 +770,13 @@ export function createCloudSave(ctx, options = {}) {
           });
           window.google.accounts.id.prompt((notification) => {
             if (settled) return;
-            if (notification?.isNotDisplayed?.() || notification?.isSkippedMoment?.()) {
-              settled = true;
-              bus?.emit?.('cloudSave:requestDevPrompt', {});
-              resolve({ ok: false, needsDevPrompt: true });
+            if (
+              notification?.isNotDisplayed?.() ||
+              notification?.isSkippedMoment?.() ||
+              notification?.isDismissedMoment?.()
+            ) {
+              clearTimeout(timer);
+              finishDevPrompt();
             }
           });
         });
