@@ -173,6 +173,19 @@
       "bytes": 44717,
       "sha256": "e97fbfb4bed6955c97837e9e98cf3fe1d054cb8dde505fac72552661362bd814",
       "review": "docs/story/video-qc-85.md"
+    },
+    {
+      "path": "losang-map-handoff.webp",
+      "purpose": "Approved Losang map-copy handoff illustration on final dialogue line (#113)",
+      "source": "OpenAI built-in image generation, 2026-11-08, using the author's previously approved fictional character reference; exact model version unavailable",
+      "method": "One generation; 1672 × 941 original normalized to 1664 × 936 without cropping, then quality-84 WebP encoding",
+      "rights": "Reference permissions unchanged; no independent legal/commercial-rights certification; cultural and architectural fidelity requires human review",
+      "classification": "AI-generated fictional illustration, not a historical photograph; map is an abstract illustrative copy, not a navigation source or authentic relic",
+      "notArchival": true,
+      "bytes": 97460,
+      "sha256": "126b478b555cbc3193f60f4727cfe76f030598d28c7b4f473c3d36136196d5b4",
+      "lazy": true,
+      "review": "docs/story/losang-still-113.md"
     }
   ],
   "textSources": [
