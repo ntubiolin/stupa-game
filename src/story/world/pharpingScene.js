@@ -2,6 +2,12 @@ import * as THREE from 'three';
 import { createMap } from '../../world/maps/pharping.js';
 import { seededRandom } from '../../world/mapBase.js';
 import { createWellShadow } from './wellShadow.js';
+import {
+  buildDroughtSpriteModel,
+  buildDustDevilModel,
+  buildThirstyPretaModel,
+} from '../../gameplay/enemyModels/pharping.js';
+import { buildDroughtLordModel } from '../../gameplay/bosses/droughtLord.js';
 
 const visualCheckpoints = ['spring1', 'spring2', 'channel1', 'channel2', 'manuscript',
   'cave', 'shadow', 'release', 'rain', 'diary', 'complete'];
@@ -384,6 +390,150 @@ function makeRain(group) {
   };
 }
 
+function makeMonsters(group, getHeight) {
+  const monsters = new THREE.Group();
+  monsters.name = 'StoryPharpingMonsters';
+  group.add(monsters);
+
+  const droughtSprite = buildDroughtSpriteModel(THREE);
+  droughtSprite.root.name = 'StoryDroughtSprite';
+  const sx = 2040.2;
+  const sz = 30.6;
+  droughtSprite.root.position.set(sx, getHeight(sx, sz), sz);
+  droughtSprite.root.rotation.y = 0.35;
+  monsters.add(droughtSprite.root);
+
+  const dustDevil = buildDustDevilModel(THREE);
+  dustDevil.root.name = 'StoryDustDevil';
+  const cx = 2035.4;
+  const cz = 24.5;
+  dustDevil.root.position.set(cx, getHeight(cx, cz), cz);
+  monsters.add(dustDevil.root);
+
+  const thirstyPreta = buildThirstyPretaModel(THREE);
+  thirstyPreta.root.name = 'StoryThirstyPreta';
+  const px = 1972.1;
+  const pz = 53.6;
+  thirstyPreta.root.position.set(px, getHeight(px, pz), pz);
+  thirstyPreta.root.rotation.y = -1.25;
+  monsters.add(thirstyPreta.root);
+
+  const droughtLord = buildDroughtLordModel(THREE);
+  droughtLord.group.name = 'StoryDroughtLord';
+  const wellY = getHeight(1970, 53);
+  droughtLord.group.position.set(1970, wellY - 1.15, 53);
+  droughtLord.group.rotation.y = Math.PI;
+  droughtLord.group.scale.setScalar(0.45);
+  monsters.add(droughtLord.group);
+
+  // Cave practitioner silhouette breathing gently near the Yangleshö cave shrine
+  const practitioner = new THREE.Group();
+  practitioner.name = 'StoryPharpingPractitioner';
+  const prX = 2021.8;
+  const prZ = -44.2;
+  practitioner.position.set(prX, getHeight(prX, prZ), prZ);
+  practitioner.rotation.y = -0.55;
+  const robeMat = new THREE.MeshStandardMaterial({
+    color: 0x7c2d12,
+    roughness: 0.85,
+    emissive: 0x2a1208,
+    emissiveIntensity: 0.25,
+  });
+  const saffronMat = new THREE.MeshStandardMaterial({
+    color: 0xd97706,
+    roughness: 0.78,
+    emissive: 0x451a03,
+    emissiveIntensity: 0.2,
+  });
+  const skinMat = new THREE.MeshStandardMaterial({ color: 0xc6946e, roughness: 0.8 });
+  const robe = new THREE.Mesh(new THREE.ConeGeometry(0.36, 0.88, 10), robeMat);
+  robe.position.y = 0.44;
+  const shawl = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 0.44, 10), saffronMat);
+  shawl.position.y = 0.72;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), skinMat);
+  head.position.y = 1.08;
+  practitioner.add(robe, shawl, head);
+  monsters.add(practitioner);
+
+  const spriteDummy = {
+    model: droughtSprite,
+    state: 'idle',
+    stateTimer: 0,
+    currentAttack: { windup: 0.7 },
+  };
+  const devilDummy = { state: 'attack' };
+
+  return {
+    set(checkpoint, raining, dt, time) {
+      const stepDt = dt > 0 ? dt : 0.016;
+
+      // 1. Spring Drought Sprite: chokes spring until spring2 is cleared (checkpoint >= 2)
+      const springCleared = checkpoint >= 2;
+      spriteDummy.state = springCleared ? 'idle' : 'windup';
+      spriteDummy.stateTimer = springCleared ? 0 : 0.35 + Math.sin(time * 3) * 0.15;
+      droughtSprite.animate(spriteDummy, stepDt, time);
+      if (springCleared) {
+        droughtSprite.root.scale.setScalar(raining ? 0.42 : 0.58);
+        droughtSprite.bodyRoot.rotation.x = 0.45;
+        droughtSprite.materials[0].emissive.setHex(raining ? 0x246368 : 0x3b2810);
+      } else {
+        droughtSprite.root.scale.setScalar(checkpoint === 1 ? 0.82 : 1.0);
+        droughtSprite.bodyRoot.rotation.x = 0;
+        droughtSprite.materials[0].emissive.setHex(0x5a1804);
+      }
+
+      // 2. Channel Dust Devil: swirls aggressively until channel2 is cleared (checkpoint >= 4)
+      const channelCleared = checkpoint >= 4;
+      devilDummy.state = channelCleared ? 'idle' : 'attack';
+      dustDevil.animate(devilDummy, stepDt, time);
+      dustDevil.root.scale.setScalar(
+        channelCleared ? (raining ? 0.28 : 0.4) : (checkpoint === 3 ? 0.76 : 1.0),
+      );
+      dustDevil.materials[0].opacity = channelCleared ? 0.35 : 0.88;
+      dustDevil.materials[0].emissive.setHex(channelCleared ? 0x246368 : 0x3b2810);
+
+      // 3. Dry Well Thirsty Preta: reaches hungrily toward well until pacified at release/rain (checkpoint >= 7)
+      const pacified = checkpoint >= 7;
+      thirstyPreta.bodyRoot.position.y = pacified
+        ? -0.18 + Math.sin(time * 2.0) * 0.02
+        : Math.sin(time * 3.4) * 0.05;
+      thirstyPreta.bodyRoot.rotation.x = pacified
+        ? 0.38
+        : 0.12 + Math.sin(time * 4.2) * 0.06;
+      thirstyPreta.leftArm.rotation.x = pacified
+        ? -0.65
+        : -0.95 + Math.sin(time * 4.5) * 0.22;
+      thirstyPreta.rightArm.rotation.x = pacified
+        ? -0.65
+        : -0.95 - Math.sin(time * 4.5) * 0.22;
+      thirstyPreta.materials[0].emissive.setHex(pacified ? 0x246368 : 0x2a1d08);
+
+      // 4. Drought Lord rising from the dry well at 'shadow' (6) and subdued at 'release' (7) / 'rain' (8+)
+      if (checkpoint === 6) {
+        droughtLord.group.scale.setScalar(0.78);
+        droughtLord.group.position.set(1970, wellY - 0.1 + Math.sin(time * 2.8) * 0.08, 53);
+        droughtLord.anim(stepDt, { animState: 'enrage', enraged: true, subdued: false });
+      } else if (checkpoint === 7) {
+        droughtLord.group.scale.setScalar(0.62);
+        droughtLord.group.position.set(1970, wellY - 0.35 + Math.sin(time * 1.8) * 0.03, 53);
+        droughtLord.anim(stepDt, { animState: 'kneel', enraged: false, subdued: true });
+      } else if (checkpoint >= 8) {
+        droughtLord.group.scale.setScalar(0.42);
+        droughtLord.group.position.set(1970, wellY - 0.85 + Math.sin(time * 1.5) * 0.02, 53);
+        droughtLord.anim(stepDt, { animState: 'kneel', enraged: false, subdued: true });
+      } else {
+        droughtLord.group.scale.setScalar(0.45);
+        droughtLord.group.position.set(1970, wellY - 1.15 + Math.sin(time * 2.2) * 0.04, 53);
+        droughtLord.anim(stepDt, { animState: 'idle', enraged: false, subdued: false });
+      }
+
+      // 5. Cave practitioner subtle breathing & swaying
+      practitioner.scale.y = 1 + Math.sin(time * 2.4) * 0.025;
+      practitioner.rotation.z = Math.sin(time * 1.6) * 0.03;
+    },
+  };
+}
+
 export async function createPharpingScene(ctx) {
   const group = new THREE.Group();
   group.name = 'StoryPharping';
@@ -396,6 +546,7 @@ export async function createPharpingScene(ctx) {
   const shadow = createWellShadow(group, getHeight(1970, 53));
   const rain = makeRain(group);
   const valley = makeValleyDetails(group, getHeight);
+  const monsters = makeMonsters(group, getHeight);
   const caveTable = { type: 'circle', x: 2020, z: -44.5, r: 0.84, zone: 'pharping' };
   const trailRock = { type: 'circle', x: 2028, z: -28, r: 0.58, zone: 'pharping' };
   const colliders = [...base.colliders, caveTable, trailRock, ...debris.map((item) => item.collider)];
@@ -448,6 +599,7 @@ export async function createPharpingScene(ctx) {
     base.map.lampNiches.forEach((lamp, index) => { lamp.flameGrp.visible = index > 0 || lit; });
     valley.set(raining, ambient);
     rain.set(raining, ambient, ctx.state?.player?.position || well);
+    monsters.set(checkpoint, raining, dt, ambient);
   }
 
   function restore(checkpointId, { animate = false, reducedMotion = false } = {}) {

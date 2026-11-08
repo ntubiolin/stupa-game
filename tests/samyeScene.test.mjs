@@ -212,3 +212,47 @@ test('Samye photograph precedes the storm and remembrance keeps the source disti
   assert.match(zh['mirror.chapter.samye.hepori.body'], /沒有留下姓名/);
   assert.match(zh['mirror.chapter.samye.hepori.body'], /讓沙粒隨風散去/);
 });
+
+test('Samye night demons, builders, and Pehar oath-mandala animate across checkpoints', async (t) => {
+  const scene = await createSamyeScene({ colliders: [] });
+  t.after(() => scene.dispose());
+  const object = name => scene.group.getObjectByName(name);
+
+  const builders = object('StorySamyeBuilders');
+  const monsters = object('StorySamyeMonsters');
+  const wallBreaker = object('StoryWallBreaker');
+  const du = object('StoryDuDemon');
+  const gyalpo = object('StoryGyalpoSpirit');
+  const pehar = object('StoryPehar');
+  const mandala = object('StoryHeporiMandala');
+  const oathRing = object('StoryDemonOathRing');
+  assert.ok(builders && monsters && wallBreaker && du && gyalpo && pehar && mandala && oathRing);
+
+  // Daytime: builders work, night demons and Pehar are hidden
+  scene.restore('stone');
+  assert.equal(monsters.visible, false);
+  assert.equal(pehar.visible, false);
+  assert.equal(mandala.visible, false);
+
+  // Night: demons appear and circle the worksite
+  scene.restore('night');
+  assert.equal(monsters.visible, true);
+  assert.equal(pehar.visible, false);
+  assert.equal(oathRing.visible, false);
+  const nightPos = wallBreaker.position.clone();
+  scene.update(0.35);
+  assert.notDeepEqual(wallBreaker.position, nightPos);
+
+  // Rebuild: demons recoil outward to the perimeter
+  scene.restore('rebuild');
+  assert.equal(monsters.visible, true);
+  assert.ok(wallBreaker.position.distanceTo(nightPos) > 2.5);
+
+  // Hepo Ri & Memory: Pehar and oath mandala manifest while demons bow with golden oath rings
+  scene.restore('hepori');
+  assert.equal(monsters.visible, true);
+  assert.equal(pehar.visible, true);
+  assert.equal(mandala.visible, true);
+  assert.equal(oathRing.visible, true);
+  assert.ok(wallBreaker.rotation.x > 0.3);
+});

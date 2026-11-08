@@ -1,6 +1,12 @@
 import * as THREE from 'three';
 import { createMap } from '../../world/maps/samye.js';
 import { seededRandom } from '../../world/mapBase.js';
+import {
+  buildWallBreakerModel,
+  buildDuModel,
+  buildGyalpoModel,
+} from '../../gameplay/enemyModels/samye.js';
+import { buildPeharModel } from '../../gameplay/bosses/pehar.js';
 
 const approaches = {
   stone: [5008, 38, 5008, 35, 0.6],
@@ -90,12 +96,15 @@ function addBuilders(group, getHeight, colliders) {
   const cap = new THREE.SphereGeometry(0.147, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.51);
   const arm = new THREE.CylinderGeometry(0.065, 0.052, 0.45, 7);
   const positions = [[5009.8, 32.8], [5015.6, 33]];
+  const buildersGroup = new THREE.Group();
+  buildersGroup.name = 'StorySamyeBuilders';
+  group.add(buildersGroup);
   const builders = positions.map(([x, z], index) => {
     const builder = new THREE.Group();
     builder.name = 'SamyeWorksiteBuilder';
     builder.position.set(x, getHeight(x, z), z);
     builder.rotation.y = index === 0 ? 0.68 : -0.8;
-    group.add(builder);
+    buildersGroup.add(builder);
     colliders.push({ type: 'circle', zone: 'samye', x, z, r: 0.35 });
 
     function meshAt(geometry, material, x, y, z) {
@@ -111,12 +120,18 @@ function addBuilders(group, getHeight, colliders) {
     meshAt(cap, cloth, 0, 1.41, 0.04);
     meshAt(leg, cloth, -0.12, 0.32, 0);
     meshAt(leg, cloth, 0.12, 0.32, 0);
-    return [-0.25, 0.25].map(x => meshAt(arm, tunics[index], x, 0.97, 0.12));
+    return {
+      builder,
+      baseY: getHeight(x, z),
+      arms: [-0.25, 0.25].map(x => meshAt(arm, tunics[index], x, 0.97, 0.12)),
+    };
   });
-  return (progress, working) => {
-    for (const [index, arms] of builders.entries()) {
-      const lift = working ? Math.sin(progress * Math.PI) * (1.05 - index * 0.23) : 0;
+  return (progress, working, time = 0, daytime = true) => {
+    for (const [index, { builder, baseY, arms }] of builders.entries()) {
+      const idleWave = daytime ? Math.sin(time * 3.0 + index * 1.4) * 0.18 : 0;
+      const lift = working ? Math.sin(progress * Math.PI) * (1.05 - index * 0.23) : idleWave;
       for (const arm of arms) arm.rotation.x = -0.6 - lift;
+      builder.position.y = baseY + (daytime ? Math.abs(Math.sin(time * 2.5 + index)) * 0.03 : 0);
     }
   };
 }
@@ -191,6 +206,129 @@ function disposeGroup(group) {
   group.clear();
 }
 
+function makeMonstersAndPehar(group, getHeight) {
+  const monstersGroup = new THREE.Group();
+  monstersGroup.name = 'StorySamyeMonsters';
+  group.add(monstersGroup);
+
+  const wallBreaker = buildWallBreakerModel();
+  wallBreaker.group.name = 'StoryWallBreaker';
+  monstersGroup.add(wallBreaker.group);
+
+  const du = buildDuModel();
+  du.group.name = 'StoryDuDemon';
+  monstersGroup.add(du.group);
+
+  const gyalpo = buildGyalpoModel();
+  gyalpo.group.name = 'StoryGyalpoSpirit';
+  monstersGroup.add(gyalpo.group);
+
+  const oathRingGeo = new THREE.TorusGeometry(0.55, 0.035, 6, 20);
+  oathRingGeo.rotateX(Math.PI / 2);
+  const oathRingMat = new THREE.MeshBasicMaterial({
+    color: 0xfacc15,
+    transparent: true,
+    opacity: 0.85,
+  });
+
+  const demonSpecs = [
+    {
+      model: wallBreaker,
+      closePos: [5011.2, 35.1],
+      recoilPos: [5006.8, 36.6],
+      yaw: 0.25,
+    },
+    {
+      model: du,
+      closePos: [5013.4, 35.2],
+      recoilPos: [5017.2, 36.8],
+      yaw: -0.35,
+    },
+    {
+      model: gyalpo,
+      closePos: [5012.0, 31.8],
+      recoilPos: [5012.0, 29.8],
+      yaw: Math.PI,
+    },
+  ].map((spec) => {
+    const ring = new THREE.Mesh(oathRingGeo, oathRingMat);
+    ring.name = 'StoryDemonOathRing';
+    ring.position.y = 0.88;
+    ring.visible = false;
+    spec.model.group.add(ring);
+    return { ...spec, ring };
+  });
+
+  // Pehar and Golden Oath-Mandala on Mount Hepo Ri
+  const pehar = buildPeharModel();
+  pehar.group.name = 'StoryPehar';
+  const hx = 5075;
+  const hz = -10;
+  const hy = getHeight(hx, hz);
+  pehar.group.position.set(hx, hy, hz);
+  pehar.group.rotation.y = Math.atan2(5063 - hx, 5 - hz);
+  group.add(pehar.group);
+
+  const heporiMandala = new THREE.Group();
+  heporiMandala.name = 'StoryHeporiMandala';
+  heporiMandala.position.set(hx, hy + 0.14, hz);
+  const mandalaMat = new THREE.MeshBasicMaterial({
+    color: 0xfbbf24,
+    transparent: true,
+    opacity: 0.82,
+    side: THREE.DoubleSide,
+  });
+  const outerRing = new THREE.Mesh(new THREE.RingGeometry(2.1, 2.38, 36), mandalaMat);
+  outerRing.rotation.x = -Math.PI / 2;
+  const innerRing = new THREE.Mesh(new THREE.RingGeometry(1.25, 1.42, 32), mandalaMat);
+  innerRing.rotation.x = -Math.PI / 2;
+  heporiMandala.add(outerRing, innerRing);
+  group.add(heporiMandala);
+
+  return (checkpointId, checkpointIdx, dt, time) => {
+    const stepDt = dt > 0 ? dt : 0.016;
+    const isDaytime = ['stone', 'wood', 'photo'].includes(checkpointId);
+    const isNightAttack = checkpointId === 'night';
+    const isRebuild = checkpointId === 'rebuild';
+    const isSubdued = checkpointIdx >= 4;
+
+    monstersGroup.visible = !isDaytime;
+    if (monstersGroup.visible) {
+      for (const [idx, { model, closePos, recoilPos, yaw, ring }] of demonSpecs.entries()) {
+        const [bx, bz] = isNightAttack ? closePos : recoilPos;
+        const orbit = isNightAttack ? Math.sin(time * 2.8 + idx * 2.1) * 0.45 : 0;
+        const x = bx + orbit;
+        const z = bz + (isNightAttack ? Math.cos(time * 2.8 + idx * 2.1) * 0.35 : 0);
+        const y = getHeight(x, z);
+
+        model.animate(
+          {
+            animTime: time + idx * 0.8,
+            state: isNightAttack ? 'windup' : 'idle',
+          },
+          stepDt,
+          isNightAttack,
+        );
+
+        model.group.position.set(x, y + (isSubdued ? -0.18 : 0), z);
+        model.group.rotation.set(isSubdued ? 0.42 : 0, yaw, 0);
+        ring.visible = isSubdued;
+        if (isSubdued) {
+          ring.rotation.z = time * 1.6 + idx;
+        }
+      }
+    }
+
+    pehar.group.visible = isSubdued;
+    heporiMandala.visible = isSubdued;
+    if (isSubdued) {
+      pehar.anim('kneel', time, stepDt, { subdued: true });
+      outerRing.rotation.z = time * 0.85;
+      innerRing.rotation.z = -time * 1.15;
+    }
+  };
+}
+
 export async function createSamyeScene(ctx) {
   const colliders = [];
   const { group, getHeight, setStage, structure, nightTorches } =
@@ -199,6 +337,7 @@ export async function createSamyeScene(ctx) {
   const worksite = makeWorksite(group, getHeight);
   const poseBuilders = addBuilders(group, getHeight, colliders);
   const setNight = makeNight(group);
+  const setMonsters = makeMonstersAndPehar(group, getHeight);
   colliders.push({ type: 'box', zone: 'samye', minX: 5010.4, maxX: 5013.6, minZ: 33.5, maxZ: 34.5 });
   ctx.colliders.push(...colliders);
 
@@ -206,10 +345,12 @@ export async function createSamyeScene(ctx) {
   let currentCheckpoint = 'stone';
   let previous = 0;
   let progress = 1;
+  let ambient = 0;
+  let reduced = false;
   let visibleStage = -1;
   let disposed = false;
 
-  function render() {
+  function render(dt = 0) {
     const eased = progress * progress * (3 - 2 * progress);
     const transitioning = progress < 1;
     const collapsing = transitioning && checkpoint === 3;
@@ -219,11 +360,12 @@ export async function createSamyeScene(ctx) {
     structure.scale.y = collapsing ? 1 - eased * 0.92
       : transitioning ? 0.55 + eased * 0.45 : 1;
     worksite.set(previous, checkpoint, eased);
-    poseBuilders(eased, transitioning && !collapsing);
+    poseBuilders(eased, transitioning && !collapsing, ambient, checkpoint <= 2);
 
     const night = THREE.MathUtils.lerp(Number(previous === 3), Number(checkpoint === 3), eased);
     nightTorches.visible = night > 0.45;
     setNight(night, collapsing ? progress : 1);
+    setMonsters(currentCheckpoint, checkpoint, dt, ambient);
   }
 
   function restore(checkpointId, { animate = false, reducedMotion = false } = {}) {
@@ -232,10 +374,12 @@ export async function createSamyeScene(ctx) {
       .indexOf(checkpointId === 'photo' ? 'night' : checkpointId);
     if (disposed || next === -1) return;
     const transition = animate && !reducedMotion && next === checkpoint + 1 && next <= 4;
+    reduced = reducedMotion;
     previous = transition ? checkpoint : next;
     checkpoint = next;
     currentCheckpoint = checkpointId;
     progress = transition ? 0 : 1;
+    if (!transition) ambient = 0;
     render();
   }
 
@@ -243,9 +387,12 @@ export async function createSamyeScene(ctx) {
   return {
     group, getHeight, restore,
     update(dt) {
-      if (disposed || progress === 1 || !Number.isFinite(dt) || dt <= 0) return;
-      progress = Math.min(1, progress + dt / transitionSeconds);
-      render();
+      if (disposed || reduced || !Number.isFinite(dt) || dt <= 0) return;
+      ambient = (ambient + dt) % 1000;
+      if (progress < 1) {
+        progress = Math.min(1, progress + dt / transitionSeconds);
+      }
+      render(dt);
     },
     getTarget(id) {
       if (!Object.hasOwn(approaches, id)) return null;

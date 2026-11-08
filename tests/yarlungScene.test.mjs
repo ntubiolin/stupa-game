@@ -116,3 +116,40 @@ test('Yarlung approaches stay walkable, and the story instance never publishes A
     else globalThis.window = oldWindow;
   }
 });
+
+test('Yarlung nyen spirits, hail cores, and Yarlha Shampo manifestation respond to checkpoints', async (t) => {
+  const scene = await createYarlungScene({ colliders: [] });
+  t.after(() => scene.dispose());
+  const object = (name) => scene.group.getObjectByName(name);
+
+  const monsters = object('StoryYarlungMonsters');
+  const nyenA = object('StoryNyenA');
+  const hailA = object('StoryHailCoreA');
+  const hailB = object('StoryHailCoreB');
+  const shampo = object('StoryYarlhaShampo');
+  const vajraRing = object('StoryYarlungVajraRing');
+  assert.ok(monsters && nyenA && hailA && hailB && shampo && vajraRing);
+
+  scene.restore('observe');
+  assert.equal(shampo.visible, false);
+  const initialNyenDist = Math.hypot(nyenA.position.x, nyenA.position.z);
+  assert.ok(hailA.scale.x > 0.8);
+  assert.ok(hailB.scale.x > 0.8);
+
+  // Removing stone1 calms the first hail core
+  scene.restore('pause');
+  assert.ok(hailA.scale.x < 0.5);
+  assert.ok(hailB.scale.x > 0.8);
+
+  // At release, nyen spirits step back and bow while both hail cores subside
+  scene.restore('release');
+  assert.ok(hailB.scale.x < 0.5);
+  assert.ok(Math.hypot(nyenA.position.x, nyenA.position.z) > initialNyenDist);
+
+  // At guardian and memory, StoryYarlhaShampo manifests with rotating Vajra ring
+  scene.restore('guardian');
+  assert.equal(shampo.visible, true);
+  const ringZ = vajraRing.rotation.z;
+  scene.update(0.35);
+  assert.notEqual(vajraRing.rotation.z, ringZ);
+});

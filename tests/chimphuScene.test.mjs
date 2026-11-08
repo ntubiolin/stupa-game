@@ -194,3 +194,47 @@ test('starlight dialogue precedes retrieval and the descent, with bilingual fixe
   assert.match(zh[key('starlight2')], /不是把寶物藏在石頭裡。而是在心還沒有準備好之前，替它保存一段真理。/);
   assert.match(zh[key('starlight3')], /當心準備好時，石頭自然會打開。[\s\S]*領取空行文字石板與泛黃的信封/);
 });
+
+test('Chimphu custodian, Terma Guardian, and Yeshe Tsogyal vision respond to checkpoints', async (t) => {
+  const scene = await createChimphuScene({ colliders: [] });
+  t.after(() => scene.dispose());
+  const object = (name) => scene.group.getObjectByName(name);
+
+  const custodian = object('StoryChimphuCustodian');
+  const guardian = object('StoryTermaGuardian');
+  const vision = object('StoryYesheTsogyalVision');
+  const motes = object('StoryDakiniStarlightMotes');
+  assert.ok(custodian && guardian && vision && motes);
+
+  scene.restore('road');
+  assert.equal(custodian.visible, false);
+  assert.equal(guardian.visible, false);
+  assert.equal(vision.visible, false);
+
+  // Custody station checkpoints show the breathing custodian
+  for (const id of ['custody', 'records', 'bundle']) {
+    scene.restore(id);
+    assert.equal(custodian.visible, true, id);
+    assert.equal(guardian.visible, false, id);
+    assert.equal(vision.visible, false, id);
+  }
+  const initialScaleY = custodian.scale.y;
+  scene.update(0.35);
+  assert.notEqual(custodian.scale.y, initialScaleY);
+
+  // Cave and light checkpoints reveal the Terma Guardian standing guard
+  scene.restore('cave');
+  assert.equal(custodian.visible, false);
+  assert.equal(guardian.visible, true);
+  assert.equal(vision.visible, false);
+  assert.equal(guardian.children[0].position.y, 0);
+
+  // Starlight checkpoints pacify the Terma Guardian and illuminate Yeshe Tsogyal Vision
+  scene.restore('starlight1');
+  assert.equal(guardian.visible, true);
+  assert.equal(vision.visible, true);
+  assert.ok(guardian.children[0].position.y < -0.5);
+  const motesRotY = motes.rotation.y;
+  scene.update(0.35);
+  assert.notEqual(motes.rotation.y, motesRotY);
+});

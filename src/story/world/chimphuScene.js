@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CHIMPHU_CHAPTER } from '../../data/story/chapters/chimphu.js';
 import { buildChimphuMap } from '../../world/maps/chimphu.js';
 import { seededRandom } from '../../world/mapBase.js';
+import { buildTermaGuardianModel } from '../../gameplay/bosses/termaGuardian.js';
 
 const checkpoints = CHIMPHU_CHAPTER.checkpoints.map(({ id }) => id);
 const approaches = {
@@ -154,6 +155,138 @@ function disposeOwned(group, extras) {
   group.clear();
 }
 
+function createCaveProtectors(group, getHeight) {
+  // 1. Elderly monastic custodian near the custody station table
+  const custodian = new THREE.Group();
+  custodian.name = 'StoryChimphuCustodian';
+  const cx = 5984.5;
+  const cz = -4.1;
+  const cy = getHeight(cx, cz);
+  custodian.position.set(cx, cy, cz);
+  custodian.rotation.y = 0.45;
+  const robeMat = new THREE.MeshStandardMaterial({
+    color: 0x7f1d1d,
+    roughness: 0.88,
+    emissive: 0x2a0a0a,
+    emissiveIntensity: 0.2,
+  });
+  const shawlMat = new THREE.MeshStandardMaterial({
+    color: 0xb45309,
+    roughness: 0.82,
+    emissive: 0x3b1804,
+    emissiveIntensity: 0.18,
+  });
+  const skinMat = new THREE.MeshStandardMaterial({ color: 0xd6b498, roughness: 0.78 });
+  const robe = new THREE.Mesh(new THREE.ConeGeometry(0.36, 1.18, 10), robeMat);
+  robe.position.y = 0.59;
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 0.54, 10), shawlMat);
+  torso.position.y = 1.05;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), skinMat);
+  head.position.y = 1.46;
+  custodian.add(robe, torso, head);
+  group.add(custodian);
+
+  // 2. Terma Guardian standing guard at the cave threshold
+  const guardian = buildTermaGuardianModel(THREE);
+  guardian.group.name = 'StoryTermaGuardian';
+  const gx = 5987.2;
+  const gz = -34.2;
+  guardian.group.position.set(gx, getHeight(gx, gz), gz);
+  guardian.group.rotation.y = -0.35;
+  guardian.group.scale.setScalar(0.78);
+  group.add(guardian.group);
+
+  // 3. Serene lotus-seated translucent golden-cyan silhouette of Yeshe Tsogyal inside the cave alcove
+  const vision = new THREE.Group();
+  vision.name = 'StoryYesheTsogyalVision';
+  const vx = 5985;
+  const vz = -35.1;
+  const vy = getHeight(vx, vz) + 0.32;
+  vision.position.set(vx, vy, vz);
+  group.add(vision);
+
+  const cyanGoldMat = new THREE.MeshStandardMaterial({
+    color: 0x67e8f9,
+    emissive: 0x0891b2,
+    emissiveIntensity: 0.85,
+    roughness: 0.25,
+    metalness: 0.2,
+    transparent: true,
+    opacity: 0.82,
+  });
+  const goldHaloMat = new THREE.MeshBasicMaterial({
+    color: 0xfde047,
+    transparent: true,
+    opacity: 0.88,
+    side: THREE.DoubleSide,
+  });
+
+  const lotusBase = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.48, 0.22, 12), goldHaloMat);
+  lotusBase.position.y = 0.11;
+  const seatedRobe = new THREE.Mesh(new THREE.ConeGeometry(0.46, 0.92, 12), cyanGoldMat);
+  seatedRobe.position.y = 0.58;
+  const dakiniTorso = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.26, 0.48, 10), cyanGoldMat);
+  dakiniTorso.position.y = 1.08;
+  const dakiniHead = new THREE.Mesh(new THREE.SphereGeometry(0.17, 12, 10), cyanGoldMat);
+  dakiniHead.position.y = 1.46;
+  const dakiniCrown = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.025, 6, 16), goldHaloMat);
+  dakiniCrown.rotation.x = Math.PI / 2;
+  dakiniCrown.position.y = 1.56;
+  const mudraHands = new THREE.Mesh(new THREE.OctahedronGeometry(0.1, 0), goldHaloMat);
+  mudraHands.position.set(0, 1.06, 0.24);
+  const dakiniHalo = new THREE.Mesh(new THREE.RingGeometry(0.44, 0.54, 28), goldHaloMat);
+  dakiniHalo.position.set(0, 1.46, -0.15);
+
+  const motesRing = new THREE.Group();
+  motesRing.name = 'StoryDakiniStarlightMotes';
+  motesRing.position.y = 1.15;
+  const moteGeo = new THREE.OctahedronGeometry(0.065, 0);
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const mote = new THREE.Mesh(moteGeo, goldHaloMat);
+    mote.position.set(Math.cos(a) * 0.78, (i % 2) * 0.18 - 0.09, Math.sin(a) * 0.78);
+    motesRing.add(mote);
+  }
+
+  vision.add(lotusBase, seatedRobe, dakiniTorso, dakiniHead, dakiniCrown, mudraHands, dakiniHalo, motesRing);
+
+  return {
+    set(checkpointIdx, id, dt, time) {
+      const stepDt = dt > 0 ? dt : 0.016;
+      const custodyIdx = checkpoints.indexOf('custody');
+      const bundleIdx = checkpoints.indexOf('bundle');
+      const caveIdx = checkpoints.indexOf('cave');
+      const starlight1Idx = checkpoints.indexOf('starlight1');
+
+      // Custodian visible at custody, records, bundle
+      custodian.visible = checkpointIdx >= custodyIdx && checkpointIdx <= bundleIdx;
+      if (custodian.visible) {
+        custodian.scale.y = 1 + Math.sin(time * 2.4) * 0.025;
+        custodian.rotation.z = Math.sin(time * 1.6) * 0.02;
+      }
+
+      // Terma Guardian visible from 'cave' onwards; shifts to peaceful kneel at 'starlight1'+
+      guardian.group.visible = checkpointIdx >= caveIdx;
+      if (guardian.group.visible) {
+        const subdued = checkpointIdx >= starlight1Idx;
+        guardian.anim(stepDt, {
+          animState: subdued ? 'kneel' : id === 'light' ? 'windup' : 'idle',
+          enraged: id === 'light',
+          subdued,
+        });
+      }
+
+      // Yeshe Tsogyal Vision illuminates from 'starlight1' through 'complete'
+      vision.visible = checkpointIdx >= starlight1Idx;
+      if (vision.visible) {
+        vision.position.y = vy + Math.sin(time * 2.2) * 0.08;
+        dakiniHalo.rotation.z = time * 0.95;
+        motesRing.rotation.y = time * 1.45;
+      }
+    },
+  };
+}
+
 export async function createChimphuScene(ctx) {
   const group = new THREE.Group();
   group.name = 'StoryChimphu';
@@ -167,6 +300,7 @@ export async function createChimphuScene(ctx) {
   createRoadside(group, getHeight, box);
   const { lid, documents, bundle } = createCustody(group, getHeight, box);
   const { lights, render: renderLights } = createCaveLights(group, getHeight);
+  const protectors = createCaveProtectors(group, getHeight);
   const crack = mesh(group, box, new THREE.MeshBasicMaterial({
     color: 0xffd593, transparent: true, opacity: 0.75, toneMapped: false,
   }), [5985, getHeight(5985, -35.1) + 2, -35.4], [0.035, 2.1, 0.025]);
@@ -207,6 +341,7 @@ export async function createChimphuScene(ctx) {
     const scatter = id === 'descent' ? progress(1.15) : Number(checkpoint > checkpoints.indexOf('descent'));
     crack.visible = checkpoint >= checkpoints.indexOf('cave') && checkpoint <= checkpoints.indexOf('starlight3');
     renderLights(appear, scatter, ambient);
+    protectors.set(checkpoint, id, 0.016, ambient);
   }
 
   function restore(checkpointId, { animate = false, reducedMotion = false } = {}) {

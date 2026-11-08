@@ -3,6 +3,11 @@ import { createBus } from '../../core/events.js';
 import { MANGYUL_CHAPTER } from '../../data/story/chapters/mangyul.js';
 import { seededRandom } from '../../world/mapBase.js';
 import { createMangyulMap } from '../../world/maps/mangyul.js';
+import {
+  buildSnowSpriteModel,
+  buildHailGhostModel,
+  buildAvalancheBruteModel,
+} from '../../gameplay/enemyModels/mangyul.js';
 
 const colors = [0x2563eb, 0xf8fafc, 0xdc2626, 0x16a34a, 0xeab308];
 const checkpoints = MANGYUL_CHAPTER.checkpoints.map(({ id }) => id);
@@ -87,13 +92,183 @@ function setAltarFlags(altar, progress, focused) {
   });
 }
 
+function makeMonstersAndGoddesses(props, getHeight, altarPoints, passMarker) {
+  const kCfg = {
+    skin: 0x8ecae6,
+    armor: 0x1d3557,
+    accent: 0xe0fbfc,
+    glow: 0x90e0ef,
+    dark: 0x0f172a,
+    color: 0x8ecae6,
+    accentColor: 0xe0fbfc,
+    eyeColor: 0x90e0ef,
+  };
+
+  const monstersGroup = new THREE.Group();
+  monstersGroup.name = 'StoryMangyulMonsters';
+  props.add(monstersGroup);
+
+  const sprite1 = buildSnowSpriteModel(THREE, kCfg);
+  sprite1.root.name = 'StorySnowSpriteA';
+  const s1x = altarPoints[1].x - 3.8;
+  const s1z = altarPoints[1].z - 1.2;
+  sprite1.root.position.set(s1x, getHeight(s1x, s1z), s1z);
+  monstersGroup.add(sprite1.root);
+
+  const hail1 = buildHailGhostModel(THREE, kCfg);
+  hail1.root.name = 'StoryHailGhostA';
+  const h1x = altarPoints[4].x + 3.8;
+  const h1z = altarPoints[4].z - 1.0;
+  hail1.root.position.set(h1x, getHeight(h1x, h1z), h1z);
+  monstersGroup.add(hail1.root);
+
+  const sprite2 = buildSnowSpriteModel(THREE, kCfg);
+  sprite2.root.name = 'StorySnowSpriteB';
+  const s2x = altarPoints[7].x - 3.8;
+  const s2z = altarPoints[7].z - 1.2;
+  sprite2.root.position.set(s2x, getHeight(s2x, s2z), s2z);
+  monstersGroup.add(sprite2.root);
+
+  const hail2 = buildHailGhostModel(THREE, kCfg);
+  hail2.root.name = 'StoryHailGhostB';
+  const h2x = altarPoints[9].x + 3.8;
+  const h2z = altarPoints[9].z - 1.0;
+  hail2.root.position.set(h2x, getHeight(h2x, h2z), h2z);
+  monstersGroup.add(hail2.root);
+
+  const brute = buildAvalancheBruteModel(THREE, kCfg);
+  brute.root.name = 'StoryAvalancheBrute';
+  const bx = passMarker.x + 5.2;
+  const bz = passMarker.z - 2.4;
+  brute.root.position.set(bx, getHeight(bx, bz), bz);
+  monstersGroup.add(brute.root);
+
+  const monsterEntries = [
+    { model: sprite1, state: { animPhase: 0.2, state: 'idle' }, basePos: sprite1.root.position.clone() },
+    { model: hail1, state: { animPhase: 1.1, state: 'idle' }, basePos: hail1.root.position.clone() },
+    { model: sprite2, state: { animPhase: 2.3, state: 'idle' }, basePos: sprite2.root.position.clone() },
+    { model: hail2, state: { animPhase: 3.4, state: 'idle' }, basePos: hail2.root.position.clone() },
+    { model: brute, state: { animPhase: 0.7, state: 'idle', dashTimer: 0 }, basePos: brute.root.position.clone() },
+  ];
+
+  // Twelve Tenma Goddesses (十二丹瑪女神) beside the 12 cairn altars
+  const goddessesGroup = new THREE.Group();
+  goddessesGroup.name = 'StoryTenmaGoddesses';
+  props.add(goddessesGroup);
+
+  const robeGeo = new THREE.ConeGeometry(0.36, 1.38, 10);
+  const torsoGeo = new THREE.CylinderGeometry(0.18, 0.24, 0.56, 10);
+  const headGeo = new THREE.SphereGeometry(0.16, 10, 8);
+  const crownGeo = new THREE.TorusGeometry(0.16, 0.025, 6, 16);
+  crownGeo.rotateX(Math.PI / 2);
+  const haloGeo = new THREE.RingGeometry(0.38, 0.46, 24);
+
+  const goddessEntries = altarPoints.map((pt, index) => {
+    const goddess = new THREE.Group();
+    goddess.name = `StoryTenmaGoddess_${index + 1}`;
+    const side = index % 2 === 0 ? -1 : 1;
+    const gx = pt.x + side * 1.45;
+    const gz = pt.z - 0.95;
+    const gy = getHeight(gx, gz);
+    goddess.position.set(gx, gy, gz);
+    goddess.rotation.y = side * 0.45;
+
+    const robeMat = new THREE.MeshStandardMaterial({
+      color: 0x67e8f9,
+      emissive: 0x0e7490,
+      emissiveIntensity: 0.55,
+      roughness: 0.3,
+      metalness: 0.2,
+      transparent: true,
+      opacity: 0.78,
+    });
+    const goldMat = new THREE.MeshBasicMaterial({
+      color: 0xfde68a,
+      transparent: true,
+      opacity: 0.85,
+      side: THREE.DoubleSide,
+    });
+
+    const robe = new THREE.Mesh(robeGeo, robeMat);
+    robe.position.y = 0.69;
+    const torso = new THREE.Mesh(torsoGeo, robeMat);
+    torso.position.y = 1.24;
+    const head = new THREE.Mesh(headGeo, robeMat);
+    head.position.y = 1.66;
+    const crown = new THREE.Mesh(crownGeo, goldMat);
+    crown.position.y = 1.78;
+    const halo = new THREE.Mesh(haloGeo, goldMat);
+    halo.position.set(0, 1.66, -0.14);
+    goddess.add(robe, torso, head, crown, halo);
+    goddessesGroup.add(goddess);
+
+    return {
+      group: goddess,
+      halo,
+      robeMat,
+      goldMat,
+      baseY: gy,
+      defaultYaw: side * 0.45,
+      summitYaw: Math.atan2(passMarker.x - gx, passMarker.z - gz),
+    };
+  });
+
+  return {
+    set(checkpoint, dt, time) {
+      const stepDt = dt > 0 ? dt : 0.016;
+      const inQuestions = checkpoint >= firstAltar + 12 && checkpoint <= calmIndex;
+      const pacified = checkpoint > calmIndex;
+
+      for (const [idx, entry] of monsterEntries.entries()) {
+        const { model, state, basePos } = entry;
+        state.state = inQuestions ? 'windup' : 'idle';
+        model.animate(state, stepDt, !pacified);
+        if (pacified) {
+          model.root.scale.setScalar(0.62);
+          model.bodyRoot.rotation.x = 0.45;
+          model.root.position.set(
+            basePos.x,
+            basePos.y - 0.15 + Math.sin(time * 1.8 + idx) * 0.03,
+            basePos.z,
+          );
+        } else {
+          model.root.scale.setScalar(inQuestions ? 1.12 : 1.0);
+          model.bodyRoot.rotation.x = 0;
+          const swirl = Math.sin(time * 2.2 + idx * 1.3) * 0.28;
+          model.root.position.set(basePos.x + swirl, basePos.y, basePos.z);
+          if (inQuestions) {
+            model.root.rotation.y = Math.atan2(
+              passMarker.x - model.root.position.x,
+              passMarker.z - model.root.position.z,
+            );
+          } else {
+            model.root.rotation.y = Math.sin(time * 1.4 + idx) * 0.45;
+          }
+        }
+      }
+
+      for (const [idx, g] of goddessEntries.entries()) {
+        const active = checkpoint >= firstAltar + idx;
+        g.group.visible = active;
+        if (!active) continue;
+        g.group.position.y = g.baseY + Math.sin(time * 2.4 + idx * 0.6) * 0.08;
+        g.halo.rotation.z = time * 1.1 + idx * 0.5;
+        g.group.rotation.y = inQuestions || pacified ? g.summitYaw : g.defaultYaw;
+        g.robeMat.emissiveIntensity = pacified ? 0.85 : inQuestions ? 0.72 : 0.55;
+      }
+    },
+  };
+}
+
 function disposeMeshes(group, { disposeMaterials = true } = {}) {
   const geometries = new Set();
   const materials = new Set();
   group.traverse(mesh => {
     if (mesh.isInstancedMesh) mesh.dispose();
     if (mesh.geometry) geometries.add(mesh.geometry);
-    if (mesh.material) materials.add(mesh.material);
+    if (mesh.material) {
+      for (const m of [mesh.material].flat()) materials.add(m);
+    }
   });
   if (!disposeMaterials) return;
   for (const geometry of geometries) geometry.dispose();
@@ -124,6 +299,7 @@ export async function createMangyulScene(ctx) {
   let altars;
   let snow;
   let passFlags;
+  let spirits;
   try {
     const altarEntries = interactables.filter(entry => entry.kind === 'tenmaAltar');
     const passPosition = interactables.find(entry => entry.kind === 'passPrayerFlags').getPosition();
@@ -132,8 +308,10 @@ export async function createMangyulScene(ctx) {
       ({ type: 'circle', zone: 'mangyul', x: marker.x + dx, z: marker.z, r: 0.13 })));
     const margin = (ctx.config?.PLAYER?.radius ?? 0.35) + 0.18;
     let previous = { x: root.position.x, z: 43 };
+    const altarPoints = [];
     altars = altarEntries.map((entry, index) => {
       const point = entry.getPosition();
+      altarPoints.push(point);
       const target = getApproach(point, previous, colliders, margin, 1.75);
       targets.set(altarIds[index], target);
       previous = target;
@@ -148,6 +326,7 @@ export async function createMangyulScene(ctx) {
     targets.set('flags', flagTarget);
     targets.set('clearing', flagTarget);
     passFlags = makePassFlags(props, marker.x, marker.y, marker.z);
+    spirits = makeMonstersAndGoddesses(props, getHeight, altarPoints, marker);
     snow = root.children.find(child => child.isPoints);
     if (!snow) throw new Error('Mangyul snow geometry missing');
     // Keep the live particle cloud visible after the player travels away from its initial bounds.
@@ -166,7 +345,7 @@ export async function createMangyulScene(ctx) {
   let transitioning = false;
   let disposed = false;
 
-  function renderState(refreshAltarFlags) {
+  function renderState(refreshAltarFlags, dt = 0) {
     const observed = THREE.MathUtils.clamp(checkpoint - firstAltar, 0, altars.length);
     const ease = transitioning ? THREE.MathUtils.smoothstep(elapsed, 0, 0.8) : 1;
     const tied = checkpoint > flagsIndex;
@@ -181,6 +360,7 @@ export async function createMangyulScene(ctx) {
       });
     }
     passFlags.set(tied, tied && tying ? ease : 1, ambient, storm);
+    spirits.set(checkpoint, dt, ambient);
     snow.material.opacity = (reduced ? 0.42 : 0.92) * storm;
     snow.material.size = 0.35;
     snow.visible = storm > 0.01;
@@ -215,7 +395,7 @@ export async function createMangyulScene(ctx) {
     const position = ctx.state?.player?.position;
     if (position) state.player.position.copy(position);
     map.update(dt, ambient);
-    renderState(transitioning);
+    renderState(transitioning, dt);
     if (elapsed >= 0.8) transitioning = false;
   }
 

@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { YARLUNG_CHAPTER } from '../../data/story/chapters/yarlung.js';
 import { createMap } from '../../world/maps/yarlung.js';
 import { seededRandom } from '../../world/mapBase.js';
+import { buildNyenModel, buildHailCoreModel } from '../../gameplay/enemyModels/yarlung.js';
+import { buildYarlhaShampoModel } from '../../gameplay/bosses/yarlhaShampo.js';
 
 const pasture = { x: 4000, z: -72 };
 const checkpointIds = YARLUNG_CHAPTER.checkpoints.map(({ id }) => id);
@@ -184,6 +186,102 @@ function disposeGroup(group) {
   group.clear();
 }
 
+function makeMonsters(clearing) {
+  const monsters = new THREE.Group();
+  monsters.name = 'StoryYarlungMonsters';
+  clearing.add(monsters);
+
+  const nyenA = buildNyenModel(THREE);
+  nyenA.root.name = 'StoryNyenA';
+  nyenA.root.position.set(-2.8, 0, 0.85);
+  nyenA.root.rotation.y = 1.25;
+  monsters.add(nyenA.root);
+
+  const nyenB = buildNyenModel(THREE);
+  nyenB.root.name = 'StoryNyenB';
+  nyenB.root.position.set(2.8, 0, -0.65);
+  nyenB.root.rotation.y = -1.35;
+  monsters.add(nyenB.root);
+
+  const hailA = buildHailCoreModel(THREE);
+  hailA.root.name = 'StoryHailCoreA';
+  hailA.root.position.set(-2.2, 0, -1.75);
+  monsters.add(hailA.root);
+
+  const hailB = buildHailCoreModel(THREE);
+  hailB.root.name = 'StoryHailCoreB';
+  hailB.root.position.set(2.35, 0, 1.45);
+  monsters.add(hailB.root);
+
+  const shampo = buildYarlhaShampoModel(THREE);
+  shampo.group.name = 'StoryYarlhaShampo';
+  shampo.group.position.set(0, 0, -4.2);
+  shampo.group.scale.setScalar(0.65);
+  clearing.add(shampo.group);
+
+  const ringMat = new THREE.MeshBasicMaterial({
+    color: 0xfacc15,
+    transparent: true,
+    opacity: 0.78,
+    side: THREE.DoubleSide,
+  });
+  const vajraRing = new THREE.Mesh(new THREE.RingGeometry(1.4, 1.58, 36), ringMat);
+  vajraRing.name = 'StoryYarlungVajraRing';
+  vajraRing.rotation.x = Math.PI / 2;
+  vajraRing.position.set(0, 1.65, 0);
+  shampo.group.add(vajraRing);
+
+  const nyenList = [
+    { model: nyenA, basePos: new THREE.Vector3(-2.8, 0, 0.85) },
+    { model: nyenB, basePos: new THREE.Vector3(2.8, 0, -0.65) },
+  ];
+  const hailList = [hailA, hailB];
+
+  return {
+    set(checkpoint, dt, time) {
+      const stepDt = dt > 0 ? dt : 0.016;
+      const stone1Cleared = checkpoint >= 3;
+      const freed = checkpoint >= 5;
+
+      for (const [idx, { model, basePos }] of nyenList.entries()) {
+        model.animate(
+          {
+            animTime: time + idx * 0.9,
+            state: stone1Cleared ? 'idle' : 'windup',
+            stateTimer: 0.2,
+            activeAttack: { id: 'rootGrasp', windup: 0.6 },
+          },
+          stepDt,
+          !freed,
+        );
+        if (freed) {
+          model.root.position.set(basePos.x * 1.25, -0.22, basePos.z * 1.25);
+          model.bodyRoot.rotation.x = 0.42;
+          model.root.scale.setScalar(0.84);
+        } else {
+          model.root.position.copy(basePos);
+          model.bodyRoot.rotation.x = 0;
+          model.root.scale.setScalar(stone1Cleared ? 0.92 : 1.0);
+        }
+      }
+
+      for (const [idx, hail] of hailList.entries()) {
+        const cleared = idx === 0 ? stone1Cleared : freed;
+        hail.animate({ animTime: time + idx * 1.2 }, stepDt * (cleared ? 0.35 : 1.4));
+        hail.root.scale.setScalar(cleared ? 0.42 : 0.88);
+        hail.root.position.y = cleared ? -0.35 : 0;
+      }
+
+      const shampoVisible = checkpoint >= 6;
+      shampo.group.visible = shampoVisible;
+      if (shampoVisible) {
+        shampo.anim(stepDt, { animState: 'kneel', subdued: true, enraged: false });
+        vajraRing.rotation.z = time * 1.25;
+      }
+    },
+  };
+}
+
 export async function createYarlungScene(ctx) {
   const group = new THREE.Group();
   group.name = 'StoryYarlung';
@@ -200,6 +298,7 @@ export async function createYarlungScene(ctx) {
   const sphere = new THREE.SphereGeometry(1, 18, 12);
   const { yak, torso, head, forelegs } = makeYak(clearing, sphere);
   const guardian = makeGuardian(clearing, sphere);
+  const monsters = makeMonsters(clearing);
   const rocks = new THREE.DodecahedronGeometry(1);
   const rock = new THREE.MeshStandardMaterial({ color: 0x69625e, roughness: 0.97 });
   const stones = [
@@ -220,7 +319,7 @@ export async function createYarlungScene(ctx) {
   const agitation = [1, 0.78, 0.16, 0.84, 0.08, 0.13, 0.04, 0, 0, 0, 0];
   const bow = [-0.1, -0.07, 0.19, -0.22, 0.28, 0.04, 0.55, 0.55, 0.55, 0.55, 0.55];
 
-  function render() {
+  function render(dt = 0) {
     const ease = (duration) => transition ? THREE.MathUtils.smoothstep(elapsed, 0, duration) : 1;
     const from = transition ? checkpoint - 1 : checkpoint;
     const tension = THREE.MathUtils.lerp(agitation[from], agitation[checkpoint], ease(0.73));
@@ -241,6 +340,7 @@ export async function createYarlungScene(ctx) {
     yak.visible = apparition < 0.65;
     yak.scale.setScalar(1 - apparition * 0.72);
     guardian.set(apparition);
+    monsters.set(checkpoint, dt, ambient);
     animalCollider.z = pasture.z + yak.position.z;
     animalCollider.r = yak.visible ? 1.58 : 0.9;
     stones[0].set(checkpoint === 3 ? ease(0.78) : Number(checkpoint > 3));
@@ -273,7 +373,7 @@ export async function createYarlungScene(ctx) {
       elapsed += dt;
       ambient += dt;
       map.update(dt);
-      render();
+      render(dt);
     },
     getSnapshot() {
       return {
