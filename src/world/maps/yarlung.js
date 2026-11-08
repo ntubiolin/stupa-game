@@ -99,7 +99,13 @@ export function createMap(ctx) {
   }
 
   // ---------------------------------------------------------------- 1. Heightfield Terrain
-  const getHeight = (wx, wz) => {
+  const BRIDGE_LZ = 42;
+  const BRIDGE_DECK_Y = 0.52;
+  const BRIDGE_DECK_HALF_X = 5.5;
+  const BRIDGE_RAMP_END_X = 6.9;
+  const BRIDGE_HALF_Z = 1.95;
+
+  const getTerrainHeight = (wx, wz) => {
     const lx = wx - origin.x;
     const lz = wz - origin.z;
     const r = Math.hypot(lx, lz);
@@ -147,6 +153,24 @@ export function createMap(ctx) {
     return h;
   };
 
+  const getHeight = (wx, wz) => {
+    const baseH = getTerrainHeight(wx, wz);
+    const lx = wx - origin.x;
+    const lz = wz - origin.z;
+
+    // Wooden bridge deck & East/West approach ramps across the central river at (0, 42)
+    if (Math.abs(lz - BRIDGE_LZ) <= BRIDGE_HALF_Z && Math.abs(lx) < BRIDGE_RAMP_END_X) {
+      const absX = Math.abs(lx);
+      if (absX <= BRIDGE_DECK_HALF_X) {
+        return BRIDGE_DECK_Y;
+      }
+      const t = (BRIDGE_RAMP_END_X - absX) / (BRIDGE_RAMP_END_X - BRIDGE_DECK_HALF_X);
+      return baseH + (BRIDGE_DECK_Y - baseH) * t;
+    }
+
+    return baseH;
+  };
+
   const valleyGreen = new THREE.Color(0x5d8a41);
   const barleyGold = new THREE.Color(0x9ab046);
   const riverBankCol = new THREE.Color(0x7c7458);
@@ -158,7 +182,7 @@ export function createMap(ctx) {
     origin,
     size: 260,
     segments: 96,
-    heightFn: getHeight,
+    heightFn: getTerrainHeight,
     colorFn: (wx, wz, y, lx, lz) => {
       const noise = Math.sin(lx * 0.12) * Math.cos(lz * 0.12) * 0.5 + 0.5;
       // Snowline transition in the northern Alpine Pasture (lz < -50)
@@ -254,14 +278,69 @@ export function createMap(ctx) {
   // Wooden bridge across the river at (0, 42)
   const timberMat = new THREE.MeshStandardMaterial({ color: 0x5c3d28, roughness: 0.86 });
   const bridgeGroup = new THREE.Group();
-  bridgeGroup.position.set(origin.x, 0.38, origin.z + 42);
+  bridgeGroup.name = 'YarlungRiverBridge';
+  bridgeGroup.position.set(origin.x, 0.38, origin.z + BRIDGE_LZ);
   const bridgeDeck = new THREE.Mesh(new THREE.BoxGeometry(11.0, 0.28, 3.8), timberMat);
+  bridgeDeck.castShadow = true;
+  bridgeDeck.receiveShadow = true;
+
+  // East & West sloped timber approach ramps connecting the 0.52m deck to the riverbanks
+  const rampGeo = new THREE.BoxGeometry(1.62, 0.24, 3.8);
+  const rampPitch = Math.atan2(0.42, 1.4);
+  for (const side of [-1, 1]) {
+    const ramp = new THREE.Mesh(rampGeo, timberMat);
+    ramp.position.set(side * 6.18, -0.18, 0);
+    ramp.rotation.z = -side * rampPitch;
+    ramp.castShadow = true;
+    ramp.receiveShadow = true;
+    bridgeGroup.add(ramp);
+  }
+
   const railN = new THREE.Mesh(new THREE.BoxGeometry(11.0, 0.65, 0.18), timberMat);
   railN.position.set(0, 0.42, -1.75);
+  railN.castShadow = true;
   const railS = new THREE.Mesh(new THREE.BoxGeometry(11.0, 0.65, 0.18), timberMat);
   railS.position.set(0, 0.42, 1.75);
+  railS.castShadow = true;
   bridgeGroup.add(bridgeDeck, railN, railS);
+
+  // Sloped ramp side rails & timber support piers anchored into riverbed and banks
+  const rampRailGeo = new THREE.BoxGeometry(1.55, 0.52, 0.18);
+  const bridgePostGeo = new THREE.CylinderGeometry(0.13, 0.15, 1.35, 6);
+  for (const rz of [-1.75, 1.75]) {
+    for (const side of [-1, 1]) {
+      const rampRail = new THREE.Mesh(rampRailGeo, timberMat);
+      rampRail.position.set(side * 6.15, 0.18, rz);
+      rampRail.rotation.z = -side * rampPitch;
+      rampRail.castShadow = true;
+      bridgeGroup.add(rampRail);
+    }
+    for (const px of [-6.8, -5.4, -2.7, 0, 2.7, 5.4, 6.8]) {
+      const isRampEnd = Math.abs(px) > 6.0;
+      const post = new THREE.Mesh(bridgePostGeo, timberMat);
+      post.position.set(px, isRampEnd ? -0.12 : 0.18, rz);
+      post.castShadow = true;
+      bridgeGroup.add(post);
+    }
+  }
   group.add(bridgeGroup);
+
+  // Solid side railing colliders so entities cannot walk North/South through the bridge sides,
+  // while leaving the 3.16m East-West roadway completely clear for crossing.
+  pushCollider(ctx, 'yarlung', {
+    type: 'box',
+    minX: origin.x - BRIDGE_RAMP_END_X,
+    maxX: origin.x + BRIDGE_RAMP_END_X,
+    minZ: origin.z + BRIDGE_LZ - BRIDGE_HALF_Z,
+    maxZ: origin.z + BRIDGE_LZ - 1.58,
+  });
+  pushCollider(ctx, 'yarlung', {
+    type: 'box',
+    minX: origin.x - BRIDGE_RAMP_END_X,
+    maxX: origin.x + BRIDGE_RAMP_END_X,
+    minZ: origin.z + BRIDGE_LZ + 1.58,
+    maxZ: origin.z + BRIDGE_LZ + BRIDGE_HALF_Z,
+  });
 
   // ---------------------------------------------------------------- 4. Swaying Barley Fields on Both Riverbanks (`InstancedMesh`)
   const barleyCount = 320;
@@ -1059,7 +1138,7 @@ export function createMap(ctx) {
     avoid: [
       { x: origin.x, z: origin.z + 85, r: 15 }, // Entrance & Waypoint
       { x: origin.x + 25, z: origin.z + 45, r: 16 }, // Yarlung Village
-      { x: origin.x, z: origin.z + 42, r: 9 }, // River Bridge
+      { x: origin.x, z: origin.z + 42, r: 12 }, // River Bridge & East/West approaches
       { x: origin.x - 45, z: origin.z + 20, r: 16 }, // Yumbulagang Palace
       { x: origin.x + 60, z: origin.z - 30, r: 15 }, // Sheldrak Crystal Cave
       { x: origin.x, z: origin.z - 75, r: 25 }, // Alpine Pasture Arena
