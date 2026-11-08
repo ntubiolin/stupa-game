@@ -835,12 +835,17 @@ export function createQuests(ctx) {
   bus.on('zone:change', ({ to }) => {
     const mapDef = ctx.world?.getMap?.(to);
     const intro = mapDef?.chapterIntro;
-    if (intro?.startQuest && !isActive(intro.startQuest) && !isDone(intro.startQuest)) {
+    const startQuestDone = Boolean(intro?.startQuest && isDone(intro.startQuest));
+    if (intro?.startQuest && !isActive(intro.startQuest) && !startQuestDone) {
       start(intro.startQuest);
     }
     checkAutoStartQuests();
     if (intro && intro.flag && !hasFlag(intro.flag)) {
-      bus.emit('chapter:intro', intro);
+      if (startQuestDone) {
+        setFlag(intro.flag, true);
+      } else {
+        bus.emit('chapter:intro', intro);
+      }
     }
   });
 
