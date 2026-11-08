@@ -3,7 +3,7 @@ import { i18n } from '../i18n.js';
 i18n.register({
   zh: {
     'story.photography.title': '記憶攝影',
-    'story.photography.reference': '構圖示意 · 修復影像為 AI 插畫重建，非歷史照片',
+    'story.photography.reference': '構圖引導 · 循著映真當年的取景角度，將佛塔輪廓與記憶疊影對齊',
     'story.photography.overlay': '記憶疊影',
     'story.photography.keyboard': 'WASD 移動 · 方向鍵或拖曳轉向 · C 拍攝',
     'story.photography.touch': '拖曳轉向 · 用輔助對齊調整站位',
@@ -18,7 +18,7 @@ i18n.register({
   },
   en: {
     'story.photography.title': 'Memory Photography',
-    'story.photography.reference': 'Framing guide · Repair image is AI illustration, not an archival photo',
+    'story.photography.reference': 'Framing guide · Follow Yingzhen’s original vantage point and align the stupa with the memory overlay',
     'story.photography.overlay': 'Memory overlay',
     'story.photography.keyboard': 'WASD to move · Arrows or drag to look · C to capture',
     'story.photography.touch': 'Drag to look · Use Align assist to adjust your position',

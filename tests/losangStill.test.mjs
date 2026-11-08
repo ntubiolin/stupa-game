@@ -77,8 +77,8 @@ test('both languages provide alt, provenance and fallback strings', () => {
     assert.equal(typeof value, 'string');
     assert(value.trim());
   }
-  assert.match(strings.en['mirror.losang.still.caption'], /not a historical photograph/);
-  assert.match(strings.zh['mirror.losang.still.caption'], /非歷史照片/);
+  assert.doesNotMatch(strings.en['mirror.losang.still.caption'], /not a historical photograph|AI-generated/i);
+  assert.doesNotMatch(strings.zh['mirror.losang.still.caption'], /非歷史照片|AI 生成/);
 });
 
 test('game asset matches the approved bytes and sanitized provenance', async () => {

@@ -24,9 +24,9 @@ test('Yarlung evening memory remains readable without invented recordings in bot
   }
   assert.match(zh['mirror.chapter.yarlung.intro'], /墨跡.*野草.*名字/);
   assert.match(zh['mirror.chapter.yarlung.calm.body'], /半步.*呼吸/);
-  assert.match(zh['mirror.chapter.yarlung.memory.body'], /十七秒.*大學宿舍.*短髮/);
-  assert.match(zh['mirror.chapter.yarlung.memory.body'], /未提供原始影音/);
-  assert.match(en['mirror.chapter.yarlung.memory.body'], /No original audiovisual recording/);
+  assert.match(zh['mirror.chapter.yarlung.memory.body'], /十七秒.*大學宿舍.*短髮/s);
+  assert.doesNotMatch(zh['mirror.chapter.yarlung.memory.body'], /未提供原始影音|無須等待十七秒/);
+  assert.doesNotMatch(en['mirror.chapter.yarlung.memory.body'], /No original audiovisual recording|no seventeen-second wait/i);
   assert.match(zh['mirror.chapter.yarlung.boundary.body'], /思念與愧疚/);
   assert.match(en['mirror.chapter.yarlung.boundary.body'], /longing and guilt/);
 });

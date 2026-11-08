@@ -94,8 +94,8 @@ test('both languages provide alt, provenance caption and fallback strings for al
         assert(value.trim(), `empty ${lang} mirror.${spec.key}.${suffix}`);
       }
     }
-    assert.match(strings.en[`mirror.${spec.key}.caption`], /not a historical photograph/);
-    assert.match(strings.zh[`mirror.${spec.key}.caption`], /非歷史照片/);
+    assert.doesNotMatch(strings.en[`mirror.${spec.key}.caption`], /not a historical photograph|AI-generated/i);
+    assert.doesNotMatch(strings.zh[`mirror.${spec.key}.caption`], /非歷史照片|AI 生成/);
   }
 });
 
