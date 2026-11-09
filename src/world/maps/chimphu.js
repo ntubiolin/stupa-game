@@ -14,14 +14,104 @@
  * Strictly zero PointLights (uses emissive MeshStandardMaterial & AdditiveBlending).
  */
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { CHIMPHU_MAP } from '../../data/maps/chimphu.js';
 import {
   createHeightfieldTerrain,
   addRimMountains,
   buildGateArch,
+  seededRandom,
   pushCollider,
 } from '../mapBase.js';
 import { i18n } from '../../i18n.js';
+
+let _seaOfCloudsTex = null;
+function getSeaOfCloudsTexture() {
+  if (_seaOfCloudsTex) return _seaOfCloudsTex;
+  if (typeof document === 'undefined') return null;
+  const size = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const c = canvas.getContext('2d');
+  if (c) {
+    c.clearRect(0, 0, size, size);
+    // Base radial cloud bank fading smoothly to 0 at edges
+    const baseGrad = c.createRadialGradient(256, 256, 24, 256, 256, 248);
+    baseGrad.addColorStop(0.0, 'rgba(255, 249, 235, 0.88)');
+    baseGrad.addColorStop(0.42, 'rgba(254, 235, 200, 0.68)');
+    baseGrad.addColorStop(0.75, 'rgba(226, 232, 240, 0.28)');
+    baseGrad.addColorStop(1.0, 'rgba(203, 213, 225, 0.0)');
+    c.fillStyle = baseGrad;
+    c.fillRect(0, 0, size, size);
+
+    // Billowing multi-lobe cloud puffs for painterly SEASON x Firewatch volume
+    const puffRng = seededRandom(6040);
+    for (let i = 0; i < 28; i++) {
+      const ang = (i / 28) * Math.PI * 2 + puffRng() * 0.25;
+      const dist = 25 + puffRng() * 135;
+      const px = 256 + Math.cos(ang) * dist;
+      const py = 256 + Math.sin(ang) * dist;
+      const pr = 42 + puffRng() * 64;
+      const pg = c.createRadialGradient(px, py - pr * 0.15, 4, px, py, pr);
+      const isWarmCrest = i % 2 === 0;
+      pg.addColorStop(0.0, isWarmCrest ? 'rgba(255, 251, 235, 0.55)' : 'rgba(253, 230, 188, 0.45)');
+      pg.addColorStop(0.55, isWarmCrest ? 'rgba(254, 215, 170, 0.24)' : 'rgba(226, 232, 240, 0.22)');
+      pg.addColorStop(1.0, 'rgba(255, 255, 255, 0.0)');
+      c.fillStyle = pg;
+      if (typeof c.beginPath === 'function' && typeof c.arc === 'function' && typeof c.fill === 'function') {
+        c.beginPath();
+        c.arc(px, py, pr, 0, Math.PI * 2);
+        c.fill();
+      } else {
+        c.fillRect(px - pr, py - pr, pr * 2, pr * 2);
+      }
+    }
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  _seaOfCloudsTex = tex;
+  return tex;
+}
+
+/**
+ * Builds a draped white silk Khatag ceremonial scarf (`潔白哈達`) between two 3D points
+ * with a catenary curve and hanging silk tails at both ends.
+ */
+function createKhatagScarf(startVec, endVec, silkMat, { sag = 0.36, segs = 10, tailLen = 0.65 } = {}) {
+  const grp = new THREE.Group();
+  const partGeos = [];
+  for (let i = 0; i < segs; i++) {
+    const t0 = i / segs;
+    const t1 = (i + 1) / segs;
+    const tMid = (t0 + t1) * 0.5;
+    const p0 = new THREE.Vector3().lerpVectors(startVec, endVec, t0);
+    const p1 = new THREE.Vector3().lerpVectors(startVec, endVec, t1);
+    p0.y -= Math.sin(t0 * Math.PI) * sag;
+    p1.y -= Math.sin(t1 * Math.PI) * sag;
+    const segLen = p0.distanceTo(p1) * 1.06;
+    const ribbon = new THREE.BoxGeometry(0.16, 0.028, segLen);
+    const dummyObj = new THREE.Object3D();
+    dummyObj.position.copy(p0).lerp(p1, 0.5);
+    dummyObj.lookAt(p1);
+    dummyObj.rotateZ(Math.sin(tMid * Math.PI) * 0.12);
+    dummyObj.updateMatrix();
+    ribbon.applyMatrix4(dummyObj.matrix);
+    partGeos.push(ribbon);
+  }
+  // Hanging silk tails at start & end
+  for (const [endPt, dirSign] of [[startVec, -1], [endVec, 1]]) {
+    const tail = new THREE.BoxGeometry(0.17, tailLen, 0.03);
+    tail.rotateZ(dirSign * 0.08);
+    tail.translate(endPt.x, endPt.y - tailLen * 0.48, endPt.z);
+    partGeos.push(tail);
+  }
+  const merged = mergeGeometries(partGeos, false);
+  for (const g of partGeos) g.dispose();
+  grp.add(new THREE.Mesh(merged, silkMat));
+  return { group: grp, geometry: merged };
+}
 
 function createPrayerFlagString(startVec, endVec, { count = 12, sag = 0.55 } = {}) {
   const grp = new THREE.Group();
@@ -154,9 +244,10 @@ export function buildChimphuMap(ctx) {
   const interactables = [];
   const disposables = [];
 
-  const mossCol = new THREE.Color(0x4b5d49);
-  const cliffCol = new THREE.Color(0x525954);
-  const pathCol = new THREE.Color(0x747b74);
+  const mossCol = new THREE.Color(0x4a6943);
+  const meadowWarmCol = new THREE.Color(0x887d45);
+  const cliffCol = new THREE.Color(0x57544e);
+  const pathCol = new THREE.Color(0x7d8076);
   const tmpCol = new THREE.Color();
 
   const { mesh: terrainMesh } = createHeightfieldTerrain(ctx, {
@@ -172,7 +263,9 @@ export function buildChimphuMap(ctx) {
         return cliffCol;
       }
       const n = Math.sin(lx * 0.1) * Math.cos(lz * 0.1) * 0.5 + 0.5;
-      return tmpCol.lerpColors(mossCol, cliffCol, n * 0.35);
+      const sunPatch = Math.max(0, Math.sin(lx * 0.065 + lz * 0.055));
+      tmpCol.lerpColors(mossCol, cliffCol, n * 0.28);
+      return tmpCol.lerp(meadowWarmCol, sunPatch * 0.42);
     },
   });
   group.add(terrainMesh);
@@ -642,7 +735,37 @@ export function buildChimphuMap(ctx) {
     },
   });
 
-  // ---------------------------------------------------------------- 4. Small Tibetan Retreat Huts (`閉關房`) & Meditation Cushions
+  // Shared materials for Tibetan fantsang windows, butter-lamp niches, and white silk Khatag scarves (0 PointLights)
+  const fantsangFrameMat = new THREE.MeshStandardMaterial({
+    color: 0x1c1917,
+    roughness: 0.86,
+    metalness: 0.06,
+  });
+  const warmButterWindowMat = new THREE.MeshStandardMaterial({
+    color: 0xffd27d,
+    emissive: 0xffb347,
+    emissiveIntensity: 0.48,
+    roughness: 0.35,
+    metalness: 0.12,
+  });
+  const khatagSilkMat = new THREE.MeshStandardMaterial({
+    color: 0xf8fafc,
+    emissive: 0xe2e8f0,
+    emissiveIntensity: 0.24,
+    roughness: 0.42,
+    metalness: 0.05,
+    side: THREE.DoubleSide,
+  });
+  disposables.push(fantsangFrameMat, warmButterWindowMat, khatagSilkMat);
+
+  function addDrapedKhatag(parent, startVec, endVec, opts) {
+    const { group: kg, geometry: kGeo } = createKhatagScarf(startVec, endVec, khatagSilkMat, opts);
+    parent.add(kg);
+    disposables.push(kGeo);
+    return kg;
+  }
+
+  // ---------------------------------------------------------------- 4. Small Tibetan Retreat Huts (`閉關房`), Cliffside Meditation Cells, Khatags & Mantra Carvings
   function buildRetreatHut(lx, lz, rotY, cushionOffset) {
     const wx = ox + lx;
     const wz = oz + lz;
@@ -662,10 +785,56 @@ export function buildChimphuMap(ctx) {
     const roof = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.25, 4.0), woodMat);
     roof.position.y = 2.8;
 
-    const door = new THREE.Mesh(new THREE.BoxGeometry(0.95, 1.75, 0.15), woodMat);
+    const doorFrame = new THREE.Mesh(new THREE.BoxGeometry(1.18, 1.92, 0.16), fantsangFrameMat);
+    doorFrame.position.set(0, 0.96, 1.81);
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.92, 1.72, 0.19), woodMat);
     door.position.set(0, 0.88, 1.82);
 
-    hut.add(body, frieze, roof, door);
+    // Flanking Tibetan black trapezoidal windows (`fantsang`) with warm golden-amber butter-lamp panes
+    for (const sideX of [-1.32, 1.32]) {
+      const wFrame = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.92, 0.14), fantsangFrameMat);
+      wFrame.position.set(sideX, 1.48, 1.81);
+      const wPane = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.68, 0.17), warmButterWindowMat);
+      wPane.position.set(sideX, 1.48, 1.82);
+      hut.add(wFrame, wPane);
+    }
+
+    // Side facade windows
+    for (const sideSign of [-1, 1]) {
+      const sFrame = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.88, 0.78), fantsangFrameMat);
+      sFrame.position.set(sideSign * 2.11, 1.48, 0);
+      const sPane = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.64, 0.54), warmButterWindowMat);
+      sPane.position.set(sideSign * 2.12, 1.48, 0);
+      hut.add(sFrame, sPane);
+    }
+
+    // Golden Melong mirror bosses along the front Penma frieze + rooftop incense pinnacle
+    for (const bx of [-1.45, -0.72, 0, 0.72, 1.45]) {
+      const boss = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.1, 10), goldTrimMat);
+      boss.rotation.x = Math.PI / 2;
+      boss.position.set(bx, 2.48, 1.88);
+      hut.add(boss);
+    }
+    const roofFinial = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.55, 8), goldTrimMat);
+    roofFinial.position.set(0, 3.18, 0);
+
+    // Warm butter-lamp offering niche recessed beside the doorway (0 PointLights)
+    const nicheBox = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.52, 0.18), fantsangFrameMat);
+    nicheBox.position.set(0.78, 1.12, 1.81);
+    const nicheFlame = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.22, 8), lampFlameMat);
+    nicheFlame.position.set(0.78, 1.08, 1.88);
+    const nicheHalo = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), lampHaloMat);
+    nicheHalo.position.set(0.78, 1.08, 1.88);
+
+    // Draped white silk Khatag scarf over the retreat hut doorway lintel
+    addDrapedKhatag(
+      hut,
+      new THREE.Vector3(-0.62, 1.92, 1.91),
+      new THREE.Vector3(0.62, 1.92, 1.91),
+      { sag: 0.22, segs: 8, tailLen: 0.52 },
+    );
+
+    hut.add(body, frieze, roof, doorFrame, door, roofFinial, nicheBox, nicheFlame, nicheHalo);
     group.add(hut);
     registerCollider({ type: 'circle', x: wx, z: wz, r: 2.35 });
 
@@ -690,6 +859,100 @@ export function buildChimphuMap(ctx) {
 
   buildRetreatHut(-18, -5, 0.35, { lx: -15, lz: -4 });
   buildRetreatHut(20, -8, -0.4, { lx: 16, lz: -6 });
+
+  // 4b. Cliffside Meditation Cells (`崖壁閉關小石室 / 修行龕`), Butter-Lamp Glow Niches & Carved Mantra Rock Plaques
+  const cliffCellsDefs = [
+    { lx: -24.5, yOff: 4.2, lz: -35.8, rotY: 0.28 },
+    { lx: -9.8, yOff: 5.4, lz: -41.2, rotY: 0.12 },
+    { lx: 9.8, yOff: 5.2, lz: -41.2, rotY: -0.12 },
+    { lx: 24.5, yOff: 4.0, lz: -35.2, rotY: -0.28 },
+  ];
+  for (let i = 0; i < cliffCellsDefs.length; i++) {
+    const cd = cliffCellsDefs[i];
+    const wx = ox + cd.lx;
+    const wz = oz + cd.lz;
+    const wy = getTerrainHeight(wx, wz) + cd.yOff;
+    const cellGrp = new THREE.Group();
+    cellGrp.position.set(wx, wy, wz);
+    cellGrp.rotation.y = cd.rotY;
+
+    const timberLedge = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.24, 1.9), woodMat);
+    const cellBody = new THREE.Mesh(new THREE.BoxGeometry(2.7, 2.1, 1.5), whiteWallMat);
+    cellBody.position.set(0, 1.15, -0.1);
+    const cellPenma = new THREE.Mesh(new THREE.BoxGeometry(2.82, 0.34, 1.62), maroonTrimMat);
+    cellPenma.position.set(0, 2.12, -0.1);
+    const winFrame = new THREE.Mesh(new THREE.BoxGeometry(0.86, 1.02, 0.14), fantsangFrameMat);
+    winFrame.position.set(0, 1.18, 0.68);
+    const winPane = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.76, 0.18), warmButterWindowMat);
+    winPane.position.set(0, 1.18, 0.7);
+    const lampHalo = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 8), lampHaloMat);
+    lampHalo.position.set(0, 1.18, 0.82);
+
+    addDrapedKhatag(
+      cellGrp,
+      new THREE.Vector3(-1.15, 2.02, 0.76),
+      new THREE.Vector3(1.15, 2.02, 0.76),
+      { sag: 0.28, segs: 8, tailLen: 0.58 },
+    );
+
+    cellGrp.add(timberLedge, cellBody, cellPenma, winFrame, winPane, lampHalo);
+    group.add(cellGrp);
+  }
+
+  // Carved Mantra Rock Plaques (`摩崖石刻`) along the northern cliffside caves & upper terrace
+  const rockMantraDefs = [
+    { lx: -19.5, yOff: 1.5, lz: -34.2, rotY: 0.22, text: 'ཨོཾ་མ་ཎི་པདྨེ་ཧཱུྃ', sub: '觀音六字真言' },
+    { lx: 19.5, yOff: 1.5, lz: -34.2, rotY: -0.22, text: 'བཛྲ་གུ་རུ་པདྨ', sub: '蓮師金剛七句' },
+    { lx: -6.2, yOff: 1.35, lz: -37.2, rotY: 0.08, text: 'ཨོཾ་ཨཱཿ་ཧཱུྃ', sub: '身語意三密加持' },
+    { lx: 6.2, yOff: 1.35, lz: -37.2, rotY: -0.08, text: 'ཨ', sub: '本初無生法界' },
+  ];
+  for (const rm of rockMantraDefs) {
+    const wx = ox + rm.lx;
+    const wz = oz + rm.lz;
+    const wy = getTerrainHeight(wx, wz) + rm.yOff;
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(2.35, 1.25, 0.28), mossRockMat);
+    slab.position.set(wx, wy, wz);
+    slab.rotation.y = rm.rotY;
+    group.add(slab);
+
+    const mTex = ctx.storyPreview ? null : makeSyllablePlaqueTexture(rm.text, rm.sub);
+    const mMat = new THREE.MeshBasicMaterial({
+      map: mTex,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const mPlane = new THREE.Mesh(new THREE.PlaneGeometry(2.15, 1.08), mMat);
+    mPlane.position.set(
+      wx + Math.sin(rm.rotY) * 0.16,
+      wy,
+      wz + Math.cos(rm.rotY) * 0.16,
+    );
+    mPlane.rotation.y = rm.rotY;
+    group.add(mPlane);
+    if (mTex) disposables.push(mTex);
+    disposables.push(mMat);
+  }
+
+  // Draped White Silk Khatag Scarves on the Terma Realm Stone Gate & Flanking Meditation Grotto Arches
+  addDrapedKhatag(
+    termaGateGroup,
+    new THREE.Vector3(-2.85, 5.15, 0.92),
+    new THREE.Vector3(2.85, 5.15, 0.92),
+    { sag: 0.62, segs: 12, tailLen: 1.05 },
+  );
+  for (const side of [-1, 1]) {
+    const caveX = ox + side * 15;
+    const caveZ = oz - 36;
+    const caveY = getTerrainHeight(caveX, caveZ);
+    addDrapedKhatag(
+      group,
+      new THREE.Vector3(caveX - 1.85, caveY + 2.35, caveZ + 0.55),
+      new THREE.Vector3(caveX + 1.85, caveY + 2.35, caveZ + 0.55),
+      { sag: 0.38, segs: 9, tailLen: 0.72 },
+    );
+  }
 
   // ---------------------------------------------------------------- 5. Amrita Refill Spring (`青朴甘露泉`) at (5988, 12)
   const springX = ox - 12; // 5988
@@ -757,7 +1020,7 @@ export function buildChimphuMap(ctx) {
     },
   });
 
-  // ---------------------------------------------------------------- 6. South-Facing Scenic Overlook (`景觀台`) at (6000, 40) & Samye Vista
+  // ---------------------------------------------------------------- 6. South-Facing Scenic Overlook (`景觀台`) at (6000, 40), Sea of Clouds & Samye Vista
   const overlookX = ox;
   const overlookZ = oz + 40;
   const overlookY = getTerrainHeight(overlookX, overlookZ);
@@ -769,7 +1032,8 @@ export function buildChimphuMap(ctx) {
   deck.position.y = 0.2;
   overlookGroup.add(deck);
 
-  // Stone balustrade posts along the southern rim
+  // Stone balustrade posts & draped white silk Khatag scarves along the southern rim
+  const balustradePts = [];
   for (let i = -3; i <= 3; i++) {
     const ang = i * 0.26;
     const px = Math.sin(ang) * 5.0;
@@ -779,10 +1043,86 @@ export function buildChimphuMap(ctx) {
     const cap = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.16, 0.44), goldTrimMat);
     cap.position.set(px, 1.28, pz);
     overlookGroup.add(post, cap);
+    balustradePts.push(new THREE.Vector3(px, 1.15, pz));
+  }
+  for (let i = 0; i < balustradePts.length - 1; i++) {
+    if (i % 2 === 0) {
+      addDrapedKhatag(overlookGroup, balustradePts[i], balustradePts[i + 1], {
+        sag: 0.24,
+        segs: 7,
+        tailLen: 0.48,
+      });
+    }
   }
   group.add(overlookGroup);
 
-  // Distant Vista of the Yarlung Tsangpo River & Samye Monastery far below in the valley
+  // 6a. Multi-Layered Sea of Clouds (`雲海`, `z > 36`) billowing across the southern mountain bowl
+  const seaOfCloudsGroup = new THREE.Group();
+  seaOfCloudsGroup.name = 'ChimphuSeaOfClouds';
+  group.add(seaOfCloudsGroup);
+
+  const cloudTex = getSeaOfCloudsTexture();
+  const cloudRingGeo = new THREE.RingGeometry(24, 128, 48);
+  cloudRingGeo.rotateX(-Math.PI / 2);
+  const cloudPatchGeo = new THREE.PlaneGeometry(58, 42);
+  cloudPatchGeo.rotateX(-Math.PI / 2);
+  disposables.push(cloudRingGeo, cloudPatchGeo);
+
+  const cloudRingMatUpper = new THREE.MeshBasicMaterial({
+    map: cloudTex,
+    color: 0xfff4d6,
+    transparent: true,
+    opacity: 0.56,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const cloudRingMatLower = new THREE.MeshBasicMaterial({
+    map: cloudTex,
+    color: 0xfcd392,
+    transparent: true,
+    opacity: 0.48,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  disposables.push(cloudRingMatUpper, cloudRingMatLower);
+
+  const cloudRingUpper = new THREE.Mesh(cloudRingGeo, cloudRingMatUpper);
+  cloudRingUpper.position.set(ox, -6.5, oz + 96);
+  const cloudRingLower = new THREE.Mesh(cloudRingGeo, cloudRingMatLower);
+  cloudRingLower.position.set(ox, -11.2, oz + 104);
+  cloudRingLower.rotation.y = 0.85;
+  seaOfCloudsGroup.add(cloudRingUpper, cloudRingLower);
+
+  // Billowing individual cloud banks framing the valley overlook (parted in center so Samye vista shines through)
+  const cloudBankDefs = [
+    { lx: -42, y: -4.2, lz: 64, sx: 1.15, sz: 0.95, col: 0xfff7e6, op: 0.68 },
+    { lx: 42, y: -4.4, lz: 66, sx: 1.18, sz: 0.95, col: 0xfff7e6, op: 0.68 },
+    { lx: -64, y: -6.8, lz: 92, sx: 1.45, sz: 1.15, col: 0xfde68a, op: 0.58 },
+    { lx: 64, y: -7.0, lz: 94, sx: 1.45, sz: 1.15, col: 0xfde68a, op: 0.58 },
+    { lx: -26, y: -8.5, lz: 82, sx: 0.92, sz: 0.82, col: 0xfffbeb, op: 0.54 },
+    { lx: 28, y: -8.6, lz: 84, sx: 0.92, sz: 0.82, col: 0xfffbeb, op: 0.54 },
+    { lx: 0, y: -13.5, lz: 138, sx: 2.1, sz: 1.15, col: 0xfed7aa, op: 0.62 },
+  ];
+  const cloudBankMeshes = [];
+  for (let i = 0; i < cloudBankDefs.length; i++) {
+    const cb = cloudBankDefs[i];
+    const cMat = new THREE.MeshBasicMaterial({
+      map: cloudTex,
+      color: cb.col,
+      transparent: true,
+      opacity: cb.op,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    disposables.push(cMat);
+    const cMesh = new THREE.Mesh(cloudPatchGeo, cMat);
+    cMesh.position.set(ox + cb.lx, cb.y, oz + cb.lz);
+    cMesh.scale.set(cb.sx, 1, cb.sz);
+    seaOfCloudsGroup.add(cMesh);
+    cloudBankMeshes.push({ mesh: cMesh, baseX: ox + cb.lx, baseY: cb.y, phase: i * 1.1 });
+  }
+
+  // 6b. Distant Vista of the Yarlung Tsangpo River, Samye Monastery & Mount Hepo Ri far below in the valley
   const vistaGroup = new THREE.Group();
   vistaGroup.name = 'SamyeValleyVista';
   vistaGroup.position.set(ox, -16, oz + 108);
@@ -794,11 +1134,20 @@ export function buildChimphuMap(ctx) {
     emissive: 0x0369a1,
     emissiveIntensity: 0.5,
   });
+  const sandBankMat = new THREE.MeshStandardMaterial({
+    color: 0xe3b878,
+    roughness: 0.85,
+    emissive: 0x92400e,
+    emissiveIntensity: 0.18,
+  });
+  const sandBankPlane = new THREE.Mesh(new THREE.CircleGeometry(24, 32), sandBankMat);
+  sandBankPlane.rotation.x = -Math.PI / 2;
+  sandBankPlane.position.set(0, -0.1, 0);
   const riverRibbon = new THREE.Mesh(new THREE.PlaneGeometry(220, 18), riverRibbonMat);
   riverRibbon.rotation.x = -Math.PI / 2;
   riverRibbon.position.set(0, -2, 16);
 
-  // Miniature Samye Mandala silhouette (circular wall + 3-tier golden Utse + 4 stupas)
+  // Miniature Samye Mandala silhouette (circular wall + 3-tier golden Utse + 4 colored stupas + red Mount Hepo Ri)
   const vistaWall = new THREE.Mesh(
     new THREE.RingGeometry(11, 12.2, 32),
     whiteWallMat,
@@ -813,9 +1162,70 @@ export function buildChimphuMap(ctx) {
   vistaUtse3.rotation.y = Math.PI / 4;
   vistaUtse3.position.y = 5.2;
 
-  vistaGroup.add(riverRibbon, vistaWall, vistaUtse1, vistaUtse2, vistaUtse3);
+  vistaGroup.add(sandBankPlane, riverRibbon, vistaWall, vistaUtse1, vistaUtse2, vistaUtse3);
+
+  const miniStupaColors = [
+    [6.2, 6.2, 0xf8fafc],
+    [-6.2, 6.2, 0xdc2626],
+    [-6.2, -6.2, 0x1e293b],
+    [6.2, -6.2, 0x0d9488],
+  ];
+  for (const [sx, sz, scol] of miniStupaColors) {
+    const sMat = new THREE.MeshStandardMaterial({
+      color: scol,
+      emissive: scol,
+      emissiveIntensity: 0.25,
+      roughness: 0.5,
+    });
+    disposables.push(sMat);
+    const ms = new THREE.Mesh(new THREE.ConeGeometry(1.1, 2.8, 8), sMat);
+    ms.position.set(sx, 1.4, sz);
+    vistaGroup.add(ms);
+  }
+
+  // Distant terracotta-red Mount Hepo Ri silhouette east of miniature Samye
+  const vistaHepoMat = new THREE.MeshStandardMaterial({
+    color: 0xb84a32,
+    emissive: 0x7c2d12,
+    emissiveIntensity: 0.22,
+    roughness: 0.88,
+  });
+  const vistaHepoCone = new THREE.Mesh(new THREE.ConeGeometry(11.5, 7.5, 12), vistaHepoMat);
+  vistaHepoCone.position.set(22, 3.2, -3);
+  vistaGroup.add(vistaHepoCone);
+
   group.add(vistaGroup);
-  disposables.push(riverRibbonMat);
+  disposables.push(riverRibbonMat, sandBankMat, vistaHepoMat);
+
+  // 6c. Diagonal Golden-Hour Sunbeams slanting across the mountain bowl toward the Sea of Clouds & Samye Vista
+  const valleySunbeamMat = new THREE.MeshBasicMaterial({
+    map: glowTex,
+    color: 0xffcf70,
+    transparent: true,
+    opacity: 0.13,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const valleySunbeamGeo = new THREE.CylinderGeometry(2.4, 7.2, 44, 12, 1, true);
+  disposables.push(valleySunbeamMat, valleySunbeamGeo);
+  const valleySunbeamCoords = [
+    [-22, 16, 12, 1.0],
+    [0, 18, 22, 1.15],
+    [22, 16, 14, 1.0],
+    [-26, 11, 56, 1.2],
+    [0, 12, 78, 1.35],
+    [26, 11, 58, 1.2],
+  ];
+  for (const [bx, by, bz, bs] of valleySunbeamCoords) {
+    const ray = new THREE.Mesh(valleySunbeamGeo, valleySunbeamMat);
+    ray.position.set(ox + bx, by, oz + bz);
+    ray.rotation.z = -0.32;
+    ray.rotation.x = 0.22;
+    ray.scale.setScalar(bs);
+    group.add(ray);
+  }
 
   const overlookPosVec = new THREE.Vector3(overlookX, overlookY, overlookZ);
   registerInteractable({
@@ -833,7 +1243,7 @@ export function buildChimphuMap(ctx) {
     },
   });
 
-  // ---------------------------------------------------------------- 7. Pine/Juniper Trees (`松柏`) & Five-Color Prayer Flags (`經幡`)
+  // ---------------------------------------------------------------- 7. Pine/Juniper Trees (`松柏`), Alpine Grass Tufts (`InstancedMesh`) & Golden Spore Motes (`THREE.Points`)
   const pinePositions = [
     [-28, 18, 1.15],
     [-24, 4, 1.0],
@@ -875,11 +1285,95 @@ export function buildChimphuMap(ctx) {
     registerCollider({ type: 'circle', x: wx, z: wz, r: 0.55 * sc });
   }
 
+  // 7b. Swaying Golden-Emerald Alpine Grass Tufts (`InstancedMesh`, 0 colliders) across the mountain amphitheater
+  const blade1 = new THREE.ConeGeometry(0.11, 0.68, 4);
+  blade1.translate(0, 0.32, 0);
+  const blade2 = new THREE.ConeGeometry(0.09, 0.56, 4);
+  blade2.rotateZ(0.24);
+  blade2.translate(0.12, 0.26, 0.06);
+  const blade3 = new THREE.ConeGeometry(0.09, 0.58, 4);
+  blade3.rotateZ(-0.22);
+  blade3.translate(-0.12, 0.27, -0.05);
+  const grassTuftGeo = mergeGeometries([blade1, blade2, blade3], false);
+  blade1.dispose();
+  blade2.dispose();
+  blade3.dispose();
+  const grassTuftMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 0.82,
+    metalness: 0.04,
+  });
+  disposables.push(grassTuftGeo, grassTuftMat);
+
+  const GRASS_COUNT = 160;
+  const grassInst = new THREE.InstancedMesh(grassTuftGeo, grassTuftMat, GRASS_COUNT);
+  grassInst.name = 'ChimphuAlpineGrassTufts';
+  const grassRng = seededRandom(6055);
+  const grassDummy = new THREE.Object3D();
+  const grassCol = new THREE.Color();
+  const emeraldBladeCol = new THREE.Color(0x5c8248);
+  const goldenBladeCol = new THREE.Color(0xd4a843);
+  let gIdx = 0;
+  for (let attempt = 0; attempt < 420 && gIdx < GRASS_COUNT; attempt++) {
+    const lx = (grassRng() - 0.5) * 76;
+    const lz = -26 + grassRng() * 64;
+    if (Math.abs(lx) < 4.5) continue; // keep central stone steps clear
+    if (Math.hypot(lx - -18, lz - -5) < 3.6) continue;
+    if (Math.hypot(lx - 20, lz - -8) < 3.6) continue;
+    if (Math.hypot(lx - -12, lz - 12) < 3.2) continue;
+    const wx = ox + lx;
+    const wz = oz + lz;
+    const wy = getTerrainHeight(wx, wz) - 0.04;
+    grassDummy.position.set(wx, wy, wz);
+    grassDummy.rotation.set(0, grassRng() * Math.PI * 2, (grassRng() - 0.5) * 0.15);
+    const sc = 0.75 + grassRng() * 0.7;
+    grassDummy.scale.set(sc, sc * (0.85 + grassRng() * 0.4), sc);
+    grassDummy.updateMatrix();
+    grassInst.setMatrixAt(gIdx, grassDummy.matrix);
+    grassCol.lerpColors(emeraldBladeCol, goldenBladeCol, grassRng() * 0.75);
+    grassInst.setColorAt(gIdx, grassCol);
+    gIdx++;
+  }
+  grassInst.count = gIdx;
+  grassInst.instanceMatrix.needsUpdate = true;
+  if (grassInst.instanceColor) grassInst.instanceColor.needsUpdate = true;
+  group.add(grassInst);
+
+  // 7c. Floating SEASON-style Golden Spore / Light Motes (`THREE.Points`) in the mountain amphitheater
+  const sporeCount = 88;
+  const sporeGeo = new THREE.BufferGeometry();
+  const sporePos = new Float32Array(sporeCount * 3);
+  const sporeRng = seededRandom(6088);
+  for (let i = 0; i < sporeCount; i++) {
+    const lx = (sporeRng() - 0.5) * 74;
+    const lz = -28 + sporeRng() * 68;
+    const wy = getTerrainHeight(ox + lx, oz + lz) + 0.5 + sporeRng() * 5.2;
+    sporePos[i * 3 + 0] = ox + lx;
+    sporePos[i * 3 + 1] = wy;
+    sporePos[i * 3 + 2] = oz + lz;
+  }
+  sporeGeo.setAttribute('position', new THREE.BufferAttribute(sporePos, 3));
+  const sporeMat = new THREE.PointsMaterial({
+    map: glowTex,
+    color: 0xffdf7a,
+    size: 0.42,
+    transparent: true,
+    opacity: 0.78,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const sporePoints = new THREE.Points(sporeGeo, sporeMat);
+  sporePoints.name = 'ChimphuGoldenSpores';
+  group.add(sporePoints);
+  disposables.push(sporeGeo, sporeMat);
+
   // Prayer flag strings (`經幡`) draped across the hermitage valley
   const flagSpans = [
     [new THREE.Vector3(ox - 14, getTerrainHeight(ox - 14, oz - 26) + 4.2, oz - 26), new THREE.Vector3(ox - 3, getTerrainHeight(ox - 3, oz - 38) + 5.8, oz - 38)],
     [new THREE.Vector3(ox + 15, getTerrainHeight(ox + 15, oz - 25) + 4.2, oz - 25), new THREE.Vector3(ox + 3, getTerrainHeight(ox + 3, oz - 38) + 5.8, oz - 38)],
     [new THREE.Vector3(ox - 18, getTerrainHeight(ox - 18, oz - 5) + 3.0, oz - 5), new THREE.Vector3(ox - 12, getTerrainHeight(ox - 12, oz + 12) + 2.4, oz + 12)],
+    [new THREE.Vector3(ox + 20, getTerrainHeight(ox + 20, oz - 8) + 3.0, oz - 8), new THREE.Vector3(ox + 15, getTerrainHeight(ox + 15, oz - 25) + 4.0, oz - 25)],
     [new THREE.Vector3(ox - 5, overlookY + 1.4, overlookZ), new THREE.Vector3(ox + 5, overlookY + 1.4, overlookZ)],
   ];
   for (const [a, b] of flagSpans) {
@@ -902,6 +1396,16 @@ export function buildChimphuMap(ctx) {
     guruSanctumPoolMat.opacity = 0.44 + Math.sin(elapsed * 3.0) * 0.06;
     gateThresholdPoolMat.opacity = 0.48 + Math.cos(elapsed * 2.6) * 0.07;
     cavernShaftMat.opacity = 0.09 + Math.sin(elapsed * 1.8) * 0.025;
+    valleySunbeamMat.opacity = 0.11 + Math.sin(elapsed * 1.3) * 0.03;
+
+    // Animate Sea of Clouds gentle drift
+    cloudRingUpper.rotation.y = elapsed * 0.018;
+    cloudRingLower.rotation.y = 0.85 - elapsed * 0.014;
+    for (let i = 0; i < cloudBankMeshes.length; i++) {
+      const cb = cloudBankMeshes[i];
+      cb.mesh.position.x = cb.baseX + Math.sin(elapsed * 0.32 + cb.phase) * 1.6;
+      cb.mesh.position.y = cb.baseY + Math.cos(elapsed * 0.45 + cb.phase) * 0.35;
+    }
 
     // Gentle upward drift for Chimphu northern cavern dust motes
     const dustArr = chimphuDustGeo.attributes.position.array;
@@ -913,6 +1417,18 @@ export function buildChimphuMap(ctx) {
       }
     }
     chimphuDustGeo.attributes.position.needsUpdate = true;
+
+    // Gentle floating drift for amphitheater golden spore motes
+    const sArr = sporeGeo.attributes.position.array;
+    for (let i = 0; i < sporeCount; i++) {
+      const idx = i * 3;
+      sArr[idx + 0] += Math.sin(elapsed * 0.8 + i) * dt * 0.12;
+      sArr[idx + 1] += dt * (0.1 + (i % 4) * 0.03);
+      if (sArr[idx + 1] > 6.8) {
+        sArr[idx + 1] = 0.45;
+      }
+    }
+    sporeGeo.attributes.position.needsUpdate = true;
   }
 
   return {

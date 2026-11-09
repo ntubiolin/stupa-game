@@ -142,40 +142,100 @@ function createDharmaWheelGeometry(radius = 0.85, tube = 0.09) {
 }
 
 /**
- * Procedural CanvasTexture for Samye's cosmic Mount Meru (`須彌山壇城`) courtyard pavement.
+ * High-detail procedural CanvasTexture for Samye's cosmic Mount Meru (`須彌山壇城`) courtyard pavement.
+ * Inspired by `createPlazaPavingTexture` in `src/world/environment.js`, combining polar concentric
+ * stone paver courses, terracotta kora rings, cosmic turquoise ocean courses, 16-petal lotus ring,
+ * and Four Cardinal Processional Avenues.
  */
 function createSamyeMandalaTexture() {
   if (typeof document === 'undefined') return null;
+  const size = 512;
   const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
+  canvas.width = size;
+  canvas.height = size;
   const c = canvas.getContext('2d');
   if (!c) return null;
 
-  const cx = 256;
-  const cy = 256;
+  const cx = size / 2;
+  const cy = size / 2;
+  const maxR = size * 0.49;
 
-  // Base warm Tibetan flagstone limestone
-  c.fillStyle = '#d6cfc0';
-  c.fillRect(0, 0, 512, 512);
+  // Base warm Tibetan stone mortar tone
+  c.fillStyle = '#8b7f70';
+  c.fillRect(0, 0, size, size);
 
-  // Outer Iron Mountain ring & cosmic ocean ring
-  const ringDefs = [
-    { r: 248, fill: '#8b2624', stroke: '#fbbf24', lw: 4 },
-    { r: 236, fill: '#cfc6b4', stroke: '#78350f', lw: 2 },
-    { r: 214, fill: '#b7c4be', stroke: '#0f766e', lw: 3 },
-    { r: 196, fill: '#d8d0c0', stroke: '#b45309', lw: 3 },
-    { r: 152, fill: '#cbbca4', stroke: '#8b1e24', lw: 3 },
-    { r: 112, fill: '#dfd7c8', stroke: '#d97706', lw: 3 },
-    { r: 82, fill: '#991b1b', stroke: '#fbbf24', lw: 4 },
-  ];
-  for (const rd of ringDefs) {
+  // Deterministic organic dirt/patina mottling
+  const patRng = seededRandom(5120);
+  for (let i = 0; i < 360; i++) {
+    const x = patRng() * size;
+    const y = patRng() * size;
+    const r = 4 + patRng() * 18;
+    const v = 128 + Math.floor(patRng() * 38);
+    c.fillStyle = `rgba(${v}, ${v - 6}, ${v - 14}, 0.16)`;
     c.beginPath();
-    c.arc(cx, cy, rd.r, 0, TWO_PI);
-    c.fillStyle = rd.fill;
+    c.arc(x, y, r, 0, TWO_PI);
     c.fill();
-    c.lineWidth = rd.lw;
-    c.strokeStyle = rd.stroke;
+  }
+
+  // Concentric courses of individual stone flagstones from r = 82px out to maxR (250px)
+  const ringCount = 24;
+  const innerStart = 82;
+  const ringStep = (maxR - innerStart) / ringCount;
+
+  for (let rIdx = 0; rIdx < ringCount; rIdx++) {
+    const r0 = innerStart + rIdx * ringStep;
+    const r1 = r0 + ringStep;
+    const rMid = (r0 + r1) * 0.5;
+
+    // Accentuate walking kora rings with terracotta crimson, cosmic turquoise, and golden sandstone
+    let baseHue = [176, 166, 150]; // Warm Tibetan flagstone limestone
+    if (rIdx === 2 || rIdx === 10 || rIdx === 18 || rIdx === 23) {
+      baseHue = [164, 88, 68]; // Terracotta crimson kora band
+    } else if (rIdx === 6 || rIdx === 15) {
+      baseHue = [132, 162, 154]; // Cosmic turquoise-slate ring
+    } else if (rIdx === 14 || rIdx === 21) {
+      baseHue = [194, 162, 114]; // Golden-ochre sandstone ring
+    }
+
+    const segs = Math.max(16, Math.floor((TWO_PI * rMid) / 9));
+    for (let s = 0; s < segs; s++) {
+      const a0 = (s / segs) * TWO_PI + (rIdx % 2) * (Math.PI / segs);
+      const a1 = ((s + 1) / segs) * TWO_PI + (rIdx % 2) * (Math.PI / segs);
+
+      const jitter = ((s * 19 + rIdx * 37) % 21) - 10;
+      const cr = Math.min(255, Math.max(40, baseHue[0] + jitter));
+      const cg = Math.min(255, Math.max(40, baseHue[1] + jitter));
+      const cb = Math.min(255, Math.max(40, baseHue[2] + jitter));
+
+      c.beginPath();
+      c.arc(cx, cy, r1 - 0.8, a0 + 0.005, a1 - 0.005, false);
+      c.arc(cx, cy, r0 + 0.8, a1 - 0.005, a0 + 0.005, true);
+      c.closePath();
+      c.fillStyle = `rgb(${cr}, ${cg}, ${cb})`;
+      c.fill();
+    }
+
+    // Dark mortar joint circle between concentric stone courses
+    c.beginPath();
+    c.arc(cx, cy, r0, 0, TWO_PI);
+    c.strokeStyle = 'rgba(58, 49, 41, 0.58)';
+    c.lineWidth = 1.4;
+    c.stroke();
+  }
+
+  // Golden & crimson mandala border rings
+  const borderRings = [
+    { r: 248, stroke: '#fbbf24', lw: 3.2 },
+    { r: 212, stroke: '#0f766e', lw: 2.2 },
+    { r: 154, stroke: '#991b1b', lw: 2.6 },
+    { r: 112, stroke: '#d97706', lw: 2.4 },
+    { r: 82, stroke: '#fbbf24', lw: 3.5 },
+  ];
+  for (const br of borderRings) {
+    c.beginPath();
+    c.arc(cx, cy, br.r, 0, TWO_PI);
+    c.lineWidth = br.lw;
+    c.strokeStyle = br.stroke;
     c.stroke();
   }
 
@@ -187,8 +247,8 @@ function createSamyeMandalaTexture() {
     c.beginPath();
     c.moveTo(cx + Math.cos(a0) * 82, cy + Math.sin(a0) * 82);
     c.quadraticCurveTo(
-      cx + Math.cos(a1) * 116,
-      cy + Math.sin(a1) * 116,
+      cx + Math.cos(a1) * 114,
+      cy + Math.sin(a1) * 114,
       cx + Math.cos(a2) * 82,
       cy + Math.sin(a2) * 82
     );
@@ -200,32 +260,25 @@ function createSamyeMandalaTexture() {
     c.stroke();
   }
 
-  // Radial flagstone joints
-  c.strokeStyle = 'rgba(87, 73, 56, 0.28)';
-  c.lineWidth = 1.2;
-  for (let i = 0; i < 32; i++) {
-    const a = (i / 32) * TWO_PI;
-    c.beginPath();
-    c.moveTo(cx + Math.cos(a) * 82, cy + Math.sin(a) * 82);
-    c.lineTo(cx + Math.cos(a) * 246, cy + Math.sin(a) * 246);
-    c.stroke();
-  }
-
-  // Four Cardinal Processional Avenues (N, S, E, W)
+  // Four Cardinal Processional Avenues (N, S, E, W) with individual flagstones
   const aveAngles = [0, Math.PI * 0.5, Math.PI, Math.PI * 1.5];
   for (const ang of aveAngles) {
     c.save();
     c.translate(cx, cy);
     c.rotate(ang);
-    c.fillStyle = '#e7e2d5';
+    c.fillStyle = '#cfc5b4';
     c.fillRect(58, -18, 188, 36);
     c.strokeStyle = '#8b1e24';
     c.lineWidth = 3;
     c.strokeRect(58, -18, 188, 36);
-    c.strokeStyle = '#d97706';
-    c.lineWidth = 1.5;
-    for (let x = 66; x < 242; x += 14) {
-      c.strokeRect(x, -13, 10, 26);
+    for (let x = 62; x < 242; x += 12) {
+      const shade = 206 + ((x * 7) % 18) - 9;
+      c.fillStyle = `rgb(${shade}, ${shade - 8}, ${shade - 20})`;
+      c.fillRect(x, -14, 10, 13);
+      c.fillRect(x, 1, 10, 13);
+      c.strokeStyle = 'rgba(120, 53, 15, 0.45)';
+      c.lineWidth = 1;
+      c.strokeRect(x, -14, 10, 28);
     }
     c.restore();
   }
@@ -236,10 +289,222 @@ function createSamyeMandalaTexture() {
   c.strokeStyle = '#fbbf24';
   c.lineWidth = 4;
   c.strokeRect(cx - 56, cy - 56, 112, 112);
+  c.strokeStyle = '#fde68a';
+  c.lineWidth = 2;
+  c.strokeRect(cx - 46, cy - 46, 92, 92);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * Procedural seamless wind-rippled golden sand dune CanvasTexture (`256x256`)
+ * for the Yarlung Tsangpo riverbank desert plains & dune crests.
+ * Uses warm high-value golden tones so it multiplies cleanly with terrain vertexColors
+ * while providing crisp wind-wave ripple relief via `bumpMap`.
+ */
+function createWindRippledSandTexture() {
+  if (typeof document === 'undefined') return null;
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const c = canvas.getContext('2d');
+  if (!c) return null;
+
+  const imgData = c.createImageData(size, size);
+  const data = imgData.data;
+  const rng = seededRandom(8842);
+
+  for (let y = 0; y < size; y++) {
+    const v = (y / size) * TWO_PI;
+    for (let x = 0; x < size; x++) {
+      const u = (x / size) * TWO_PI;
+      // Seamless periodic wind-ripple waves + secondary harmonic
+      const wave1 = Math.sin(v * 9.0 + Math.sin(u * 2.0) * 1.35 + Math.cos(u * 3.0) * 0.45);
+      const wave2 = Math.sin(v * 18.0 - u * 2.0 + Math.sin(u * 4.0) * 0.6) * 0.35;
+      const ripple = Math.max(-1, Math.min(1, wave1 * 0.75 + wave2));
+      const grain = (rng() - 0.5) * 10;
+
+      // High-value warm sand range (208..255) so vertexColors shine through vividly
+      const base = 232 + ripple * 18 + grain;
+      const r = Math.min(255, Math.max(200, Math.round(base + 6)));
+      const g = Math.min(255, Math.max(190, Math.round(base - 2)));
+      const b = Math.min(255, Math.max(172, Math.round(base - 14)));
+
+      const idx = (y * size + x) * 4;
+      data[idx + 0] = r;
+      data[idx + 1] = g;
+      data[idx + 2] = b;
+      data[idx + 3] = 255;
+    }
+  }
+  c.putImageData(imgData, 0, 0);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(28, 28);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * Procedural CanvasTexture for painted Buddha Wisdom Eyes (`佛眼 / 智慧眼`) on the Harmika
+ * of Samye's Four Colored Stupas.
+ */
+function createBuddhaEyesHarmikaTexture() {
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const c = canvas.getContext('2d');
+  if (!c) return null;
+
+  // Rich burnished golden-ochre background with crimson border
+  c.fillStyle = '#f59e0b';
+  c.fillRect(0, 0, 128, 128);
+  c.strokeStyle = '#7f1d1d';
+  c.lineWidth = 8;
+  c.strokeRect(4, 4, 120, 120);
+  c.strokeStyle = '#fef3c7';
+  c.lineWidth = 2;
+  c.strokeRect(10, 10, 108, 108);
+
+  // Pair of lotus-shaped Wisdom Eyes
+  for (const ex of [38, 90]) {
+    const ey = 62;
+    // White sclera
+    c.beginPath();
+    c.moveTo(ex - 20, ey);
+    c.quadraticCurveTo(ex, ey - 15, ex + 20, ey);
+    c.quadraticCurveTo(ex, ey + 14, ex - 20, ey);
+    c.closePath();
+    c.fillStyle = '#f8fafc';
+    c.fill();
+    c.lineWidth = 2.5;
+    c.strokeStyle = '#0f172a';
+    c.stroke();
+
+    // Dark iris & golden pupil highlight
+    c.beginPath();
+    c.arc(ex, ey - 1, 7.5, 0, TWO_PI);
+    c.fillStyle = '#1e293b';
+    c.fill();
+    c.beginPath();
+    c.arc(ex - 2, ey - 3, 2.2, 0, TWO_PI);
+    c.fillStyle = '#fef08a';
+    c.fill();
+
+    // Heavy crimson & black upper eyelid / brow arch
+    c.beginPath();
+    c.moveTo(ex - 22, ey - 3);
+    c.quadraticCurveTo(ex, ey - 20, ex + 22, ey - 3);
+    c.lineWidth = 3;
+    c.strokeStyle = '#7f1d1d';
+    c.stroke();
+  }
+
+  // Crimson & gold third-eye Urna (`白毫`)
+  c.beginPath();
+  c.arc(64, 34, 7.5, 0, TWO_PI);
+  c.fillStyle = '#dc2626';
+  c.fill();
+  c.lineWidth = 2;
+  c.strokeStyle = '#fef08a';
+  c.stroke();
+
+  // Curly Nepali/Tibetan unity symbol (`Ek`) below the eyes
+  c.beginPath();
+  c.moveTo(64, 70);
+  c.quadraticCurveTo(72, 82, 63, 94);
+  c.quadraticCurveTo(56, 104, 68, 106);
+  c.lineWidth = 3.5;
+  c.strokeStyle = '#0f172a';
+  c.stroke();
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * Soft vertical wisp CanvasTexture for rising incense smoke & golden-hour sunbeams.
+ */
+function createAtmosphericBeamTexture(isSmoke = false) {
+  if (typeof document === 'undefined') return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 128;
+  const c = canvas.getContext('2d');
+  if (!c) return null;
+
+  const grad = c.createRadialGradient(32, 64, 2, 32, 64, 58);
+  if (isSmoke) {
+    grad.addColorStop(0.0, 'rgba(255, 248, 231, 0.75)');
+    grad.addColorStop(0.45, 'rgba(226, 232, 240, 0.32)');
+    grad.addColorStop(1.0, 'rgba(148, 163, 184, 0.0)');
+  } else {
+    grad.addColorStop(0.0, 'rgba(255, 232, 158, 0.85)');
+    grad.addColorStop(0.45, 'rgba(251, 191, 36, 0.35)');
+    grad.addColorStop(1.0, 'rgba(217, 119, 6, 0.0)');
+  }
+  c.fillStyle = grad;
+  c.fillRect(0, 0, 64, 128);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.needsUpdate = true;
   return tex;
+}
+
+/**
+ * Builds a 5-color Tibetan prayer flag string (`藍白紅綠黃`) between `startVec` and `endVec`.
+ */
+function createSamyePrayerFlagString(startVec, endVec, { count = 14, sag = 0.65 } = {}) {
+  const grp = new THREE.Group();
+  const ropeMat = new THREE.MeshBasicMaterial({ color: 0x3b2f24 });
+  const flagColors = [0x2563eb, 0xf8fafc, 0xdc2626, 0x16a34a, 0xeab308];
+  const flagBuckets = [[], [], [], [], []];
+
+  const angleY = Math.atan2(endVec.x - startVec.x, endVec.z - startVec.z) + Math.PI / 2;
+  for (let i = 0; i < count; i++) {
+    const t = (i + 0.5) / count;
+    const x = THREE.MathUtils.lerp(startVec.x, endVec.x, t);
+    const z = THREE.MathUtils.lerp(startVec.z, endVec.z, t);
+    const baseY = THREE.MathUtils.lerp(startVec.y, endVec.y, t);
+    const y = baseY - Math.sin(t * Math.PI) * sag;
+
+    const fg = new THREE.PlaneGeometry(0.46, 0.56);
+    fg.rotateY(angleY);
+    fg.translate(x, y - 0.26, z);
+    flagBuckets[i % 5].push(fg);
+  }
+
+  for (let cIdx = 0; cIdx < 5; cIdx++) {
+    if (flagBuckets[cIdx].length === 0) continue;
+    const mat = new THREE.MeshStandardMaterial({
+      color: flagColors[cIdx],
+      emissive: flagColors[cIdx],
+      emissiveIntensity: 0.14,
+      roughness: 0.72,
+      side: THREE.DoubleSide,
+    });
+    grp.add(new THREE.Mesh(mergeAndDispose(flagBuckets[cIdx]), mat));
+  }
+
+  const dist = startVec.distanceTo(endVec);
+  const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, dist, 5), ropeMat);
+  cord.position.copy(startVec).lerp(endVec, 0.5);
+  cord.position.y -= sag * 0.35;
+  cord.lookAt(endVec);
+  cord.rotateX(Math.PI / 2);
+  grp.add(cord);
+
+  return grp;
 }
 
 /**
@@ -391,14 +656,16 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
   const getHeight = (lx, lz) => samyeHeight(lx, lz);
   const addCollider = (wx, wz, r) => pushCollider(ctx, 'samye', { type: 'circle', x: wx, z: wz, r });
 
-  // Terrain mesh with warm sandy plain, red-hill Hepo Ri, Pehar arena, and mandala courtyard vertex palette
-  const sandCol = new THREE.Color(0xcab38b);
-  const duneCol = new THREE.Color(0xb89c6f);
-  const hepoRedCol = new THREE.Color(0x9e4733);
-  const hepoDeepRedCol = new THREE.Color(0x7c2d1e);
-  const courtStoneCol = new THREE.Color(0xd6d1c4);
+  // Terrain mesh with SEASON x Firewatch golden-sienna sand dunes, terracotta-red Hepo Ri strata, Pehar arena, and mandala courtyard vertex palette
+  const sandCol = new THREE.Color(0xe3b878);
+  const duneCol = new THREE.Color(0xc98a4b);
+  const duneHighlightCol = new THREE.Color(0xf4cf92);
+  const hepoRedCol = new THREE.Color(0xb84a32);
+  const hepoDeepRedCol = new THREE.Color(0xd46a48);
+  const hepoShadowCol = new THREE.Color(0x882c1b);
+  const courtStoneCol = new THREE.Color(0xdcd3c2);
   const peharSlateCol = new THREE.Color(0x3b2f2f);
-  const riverSiltCol = new THREE.Color(0x9c8c72);
+  const riverSiltCol = new THREE.Color(0xb59162);
   const tmpCol = new THREE.Color();
 
   const { mesh: terrainMesh } = createHeightfieldTerrain(ctx, {
@@ -419,18 +686,32 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
       }
       if (dHepo < 42) {
         const u = Math.min(1, Math.max(0, 1 - dHepo / 42));
-        const strata = Math.sin(y * 2.4 + lx * 0.12) * 0.5 + 0.5;
-        tmpCol.lerpColors(hepoRedCol, hepoDeepRedCol, strata * 0.55);
-        return tmpCol.lerpColors(sandCol, tmpCol, u * 0.9);
+        const strata = Math.sin(y * 2.8 + lx * 0.14) * 0.5 + 0.5;
+        const band = Math.cos(y * 5.2 - lz * 0.1) * 0.5 + 0.5;
+        tmpCol.lerpColors(hepoRedCol, hepoDeepRedCol, strata * 0.72);
+        if (band < 0.35) {
+          tmpCol.lerp(hepoShadowCol, 0.35);
+        }
+        return tmpCol.lerpColors(sandCol, tmpCol, u * 0.94);
       }
       if (lz > 82) {
         const bankMix = Math.min(1, (lz - 82) / 14);
         return tmpCol.lerpColors(sandCol, riverSiltCol, bankMix * 0.75);
       }
       const n = Math.sin(lx * 0.08) * Math.cos(lz * 0.08) * 0.5 + 0.5;
-      return tmpCol.lerpColors(duneCol, sandCol, n);
+      const rippleCrest = Math.max(0, Math.sin((lx + lz) * 0.12));
+      tmpCol.lerpColors(duneCol, sandCol, n);
+      return tmpCol.lerp(duneHighlightCol, rippleCrest * 0.28);
     },
   });
+  const windSandTex = createWindRippledSandTexture();
+  if (windSandTex && terrainMesh.material) {
+    terrainMesh.material.map = windSandTex;
+    terrainMesh.material.bumpMap = windSandTex;
+    terrainMesh.material.bumpScale = 0.085;
+    terrainMesh.material.roughness = 0.9;
+    terrainMesh.material.needsUpdate = true;
+  }
   group.add(terrainMesh);
 
   addRimMountains(ctx, group, {
@@ -651,9 +932,10 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
   duneCrestGeo.scale(1.8, 0.55, 0.68);
   duneCrestGeo.translate(0, 0.22, 0);
   const duneCrestMat = new THREE.MeshStandardMaterial({
-    color: 0xc4a878,
-    roughness: 0.94,
-    metalness: 0.02,
+    color: 0xdfa868,
+    roughness: 0.88,
+    metalness: 0.03,
+    ...(windSandTex ? { map: windSandTex, bumpMap: windSandTex, bumpScale: 0.07 } : {}),
   });
   const DUNE_CREST_COUNT = 28;
   const duneCrestsInst = new THREE.InstancedMesh(duneCrestGeo, duneCrestMat, DUNE_CREST_COUNT);
@@ -832,7 +1114,7 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
   monasteryGroup.position.set(0, 0, 0);
   root.add(monasteryGroup);
 
-  // --- Cosmic Mount Meru (`須彌山壇城`) Mandala Courtyard Pavement (`r = 42.6m`, `y = 0.02`) & 4 Cardinal Processional Avenues
+  // --- Cosmic Mount Meru (`須彌山壇城`) Mandala Courtyard Pavement (`r = 42.8m`, `y = 0.02`) & 4 Cardinal Processional Avenues
   const mandalaPavementGroup = new THREE.Group();
   mandalaPavementGroup.name = 'Samye_MandalaPavement';
   root.add(mandalaPavementGroup);
@@ -841,10 +1123,11 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
   const mandalaDiscMat = new THREE.MeshStandardMaterial({
     color: mandalaTex ? 0xffffff : 0xd8d0c0,
     map: mandalaTex,
-    roughness: 0.86,
-    metalness: 0.06,
+    ...(mandalaTex ? { bumpMap: mandalaTex, bumpScale: 0.04 } : {}),
+    roughness: 0.84,
+    metalness: 0.05,
   });
-  const mandalaDiscMesh = new THREE.Mesh(new THREE.CircleGeometry(42.6, 64), mandalaDiscMat);
+  const mandalaDiscMesh = new THREE.Mesh(new THREE.CircleGeometry(42.8, 72), mandalaDiscMat);
   mandalaDiscMesh.rotation.x = -Math.PI / 2;
   mandalaDiscMesh.position.y = 0.02;
   mandalaDiscMesh.receiveShadow = true;
@@ -1017,6 +1300,48 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
     }
   }
 
+  // Shared Tibetan architectural facade materials: black trapezoidal fantsang frames & warm golden-amber interior panes (0 PointLights!)
+  const fantsangFrameMat = new THREE.MeshStandardMaterial({
+    color: 0x1c1917,
+    roughness: 0.85,
+    metalness: 0.06,
+  });
+  const warmWindowPaneMat = new THREE.MeshStandardMaterial({
+    color: 0xffd27d,
+    emissive: 0xffb347,
+    emissiveIntensity: 0.35,
+    roughness: 0.38,
+    metalness: 0.12,
+  });
+
+  // Helper to append a Tibetan trapezoidal window (`fantsang`) + warm amber pane + crimson lintel into geometry buckets
+  function pushTibetanWindow(frameBucket, paneBucket, goldBucket, x, y, z, rotY, w = 0.95, h = 1.25) {
+    // Stepped trapezoidal black casing (wider at bottom, narrower at top with projecting lintel hood)
+    const lowerFrame = new THREE.BoxGeometry(w * 1.12, h * 0.52, 0.12);
+    lowerFrame.translate(0, -h * 0.22, 0);
+    const upperFrame = new THREE.BoxGeometry(w * 0.96, h * 0.52, 0.12);
+    upperFrame.translate(0, h * 0.22, 0);
+    const hood = new THREE.BoxGeometry(w * 1.22, 0.14, 0.18);
+    hood.translate(0, h * 0.52, 0.02);
+    for (const fg of [lowerFrame, upperFrame, hood]) {
+      fg.translate(x, y, z);
+      fg.rotateY(rotY);
+      frameBucket.push(fg);
+    }
+
+    const pane = new THREE.BoxGeometry(w * 0.68, h * 0.74, 0.15);
+    pane.translate(x, y, z);
+    pane.rotateY(rotY);
+    paneBucket.push(pane);
+
+    if (goldBucket) {
+      const sill = new THREE.BoxGeometry(w * 0.86, 0.08, 0.16);
+      sill.translate(x, y + h * 0.42, z);
+      sill.rotateY(rotY);
+      goldBucket.push(sill);
+    }
+  }
+
   // --- Central Utse Great Hall (`烏孜大殿` — 3 stories: Tibetan, Chinese, Indian)
   const utseFloor1Group = new THREE.Group(); // Stage 1+: Tibetan stone base
   const utseFloor2Group = new THREE.Group(); // Stage 2+: Chinese glazed-tile eave second floor
@@ -1037,42 +1362,50 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
   utseF1GoldTrim.position.y = 5.25;
   utseFloor1Group.add(utseF1Plinth, utseF1Body, utseF1Band, utseF1GoldTrim);
 
-  // Cardinal Porticoes & Golden Melong Medallions on Utse Floor 1
+  // Cardinal Porticoes, Tibetan Black Trapezoidal Windows (`fantsang`), & Golden Melong Medallions on Utse Floor 1
   const porticoGeoParts = [];
+  const f1FrameParts = [];
+  const f1PaneParts = [];
+  const melongParts = [];
   for (let d = 0; d < 4; d++) {
+    const rotY = (d * Math.PI) / 2;
     const lintelG = new THREE.BoxGeometry(4.4, 0.48, 1.4);
     lintelG.translate(0, 3.55, 8.45);
-    lintelG.rotateY((d * Math.PI) / 2);
+    lintelG.rotateY(rotY);
     porticoGeoParts.push(lintelG);
     for (const s of [-1.5, 1.5]) {
       const colG = new THREE.CylinderGeometry(0.22, 0.26, 3.4, 8);
       colG.translate(s, 1.7, 8.55);
-      colG.rotateY((d * Math.PI) / 2);
+      colG.rotateY(rotY);
       porticoGeoParts.push(colG);
+    }
+    // Sanctum entrance door under each cardinal portico
+    pushTibetanWindow(f1FrameParts, f1PaneParts, melongParts, 0, 1.85, 8.02, rotY, 1.65, 2.35);
+    // Flanking ground-floor & upper-gallery fantsang windows on all 4 facades
+    for (const wx of [-5.8, -3.5, 3.5, 5.8]) {
+      pushTibetanWindow(f1FrameParts, f1PaneParts, melongParts, wx, 2.25, 8.02, rotY, 0.95, 1.25);
+      pushTibetanWindow(f1FrameParts, f1PaneParts, melongParts, wx, 3.75, 8.02, rotY, 0.82, 0.95);
+    }
+    // Golden Melong Mirror Bosses along Floor 1 Penma Frieze
+    for (let k = -3; k <= 3; k++) {
+      const boss = new THREE.CylinderGeometry(0.24, 0.24, 0.14, 10);
+      boss.rotateX(Math.PI / 2);
+      boss.translate(k * 2.2, 4.75, 8.18);
+      boss.rotateY(rotY);
+      melongParts.push(boss);
     }
   }
   const utsePorticoesMesh = new THREE.Mesh(mergeAndDispose(porticoGeoParts), tibetanRedMat);
   utsePorticoesMesh.castShadow = true;
-  utseFloor1Group.add(utsePorticoesMesh);
-
-  // Golden Melong Mirror Bosses along Floor 1 Penma Frieze
-  const melongParts = [];
-  for (let d = 0; d < 4; d++) {
-    for (let k = -2; k <= 2; k++) {
-      const boss = new THREE.CylinderGeometry(0.24, 0.24, 0.12, 10);
-      boss.rotateX(Math.PI / 2);
-      boss.translate(k * 2.8, 4.75, 8.18);
-      boss.rotateY((d * Math.PI) / 2);
-      melongParts.push(boss);
-    }
-  }
+  const utseF1FramesMesh = new THREE.Mesh(mergeAndDispose(f1FrameParts), fantsangFrameMat);
+  const utseF1PanesMesh = new THREE.Mesh(mergeAndDispose(f1PaneParts), warmWindowPaneMat);
   const utseMelongMesh = new THREE.Mesh(mergeAndDispose(melongParts), indianGoldRoofMat);
-  utseFloor1Group.add(utseMelongMesh);
+  utseFloor1Group.add(utsePorticoesMesh, utseF1FramesMesh, utseF1PanesMesh, utseMelongMesh);
 
   // Collider for Central Utse Great Hall so player walks around it
   addCollider(ox, oz, 9.5);
 
-  // Floor 2 (Chinese style): crimson colonnade + sweeping jade-green overhanging eaves + upturned corner ridges
+  // Floor 2 (Chinese style): crimson colonnade + sweeping jade-green overhanging eaves + upturned corner ridges + lattice windows
   const utseF2Body = new THREE.Mesh(new THREE.BoxGeometry(12.2, 4.0, 12.2), tibetanRedMat);
   utseF2Body.position.y = 7.2;
   utseF2Body.castShadow = true;
@@ -1082,17 +1415,43 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
   utseF2Roof.rotation.y = Math.PI / 4;
   utseF2Roof.position.y = 9.6;
 
-  // Upturned Chinese Jade Eave Corners (`飛簷翹角`)
+  // Upturned Chinese Jade Eave Corners (`飛簷翹角`) + Floor 2 Windows & Golden Mirror Bosses
   const eaveCornerParts = [];
+  const f2FrameParts = [];
+  const f2PaneParts = [];
+  const f2GoldParts = [];
   for (let cIdx = 0; cIdx < 4; cIdx++) {
+    const rotY = (cIdx * Math.PI) / 2;
     const horn = new THREE.ConeGeometry(0.45, 1.65, 5);
     horn.rotateZ(-Math.PI * 0.32);
     horn.translate(7.4, 9.15, 0);
-    horn.rotateY((cIdx * Math.PI) / 2 + Math.PI / 4);
+    horn.rotateY(rotY + Math.PI / 4);
     eaveCornerParts.push(horn);
+
+    for (const wx of [-3.8, -1.3, 1.3, 3.8]) {
+      pushTibetanWindow(f2FrameParts, f2PaneParts, f2GoldParts, wx, 7.15, 6.12, rotY, 0.88, 1.2);
+    }
+    for (let k = -2; k <= 2; k++) {
+      const boss = new THREE.CylinderGeometry(0.2, 0.2, 0.14, 10);
+      boss.rotateX(Math.PI / 2);
+      boss.translate(k * 2.2, 8.45, 6.14);
+      boss.rotateY(rotY);
+      f2GoldParts.push(boss);
+    }
   }
   const utseF2EaveHorns = new THREE.Mesh(mergeAndDispose(eaveCornerParts), chineseJadeRoofMat);
-  utseFloor2Group.add(utseF2Body, utseF2Balustrade, utseF2Roof, utseF2EaveHorns);
+  const utseF2FramesMesh = new THREE.Mesh(mergeAndDispose(f2FrameParts), fantsangFrameMat);
+  const utseF2PanesMesh = new THREE.Mesh(mergeAndDispose(f2PaneParts), warmWindowPaneMat);
+  const utseF2GoldMesh = new THREE.Mesh(mergeAndDispose(f2GoldParts), indianGoldRoofMat);
+  utseFloor2Group.add(
+    utseF2Body,
+    utseF2Balustrade,
+    utseF2Roof,
+    utseF2EaveHorns,
+    utseF2FramesMesh,
+    utseF2PanesMesh,
+    utseF2GoldMesh
+  );
 
   // Floor 3 (Indian style): carved lotus plinth + mandala pavilion + gleaming golden roof (Serto) + rooftop Dharma Wheel & Twin Deer
   const utseF3LotusBase = new THREE.Mesh(new THREE.CylinderGeometry(6.3, 6.8, 0.55, 16), carvedStoneMat);
@@ -1109,7 +1468,37 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
   utseFinial.position.y = 16.2;
   const utseRoofWheel = new THREE.Mesh(createDharmaWheelGeometry(0.95, 0.1), indianGoldRoofMat);
   utseRoofWheel.position.set(0, 13.8, 4.6);
-  utseFloor3Group.add(utseF3LotusBase, utseF3Body, utseF3Penma, utseF3GoldRoof, utseFinial, utseRoofWheel);
+
+  const f3FrameParts = [];
+  const f3PaneParts = [];
+  const f3GoldParts = [];
+  for (let d = 0; d < 4; d++) {
+    const rotY = (d * Math.PI) / 2;
+    for (const wx of [-2.4, 0, 2.4]) {
+      pushTibetanWindow(f3FrameParts, f3PaneParts, f3GoldParts, wx, 11.35, 4.22, rotY, 0.78, 1.05);
+    }
+    for (const bx of [-2.6, -1.3, 0, 1.3, 2.6]) {
+      const boss = new THREE.CylinderGeometry(0.18, 0.18, 0.14, 10);
+      boss.rotateX(Math.PI / 2);
+      boss.translate(bx, 12.75, 4.35);
+      boss.rotateY(rotY);
+      f3GoldParts.push(boss);
+    }
+  }
+  const utseF3FramesMesh = new THREE.Mesh(mergeAndDispose(f3FrameParts), fantsangFrameMat);
+  const utseF3PanesMesh = new THREE.Mesh(mergeAndDispose(f3PaneParts), warmWindowPaneMat);
+  const utseF3GoldMesh = new THREE.Mesh(mergeAndDispose(f3GoldParts), indianGoldRoofMat);
+  utseFloor3Group.add(
+    utseF3LotusBase,
+    utseF3Body,
+    utseF3Penma,
+    utseF3GoldRoof,
+    utseFinial,
+    utseRoofWheel,
+    utseF3FramesMesh,
+    utseF3PanesMesh,
+    utseF3GoldMesh
+  );
 
   // --- Stage 2 & 3: Four Colored Stupas (`四色塔`: White SE, Red SW, Black NW, Green NE)
   const stupaFoundationsGroup = new THREE.Group();
@@ -1123,13 +1512,23 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
     { id: 'green_ne', lx: 21, lz: -21, color: 0x0d9488, emissive: 0x115e59 },  // NE Green/Turquoise Stupa
   ];
 
-  // Shared lotus base + golden harmika/parasol/finial geometry for the 4 colored stupas
+  // Painted Buddha-eye harmika texture + golden spire/parasol/finial geometry for the 4 colored stupas
+  const buddhaEyesTex = createBuddhaEyesHarmikaTexture();
+  const stupaHarmikaEyesMat = new THREE.MeshStandardMaterial({
+    color: buddhaEyesTex ? 0xffffff : 0xfbbf24,
+    map: buddhaEyesTex,
+    emissive: 0xd97706,
+    emissiveIntensity: 0.35,
+    roughness: 0.36,
+    metalness: 0.32,
+  });
+  const stupaHarmikaGeo = new THREE.BoxGeometry(1.52, 0.64, 1.52);
   const stupaLotusPlinthGeo = new THREE.CylinderGeometry(2.35, 2.65, 0.36, 16);
   const stupaCrownParts = [
-    new THREE.BoxGeometry(1.45, 0.55, 1.45).translate(0, 3.95, 0), // Harmika cube
-    new THREE.ConeGeometry(0.85, 2.8, 10).translate(0, 5.4, 0),    // 13-tier Dharmachakra spire
-    new THREE.CylinderGeometry(1.1, 1.2, 0.14, 14).translate(0, 6.85, 0), // Golden parasol (Chatra)
-    new THREE.OctahedronGeometry(0.38, 0).translate(0, 7.32, 0),   // Sun-Moon-Flame finial
+    new THREE.BoxGeometry(1.66, 0.14, 1.66).translate(0, 4.32, 0), // Golden cornice above harmika
+    new THREE.ConeGeometry(0.85, 2.8, 10).translate(0, 5.45, 0),   // 13-tier Dharmachakra spire
+    new THREE.CylinderGeometry(1.1, 1.2, 0.14, 14).translate(0, 6.88, 0), // Golden parasol (Chatra)
+    new THREE.OctahedronGeometry(0.38, 0).translate(0, 7.35, 0),   // Sun-Moon-Flame finial
   ];
   const stupaGoldCrownGeo = mergeAndDispose(stupaCrownParts);
 
@@ -1140,7 +1539,7 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
     plinth.castShadow = true;
     stupaFoundationsGroup.add(plinth);
 
-    // Stage 3 full colored stupa with lotus plinth, stepped throne, colored bumpa, and golden crown
+    // Stage 3 full colored stupa with lotus plinth, stepped throne, colored bumpa, painted Buddha-eye harmika, and golden crown
     const sMat = new THREE.MeshStandardMaterial({
       color: cs.color,
       emissive: cs.emissive,
@@ -1163,8 +1562,20 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
     dome.castShadow = true;
     const neckBand = new THREE.Mesh(new THREE.CylinderGeometry(1.56, 1.56, 0.28, 12), tibetanRedMat);
     neckBand.position.y = 3.68;
+    const harmika = new THREE.Mesh(stupaHarmikaGeo, stupaHarmikaEyesMat);
+    harmika.position.y = 3.98;
     const crown = new THREE.Mesh(stupaGoldCrownGeo, indianGoldRoofMat);
-    sg.add(lotusBase, tier, tier2, dome, neckBand, crown);
+
+    // Carved golden shrine niche (`佛龕`) on the bumpa facing inward toward Utse
+    const inwardAng = Math.atan2(-cs.lx, -cs.lz);
+    const nicheFrame = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.92, 0.28), indianGoldRoofMat);
+    nicheFrame.position.set(Math.sin(inwardAng) * 1.58, 2.92, Math.cos(inwardAng) * 1.58);
+    nicheFrame.rotation.y = inwardAng;
+    const nichePane = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.64, 0.32), warmWindowPaneMat);
+    nichePane.position.copy(nicheFrame.position);
+    nichePane.rotation.y = inwardAng;
+
+    sg.add(lotusBase, tier, tier2, dome, neckBand, harmika, crown, nicheFrame, nichePane);
     fourStupasGroup.add(sg);
 
     addCollider(ox + cs.lx, oz + cs.lz, 2.8);
@@ -1181,6 +1592,35 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
     [-25, 0],
   ];
   const continentWheelGeo = createDharmaWheelGeometry(0.58, 0.065);
+  // Pre-build shared facade details for each of the Four Continents Temples (fantsang windows, doorway, golden mirror bosses)
+  const contFrameParts = [];
+  const contPaneParts = [];
+  const contGoldParts = [];
+  // Front doorway + flanking front windows
+  pushTibetanWindow(contFrameParts, contPaneParts, contGoldParts, 0, 1.38, 3.12, 0, 1.25, 1.95);
+  for (const wx of [-2.05, 2.05]) {
+    pushTibetanWindow(contFrameParts, contPaneParts, contGoldParts, wx, 2.05, 3.12, 0, 0.78, 1.05);
+  }
+  // Left, Right & Back facade windows + 4-side golden mirror bosses on Penma frieze
+  for (let sideIdx = 0; sideIdx < 4; sideIdx++) {
+    const rotY = (sideIdx * Math.PI) / 2;
+    if (sideIdx > 0) {
+      for (const wx of [-1.75, 0, 1.75]) {
+        pushTibetanWindow(contFrameParts, contPaneParts, contGoldParts, wx, 2.05, 3.12, rotY, 0.78, 1.05);
+      }
+    }
+    for (const bx of [-2.2, -1.1, 0, 1.1, 2.2]) {
+      const boss = new THREE.CylinderGeometry(0.16, 0.16, 0.12, 10);
+      boss.rotateX(Math.PI / 2);
+      boss.translate(bx, 3.85, 3.32);
+      boss.rotateY(rotY);
+      contGoldParts.push(boss);
+    }
+  }
+  const contFramesGeo = mergeAndDispose(contFrameParts);
+  const contPanesGeo = mergeAndDispose(contPaneParts);
+  const contGoldGeo = mergeAndDispose(contGoldParts);
+
   for (const [cx, cz] of continentCoords) {
     const cg = new THREE.Group();
     cg.position.set(cx, 0, cz);
@@ -1200,8 +1640,11 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
     porchCanopy.position.set(0, 2.85, 3.45);
     const dharmaWheel = new THREE.Mesh(continentWheelGeo, indianGoldRoofMat);
     dharmaWheel.position.set(0, 4.82, 0);
+    const framesMesh = new THREE.Mesh(contFramesGeo, fantsangFrameMat);
+    const panesMesh = new THREE.Mesh(contPanesGeo, warmWindowPaneMat);
+    const bossesMesh = new THREE.Mesh(contGoldGeo, indianGoldRoofMat);
 
-    cg.add(lotusPlinth, hall, roof, goldCornice, porchCanopy, dharmaWheel);
+    cg.add(lotusPlinth, hall, roof, goldCornice, porchCanopy, dharmaWheel, framesMesh, panesMesh, bossesMesh);
     fourContinentsGroup.add(cg);
     addCollider(ox + cx, oz + cz, 3.4);
   }
@@ -1230,7 +1673,7 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
   moonRoof.position.set(0, 3.85, 14.5);
   stage4Group.add(sunChapel, sunRoof, moonChapel, moonRoof);
 
-  // Eight Sub-continents Chapels (`八小洲殿`) as InstancedMeshes (white stone body + red Penma roof band + golden finial)
+  // Eight Sub-continents Chapels (`八小洲殿`) as InstancedMeshes (white stone body + red Penma roof band + golden finial + warm window panes)
   const subChapelGeo = new THREE.BoxGeometry(3.4, 2.6, 3.4);
   subChapelGeo.translate(0, 1.3, 0);
   const subChapelInst = new THREE.InstancedMesh(subChapelGeo, stoneWhiteMat, 8);
@@ -1243,6 +1686,10 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
   subFinialGeo.translate(0, 3.42, 0);
   const subFinialInst = new THREE.InstancedMesh(subFinialGeo, indianGoldRoofMat, 8);
 
+  const subWinGeo = new THREE.BoxGeometry(3.46, 0.72, 0.65);
+  subWinGeo.translate(0, 1.48, 0);
+  const subWinInst = new THREE.InstancedMesh(subWinGeo, warmWindowPaneMat, 8);
+
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * TWO_PI + Math.PI / 8;
     dummy.position.set(Math.cos(a) * 31.5, 0, Math.sin(a) * 31.5);
@@ -1252,11 +1699,13 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
     subChapelInst.setMatrixAt(i, dummy.matrix);
     subRoofBandInst.setMatrixAt(i, dummy.matrix);
     subFinialInst.setMatrixAt(i, dummy.matrix);
+    subWinInst.setMatrixAt(i, dummy.matrix);
   }
   subChapelInst.instanceMatrix.needsUpdate = true;
   subRoofBandInst.instanceMatrix.needsUpdate = true;
   subFinialInst.instanceMatrix.needsUpdate = true;
-  stage4Group.add(subChapelInst, subRoofBandInst, subFinialInst);
+  subWinInst.instanceMatrix.needsUpdate = true;
+  stage4Group.add(subChapelInst, subRoofBandInst, subFinialInst, subWinInst);
 
   // 1008 Mini-Stupas along the top of the circular perimeter wall (SINGLE InstancedMesh, count = 1008!)
   const miniStupaGeo = createMiniStupaGeometry();
@@ -1287,20 +1736,12 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
   updateMiniStupasTransform(1.0);
   stage4Group.add(miniStupasInst);
 
-  // Radial Prayer Flag Lines from Utse roof to perimeter wall
-  const flagLineMat = new THREE.MeshBasicMaterial({
-    color: 0xfbbf24,
-    transparent: true,
-    opacity: 0.78,
-    side: THREE.DoubleSide,
-  });
+  // Radial 5-Color Tibetan Prayer Flag Canopy from Utse roof to perimeter wall
   for (let i = 0; i < 8; i++) {
     const ang = (i / 8) * TWO_PI;
-    const ribbon = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 36), flagLineMat);
-    ribbon.position.set(Math.cos(ang) * 22, 8.8, Math.sin(ang) * 22);
-    ribbon.rotation.y = Math.atan2(Math.cos(ang), Math.sin(ang));
-    ribbon.rotation.x = 0.26;
-    stage4Group.add(ribbon);
+    const startV = new THREE.Vector3(Math.cos(ang) * 6.8, 12.6, Math.sin(ang) * 6.8);
+    const endV = new THREE.Vector3(Math.cos(ang) * 42.4, 3.9, Math.sin(ang) * 42.4);
+    stage4Group.add(createSamyePrayerFlagString(startV, endV, { count: 18, sag: 1.15 }));
   }
 
   // ---------------------------------------------------------------- 5. Mount Hepo Ri (`(75, -10)`) Red-Sandstone Cliffs, Pilgrimage Steps & Summit Mandala
@@ -1308,7 +1749,7 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
   hepoSlopesGroup.name = 'Samye_HepoRiSlopes';
   root.add(hepoSlopesGroup);
 
-  // 5a. Rugged Red-Sandstone Cliff Strata Outcrops ringing Mount Hepo Ri (`InstancedMesh`, 0 colliders)
+  // 5a. Rugged Terracotta-Red Sandstone Cliff Strata Outcrops ringing Mount Hepo Ri (`InstancedMesh`, 0 colliders)
   const cliffSlab1 = new THREE.DodecahedronGeometry(1.35, 0);
   cliffSlab1.scale(1.45, 0.68, 0.92);
   cliffSlab1.translate(0, 0.45, 0);
@@ -1317,8 +1758,10 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
   cliffSlab2.translate(0.55, 0.85, 0.15);
   const hepoCliffGeo = mergeAndDispose([cliffSlab1, cliffSlab2]);
   const hepoCliffMat = new THREE.MeshStandardMaterial({
-    color: 0x8f3624,
-    roughness: 0.88,
+    color: 0xb84a32,
+    emissive: 0x451a03,
+    emissiveIntensity: 0.1,
+    roughness: 0.86,
     metalness: 0.04,
   });
   const HEPO_CLIFF_COUNT = 36;
@@ -1424,6 +1867,18 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
   hepoPolesInst.instanceMatrix.needsUpdate = true;
   hepoSlopesGroup.add(hepoPolesInst);
 
+  // Extra 5-color prayer flag strings overlooking Samye Monastery from the western ridge of Mount Hepo Ri
+  const hepoRidgeFlagSpans = [
+    [new THREE.Vector3(60.5, getHeight(60.5, -15.5) + 2.8, -15.5), new THREE.Vector3(60.5, getHeight(60.5, -4.5) + 2.8, -4.5)],
+    [new THREE.Vector3(61.0, getHeight(61.0, -14.2) + 2.9, -14.2), new THREE.Vector3(48.5, getHeight(48.5, -13.0) + 2.8, -13.0)],
+    [new THREE.Vector3(61.0, getHeight(61.0, -5.8) + 2.9, -5.8), new THREE.Vector3(48.5, getHeight(48.5, -7.0) + 2.8, -7.0)],
+    [new THREE.Vector3(48.5, getHeight(48.5, -13.0) + 2.8, -13.0), new THREE.Vector3(37.0, getHeight(37.0, -12.0) + 2.7, -12.0)],
+    [new THREE.Vector3(48.5, getHeight(48.5, -7.0) + 2.8, -7.0), new THREE.Vector3(37.0, getHeight(37.0, -8.0) + 2.7, -8.0)],
+  ];
+  for (const [sv, ev] of hepoRidgeFlagSpans) {
+    hepoSlopesGroup.add(createSamyePrayerFlagString(sv, ev, { count: 14, sag: 0.55 }));
+  }
+
   // 5d. Mount Hepo Ri Summit Plateau (`(75, -10)`, `y = 8.4m`) — Vajra Mandala, 8 Mani Incense Burners & Golden Dharma Wheel Altar
   const heporiGroup = new THREE.Group();
   heporiGroup.name = 'Samye_MountHepoRi';
@@ -1467,18 +1922,79 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
   sangEmberGeo.translate(0, 2.38, 0);
   const hepoBurnerFlamesInst = new THREE.InstancedMesh(sangEmberGeo, torchFlameMat, 8);
 
+  // Rising translucent incense smoke plumes (`MeshBasicMaterial`, `AdditiveBlending`, `depthWrite: false`) above the 8 summit burners
+  const smokeTex = createAtmosphericBeamTexture(true);
+  const smokePlumeMat = new THREE.MeshBasicMaterial({
+    map: smokeTex,
+    color: 0xfef3c7,
+    transparent: true,
+    opacity: 0.42,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const smokePlane1 = new THREE.PlaneGeometry(1.15, 3.8);
+  const smokePlane2 = new THREE.PlaneGeometry(1.15, 3.8);
+  smokePlane2.rotateY(Math.PI / 2);
+  const smokePlumeGeo = mergeAndDispose([smokePlane1, smokePlane2]);
+  const hepoSmokePlumes = [];
+
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * TWO_PI + Math.PI / 8;
-    dummy.position.set(Math.cos(a) * 14.2, 0, Math.sin(a) * 14.2);
+    const bx = Math.cos(a) * 14.2;
+    const bz = Math.sin(a) * 14.2;
+    dummy.position.set(bx, 0, bz);
     dummy.rotation.set(0, -a, 0);
     dummy.scale.setScalar(1);
     dummy.updateMatrix();
     hepoBurnersInst.setMatrixAt(i, dummy.matrix);
     hepoBurnerFlamesInst.setMatrixAt(i, dummy.matrix);
+
+    const plume = new THREE.Mesh(smokePlumeGeo, smokePlumeMat);
+    plume.position.set(bx, 4.4, bz);
+    heporiGroup.add(plume);
+    hepoSmokePlumes.push({ mesh: plume, baseX: bx, baseZ: bz, phase: i * 0.85 });
   }
   hepoBurnersInst.instanceMatrix.needsUpdate = true;
   hepoBurnerFlamesInst.instanceMatrix.needsUpdate = true;
   heporiGroup.add(hepoBurnersInst, hepoBurnerFlamesInst);
+
+  // 8 Diagonal Golden-Hour Sunbeam Shafts (Firewatch God Rays) slanting over Utse golden roof, Four Colored Stupas, and sand dunes
+  const sunbeamsGroup = new THREE.Group();
+  sunbeamsGroup.name = 'Samye_GoldenSunbeams';
+  root.add(sunbeamsGroup);
+  const sunbeamTex = createAtmosphericBeamTexture(false);
+  const sunbeamMat = new THREE.MeshBasicMaterial({
+    map: sunbeamTex,
+    color: 0xffc65c,
+    transparent: true,
+    opacity: 0.14,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const sunbeamGeo = new THREE.CylinderGeometry(2.2, 6.4, 38, 12, 1, true);
+  const sunbeamDefs = [
+    { x: 0, y: 19, z: 0, s: 1.25 },
+    { x: -18, y: 17, z: 16, s: 0.95 },
+    { x: 18, y: 17, z: 16, s: 0.95 },
+    { x: -18, y: 17, z: -16, s: 0.9 },
+    { x: 18, y: 17, z: -16, s: 0.9 },
+    { x: -38, y: 16, z: 48, s: 1.05 },
+    { x: 36, y: 16, z: 54, s: 1.05 },
+    { x: 72, y: 24, z: -10, s: 1.1 },
+  ];
+  for (let i = 0; i < sunbeamDefs.length; i++) {
+    const sb = sunbeamDefs[i];
+    const shaft = new THREE.Mesh(sunbeamGeo, sunbeamMat);
+    shaft.position.set(sb.x, sb.y, sb.z);
+    shaft.rotation.z = -0.34;
+    shaft.rotation.x = 0.16;
+    shaft.scale.setScalar(sb.s);
+    sunbeamsGroup.add(shaft);
+  }
 
   // Mandala Stone Platform & Golden Eight-Spoke Dharma Wheel Altar Centerpiece on Mount Hepo Ri Summit
   const altarDisc = new THREE.Mesh(new THREE.CylinderGeometry(5.5, 6.2, 0.45, 24), stoneWhiteMat);
@@ -2441,6 +2957,18 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
       vajraHalo.scale.setScalar(haloScale);
       hepoDharmaWheel.rotation.y = elapsed * 0.65;
       peharArenaRing.rotation.z = -elapsed * 0.4;
+
+      // Animate Mount Hepo Ri summit incense smoke plumes & golden-hour sunbeams
+      for (let i = 0; i < hepoSmokePlumes.length; i++) {
+        const sp = hepoSmokePlumes[i];
+        const wisp = Math.sin(elapsed * 1.8 + sp.phase);
+        sp.mesh.position.x = sp.baseX + wisp * 0.22;
+        sp.mesh.position.y = 4.35 + ((elapsed * 0.45 + sp.phase) % 1.2) * 0.45;
+        sp.mesh.rotation.y = elapsed * 0.35 + sp.phase;
+        sp.mesh.scale.set(1.0 + Math.abs(wisp) * 0.18, 0.95 + Math.sin(elapsed * 1.4 + sp.phase) * 0.15, 1.0);
+      }
+      sunbeamsGroup.visible = phase !== 'night';
+      sunbeamMat.opacity = 0.12 + Math.sin(elapsed * 1.2) * 0.03;
 
       // Animate Guru Rinpoche Pure Vision Vajra Dance on Mount Hepo Ri
       const visionNpc = ctx.npcs?.get?.('guruVision.samye');
