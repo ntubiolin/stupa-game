@@ -140,6 +140,13 @@ export const CH1_DIALOGUES = {
         speaker: 'npc.pharpingVillager1',
         look: 'villager',
         textKey: 'dlg.ch1.villager1.dry',
+        choices: [
+          {
+            textKey: 'ch1.villager.talk.choice',
+            labelKey: 'ch1.villager.talk.choice',
+            next: null,
+          },
+        ],
       },
     },
   },
@@ -150,6 +157,13 @@ export const CH1_DIALOGUES = {
         speaker: 'npc.pharpingVillager1',
         look: 'villager',
         textKey: 'dlg.ch1.villager1.rain',
+        choices: [
+          {
+            textKey: 'ch1.villager.talk.choice',
+            labelKey: 'ch1.villager.talk.choice',
+            next: null,
+          },
+        ],
       },
     },
   },
@@ -160,6 +174,13 @@ export const CH1_DIALOGUES = {
         speaker: 'npc.pharpingVillager2',
         look: 'villager',
         textKey: 'dlg.ch1.villager2.dry',
+        choices: [
+          {
+            textKey: 'ch1.villager.talk.choice',
+            labelKey: 'ch1.villager.talk.choice',
+            next: null,
+          },
+        ],
       },
     },
   },
@@ -170,6 +191,134 @@ export const CH1_DIALOGUES = {
         speaker: 'npc.pharpingVillager2',
         look: 'villager',
         textKey: 'dlg.ch1.villager2.rain',
+        choices: [
+          {
+            textKey: 'ch1.villager.talk.choice',
+            labelKey: 'ch1.villager.talk.choice',
+            next: null,
+          },
+        ],
+      },
+    },
+  },
+
+  // 5b. Yangleshö Cave Practitioner (`pharpingPractitioner`)
+  'ch1.practitioner.intro': {
+    id: 'ch1.practitioner.intro',
+    nodes: {
+      start: {
+        speaker: 'npc.pharpingPractitioner',
+        look: 'lama',
+        textKey: 'dlg.ch1.practitioner.intro.1',
+        actions: [
+          { type: 'startQuest', id: 'ch1.drought' },
+          { type: 'unlockCodex', id: 'pharping' },
+          { type: 'unlockCodex', id: 'yangleshoCave' },
+        ],
+        next: 'n2',
+      },
+      n2: {
+        speaker: 'npc.pharpingPractitioner',
+        look: 'lama',
+        textKey: 'dlg.ch1.practitioner.intro.2',
+        choices: [
+          {
+            textKey: 'dlg.ch1.practitioner.choice.ok',
+            labelKey: 'dlg.ch1.practitioner.choice.ok',
+            actions: [{ type: 'startQuest', id: 'ch1.drought' }],
+            next: null,
+          },
+        ],
+      },
+    },
+  },
+  'ch1.practitioner.droughtActive': {
+    id: 'ch1.practitioner.droughtActive',
+    nodes: {
+      start: {
+        speaker: 'npc.pharpingPractitioner',
+        look: 'lama',
+        textKey: 'dlg.ch1.practitioner.droughtActive.1',
+        choices: [
+          {
+            textKey: 'dlg.ch1.practitioner.choice.ok',
+            labelKey: 'dlg.ch1.practitioner.choice.ok',
+            next: null,
+          },
+        ],
+      },
+    },
+  },
+  'ch1.practitioner.reportElder': {
+    id: 'ch1.practitioner.reportElder',
+    nodes: {
+      start: {
+        speaker: 'npc.pharpingPractitioner',
+        look: 'lama',
+        textKey: 'dlg.ch1.practitioner.reportElder.1',
+        choices: [
+          {
+            textKey: 'dlg.ch1.practitioner.choice.ok',
+            labelKey: 'dlg.ch1.practitioner.choice.ok',
+            next: null,
+          },
+        ],
+      },
+    },
+  },
+  'ch1.practitioner.lampsHint': {
+    id: 'ch1.practitioner.lampsHint',
+    nodes: {
+      start: {
+        speaker: 'npc.pharpingPractitioner',
+        look: 'lama',
+        textKey: 'dlg.ch1.practitioner.lampsHint.1',
+        actions: [
+          { type: 'unlockCodex', id: 'yangleshoCave' },
+          { type: 'startQuest', id: 'ch1.lamps' },
+        ],
+        choices: [
+          {
+            textKey: 'dlg.ch1.practitioner.choice.ok',
+            labelKey: 'dlg.ch1.practitioner.choice.ok',
+            actions: [{ type: 'startQuest', id: 'ch1.lamps' }],
+            next: null,
+          },
+        ],
+      },
+    },
+  },
+  'ch1.practitioner.visionManifested': {
+    id: 'ch1.practitioner.visionManifested',
+    nodes: {
+      start: {
+        speaker: 'npc.pharpingPractitioner',
+        look: 'lama',
+        textKey: 'dlg.ch1.practitioner.visionManifested.1',
+        choices: [
+          {
+            textKey: 'dlg.ch1.practitioner.choice.ok',
+            labelKey: 'dlg.ch1.practitioner.choice.ok',
+            next: null,
+          },
+        ],
+      },
+    },
+  },
+  'ch1.practitioner.afterRain': {
+    id: 'ch1.practitioner.afterRain',
+    nodes: {
+      start: {
+        speaker: 'npc.pharpingPractitioner',
+        look: 'lama',
+        textKey: 'dlg.ch1.practitioner.afterRain.1',
+        choices: [
+          {
+            textKey: 'dlg.ch1.practitioner.choice.ok',
+            labelKey: 'dlg.ch1.practitioner.choice.ok',
+            next: null,
+          },
+        ],
       },
     },
   },
