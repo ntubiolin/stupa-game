@@ -227,11 +227,33 @@ export function createBoss(ctx, def) {
   }
 
   // ---------------------------------------------------------------- 4. Persistent Oath Stone (誓言石)
+  const oathOffset = def.oathStoneOffset || { x: 0, z: -1.5 };
+  const oathX = arena.x + (oathOffset.x || 0);
+  const oathZ = arena.z + (oathOffset.z || 0);
+  const oathStartY = getGroundY(oathX, oathZ);
+
   const oathStoneGroup = new THREE.Group();
   oathStoneGroup.name = `OathStone_${def.id}`;
-  oathStoneGroup.position.set(arena.x, startY, arena.z);
+  oathStoneGroup.position.set(oathX, oathStartY, oathZ);
   oathStoneGroup.visible = false;
   rootGroup.add(oathStoneGroup);
+
+  // Dormant arena perimeter warning ring (0 PointLights)
+  const warnRingGeo = new THREE.RingGeometry(Math.max(1, arena.r - 0.2), arena.r + 0.12, 64);
+  warnRingGeo.rotateX(-Math.PI / 2);
+  const warnRingMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(2.0, 0.75, 0.25),
+    transparent: true,
+    opacity: 0.16,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const warnRingMesh = new THREE.Mesh(warnRingGeo, warnRingMat);
+  warnRingMesh.position.set(arena.x, startY + 0.04, arena.z);
+  warnRingMesh.visible = false;
+  rootGroup.add(warnRingMesh);
 
   const steleMat = new THREE.MeshStandardMaterial({
     color: 0x475569,
@@ -330,27 +352,41 @@ export function createBoss(ctx, def) {
     stunUntil: 0,
     rootUntil: 0,
     oathCeremonyTimer: 0,
+    outsideTerritoryTimer: 0,
     ctx,
     built,
     patternRunner,
     isArenaLocked,
     setPosition(nx, nz) {
-      if (isArenaLocked()) {
-        const dx = nx - arena.x;
-        const dz = nz - arena.z;
-        const dist = Math.hypot(dx, dz);
-        const maxR = arena.r - bossState.radius - 0.3;
-        if (dist > maxR && dist > 0.001) {
-          nx = arena.x + (dx / dist) * maxR;
-          nz = arena.z + (dz / dist) * maxR;
+      // Always clamp Boss to its arena territory so it cannot be kited to external sanctuaries
+      const locked = isArenaLocked();
+      const dxArena = nx - arena.x;
+      const dzArena = nz - arena.z;
+      const distArena = Math.hypot(dxArena, dzArena);
+      const maxR = locked
+        ? Math.max(1.5, arena.r - bossState.radius - 0.3)
+        : Math.max(1.5, arena.r - bossState.radius + 0.5);
+      if (distArena > maxR && distArena > 0.001) {
+        nx = arena.x + (dxArena / distArena) * maxR;
+        nz = arena.z + (dzArena / distArena) * maxR;
+      }
+
+      // Repel Boss from any external Mani Stone sanctuaries or map safeZones
+      if (arena.map === 'wild' && Array.isArray(ctx.config?.WILD?.maniStones)) {
+        for (const ms of ctx.config.WILD.maniStones) {
+          const minWardDist = (ms.radius || 4) + bossState.radius + 2.5;
+          const mdx = nx - ms.x;
+          const mdz = nz - ms.z;
+          const mDist = Math.hypot(mdx, mdz);
+          if (mDist < minWardDist && mDist > 0.001) {
+            nx = ms.x + (mdx / mDist) * minWardDist;
+            nz = ms.z + (mdz / mDist) * minWardDist;
+          }
         }
-        if (arena.map === 'terma') {
-          const roomHalf = Math.max(1.5, 7.45 - bossState.radius - 0.15);
-          nx = Math.max(arena.x - roomHalf, Math.min(arena.x + roomHalf, nx));
-          nz = Math.max(arena.z - roomHalf, Math.min(arena.z + roomHalf, nz));
-        }
-      } else if (arena.map === 'terma') {
-        if (ctx.dungeon?.isActive?.() && typeof ctx.dungeon.clampPosition === 'function') {
+      }
+
+      if (arena.map === 'terma') {
+        if (!locked && ctx.dungeon?.isActive?.() && typeof ctx.dungeon.clampPosition === 'function') {
           const clamped = { x: nx, z: nz };
           ctx.dungeon.clampPosition(clamped, bossState.radius);
           nx = clamped.x;
@@ -360,7 +396,7 @@ export function createBoss(ctx, def) {
           nx = Math.max(arena.x - roomHalf, Math.min(arena.x + roomHalf, nx));
           nz = Math.max(arena.z - roomHalf, Math.min(arena.z + roomHalf, nz));
         }
-      } else {
+      } else if (!locked) {
         const mapDef = ctx.world?.getMap?.(arena.map);
         const wOrigin = mapDef?.origin || { x: arena.x, z: arena.z };
         const maxWalkR = Math.max(20, ((mapDef?.walkRadius ?? 70) - bossState.radius - 1.0));
@@ -379,6 +415,54 @@ export function createBoss(ctx, def) {
     },
   };
 
+  let subduedLiveTicks = 0;
+  let oathGraceTimer = 0;
+  let rematchArmedUntil = 0;
+  let approachWarnShown = false;
+
+  const challengeInteractableId = `challengeBoss_${def.id}`;
+  function removeChallengeInteractable() {
+    ctx.interaction?.unregister?.(challengeInteractableId);
+    if (Array.isArray(ctx.interactables)) {
+      for (let i = ctx.interactables.length - 1; i >= 0; i--) {
+        if (ctx.interactables[i]?.id === challengeInteractableId) {
+          ctx.interactables.splice(i, 1);
+        }
+      }
+    }
+  }
+
+  function ensureChallengeInteractable() {
+    if (!Array.isArray(ctx.interactables)) return;
+    if (ctx.interactables.some((it) => it?.id === challengeInteractableId)) return;
+    const posVec = new THREE.Vector3(arena.x, getGroundY(arena.x, arena.z), arena.z);
+    const entry = {
+      id: challengeInteractableId,
+      kind: 'bossChallenge',
+      zone: arena.map,
+      priority: -20,
+      action: 'interact',
+      position: { x: arena.x, y: posVec.y, z: arena.z },
+      getPosition: () => {
+        posVec.set(bossState.pos.x, bossState.pos.y, bossState.pos.z);
+        return posVec;
+      },
+      isAvailable: () =>
+        (state.zone || 'stupa') === arena.map &&
+        !state.uiOpen &&
+        !state.dialogueOpen &&
+        !bossState.active &&
+        !bossState.subdued,
+      radius: 14,
+      labelKey: def.titleKey || def.nameKey,
+      getLabel: () => `${i18n.t(def.nameKey)} · ${i18n.t(def.titleKey)}`,
+      interact: () => start(),
+      onInteract: () => start(),
+    };
+    ctx.interaction?.register?.(entry);
+    ctx.interactables.push(entry);
+  }
+
   const oathInteractableId = `oathStone_${def.id}`;
   const oathInteractableDotId = `oathStone.${def.id}`;
   function removeOathStoneInteractable() {
@@ -394,29 +478,53 @@ export function createBoss(ctx, def) {
     }
   }
 
+  function handleOathStoneInteract() {
+    if (state.dialogueOpen || bossState.active || !bossState.subdued) return;
+    // In live gameplay (where update(dt) ticks subduedLiveTicks > 0), enforce post-defeat grace cooldown & 2-step confirmation
+    if (subduedLiveTicks > 0) {
+      if (bossState.oathCeremonyTimer > 0 || oathGraceTimer > 0) {
+        return;
+      }
+      const now = state.elapsed || 0;
+      if (now > rematchArmedUntil) {
+        rematchArmedUntil = now + 6.0;
+        const text = i18n.t('boss.oathPrompt', { name: i18n.t(def.nameKey) });
+        ctx.toast?.show?.(text, 3.0);
+        bus.emit('toast', { text });
+        return;
+      }
+      rematchArmedUntil = 0;
+    }
+    return start({ isRematch: true });
+  }
+
   function registerOathStoneInteractable() {
     removeOathStoneInteractable();
-    const posVec = new THREE.Vector3(arena.x, getGroundY(arena.x, arena.z), arena.z);
+    const posVec = new THREE.Vector3(oathX, getGroundY(oathX, oathZ), oathZ);
     const makeEntry = (id, radius = 2.4) => ({
       id,
       kind: 'oathStone',
       zone: arena.map,
       priority: -25,
       action: 'interact',
-      position: { x: arena.x, y: posVec.y, z: arena.z },
+      position: { x: oathX, y: posVec.y, z: oathZ },
       getPosition: () => {
-        posVec.set(arena.x, getGroundY(arena.x, arena.z), arena.z);
+        posVec.set(oathX, getGroundY(oathX, oathZ), oathZ);
         return posVec;
       },
       isAvailable: () =>
         (state.zone || 'stupa') === arena.map &&
         !state.uiOpen &&
+        !state.dialogueOpen &&
         bossState.subdued &&
-        !bossState.active,
+        !bossState.active &&
+        (subduedLiveTicks === 0 || (bossState.oathCeremonyTimer <= 0 && oathGraceTimer <= 0)),
       radius,
       labelKey: 'prompt.oathStone',
-      interact: () => start({ isRematch: true }),
-      onInteract: () => start({ isRematch: true }),
+      labelParams: { name: i18n.t(def.nameKey) },
+      getLabel: () => i18n.t('boss.oathPrompt', { name: i18n.t(def.nameKey) }),
+      interact: handleOathStoneInteract,
+      onInteract: handleOathStoneInteract,
     });
     const entry = makeEntry(oathInteractableId, 2.4);
     const dotAlias = makeEntry(oathInteractableDotId, 2.4);
@@ -453,8 +561,10 @@ export function createBoss(ctx, def) {
         zg.add(rootGroup);
       }
       const gy = getGroundY(arena.x, arena.z);
+      const ogy = getGroundY(oathX, oathZ);
       barrierGroup.position.set(arena.x, gy, arena.z);
-      oathStoneGroup.position.set(arena.x, gy, arena.z);
+      warnRingMesh.position.set(arena.x, gy + 0.04, arena.z);
+      oathStoneGroup.position.set(oathX, ogy, oathZ);
       if (!bossState.active) {
         bossState.setPosition(arena.x, arena.z);
       }
@@ -507,6 +617,10 @@ export function createBoss(ctx, def) {
     }
 
     patternRunner.clear();
+    removeChallengeInteractable();
+    rematchArmedUntil = 0;
+    oathGraceTimer = 0;
+    bossState.outsideTerritoryTimer = 0;
     bossState.isRematch = Boolean(opts.isRematch || isSavedSubdued());
     bossState.active = true;
     bossState.hp = bossState.maxHp;
@@ -529,8 +643,9 @@ export function createBoss(ctx, def) {
 
     chainsGroup.visible = false;
     invulnMesh.visible = false;
+    warnRingMesh.visible = false;
     barrierGroup.position.set(arena.x, curStartY, arena.z);
-    oathStoneGroup.position.set(arena.x, curStartY, arena.z);
+    oathStoneGroup.position.set(oathX, getGroundY(oathX, oathZ), oathZ);
     barrierGroup.visible = isArenaLocked();
     oathStoneGroup.visible = false;
     bossMeshGroup.visible = true;
@@ -539,7 +654,7 @@ export function createBoss(ctx, def) {
     def.onStart?.(bossState, ctx, patternRunner, built);
     const postStartY = getGroundY(arena.x, arena.z);
     barrierGroup.position.set(arena.x, postStartY, arena.z);
-    oathStoneGroup.position.set(arena.x, postStartY, arena.z);
+    oathStoneGroup.position.set(oathX, getGroundY(oathX, oathZ), oathZ);
     bossState.setPosition(arena.x, arena.z);
 
     // If Phase 1 includes weatherZone, activate it on start
@@ -637,6 +752,34 @@ export function createBoss(ctx, def) {
     }
   }
 
+  function isPlayerExploitingSafeZone() {
+    const pPos = state.player?.position;
+    if (!pPos) return false;
+    const distToArena = Math.hypot(pPos.x - arena.x, pPos.z - arena.z);
+    if (distToArena > arena.r + 3.5) return true;
+    if (distToArena > arena.r - 1.0) {
+      if (state.player?.inSanctuary) return true;
+      const curZone = state.zone || arena.map;
+      if (ctx.shrines?.isInSanctuary?.(pPos.x, pPos.z, curZone)) return true;
+      if (curZone === 'wild' && Array.isArray(ctx.config?.WILD?.maniStones)) {
+        for (const ms of ctx.config.WILD.maniStones) {
+          if (Math.hypot(pPos.x - ms.x, pPos.z - ms.z) <= (ms.radius || 4) + 0.5) {
+            return true;
+          }
+        }
+      }
+      const mapDef = ctx.world?.getMap?.(curZone);
+      if (Array.isArray(mapDef?.safeZones)) {
+        for (const sz of mapDef.safeZones) {
+          if (Math.hypot(pPos.x - sz.x, pPos.z - sz.z) <= (sz.r ?? 10)) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
   function dropBossLoot(firstKill) {
     if (!ctx.loot) return;
     const dropOrigin = { x: bossState.pos.x, y: bossState.pos.y, z: bossState.pos.z };
@@ -647,7 +790,7 @@ export function createBoss(ctx, def) {
       const angle = (idx / Math.max(1, total)) * TWO_PI + Math.random() * 0.35;
       const dist = 1.2 + (idx % 3) * 0.65;
       const tx = dropOrigin.x + Math.cos(angle) * dist;
-      const tz = dropOrigin.z + Math.sin(angle) * dist;
+      const tz = dropOrigin.z + Math.sin(angle) * dist + 0.75;
       const ty = getGroundY(tx, tz);
       bus.emit('loot:drop', {
         item,
@@ -715,13 +858,18 @@ export function createBoss(ctx, def) {
     bossState.enraged = false;
     bossState.animState = 'kneel';
     bossState.oathCeremonyTimer = 3.2;
+    subduedLiveTicks = 0;
+    oathGraceTimer = 4.0;
+    rematchArmedUntil = 0;
 
     state.bossActive = false;
     state.bossSubdued = true;
 
     // Clear adds, telegraphs, and weather hazards immediately
     patternRunner.clear();
+    removeChallengeInteractable();
     barrierGroup.visible = false;
+    warnRingMesh.visible = false;
     invulnMesh.visible = false;
 
     // Show golden Vajra chains around kneeling Boss
@@ -808,6 +956,7 @@ export function createBoss(ctx, def) {
     }
 
     // Register Oath Stone immediately so interaction queries / E2E tests find it right away
+    oathStoneGroup.position.set(oathX, getGroundY(oathX, oathZ), oathZ);
     registerOathStoneInteractable();
     oathStoneGroup.visible = true;
 
@@ -817,6 +966,7 @@ export function createBoss(ctx, def) {
   function reset() {
     const wasActive = bossState.active;
     patternRunner.clear();
+    removeChallengeInteractable();
     def.onReset?.(bossState, ctx, patternRunner, built);
 
     bossState.active = false;
@@ -831,6 +981,8 @@ export function createBoss(ctx, def) {
     bossState.stunUntil = 0;
     bossState.rootUntil = 0;
     bossState.oathCeremonyTimer = 0;
+    bossState.outsideTerritoryTimer = 0;
+    approachWarnShown = false;
     bossState.setPosition(arena.x, arena.z);
 
     if (isSavedSubdued()) {
@@ -839,6 +991,7 @@ export function createBoss(ctx, def) {
     state.bossActive = false;
     state.bossSubdued = Boolean(bossState.subdued);
     barrierGroup.visible = false;
+    warnRingMesh.visible = false;
     chainsGroup.visible = false;
     invulnMesh.visible = false;
 
@@ -880,6 +1033,28 @@ export function createBoss(ctx, def) {
   function damage(amount, opts = {}) {
     if (!bossState.active || bossState.hp <= 0) {
       return { dealt: 0, hit: false, killed: false, liberated: false, amount: 0, hp: bossState.hp };
+    }
+    if (!opts.ignoreTerritory && isPlayerExploitingSafeZone()) {
+      const dxHome = arena.x - bossState.pos.x;
+      const dzHome = arena.z - bossState.pos.z;
+      const dHome = Math.hypot(dxHome, dzHome);
+      if (dHome > 0.5) {
+        const step = Math.min(dHome, 2.0);
+        bossState.setPosition(
+          bossState.pos.x + (dxHome / dHome) * step,
+          bossState.pos.z + (dzHome / dHome) * step
+        );
+      }
+      return {
+        dealt: 0,
+        hit: false,
+        killed: false,
+        liberated: false,
+        amount: 0,
+        hp: bossState.hp,
+        immune: true,
+        evade: true,
+      };
     }
     if (bossState.invulnTimer > 0 && !opts.ignoreInvuln) {
       return {
@@ -1026,6 +1201,14 @@ export function createBoss(ctx, def) {
       return;
     }
 
+    // Track post-defeat live gameplay ticks & grace timer for Oath Stone
+    if (bossState.subdued && !bossState.active) {
+      subduedLiveTicks += 1;
+      if (!state.dialogueOpen && bossState.oathCeremonyTimer <= 0 && oathGraceTimer > 0) {
+        oathGraceTimer = Math.max(0, oathGraceTimer - dt);
+      }
+    }
+
     // Pulse Oath Stone ring when visible
     if (oathStoneGroup.visible) {
       oathRingMat.opacity = 0.6 + Math.sin(state.elapsed * 3.2) * 0.22;
@@ -1045,16 +1228,21 @@ export function createBoss(ctx, def) {
       }
     }
 
-    // Auto-start when player steps inside arena radius (if not yet subdued)
+    // Auto-start when player steps inside engageRadius, with earlier warning at warnRadius (if not yet subdued)
     const pPos = state.player?.position;
     const allowAuto = typeof def.canAutoStart === 'function' ? def.canAutoStart(bossState, ctx) : true;
     if (!allowAuto && !bossState.active) {
       bossMeshGroup.visible = false;
       oathStoneGroup.visible = false;
+      warnRingMesh.visible = false;
+      removeChallengeInteractable();
       return;
     }
     if (allowAuto && !bossState.active && !bossState.subdued) {
       bossMeshGroup.visible = true;
+      warnRingMesh.visible = true;
+    } else if (warnRingMesh.visible) {
+      warnRingMesh.visible = false;
     }
     if (
       allowAuto &&
@@ -1066,9 +1254,27 @@ export function createBoss(ctx, def) {
       (state.player?.hp ?? 1) > 0
     ) {
       const distToCenter = Math.hypot(pPos.x - arena.x, pPos.z - arena.z);
-      if (distToCenter <= arena.r - 0.8) {
+      const warnRadius = def.warnRadius ?? Math.max(8, arena.r - 0.5);
+      const engageRadius = def.engageRadius ?? Math.min(arena.r * 0.62, 12.5);
+      if (distToCenter <= engageRadius) {
         start();
       } else {
+        if (distToCenter <= warnRadius) {
+          warnRingMat.opacity = 0.36 + Math.sin(state.elapsed * 5.0) * 0.22;
+          ensureChallengeInteractable();
+          if (!approachWarnShown) {
+            approachWarnShown = true;
+            const warnText = `${i18n.t(def.nameKey)} — ${i18n.t(def.titleKey)}`;
+            ctx.toast?.show?.(warnText, 3.2);
+            bus.emit('toast', { text: warnText });
+          }
+        } else {
+          warnRingMat.opacity = 0.14 + Math.sin(state.elapsed * 2.2) * 0.05;
+          removeChallengeInteractable();
+          if (distToCenter > warnRadius + 3.0) {
+            approachWarnShown = false;
+          }
+        }
         built.anim?.(dt, bossState);
         return;
       }
@@ -1082,6 +1288,7 @@ export function createBoss(ctx, def) {
     }
 
     // 1. Clamp Player inside the 5-color prayer-flag arena barrier only on Hard difficulty (lockArena)
+    let retreatingToCenter = false;
     if (pPos && lockArena) {
       const dx = pPos.x - arena.x;
       const dz = pPos.z - arena.z;
@@ -1094,8 +1301,17 @@ export function createBoss(ctx, def) {
     } else if (pPos && !lockArena) {
       const distCenter = Math.hypot(pPos.x - arena.x, pPos.z - arena.z);
       const distBoss = Math.hypot(pPos.x - bossState.pos.x, pPos.z - bossState.pos.z);
+      const exploiting = isPlayerExploitingSafeZone();
+      if (exploiting || distCenter > arena.r + 6) {
+        bossState.outsideTerritoryTimer = (bossState.outsideTerritoryTimer || 0) + dt;
+      } else if (distCenter <= arena.r) {
+        bossState.outsideTerritoryTimer = 0;
+      }
+      if (exploiting || (bossState.outsideTerritoryTimer || 0) > 3.5) {
+        retreatingToCenter = true;
+      }
       const leashR = Math.max(arena.r * 2.5, arena.r + 26);
-      if (distCenter > leashR && distBoss > 26) {
+      if ((distCenter > leashR && distBoss > 26) || (bossState.outsideTerritoryTimer || 0) > 14.0) {
         reset();
         return;
       }
@@ -1128,7 +1344,36 @@ export function createBoss(ctx, def) {
       if (isSlowed) moveSpeed *= 0.6;
       if (isRooted) moveSpeed = 0;
 
-      if (pPos) {
+      if (retreatingToCenter) {
+        const dxHome = arena.x - bossState.pos.x;
+        const dzHome = arena.z - bossState.pos.z;
+        const distHome = Math.hypot(dxHome, dzHome);
+        if (distHome > 0.8 && moveSpeed > 0) {
+          const homeAngle = Math.atan2(dxHome, dzHome);
+          bossState.facing += wrapAngle(homeAngle - bossState.facing) * Math.min(1, dt * 6.0);
+          bossMeshGroup.rotation.y = bossState.facing + Math.PI;
+          const step = Math.min(distHome, moveSpeed * 1.35 * dt);
+          bossState.setPosition(
+            bossState.pos.x + (dxHome / distHome) * step,
+            bossState.pos.z + (dzHome / distHome) * step
+          );
+          bossState.animState = 'walk';
+        } else {
+          bossState.animState = 'idle';
+        }
+        // Regenerate a small amount of HP while player retreats outside territory / into sanctuary
+        if (bossState.hp < bossState.maxHp) {
+          const regen = Math.max(1, Math.round(bossState.maxHp * 0.03 * dt));
+          bossState.hp = Math.min(bossState.maxHp, bossState.hp + regen);
+          bus.emit('boss:hp', {
+            id: def.id,
+            hp: bossState.hp,
+            maxHp: bossState.maxHp,
+            phase: bossState.phase,
+            totalPhases: bossState.totalPhases,
+          });
+        }
+      } else if (pPos) {
         const dx = pPos.x - bossState.pos.x;
         const dz = pPos.z - bossState.pos.z;
         const dist = Math.hypot(dx, dz);
@@ -1150,9 +1395,11 @@ export function createBoss(ctx, def) {
         }
       }
 
-      // Schedule next attack from current phase list
-      bossState.attackTimer -= dt * (bossState.enraged ? 1.25 : 1.0);
-      if (bossState.attackTimer <= 0) {
+      // Schedule next attack from current phase list (pause new attacks while retreating to center)
+      if (!retreatingToCenter) {
+        bossState.attackTimer -= dt * (bossState.enraged ? 1.25 : 1.0);
+      }
+      if (!retreatingToCenter && bossState.attackTimer <= 0) {
         if (Array.isArray(phaseDef.patterns) && phaseDef.patterns.length > 0 && !def.attacks) {
           const availablePats = phaseDef.patterns.filter(
             (p) => !(p.type === 'weatherZone' && patternRunner.hasWeatherZone())
