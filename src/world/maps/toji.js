@@ -20,6 +20,7 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
   createHeightfieldTerrain,
   addRimMountains,
@@ -781,6 +782,33 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
     const ngRidge = new THREE.BoxGeometry(8.4, 0.28, 0.45);
     ngRidge.translate(0, 5.85, ngZ);
     gGold.push(ngRidge);
+  }
+
+  // Merge perimeter walls, sandō paths, Nandaimon, and North Gate into permanent `precinctGroup`
+  const precinctGroup = new THREE.Group();
+  precinctGroup.name = 'TojiPrecinctWallsAndGates';
+  root.add(precinctGroup);
+  const precinctBuckets = [
+    [gStone, stoneMat, true, true, 'TojiPrecinctStone'],
+    [gSando, sandoStoneMat, false, true, 'TojiPrecinctSando'],
+    [gDarkWood, darkWoodMat, true, true, 'TojiPrecinctDarkWood'],
+    [gVermilion, vermilionMat, true, true, 'TojiPrecinctVermilion'],
+    [gPlaster, plasterMat, true, true, 'TojiPrecinctPlaster'],
+    [gRoofTile, roofTileMat, true, true, 'TojiPrecinctRoofTile'],
+    [gGold, goldMat, true, false, 'TojiPrecinctGold'],
+    [gGreenLattice, greenLatticeMat, false, true, 'TojiPrecinctGreenLattice'],
+  ];
+  for (const [geos, mat, cast, receive, name] of precinctBuckets) {
+    if (!geos.length) continue;
+    const mergedGeo = mergeAndDispose([...geos]);
+    geos.length = 0;
+    if (!mergedGeo) continue;
+    disposables.push(mergedGeo);
+    const mesh = new THREE.Mesh(mergedGeo, mat);
+    mesh.name = name;
+    mesh.castShadow = cast;
+    mesh.receiveShadow = receive;
+    precinctGroup.add(mesh);
   }
 
   // ---------------------------------------------------------------- 5. Landmark 1: 東寺五重塔 (Tō-ji Gojū-no-tō — Five-Story Pagoda) at `local (36, 18)`
@@ -1676,7 +1704,11 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
     }
   }
 
-  // ---------------------------------------------------------------- 9. Merge Static Architectural Buckets into Minimal Draw Calls
+  // ---------------------------------------------------------------- 9. Merge Procedural Landmark Buckets & Load Blender 5.2 Masterpiece GLBs
+  const proceduralLandmarksGroup = new THREE.Group();
+  proceduralLandmarksGroup.name = 'TojiProceduralLandmarksFallback';
+  root.add(proceduralLandmarksGroup);
+
   const mergedBuckets = [
     [gStone, stoneMat, true, true, 'TojiStoneMerged'],
     [gSando, sandoStoneMat, false, true, 'TojiSandoMerged'],
@@ -1703,7 +1735,55 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
     mesh.name = name;
     mesh.castShadow = cast;
     mesh.receiveShadow = receive;
-    root.add(mesh);
+    proceduralLandmarksGroup.add(mesh);
+  }
+
+  // Load our personally sculpted Blender 5.2 BMesh Masterpiece GLBs (`/models/kukai/toji_*.glb`) in browser runtime
+  const blenderMasterpieceGroup = new THREE.Group();
+  blenderMasterpieceGroup.name = 'TojiBlenderMasterpieceGroup';
+  root.add(blenderMasterpieceGroup);
+  const glbSakuraMats = [];
+  const glbMapleMats = [];
+
+  if (typeof window !== 'undefined' && typeof fetch === 'function') {
+    const loader = new GLTFLoader();
+    const glbSpecs = [
+      { url: '/models/kukai/toji_gojunoto.glb', x: pagodaX, y: 0, z: pagodaZ, scale: 1.05 },
+      { url: '/models/kukai/toji_kondo.glb', x: kondoX, y: 0, z: kondoZ, scale: 1.25 },
+      { url: '/models/kukai/toji_kodo.glb', x: kodoX, y: 0, z: kodoZ, scale: 1.25 },
+    ];
+    let loadedCount = 0;
+    for (const spec of glbSpecs) {
+      loader.load(
+        spec.url,
+        (gltf) => {
+          const model = gltf.scene;
+          model.position.set(spec.x, spec.y, spec.z);
+          model.scale.setScalar(spec.scale);
+          model.traverse((child) => {
+            if (child.isMesh) {
+              child.castShadow = true;
+              child.receiveShadow = true;
+              const mName = child.material?.name || '';
+              if (mName.startsWith('Sakura')) {
+                glbSakuraMats.push(child.material);
+              } else if (mName.startsWith('Momiji')) {
+                glbMapleMats.push(child.material);
+              }
+            }
+          });
+          blenderMasterpieceGroup.add(model);
+          loadedCount += 1;
+          if (loadedCount === glbSpecs.length) {
+            proceduralLandmarksGroup.visible = false;
+            appliedSeason = null;
+            applySeasonalPalette(state?.time?.season || 'spring');
+          }
+        },
+        undefined,
+        () => {}
+      );
+    }
   }
 
   // ---------------------------------------------------------------- 10. Weeping Cherry (`不二櫻`) & Crimson Japanese Maples (`紅葉`) InstancedMeshes
@@ -1910,6 +1990,16 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
       mapleMat.emissiveIntensity = 0.14;
       particleMat.color.setHex(0xf8fafc);
       particleMat.opacity = 0.90;
+    }
+    for (const m of glbSakuraMats) {
+      m.color?.copy?.(blossomMat.color);
+      m.emissive?.copy?.(blossomMat.emissive);
+      m.emissiveIntensity = blossomMat.emissiveIntensity;
+    }
+    for (const m of glbMapleMats) {
+      m.color?.copy?.(mapleMat.color);
+      m.emissive?.copy?.(mapleMat.emissive);
+      m.emissiveIntensity = mapleMat.emissiveIntensity;
     }
   }
 

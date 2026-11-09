@@ -27,6 +27,7 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
   createHeightfieldTerrain,
   addRimMountains,
@@ -1113,7 +1114,9 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     dtGold.push(pGoldBand);
   }
 
-  daitoGroup.add(
+  const daitoFallbackGroup = new THREE.Group();
+  daitoFallbackGroup.name = 'DanjoGaran_KonponDaito_Fallback';
+  daitoFallbackGroup.add(
     new THREE.Mesh(mergeAndDispose(dtStone), stonePlinthMat),
     new THREE.Mesh(mergeAndDispose(dtVerm), vermilionMat),
     new THREE.Mesh(mergeAndDispose(dtWhite), whitePlasterMat),
@@ -1121,6 +1124,27 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     new THREE.Mesh(mergeAndDispose(dtRoof), cypressRoofMat),
     new THREE.Mesh(mergeAndDispose(dtGold), goldMat)
   );
+  daitoGroup.add(daitoFallbackGroup);
+
+  if (typeof window !== 'undefined' && typeof fetch === 'function') {
+    const loader = new GLTFLoader();
+    loader.load(
+      '/models/kukai/konpon_daito.glb',
+      (gltf) => {
+        const model = gltf.scene;
+        model.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+        daitoGroup.add(model);
+        daitoFallbackGroup.visible = false;
+      },
+      undefined,
+      () => {}
+    );
+  }
   addBoxCollider(-62 - 6.6, -62 + 6.6, 6 - 6.6, 6 + 6.6);
 
   // Rotating golden Mandala floor ring around Konpon Daitō

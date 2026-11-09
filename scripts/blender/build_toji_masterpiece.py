@@ -441,7 +441,21 @@ def build_pagoda_story_core(collection, name, cx, cy, z_bot, core_w, story_h, pa
     frieze_h = story_h * 0.28
 
     # 1. Dark weathered timber core wall (黒茶素木壁 — NOT white plaster!)
-    add_box(collection, f"{name}_DarkTimberCore", (cx, cy, z_bot + wall_h * 0.5), (core_w, core_w, wall_h), pal["timber_mid"])
+    if is_ground_story:
+        # Leave central 2.2m portals open on all 4 cardinal sides so the Golden Shinbashira & 4 Buddhas inside shine out!
+        corner_w = (core_w - 2.2) * 0.5
+        corner_off = half_c - corner_w * 0.5
+        for sx in (-1, 1):
+            for sy in (-1, 1):
+                add_box(collection, f"{name}_CornerWallY_{sx}_{sy}", (cx + sx * corner_off, cy + sy * (half_c - 0.14), z_bot + wall_h * 0.5), (corner_w, 0.28, wall_h), pal["timber_mid"])
+                add_box(collection, f"{name}_CornerWallX_{sx}_{sy}", (cx + sx * (half_c - 0.14), cy + sy * corner_off, z_bot + wall_h * 0.5), (0.28, corner_w, wall_h), pal["timber_mid"])
+        # Central Heart Pillar (心柱 Shinbashira as Mahāvairocana) + Sumeru Dais + 4 Diamond-Realm Buddhas
+        add_box(collection, f"{name}_SumeruDais", (cx, cy, z_bot + 0.36), (3.6, 3.6, 0.72), pal["gold_sacred"])
+        add_cylinder(collection, f"{name}_Shinbashira", (cx, cy, z_bot + 9.0), 0.38, 0.30, 18.0, 16, pal["gold_sacred"])
+        for b_i, (bdx, bdy) in enumerate(((0, -1.05), (0, 1.05), (-1.05, 0), (1.05, 0))):
+            add_deity_statue(collection, f"{name}_InnerBuddha_{b_i}", (cx + bdx, cy + bdy, z_bot + 0.74), 0.72, pal["gold_sacred"], pal["gold_sacred"], is_seated=True)
+    else:
+        add_box(collection, f"{name}_DarkTimberCore", (cx, cy, z_bot + wall_h * 0.5), (core_w, core_w, wall_h), pal["timber_mid"])
 
     # 2. White Shikkui plaster inter-bracket frieze ONLY at the top 28% under the eaves (白漆喰支輪・小壁 — matches toji_angle2_pagode06.jpg!)
     add_box(
@@ -487,12 +501,14 @@ def build_pagoda_story_core(collection, name, cx, cy, z_bot, core_w, story_h, pa
     side_off = core_w * 0.33
     for sy in (-1, 1):
         face_y = cy + sy * (half_c + 0.02)
-        add_box(collection, f"{name}_KaradoY_{sy}", (cx, face_y, z_bot + door_h * 0.52), (door_w, 0.08, door_h), pal["timber_dark"])
+        if not is_ground_story:
+            add_box(collection, f"{name}_KaradoY_{sy}", (cx, face_y, z_bot + door_h * 0.52), (door_w, 0.08, door_h), pal["timber_dark"])
         for wx_s in (-1, 1):
             add_box(collection, f"{name}_RenjiY_{sy}_{wx_s}", (cx + wx_s * side_off, face_y, z_bot + wall_h * 0.52), (win_w, 0.07, win_h), pal["timber_dark"])
     for sx in (-1, 1):
         face_x = cx + sx * (half_c + 0.02)
-        add_box(collection, f"{name}_KaradoX_{sx}", (face_x, cy, z_bot + door_h * 0.52), (0.08, door_w, door_h), pal["timber_dark"])
+        if not is_ground_story:
+            add_box(collection, f"{name}_KaradoX_{sx}", (face_x, cy, z_bot + door_h * 0.52), (0.08, door_w, door_h), pal["timber_dark"])
         for wy_s in (-1, 1):
             add_box(collection, f"{name}_RenjiX_{sx}_{wy_s}", (face_x, cy + wy_s * side_off, z_bot + wall_h * 0.52), (0.07, win_w, win_h), pal["timber_dark"])
 
@@ -749,27 +765,18 @@ def build_detailed_irimoya_roof(
 # Build Tō-ji Kondō (金堂) & Kōdō (講堂) along the Authentic Temple Axis
 # (Matches `ref_toji_kondo.jpg`, `toji_angle5_kodo_ext.jpg`, `ref_toji_kodo.jpg`)
 # ---------------------------------------------------------------------------
-def build_toji_kondo_and_kodo_masterpiece(collection, pal, offset=(0.0, 0.0, 0.0)):
-    ox, oy, oz = offset
-
-    # =========================================================================
-    # A. Kōdō (講堂 — Foreground right/north in `toji_angle5_kodo_ext.jpg`:
-    #    Heian-style Vermilion Pillars & Tie-Beams framing White Shikkui Plaster Walls!)
-    # =========================================================================
-    mx, my, mz = ox + 11.5, oy - 1.0, oz
+def build_toji_kodo_only(collection, pal, offset=(0.0, 0.0, 0.0)):
+    mx, my, mz = offset
     add_box(collection, "Kodo_StonePodium", (mx, my, mz + 0.48), (19.6, 10.6, 0.96), pal["granite_light"])
     add_box(collection, "Kodo_PodiumCap", (mx, my, mz + 0.98), (19.9, 10.9, 0.10), pal["granite_dark"])
 
-    # White Shikkui side & back walls + Vermilion structural grid (朱塗柱・長押・貫・斗栱 + 白漆喰壁)
     wall_h = 4.5
     add_box(collection, "Kodo_BackWall", (mx, my + 4.4, mz + 1.0 + wall_h * 0.5), (18.2, 0.45, wall_h), pal["shikkui_white"])
     for sx in (-1, 1):
         add_box(collection, f"Kodo_SideWall_{sx}", (mx + sx * 9.0, my, mz + 1.0 + wall_h * 0.5), (0.45, 8.8, wall_h), pal["shikkui_white"])
-        # Vermilion horizontal tie-beams (地覆・腰長押・内法長押・頭貫) along the white side walls (exact match to toji_angle5_kodo_ext.jpg!)
         for hz in (1.12, 2.25, 4.15, 4.75, 5.35):
             add_box(collection, f"Kodo_SideNageshi_{sx}_{hz}", (mx + sx * 9.02, my, mz + hz), (0.52, 9.0, 0.14), pal["kodo_vermilion"])
 
-    # Front & Side Vermilion Round Pillars (朱塗円柱) + Vermilion Frieze & Tokyō Brackets
     for px in (-9.0, -6.4, -3.8, -1.3, 1.3, 3.8, 6.4, 9.0):
         for py in (-4.4, 4.4):
             add_cylinder(collection, f"Kodo_Pillar_{px}_{py}", (mx + px, my + py, mz + 1.0 + wall_h * 0.5), 0.24, 0.22, wall_h, 16, pal["kodo_vermilion"])
@@ -778,16 +785,13 @@ def build_toji_kondo_and_kodo_masterpiece(collection, pal, offset=(0.0, 0.0, 0.0
         for sx in (-1, 1):
             add_cylinder(collection, f"Kodo_SidePillar_{sx}_{py}", (mx + sx * 9.0, my + py, mz + 1.0 + wall_h * 0.5), 0.24, 0.22, wall_h, 16, pal["kodo_vermilion"])
 
-    # Upper White Shikkui Kokabe frieze & Vermilion lintels across the front so the 21-Deity Mandala inside is clearly visible!
     add_box(collection, "Kodo_FrontUpperWhiteFrieze", (mx, my - 4.4, mz + 4.95), (18.2, 0.32, 0.95), pal["shikkui_white"])
     add_box(collection, "Kodo_FrontBeamA", (mx, my - 4.4, mz + 4.45), (18.4, 0.42, 0.18), pal["kodo_vermilion"])
     add_box(collection, "Kodo_FrontBeamB", (mx, my - 4.4, mz + 5.42), (18.6, 0.52, 0.22), pal["kodo_vermilion"])
 
-    # Interior 21-Deity Karmic Mandala (立體曼荼羅二十一尊) on the White & Vermilion Sumeru Altar
     add_box(collection, "Kodo_SumeruAltar", (mx, my + 0.3, mz + 1.45), (15.4, 5.6, 0.90), pal["shikkui_white"])
     add_box(collection, "Kodo_AltarTrim", (mx, my + 0.3, mz + 1.92), (15.7, 5.9, 0.14), pal["kodo_vermilion"])
 
-    # Five Wisdom Buddhas (五智如来) + Five Bodhisattvas (五菩薩) + Five Wisdom Kings (五大明王) + Bonten/Taishakuten/Shitennō
     add_deity_statue(collection, "Kodo_Dainichi", (mx, my + 0.3, mz + 1.98), 1.38, pal["gold_sacred"], pal["gold_sacred"], is_seated=True)
     for i, (dx, dy) in enumerate(((-1.45, -1.0), (1.45, -1.0), (-1.45, 1.0), (1.45, 1.0))):
         add_deity_statue(collection, f"Kodo_Buddha_{i}", (mx + dx, my + 0.3 + dy, mz + 1.98), 0.88, pal["gold_sacred"], pal["gold_sacred"], is_seated=True)
@@ -815,31 +819,41 @@ def build_toji_kondo_and_kodo_masterpiece(collection, pal, offset=(0.0, 0.0, 0.0
         has_chigomune=True,
     )
 
-    # Red-cloth Hōmōsen Tea Benches (緋毛氈の床几 — seen in foreground of toji_angle5_kodo_ext.jpg!)
     for b_idx, bx in enumerate((mx - 4.2, mx + 0.2, mx + 4.6)):
         add_box(collection, f"Kodo_RedBenchCloth_{b_idx}", (bx, my - 7.4, mz + 0.44), (2.8, 1.1, 0.12), pal["homosen_red"])
         for lx in (-1.2, 1.2):
             for ly in (-0.45, 0.45):
                 add_box(collection, f"Kodo_BenchLeg_{b_idx}_{lx}_{ly}", (bx + lx, my - 7.4 + ly, mz + 0.20), (0.10, 0.10, 0.40), pal["timber_dark"])
 
-    # =========================================================================
-    # B. Kondō (金堂 — Double-Roofed Momoyama Hall with Front Kiriage 切り上げ Eave & 5-Colored Curtain)
-    # =========================================================================
-    kx, ky, kz = ox - 11.8, oy + 1.2, oz
+
+def build_toji_kondo_only(collection, pal, offset=(0.0, 0.0, 0.0)):
+    kx, ky, kz = offset
     add_box(collection, "Kondo_StonePodium", (kx, ky, kz + 0.58), (18.2, 11.8, 1.16), pal["granite_light"])
     add_box(collection, "Kondo_FrontSteps", (kx, ky - 6.4, kz + 0.38), (4.8, 1.5, 0.76), pal["granite_light"])
 
-    # Lower story dark timber walls + Slatted Renjimado windows + Paneled Karado doors
-    add_box(collection, "Kondo_LowerTimberWall", (kx, ky, kz + 2.85), (15.4, 9.2, 3.4), pal["timber_mid"])
+    # Back wall & side dark timber walls (leaving central front sanctum portal open so Yakushi Triad shines out!)
+    add_box(collection, "Kondo_BackTimberWall", (kx, ky + 4.4, kz + 2.85), (15.4, 0.42, 3.4), pal["timber_mid"])
+    for sx in (-1, 1):
+        add_box(collection, f"Kondo_SideTimberWall_{sx}", (kx + sx * 7.5, ky, kz + 2.85), (0.42, 9.2, 3.4), pal["timber_mid"])
+        add_box(collection, f"Kondo_FrontWingWall_{sx}", (kx + sx * 5.2, ky - 4.4, kz + 2.85), (4.8, 0.42, 3.4), pal["timber_mid"])
+
     add_box(collection, "Kondo_LowerWhiteFrieze", (kx, ky, kz + 4.85), (15.3, 9.1, 0.95), pal["shikkui_white"])
-    for px in (-7.6, -5.0, -2.5, 0.0, 2.5, 5.0, 7.6):
-        if abs(px) > 0.1:
-            add_cylinder(collection, f"Kondo_FrontCol_{px}", (kx + px, ky - 4.62, kz + 3.2), 0.24, 0.22, 4.2, 14, pal["timber_dark"])
-            add_box(collection, f"Kondo_LowerTokyo_{px}", (kx + px, ky - 4.72, kz + 4.85), (0.72, 0.58, 0.65), pal["timber_dark"])
-    # Central elevated clerestory window under the Kiriage roof (切り上げ下の連子窓 — ref_toji_kondo.jpg!)
+    for px in (-7.6, -5.0, -2.5, 2.5, 5.0, 7.6):
+        add_cylinder(collection, f"Kondo_FrontCol_{px}", (kx + px, ky - 4.62, kz + 3.2), 0.24, 0.22, 4.2, 14, pal["timber_dark"])
+        add_box(collection, f"Kondo_LowerTokyo_{px}", (kx + px, ky - 4.72, kz + 4.85), (0.72, 0.58, 0.65), pal["timber_dark"])
     add_box(collection, "Kondo_KiriageWindow", (kx, ky - 4.65, kz + 5.15), (2.4, 0.18, 1.05), pal["timber_mid"])
     for wx in (-6.3, -3.7, 3.7, 6.3):
         add_box(collection, f"Kondo_RenjiWin_{wx}", (kx + wx, ky - 4.64, kz + 2.8), (1.9, 0.14, 1.85), pal["timber_dark"])
+
+    # Interior Yakushi Triad (藥師三尊: Yakushi Nyorai + Nikkō + Gakkō) & 12 Heavenly Generals (十二神將)
+    add_box(collection, "Kondo_AltarDais", (kx, ky + 0.6, kz + 1.55), (10.8, 4.2, 0.82), pal["timber_dark"])
+    add_deity_statue(collection, "Kondo_YakushiNyorai", (kx, ky + 0.6, kz + 1.98), 1.65, pal["gold_sacred"], pal["gold_sacred"], is_seated=True)
+    add_deity_statue(collection, "Kondo_NikkoBosatsu", (kx + 2.8, ky + 0.5, kz + 1.98), 1.18, pal["gold_sacred"], pal["gold_sacred"], is_seated=False)
+    add_deity_statue(collection, "Kondo_GakkoBosatsu", (kx - 2.8, ky + 0.5, kz + 1.98), 1.18, pal["gold_sacred"], pal["gold_sacred"], is_seated=False)
+    for g_i in range(12):
+        gx = kx - 4.4 + g_i * 0.80
+        gy = ky - 0.8 + (g_i % 2) * 0.45
+        add_deity_statue(collection, f"Kondo_General_{g_i}", (gx, gy, kz + 1.98), 0.55, pal["bronze_verdigris"], pal["gold_sacred"], is_seated=False)
 
     build_detailed_irimoya_roof(
         collection,
@@ -856,7 +870,6 @@ def build_toji_kondo_and_kodo_masterpiece(collection, pal, offset=(0.0, 0.0, 0.0
         has_chigomune=False,
     )
 
-    # Upper story white Shikkui frieze + dark timber brackets + Main Irimoya Roof
     add_box(collection, "Kondo_UpperWhiteCore", (kx, ky, kz + 7.35), (13.0, 7.4, 2.4), pal["shikkui_white"])
     add_box(collection, "Kondo_UpperTimberBands", (kx, ky, kz + 7.95), (13.3, 7.7, 0.55), pal["timber_dark"])
     build_detailed_irimoya_roof(
@@ -874,18 +887,23 @@ def build_toji_kondo_and_kodo_masterpiece(collection, pal, offset=(0.0, 0.0, 0.0
         has_chigomune=True,
     )
 
-    # Five-Colored Buddhist Curtain (五色幕 Goshikimaku) in front of Kondō (ref_toji_kondo.jpg!)
     maku_mats = (pal["maku_green"], pal["maku_yellow"], pal["maku_red"], pal["shikkui_white"], pal["maku_purple"])
     for side_x in (-1, 1):
-        for s_idx in range(12):
-            sx_pos = kx + side_x * (2.6 + s_idx * 0.48)
+        for s_idx in range(9):
+            sx_pos = kx + side_x * (2.6 + s_idx * 0.52)
             add_box(
                 collection,
                 f"Kondo_Goshikimaku_{side_x}_{s_idx}",
-                (sx_pos, ky - 7.5, kz + 0.55),
-                (0.46, 0.06, 0.96),
+                (sx_pos, ky - 4.75, kz + 4.15),
+                (0.48, 0.06, 0.88),
                 maku_mats[s_idx % 5],
             )
+
+
+def build_toji_kondo_and_kodo_masterpiece(collection, pal, offset=(0.0, 0.0, 0.0)):
+    ox, oy, oz = offset
+    build_toji_kodo_only(collection, pal, offset=(ox + 11.5, oy - 1.0, oz))
+    build_toji_kondo_only(collection, pal, offset=(ox - 11.8, oy + 1.2, oz))
 
 
 # ---------------------------------------------------------------------------
@@ -1081,6 +1099,23 @@ def clear_meshes():
             bpy.data.objects.remove(obj, do_unlink=True)
 
 
+def join_meshes_by_material(scene):
+    by_mat = {}
+    for obj in list(scene.objects):
+        if obj.type == "MESH" and obj.name != "TojiCourtyardGround":
+            mat_name = obj.data.materials[0].name if obj.data.materials else "Default"
+            by_mat.setdefault(mat_name, []).append(obj)
+    for mat_name, objs in by_mat.items():
+        if len(objs) <= 1:
+            continue
+        bpy.ops.object.select_all(action="DESELECT")
+        for o in objs:
+            o.select_set(True)
+        bpy.context.view_layer.objects.active = objs[0]
+        bpy.ops.object.join()
+        objs[0].name = f"TojiMerged_{mat_name}"
+
+
 def main():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     scene = bpy.context.scene
@@ -1098,6 +1133,7 @@ def main():
     build_toji_garden_and_pond(scene.collection, pal, pagoda_offset=(0.0, 0.0, 0.0))
 
     # Export updated high-detail `toji_gojunoto.glb`
+    join_meshes_by_material(scene)
     bpy.ops.object.select_all(action="DESELECT")
     for obj in scene.objects:
         if obj.type == "MESH" and obj.name != "TojiCourtyardGround":
@@ -1109,50 +1145,76 @@ def main():
         export_apply=True,
     )
 
-    # -----------------------------------------------------------------------
-    # Render Angle 1: Spring Fuji-zakura (不二櫻) + Five-Story Pagoda (matches `ref_toji_sakura.jpg`)
-    # Camera placed so Fuji-zakura's weeping sakura branches & wooden crutch poles frame the left,
-    # and the full 5-story pagoda + 9-ring Sōrin rises on the right!
-    # -----------------------------------------------------------------------
-    point_camera_at(cam_obj, (-9.5, -24.5, 3.2), (-3.8, -1.0, 12.2), lens=24.0)
-    scene.render.filepath = os.path.join(ARTIFACT_DIR, "blender_toji_angle1_sakura.png")
-    bpy.ops.render.render(write_still=True)
+    skip_render = os.environ.get("SKIP_RENDER") == "1"
 
-    # -----------------------------------------------------------------------
-    # Render Angle 2: Unobstructed Low-Angle Upward Architectural Close-Up of Dark-Timber Pagoda,
-    # 3-Rail Kumi-Kōran Balconies, White Inter-Bracket Frieze, Sumimune & Tamagaki Fence
-    # (matches `toji_angle2_pagode06.jpg` & `toji_angle4_nt062.jpg`)
-    # -----------------------------------------------------------------------
-    point_camera_at(cam_obj, (-13.5, 17.5, 2.8), (0.0, 0.0, 13.8), lens=23.0)
-    scene.render.filepath = os.path.join(ARTIFACT_DIR, "blender_toji_angle2_closeup_eaves.png")
-    bpy.ops.render.render(write_still=True)
+    if not skip_render:
+        # -----------------------------------------------------------------------
+        # Render Angle 1: Spring Fuji-zakura (不二櫻) + Five-Story Pagoda (matches `ref_toji_sakura.jpg`)
+        # -----------------------------------------------------------------------
+        point_camera_at(cam_obj, (-9.5, -24.5, 3.2), (-3.8, -1.0, 12.2), lens=24.0)
+        scene.render.filepath = os.path.join(ARTIFACT_DIR, "blender_toji_angle1_sakura.png")
+        bpy.ops.render.render(write_still=True)
 
-    # Full-complex overview for `blender_toji_gojunoto.png` (with full Sōrin spire headroom!)
-    point_camera_at(cam_obj, (-2.5, -40.5, 11.8), (0.0, -2.0, 12.2), lens=22.0)
-    scene.render.filepath = os.path.join(ARTIFACT_DIR, "blender_toji_gojunoto.png")
-    bpy.ops.render.render(write_still=True)
+        # -----------------------------------------------------------------------
+        # Render Angle 2: Unobstructed Low-Angle Upward Architectural Close-Up
+        # -----------------------------------------------------------------------
+        point_camera_at(cam_obj, (-13.5, 17.5, 2.8), (0.0, 0.0, 13.8), lens=23.0)
+        scene.render.filepath = os.path.join(ARTIFACT_DIR, "blender_toji_angle2_closeup_eaves.png")
+        bpy.ops.render.render(write_still=True)
 
-    # -----------------------------------------------------------------------
-    # Render Angle 3: View across the Lotus Pond (蓮池) with 3D Lotus Leaves, Seed Pods,
-    # Autumn Crimson Maples & Five-Story Pagoda (matches `toji_angle1_pond.jpg`)
-    # -----------------------------------------------------------------------
-    sun_obj.rotation_euler = (math.radians(62), math.radians(24), math.radians(-48))  # Golden autumn low sun angle!
-    point_camera_at(cam_obj, (6.0, -24.8, 2.35), (2.2, -7.5, 6.2), lens=20.0)
-    scene.render.filepath = os.path.join(ARTIFACT_DIR, "blender_toji_angle3_lotus_pond_autumn.png")
-    bpy.ops.render.render(write_still=True)
+        point_camera_at(cam_obj, (-2.5, -40.5, 11.8), (0.0, -2.0, 12.2), lens=22.0)
+        scene.render.filepath = os.path.join(ARTIFACT_DIR, "blender_toji_gojunoto.png")
+        bpy.ops.render.render(write_still=True)
 
-    # -----------------------------------------------------------------------
-    # Render Angle 4: Kōdō (講堂 Vermilion & White + Red Benches + 21-Deity Mandala) &
-    # Kondō (金堂 Double Roof + Kiriage Central Eave + 5-Colored Curtain)
-    # (matches `toji_angle5_kodo_ext.jpg` & `ref_toji_kondo.jpg`)
-    # -----------------------------------------------------------------------
+        # -----------------------------------------------------------------------
+        # Render Angle 3: View across the Lotus Pond (蓮池)
+        # -----------------------------------------------------------------------
+        sun_obj.rotation_euler = (math.radians(62), math.radians(24), math.radians(-48))
+        point_camera_at(cam_obj, (6.0, -24.8, 2.35), (2.2, -7.5, 6.2), lens=20.0)
+        scene.render.filepath = os.path.join(ARTIFACT_DIR, "blender_toji_angle3_lotus_pond_autumn.png")
+        bpy.ops.render.render(write_still=True)
+
+    # Export centered `toji_kondo.glb`
+    clear_meshes()
+    build_toji_kondo_only(scene.collection, pal, offset=(0.0, 0.0, 0.0))
+    join_meshes_by_material(scene)
+    bpy.ops.object.select_all(action="DESELECT")
+    for obj in scene.objects:
+        if obj.type == "MESH" and obj.name != "TojiCourtyardGround":
+            obj.select_set(True)
+    bpy.ops.export_scene.gltf(
+        filepath=os.path.join(GLB_OUT_DIR, "toji_kondo.glb"),
+        use_selection=True,
+        export_format="GLB",
+        export_apply=True,
+    )
+
+    # Export centered `toji_kodo.glb`
+    clear_meshes()
+    build_toji_kodo_only(scene.collection, pal, offset=(0.0, 0.0, 0.0))
+    join_meshes_by_material(scene)
+    bpy.ops.object.select_all(action="DESELECT")
+    for obj in scene.objects:
+        if obj.type == "MESH" and obj.name != "TojiCourtyardGround":
+            obj.select_set(True)
+    bpy.ops.export_scene.gltf(
+        filepath=os.path.join(GLB_OUT_DIR, "toji_kodo.glb"),
+        use_selection=True,
+        export_format="GLB",
+        export_apply=True,
+    )
+
+    # Build combined scene for .blend file (and render if not skip_render)
     clear_meshes()
     sun_obj.rotation_euler = (math.radians(50), math.radians(16), math.radians(-34))
     build_toji_kondo_and_kodo_masterpiece(scene.collection, pal, offset=(0.0, 0.0, 0.0))
-    point_camera_at(cam_obj, (0.0, -27.5, 9.8), (0.0, 0.0, 4.2), lens=24.0)
-    scene.render.filepath = os.path.join(ARTIFACT_DIR, "blender_toji_kondo_mandala.png")
-    bpy.ops.render.render(write_still=True)
+    if not skip_render:
+        point_camera_at(cam_obj, (0.0, -27.5, 9.8), (0.0, 0.0, 4.2), lens=24.0)
+        scene.render.filepath = os.path.join(ARTIFACT_DIR, "blender_toji_kondo_mandala.png")
+        bpy.ops.render.render(write_still=True)
 
+    build_toji_pagoda_masterpiece(scene.collection, pal, offset=(28.0, -14.0, 0.0))
+    build_toji_garden_and_pond(scene.collection, pal, pagoda_offset=(28.0, -14.0, 0.0))
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(ARTIFACT_DIR, "toji_masterpiece.blend"))
     print("TOJI_MASTERPIECE_BLENDER_SUCCESS")
 
