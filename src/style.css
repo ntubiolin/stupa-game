@@ -864,6 +864,65 @@ kbd {
   box-shadow: 0 0 8px rgba(240, 156, 43, 0.8);
 }
 
+.season-group {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin-top: 7px;
+  background: rgba(8, 5, 15, 0.45);
+  padding: 2px;
+  border-radius: 9px;
+  border: 1px solid rgba(238, 195, 108, 0.16);
+}
+
+.season-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border: none;
+  background: transparent;
+  color: var(--col-text-muted);
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 3px 5px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.season-btn__icon {
+  font-size: 0.78rem;
+  line-height: 1;
+}
+
+.season-btn.is-active {
+  background: rgba(238, 195, 108, 0.24);
+  color: var(--col-gold);
+  box-shadow: 0 0 8px rgba(238, 195, 108, 0.18);
+}
+
+.season-btn[data-season="spring"].is-active {
+  background: rgba(244, 114, 182, 0.24);
+  color: #fbcfe8;
+}
+
+.season-btn[data-season="summer"].is-active {
+  background: rgba(52, 211, 153, 0.22);
+  color: #a7f3d0;
+}
+
+.season-btn[data-season="autumn"].is-active {
+  background: rgba(249, 115, 22, 0.26);
+  color: #fed7aa;
+}
+
+.season-btn[data-season="winter"].is-active {
+  background: rgba(148, 163, 184, 0.26);
+  color: #e2e8f0;
+}
+
 .utility-bar {
   display: inline-flex;
   flex-wrap: wrap;
@@ -1630,7 +1689,8 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
   }
 
   .time-panel:not(.is-mobile-expanded) .speed-group,
-  .time-panel:not(.is-mobile-expanded) .time-slider {
+  .time-panel:not(.is-mobile-expanded) .time-slider,
+  .time-panel:not(.is-mobile-expanded) .season-group {
     display: none;
   }
 
@@ -7114,3 +7174,125 @@ body.is-touch-device .mobile-skill-pad {
   color: #e2e8f0;
   margin: 0 !important;
 }
+
+/* ==========================================================================
+   Japanese Yamato-e / Urushi Aesthetic Theme (`body[data-zone-aesthetic="japanese"]`)
+   Applied automatically in Kyoto Tō-ji (`toji`) and Mount Kōya (`koyasan`)
+   ========================================================================== */
+
+body[data-zone-aesthetic="japanese"] {
+  --bg-glass: rgba(24, 13, 15, 0.72);
+  --bg-glass-strong: rgba(20, 10, 12, 0.88);
+  --border-gold: rgba(236, 186, 98, 0.42);
+  --border-gold-strong: rgba(248, 206, 122, 0.78);
+  --col-gold: #f4c975;
+}
+
+/* Soft Washi & Bokashi atmospheric screen vignette over 3D viewport */
+body[data-zone-aesthetic="japanese"] .hud-root::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse at 50% 45%, transparent 58%, rgba(28, 12, 16, 0.34) 100%),
+    linear-gradient(180deg, rgba(255, 228, 214, 0.09) 0%, transparent 18%, transparent 84%, rgba(22, 10, 14, 0.24) 100%);
+  box-shadow: inset 0 0 0 1px rgba(238, 195, 108, 0.22);
+}
+
+body[data-zone-aesthetic="japanese"] .glass-panel {
+  background: linear-gradient(160deg, rgba(28, 14, 16, 0.78) 0%, rgba(16, 9, 12, 0.84) 100%);
+  border-color: rgba(236, 184, 96, 0.44);
+  box-shadow:
+    0 12px 34px rgba(10, 4, 6, 0.56),
+    inset 0 1px 0 rgba(255, 232, 188, 0.22),
+    inset 0 0 0 1px rgba(186, 44, 34, 0.22);
+}
+
+/* Traditional Vertical Calligraphy Scroll Badge (`和風縦書き地名巻物・朱印`) */
+.japan-emaki-scroll {
+  position: fixed;
+  top: 16px;
+  left: 244px;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+  filter: drop-shadow(0 8px 20px rgba(12, 5, 8, 0.55));
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.japan-emaki-scroll.is-hidden {
+  display: none !important;
+}
+
+.japan-emaki-scroll__rod {
+  width: 66px;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #78350f 0%, #fbbf24 14%, #29150c 22%, #1c0f08 78%, #fbbf24 86%, #78350f 100%);
+  border: 1px solid rgba(251, 191, 36, 0.48);
+}
+
+.japan-emaki-scroll__paper {
+  position: relative;
+  padding: 12px 10px 14px;
+  min-width: 56px;
+  background:
+    linear-gradient(180deg, #fbf5e6 0%, #f5ead2 52%, #efe0c1 100%);
+  border-left: 2px solid #991b1b;
+  border-right: 2px solid #991b1b;
+  box-shadow: inset 0 0 0 1px rgba(217, 119, 6, 0.35);
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #1c1412;
+  font-family: var(--font-serif);
+}
+
+.japan-emaki-scroll__seal {
+  position: absolute;
+  top: 7px;
+  left: 6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  background: rgba(200, 36, 28, 0.92);
+  border: 1px solid #fef2f2;
+  box-shadow: 0 0 0 1px #b91c1c;
+  color: #fff7ed;
+  font-size: 0.54rem;
+  font-weight: 800;
+  line-height: 1.05;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  writing-mode: vertical-rl;
+  letter-spacing: -0.04em;
+}
+
+.japan-emaki-scroll__title {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  font-size: 0.88rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #1c120e;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+.japan-emaki-scroll__sub {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: #881337;
+  padding-top: 20px;
+}
+

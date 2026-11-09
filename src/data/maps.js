@@ -216,6 +216,8 @@ import YARLUNG_MAP from './maps/yarlung.js';
 import SAMYE_MAP from './maps/samye.js';
 import CHIMPHU_MAP from './maps/chimphu.js';
 import TERMA_MAP from './maps/terma.js';
+import TOJI_MAP from './maps/toji.js';
+import KOYASAN_MAP from './maps/koyasan.js';
 
 // Auto-discover chapter map definitions (`src/data/maps/*.js`) and chapter i18n (`src/i18n/*.js`)
 const fallbackMapModules = {
@@ -226,6 +228,8 @@ const fallbackMapModules = {
   samye: { SAMYE_MAP },
   chimphu: { CHIMPHU_MAP },
   terma: { TERMA_MAP },
+  toji: { TOJI_MAP },
+  koyasan: { KOYASAN_MAP },
 };
 let chapterMapModules = fallbackMapModules;
 try {

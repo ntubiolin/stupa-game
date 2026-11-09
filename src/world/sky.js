@@ -80,6 +80,7 @@ export function createSky(ctx) {
     uTwilightFactor: { value: 0.0 },
     uCaveFactor: { value: 0.0 },
     uSubterranean: { value: 0.0 },
+    uJapanStyle: { value: 0.0 },
     uTime: { value: 0.0 },
   };
 
@@ -108,6 +109,7 @@ export function createSky(ctx) {
       uniform float uTwilightFactor;
       uniform float uCaveFactor;
       uniform float uSubterranean;
+      uniform float uJapanStyle;
       uniform float uTime;
 
       varying vec3 vWorldDir;
@@ -203,6 +205,14 @@ export function createSky(ctx) {
           vec3 cloudLit = mix(vec3(0.96, 0.95, 0.94), uSunColor * 1.05, uTwilightFactor * 0.75);
           cloudLit = mix(cloudLit, vec3(0.16, 0.22, 0.36), uNightFactor * 0.85);
           skyCol = mix(skyCol, cloudLit, cloudMask * 0.28 * outdoorVis);
+
+          // Japanese Yamato-e / Ukiyo-e Bokashi horizontal mist & golden cloud bands (大和繪霞・金雲)
+          if (uJapanStyle > 0.5) {
+            float kasumiWave = sin(y * 42.0 + sin(dir.x * 5.0 + dir.z * 5.0 + uTime * 0.04) * 1.8);
+            float kasumiBand = smoothstep(0.45, 0.92, kasumiWave) * smoothstep(0.01, 0.08, y) * smoothstep(0.28, 0.06, y);
+            vec3 kasumiCol = mix(vec3(0.99, 0.93, 0.84), uSunColor * 1.08, 0.45);
+            skyCol = mix(skyCol, kasumiCol, kasumiBand * 0.32 * (1.0 - uNightFactor * 0.8) * outdoorVis);
+          }
         }
 
         // Stars (visible at night above the horizon)
@@ -218,13 +228,17 @@ export function createSky(ctx) {
           skyCol += (starCol * stars + vec3(0.35, 0.48, 0.78) * mw) * outdoorVis;
         }
 
-        // Sun disc and corona
+        // Sun disc and corona (larger painterly Yamato-e vermilion-gold sun disc on Japanese maps!)
         float sunCos = dot(dir, uSunDir);
         float sunVis = smoothstep(-0.08, 0.04, uSunDir.y) * outdoorVis;
         if (sunVis > 0.0 && sunCos > 0.2) {
           float sunHalo = pow(max(0.0, sunCos), 10.0) * 0.28 + pow(max(0.0, sunCos), 64.0) * 0.42;
-          float sunDisc = smoothstep(0.9982, 0.9991, sunCos);
-          vec3 discCol = mix(uSunColor * 1.15, vec3(1.15, 1.08, 0.95), smoothstep(0.0, 0.35, uSunDir.y));
+          float discEdge0 = mix(0.9982, 0.9952, uJapanStyle);
+          float discEdge1 = mix(0.9991, 0.9964, uJapanStyle);
+          float sunDisc = smoothstep(discEdge0, discEdge1, sunCos);
+          vec3 jpSunDiscCol = vec3(1.0, 0.42, 0.24);
+          vec3 baseDiscCol = mix(uSunColor * 1.15, vec3(1.15, 1.08, 0.95), smoothstep(0.0, 0.35, uSunDir.y));
+          vec3 discCol = mix(baseDiscCol, mix(jpSunDiscCol, vec3(1.05, 0.88, 0.62), smoothstep(0.05, 0.55, uSunDir.y)), uJapanStyle * 0.78);
           skyCol += (uSunColor * sunHalo + discCol * sunDisc * 0.95) * sunVis * smoothstep(-0.04, 0.02, y);
         }
 
@@ -318,6 +332,91 @@ export function createSky(ctx) {
       fogFar: new THREE.Color(0x111a36),
     },
   };
+
+  // ---------------------------------------------------------------- Seasonal Solar Trajectory & Color Profiles
+  const VALID_SEASONS = ['spring', 'summer', 'autumn', 'winter'];
+  if (!state.time.season || !VALID_SEASONS.includes(state.time.season)) {
+    state.time.season = config.TIME?.defaultSeason || 'spring';
+  }
+
+  const SEASON_PROFILES = {
+    spring: {
+      id: 'spring',
+      // Vernal equinox: balanced high sun arc, warm cherry-blossom gold daylight
+      elevationScale: 0.88,
+      elevationBias: 0.02,
+      southSlope: 0.34,
+      southOffset: 0.20,
+      minSunHeight: 6.0,
+      sunIntensityMult: 1.0,
+      zenithTint: new THREE.Color(0x4b83d4),
+      horizonTint: new THREE.Color(0xfce7f3),
+      sunTint: new THREE.Color(0xfff4d6),
+      tintWeight: 0.14,
+      fogScale: 0.96,
+    },
+    summer: {
+      id: 'summer',
+      // Summer solstice: high zenith sun, short compact shadows, longer daylight
+      elevationScale: 1.12,
+      elevationBias: 0.11,
+      southSlope: 0.14,
+      southOffset: 0.06,
+      minSunHeight: 8.5,
+      sunIntensityMult: 1.12,
+      zenithTint: new THREE.Color(0x165db0),
+      horizonTint: new THREE.Color(0xdbeafe),
+      sunTint: new THREE.Color(0xfffbeb),
+      tintWeight: 0.16,
+      fogScale: 0.84,
+    },
+    autumn: {
+      id: 'autumn',
+      // Autumnal equinox -> late autumn: lower southern sun arc, warm amber-gold light, long dramatic temple shadows
+      elevationScale: 0.64,
+      elevationBias: -0.03,
+      southSlope: 0.50,
+      southOffset: 0.44,
+      minSunHeight: 4.6,
+      sunIntensityMult: 0.98,
+      zenithTint: new THREE.Color(0x3a68b2),
+      horizonTint: new THREE.Color(0xfed7aa),
+      sunTint: new THREE.Color(0xffd285),
+      tintWeight: 0.28,
+      fogScale: 1.05,
+    },
+    winter: {
+      id: 'winter',
+      // Winter solstice: low southern sun trajectory, extra-long crisp shadows, pale silver-blue sky
+      elevationScale: 0.46,
+      elevationBias: -0.08,
+      southSlope: 0.64,
+      southOffset: 0.60,
+      minSunHeight: 3.6,
+      sunIntensityMult: 0.88,
+      zenithTint: new THREE.Color(0x476899),
+      horizonTint: new THREE.Color(0xe2e8f0),
+      sunTint: new THREE.Color(0xf1f5f9),
+      tintWeight: 0.24,
+      fogScale: 1.16,
+    },
+  };
+
+  function setSeason(nextSeason, { silent = false } = {}) {
+    const norm = String(nextSeason || '').trim().toLowerCase();
+    if (!VALID_SEASONS.includes(norm)) return false;
+    const prev = state.time.season;
+    state.time.season = norm;
+    updateSkyState(0);
+    if (prev !== norm && !silent) {
+      ctx.bus?.emit?.('season:change', { season: norm, previous: prev });
+    }
+    return true;
+  }
+
+  function getSeason() {
+    return state.time.season || 'spring';
+  }
 
   const smoothstep = (edge0, edge1, x) => {
     const t = THREE.MathUtils.clamp((x - edge0) / (edge1 - edge0), 0, 1);
@@ -484,11 +583,15 @@ export function createSky(ctx) {
     const sinPhi = Math.sin(phi);
     const cosPhi = Math.cos(phi);
 
-    // Sun moves East (+X) -> South-High (+Y, +Z) -> West (-X) -> Nadir (-Y)
+    const seasonKey = VALID_SEASONS.includes(state.time.season) ? state.time.season : 'spring';
+    const seasonProf = SEASON_PROFILES[seasonKey] || SEASON_PROFILES.spring;
+
+    // Sun moves East (+X) -> South-High (+Y, +Z) -> West (-X) -> Nadir (-Y),
+    // with solar declination (altitude & southern arc) modulated by the active season.
     state.time.sunDir.set(
       cosPhi,
-      sinPhi * 0.88,
-      sinPhi * 0.34 + 0.20
+      sinPhi * seasonProf.elevationScale + seasonProf.elevationBias,
+      sinPhi * seasonProf.southSlope + seasonProf.southOffset
     ).normalize();
 
     const sunY = state.time.sunDir.y;
@@ -499,6 +602,15 @@ export function createSky(ctx) {
 
     // Twilight factor peaks around sunrise/sunset (sunY near 0)
     const twilightFactor = Math.exp(-Math.pow((sunY - 0.02) / 0.19, 2));
+
+    const isJapanZone = state.zone === 'toji' || state.zone === 'koyasan';
+    uniforms.uJapanStyle.value = isJapanZone ? 1.0 : 0.0;
+    if (typeof document !== 'undefined' && document.body) {
+      const targetAesthetic = isJapanZone ? 'japanese' : 'default';
+      if (document.body.dataset.zoneAesthetic !== targetAesthetic) {
+        document.body.dataset.zoneAesthetic = targetAesthetic;
+      }
+    }
 
     uniforms.uSunDir.value.copy(state.time.sunDir);
     uniforms.uMoonDir.value.copy(state.time.sunDir).negate();
@@ -528,19 +640,57 @@ export function createSky(ctx) {
     uniforms.uGroundColor.value.lerpColors(pA.ground, pB.ground, blend);
     uniforms.uSunColor.value.lerpColors(pA.sun, pB.sun, blend);
 
+    // Apply subtle seasonal sky & sun color temperature shift during daytime
+    const dayTintWeight = (1.0 - nightFactor) * (isJapanZone ? Math.max(0.42, seasonProf.tintWeight * 1.9) : seasonProf.tintWeight);
+    if (dayTintWeight > 0.001) {
+      uniforms.uZenithColor.value.lerp(seasonProf.zenithTint, dayTintWeight * 0.75);
+      uniforms.uHorizonColor.value.lerp(seasonProf.horizonTint, dayTintWeight);
+      uniforms.uSunColor.value.lerp(seasonProf.sunTint, dayTintWeight);
+    }
+    if (isJapanZone && nightFactor < 0.85) {
+      // Japanese Yamato-e / Ukiyo-e Bokashi horizon & mid-sky gradation (大和繪・浮世繪暈し色調)
+      const jpMidTint =
+        seasonKey === 'spring'
+          ? 0x7da4d9
+          : seasonKey === 'summer'
+          ? 0x2e86c1
+          : seasonKey === 'autumn'
+          ? 0x8e5b82
+          : 0x64748b;
+      const jpHorizTint =
+        seasonKey === 'spring'
+          ? 0xfbd5e5
+          : seasonKey === 'summer'
+          ? 0xc8f2e4
+          : seasonKey === 'autumn'
+          ? 0xfbbf83
+          : 0xe2e8f0;
+      uniforms.uMidColor.value.lerp(tmpColA.setHex(jpMidTint), (1.0 - nightFactor) * 0.45);
+      uniforms.uHorizonColor.value.lerp(tmpColB.setHex(jpHorizTint), (1.0 - nightFactor) * 0.58);
+    }
+
     hemiLight.color.lerpColors(pA.hemiSky, pB.hemiSky, blend);
     hemiLight.groundColor.lerpColors(pA.hemiGround, pB.hemiGround, blend);
-    hemiLight.intensity = THREE.MathUtils.lerp(0.78, 0.48, nightFactor);
+    if (dayTintWeight > 0.001) {
+      hemiLight.color.lerp(seasonProf.horizonTint, dayTintWeight * 0.55);
+    }
+    hemiLight.intensity = THREE.MathUtils.lerp(isJapanZone ? 0.76 : 0.78, 0.45, nightFactor);
 
     // Fog color & density per map (map.sky or map.atmosphere overrides default)
     const mapDef = ctx.world?.getMap(state.zone);
     const skyCfg = mapDef?.sky || mapDef?.atmosphere;
-    if (skyCfg?.fogColor != null) {
+    if (skyCfg?.fogColor != null && !isJapanZone) {
       scene.fog.color.set(skyCfg.fogColor);
+      if (dayTintWeight > 0.001) {
+        scene.fog.color.lerp(seasonProf.horizonTint, dayTintWeight * 0.35);
+      }
     } else {
       scene.fog.color.lerpColors(pA.fog, pB.fog, blend);
+      if (dayTintWeight > 0.001) {
+        scene.fog.color.lerp(uniforms.uHorizonColor.value, isJapanZone ? (1.0 - nightFactor) * 0.72 : dayTintWeight * 0.45);
+      }
     }
-    scene.fog.density = skyCfg?.fogDensity ?? 0.0020;
+    scene.fog.density = (skyCfg?.fogDensity ?? 0.0020) * seasonProf.fogScale * (isJapanZone ? 1.12 : 1.0);
 
     // Update shared SEASON × Firewatch multi-stop fog & sun uniforms
     SKY_SHADER_UNIFORMS.uSunDir.value.copy(state.time.sunDir);
@@ -633,13 +783,13 @@ export function createSky(ctx) {
       hemiLight.position.set(centerX, 50, centerZ);
 
       const dayStrength = smoothstep(-0.08, 0.22, sunY);
-      sunLight.intensity = dayStrength * 1.72;
+      sunLight.intensity = dayStrength * 1.68 * seasonProf.sunIntensityMult;
       sunLight.color.copy(uniforms.uSunColor.value);
       sunLight.target.position.set(centerX, 0, centerZ);
       const sunDist = 75;
       sunLight.position.set(
         centerX + state.time.sunDir.x * sunDist,
-        Math.max(6, state.time.sunDir.y * sunDist),
+        Math.max(seasonProf.minSunHeight, state.time.sunDir.y * sunDist),
         centerZ + state.time.sunDir.z * sunDist
       );
 
@@ -730,6 +880,8 @@ export function createSky(ctx) {
     getTimeOverride() {
       return timeOverride;
     },
+    setSeason,
+    getSeason,
   };
   ctx.sky = api;
   ctx.debug?.register?.('sky', api);

@@ -283,6 +283,24 @@ export function createHud(ctx) {
             </div>
           </div>
           <input id="time-slider" class="time-slider" type="range" min="0" max="1" step="0.002" value="0.3" />
+          <div class="season-group" role="group" aria-label="Season">
+            <button id="btn-season-spring" type="button" class="season-btn is-active" data-season="spring">
+              <span class="season-btn__icon" aria-hidden="true">🌸</span>
+              <span class="season-btn__label" data-i18n="hud.seasonShort.spring"></span>
+            </button>
+            <button id="btn-season-summer" type="button" class="season-btn" data-season="summer">
+              <span class="season-btn__icon" aria-hidden="true">🌿</span>
+              <span class="season-btn__label" data-i18n="hud.seasonShort.summer"></span>
+            </button>
+            <button id="btn-season-autumn" type="button" class="season-btn" data-season="autumn">
+              <span class="season-btn__icon" aria-hidden="true">🍁</span>
+              <span class="season-btn__label" data-i18n="hud.seasonShort.autumn"></span>
+            </button>
+            <button id="btn-season-winter" type="button" class="season-btn" data-season="winter">
+              <span class="season-btn__icon" aria-hidden="true">❄️</span>
+              <span class="season-btn__label" data-i18n="hud.seasonShort.winter"></span>
+            </button>
+          </div>
         </div>
 
         <div class="utility-bar glass-panel">
@@ -310,6 +328,17 @@ export function createHud(ctx) {
           <button id="btn-utility-more" type="button" class="icon-btn utility-more-btn" aria-label="More tools" title="More">
             <span>⋯</span>
           </button>
+        </div>
+
+        <!-- Japanese Yamato-e Vertical Calligraphy Scroll Badge (和風縦書き地名巻物・朱印) -->
+        <div id="japan-emaki-scroll" class="japan-emaki-scroll is-hidden" aria-hidden="true">
+          <div class="japan-emaki-scroll__rod japan-emaki-scroll__rod--top"></div>
+          <div class="japan-emaki-scroll__paper">
+            <span id="japan-emaki-seal" class="japan-emaki-scroll__seal">空海</span>
+            <span id="japan-emaki-title" class="japan-emaki-scroll__title">平安京・東寺</span>
+            <span id="japan-emaki-sub" class="japan-emaki-scroll__sub">春・不二櫻花吹雪</span>
+          </div>
+          <div class="japan-emaki-scroll__rod japan-emaki-scroll__rod--bottom"></div>
         </div>
       </aside>
 
@@ -627,6 +656,12 @@ export function createHud(ctx) {
     root.querySelector('#btn-speed-1'),
     root.querySelector('#btn-speed-4'),
   ];
+  const seasonBtns = [
+    root.querySelector('#btn-season-spring'),
+    root.querySelector('#btn-season-summer'),
+    root.querySelector('#btn-season-autumn'),
+    root.querySelector('#btn-season-winter'),
+  ].filter(Boolean);
 
   const btnLangToggle = root.querySelector('#btn-lang-toggle');
   const btnLangText = root.querySelector('#btn-lang-text');
@@ -734,6 +769,7 @@ export function createHud(ctx) {
   let lastClockStr = '';
   let lastPhase = '';
   let lastSpeed = -1;
+  let lastSeason = '';
   let lastSliderBucket = -1;
   let lastInteractAvailable = null;
   let lastFeedAvailable = null;
@@ -811,6 +847,14 @@ export function createHud(ctx) {
     speedBtns[0].title = i18n.t('hud.speedPause');
     speedBtns[1].title = i18n.t('hud.speed1');
     speedBtns[2].title = i18n.t('hud.speed4');
+    for (const sBtn of seasonBtns) {
+      const sKey = sBtn.getAttribute('data-season');
+      if (sKey) {
+        const titleStr = i18n.t(`hud.season.${sKey}`);
+        sBtn.title = titleStr;
+        sBtn.setAttribute('aria-label', titleStr);
+      }
+    }
 
     // Force refresh dynamic localized labels
     lastPhase = '';
@@ -1176,6 +1220,31 @@ export function createHud(ctx) {
     btn.addEventListener('click', () => {
       const spd = Number(btn.getAttribute('data-speed'));
       setTimeSpeed(spd, false);
+    });
+  }
+
+  function selectSeason(seasonKey, announce = true) {
+    if (!seasonKey) return;
+    if (ctx.sky?.setSeason) {
+      ctx.sky.setSeason(seasonKey, { silent: false });
+    } else {
+      state.time.season = seasonKey;
+      bus.emit('season:change', { season: seasonKey });
+    }
+    if (announce) {
+      showToast({
+        key: 'toast.seasonChanged',
+        params: { season: i18n.t(`hud.season.${seasonKey}`) },
+        kind: 'info',
+      });
+    }
+  }
+
+  for (const sBtn of seasonBtns) {
+    sBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const sKey = sBtn.getAttribute('data-season');
+      if (sKey) selectSeason(sKey, true);
     });
   }
 
@@ -1921,6 +1990,54 @@ export function createHud(ctx) {
       for (const btn of speedBtns) {
         const s = Number(btn.getAttribute('data-speed'));
         btn.classList.toggle('is-active', s === lastSpeed);
+      }
+    }
+
+    const curSeason = state.time.season || 'spring';
+    if (curSeason !== lastSeason) {
+      lastSeason = curSeason;
+      for (const sBtn of seasonBtns) {
+        const s = sBtn.getAttribute('data-season');
+        sBtn.classList.toggle('is-active', s === curSeason);
+      }
+    }
+
+    // 2b. Japanese Emaki Scroll Badge (`#japan-emaki-scroll`) for `toji` & `koyasan`
+    const curLang = i18n.getLang ? i18n.getLang() : 'zh-Hant';
+    const emakiKey = `${curZone}:${curSeason}:${curLang}`;
+    if (emakiKey !== root._lastEmakiKey) {
+      root._lastEmakiKey = emakiKey;
+      const emakiScroll = root.querySelector('#japan-emaki-scroll');
+      const emakiSeal = root.querySelector('#japan-emaki-seal');
+      const emakiTitle = root.querySelector('#japan-emaki-title');
+      const emakiSub = root.querySelector('#japan-emaki-sub');
+      const isJp = curZone === 'toji' || curZone === 'koyasan';
+      if (emakiScroll) {
+        emakiScroll.classList.toggle('is-hidden', !isJp);
+        if (isJp && emakiSeal && emakiTitle && emakiSub) {
+          const isEn = curLang === 'en';
+          if (curZone === 'toji') {
+            emakiSeal.textContent = '空海';
+            emakiTitle.textContent = isEn ? 'Kyoto · Tō-ji' : '平安京・東寺';
+            const seasonVerse = {
+              spring: isEn ? 'Fuji-zakura Petals' : '春・不二櫻花吹雪',
+              summer: isEn ? 'Lotus Pond & Green Maple' : '夏・瓢箪池青楓',
+              autumn: isEn ? 'Crimson Momiji Brocade' : '秋・五重塔錦紅葉',
+              winter: isEn ? 'Sacred Pagoda in Snow' : '冬・九條雪見伽藍',
+            };
+            emakiSub.textContent = seasonVerse[curSeason] || seasonVerse.spring;
+          } else {
+            emakiSeal.textContent = '遍照';
+            emakiTitle.textContent = isEn ? 'Mt. Kōya · Kongōbu-ji' : '高野山・金剛峯';
+            const seasonVerse = {
+              spring: isEn ? 'Mountain Cherry Mist' : '春・八葉蓮華山櫻',
+              summer: isEn ? 'Ancient Cedar Sanctuary' : '夏・奧之院千本杉',
+              autumn: isEn ? 'Jabara-michi Crimson' : '秋・蛇腹路紅楓',
+              winter: isEn ? 'Snowy Mandala Basin' : '冬・密嚴淨土雪嶺',
+            };
+            emakiSub.textContent = seasonVerse[curSeason] || seasonVerse.spring;
+          }
+        }
       }
     }
 

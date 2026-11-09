@@ -22,6 +22,8 @@ export const ALL_WAYPOINT_IDS = [
   'samye',
   'chimphu',
   'terma',
+  'toji',
+  'koyasan',
   'chimpu',
   'zangdokPalri',
   'sandbox',
