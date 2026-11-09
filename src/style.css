@@ -7311,6 +7311,10 @@ body[data-zone-aesthetic="japanese"] .glass-panel {
   box-shadow: inset 0 1px 0 rgba(255, 236, 198, 0.16);
 }
 
+.kukai-quick-travel-bar.is-hidden {
+  display: none !important;
+}
+
 .kukai-quick-travel-bar__label {
   font-size: 0.86rem;
   font-weight: 700;

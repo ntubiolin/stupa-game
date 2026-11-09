@@ -7,6 +7,7 @@ export { MURAL_PROTO_MODES, MURAL_PROTO_PASSCODE, normalizeMuralProtoMode };
 
 const CAMERA_MODES = ['smart', 'off', 'on'];
 const VOICE_STYLES = ['natural', 'instrumental'];
+export const JAPAN_MODES = ['off', 'on'];
 
 function normalizeCameraMode(val) {
   return CAMERA_MODES.includes(val) ? val : 'smart';
@@ -14,6 +15,20 @@ function normalizeCameraMode(val) {
 
 function normalizeVoiceStyle(val) {
   return VOICE_STYLES.includes(val) ? val : 'natural';
+}
+
+export function normalizeJapanMode(val) {
+  if (val === true || val === 'on') return 'on';
+  return 'off';
+}
+
+export function isJapanModeEnabled(ctx) {
+  const saved = ctx?.save?.get?.('settings', {})?.japanMode ?? ctx?.state?.japanMode;
+  return (
+    normalizeJapanMode(saved) === 'on' ||
+    ctx?.state?.zone === 'toji' ||
+    ctx?.state?.zone === 'koyasan'
+  );
 }
 
 export function createSettingsUi(ctx) {
@@ -57,6 +72,21 @@ export function createSettingsUi(ctx) {
         </label>`).join('')}
       </div>
       <p id="mantra-voice-hint" class="settings-hint" aria-live="polite"></p>
+    </fieldset>
+
+    <fieldset id="settings-japan-mode" class="settings-group">
+      <legend data-i18n="settings.japanMode"></legend>
+      <div class="difficulty-options">
+        ${JAPAN_MODES.map((id) => `<label>
+          <input type="radio" name="japanMode" value="${id}" aria-describedby="japan-mode-hint">
+          <span data-i18n="settings.japanMode.${id}"></span>
+        </label>`).join('')}
+      </div>
+      <p id="japan-mode-hint" class="settings-hint" aria-live="polite"></p>
+      <div id="japan-mode-try-actions" class="settings-mural-proto__try-actions is-hidden">
+        <button type="button" class="settings-mural-proto__try-btn" data-japan-tp="toji" data-i18n="settings.japanMode.tryToji"></button>
+        <button type="button" class="settings-mural-proto__try-btn settings-mural-proto__try-btn--b" data-japan-tp="koyasan" data-i18n="settings.japanMode.tryKoyasan"></button>
+      </div>
     </fieldset>
 
     <section class="settings-group settings-mode" aria-labelledby="settings-mode-heading">
@@ -301,6 +331,7 @@ export function createSettingsUi(ctx) {
     const preset = getDifficulty(ctx);
     const camMode = normalizeCameraMode(savedSettings.cameraAutoFollow);
     const voiceStyle = normalizeVoiceStyle(savedSettings.mantraVoiceStyle);
+    const japanMode = normalizeJapanMode(savedSettings.japanMode ?? state.japanMode);
     const muralUnlocked = Boolean(
       ctx.muralPrototype?.isUnlocked?.() ?? savedSettings.muralProtoUnlocked ?? state.muralProtoUnlocked
     );
@@ -328,10 +359,21 @@ export function createSettingsUi(ctx) {
     for (const input of dialog.querySelectorAll('input[name="mantraVoiceStyle"]')) {
       input.checked = input.value === voiceStyle;
     }
+    for (const input of dialog.querySelectorAll('input[name="japanMode"]')) {
+      input.checked = input.value === japanMode;
+    }
 
     dialog.querySelector('#difficulty-hint').textContent = i18n.t(`settings.difficulty.${preset.id}Hint`);
     dialog.querySelector('#camera-follow-hint').textContent = i18n.t(`settings.cameraAutoFollow.${camMode}Hint`);
     dialog.querySelector('#mantra-voice-hint').textContent = i18n.t(`settings.mantraVoiceStyle.${voiceStyle}Hint`);
+    const japanHintEl = dialog.querySelector('#japan-mode-hint');
+    if (japanHintEl) {
+      japanHintEl.textContent = i18n.t(`settings.japanMode.${japanMode}Hint`);
+    }
+    const japanTryActionsEl = dialog.querySelector('#japan-mode-try-actions');
+    if (japanTryActionsEl) {
+      japanTryActionsEl.classList.toggle('is-hidden', japanMode !== 'on' || !ctx.zones?.teleport);
+    }
 
     if (backupSummaryEl && ctx.save?.dump) {
       const snapshot = ctx.save.dump();
@@ -461,7 +503,7 @@ export function createSettingsUi(ctx) {
 
   dialog.addEventListener('change', event => {
     const { name, value } = event.target;
-    if (!['difficulty', 'cameraAutoFollow', 'mantraVoiceStyle', 'muralProtoMode'].includes(name)) return;
+    if (!['difficulty', 'cameraAutoFollow', 'mantraVoiceStyle', 'japanMode', 'muralProtoMode'].includes(name)) return;
     if (name === 'muralProtoMode') {
       if (ctx.muralPrototype?.setMode) {
         ctx.muralPrototype.setMode(value, { playUnfurl: value !== 'off' });
@@ -485,6 +527,9 @@ export function createSettingsUi(ctx) {
       ctx.bus?.emit?.('camera:setAutoFollow', { mode: nextSettings.cameraAutoFollow });
     } else if (name === 'mantraVoiceStyle') {
       nextSettings.mantraVoiceStyle = normalizeVoiceStyle(value);
+    } else if (name === 'japanMode') {
+      nextSettings.japanMode = normalizeJapanMode(value);
+      state.japanMode = nextSettings.japanMode === 'on';
     }
 
     ctx.save.set('settings', nextSettings);
@@ -492,6 +537,18 @@ export function createSettingsUi(ctx) {
     ctx.bus?.emit?.('settings:changed', nextSettings);
     render();
   });
+
+  for (const jpBtn of dialog.querySelectorAll('[data-japan-tp]')) {
+    jpBtn.addEventListener('click', () => {
+      const targetZone = jpBtn.dataset.japanTp;
+      close();
+      if (targetZone && ctx.zones?.teleport) {
+        ctx.zones.teleport(targetZone, {
+          spawn: targetZone === 'toji' ? 'gojunoto' : 'garan',
+        });
+      }
+    });
+  }
 
   // Mural Prototype passcode unlock & 1-click Try Now handlers (#256)
   function submitMuralUnlock() {
