@@ -172,7 +172,9 @@ export function createMerit(ctx) {
     } else if (type === 'prostration') {
       bus.emit('toast', { key: 'toast.prostration', params: { n: data.prostration }, kind: 'merit' });
     } else if (type === 'lamp') {
-      bus.emit('toast', { key: 'toast.lamp', kind: 'merit' });
+      if (payload?.source !== 'quickLamp' && payload?.source !== 'quickRefill') {
+        bus.emit('toast', { key: 'toast.lamp', kind: 'merit' });
+      }
     } else if (type === 'monkey') {
       bus.emit('toast', { key: 'toast.monkey', kind: 'merit' });
     }
