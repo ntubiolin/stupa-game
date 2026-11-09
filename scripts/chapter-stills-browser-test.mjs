@@ -158,18 +158,24 @@ try {
       await openStillCard(page, item, mobile);
       assert.equal(requested.has(item.path), true, `${item.id} requested when card opens`);
       layouts[item.id] = await checkStillLayout(page, item.id);
-      assert.match(layouts[item.id].captionText, /非歷史照片/);
+      assert(layouts[item.id].captionText.length > 10 && !/非歷史照片|AI 生成/.test(layouts[item.id].captionText));
 
       if (item.id === '01-yarlung-yak-held' || item.id === '09-finale-butter-lamp') {
+        const enSnippet = item.id === '01-yarlung-yak-held'
+          ? 'In the pale morning light of the Yarlung Valley'
+          : 'Within the cool stone niche at dusk';
+        const zhSnippet = item.id === '01-yarlung-yak-held'
+          ? '雅隆河谷蒼茫的晨光裡'
+          : '暮色微涼的灰白石龕裡';
         const oldImage = await page.locator(`.story-chapter-still[data-still="${item.id}"] img`).elementHandle();
         await page.evaluate(() => window.__stupa.storyRuntime.ctx.i18n.setLang('en'));
         await page.locator(`.story-chapter-still[data-still="${item.id}"] figcaption`)
-          .filter({ hasText: 'not a historical photograph' }).waitFor();
+          .filter({ hasText: enSnippet }).waitFor();
         assert.equal(await oldImage.getAttribute('src'), null, 'language rerender disposes previous still');
         await checkStillLayout(page, item.id);
         await page.evaluate(() => window.__stupa.storyRuntime.ctx.i18n.setLang('zh'));
         await page.locator(`.story-chapter-still[data-still="${item.id}"] figcaption`)
-          .filter({ hasText: '非歷史照片' }).waitFor();
+          .filter({ hasText: zhSnippet }).waitFor();
       }
 
       if (!process.env.CI || item.id === '01-yarlung-yak-held' || item.id === '09-finale-butter-lamp') {

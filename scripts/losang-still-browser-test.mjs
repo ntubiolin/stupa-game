@@ -96,7 +96,7 @@ try {
     const oldImage = await page.locator(`${stillSelector} img`).elementHandle();
     const oldContinue = await continueButton(page).elementHandle();
     await page.evaluate(() => __stupa.storyRuntime.ctx.i18n.setLang('en'));
-    await page.locator(`${stillSelector} figcaption`).filter({ hasText: 'not a historical photograph' }).waitFor();
+    await page.locator(`${stillSelector} figcaption`).filter({ hasText: 'Afternoon sunlight warms the white dome of Boudhanath' }).waitFor();
     assert.equal(await oldImage.getAttribute('src'), null, 'language rerender releases old image');
     await oldContinue.evaluate(button => button.click());
     assert.equal(await beat(page), 'losang', 'stale language version cannot accept map');

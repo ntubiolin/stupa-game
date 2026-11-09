@@ -345,9 +345,9 @@ function distanceToPharpingPractitioner() {
 function isNearPharpingPractitioner() {
   const d = distanceToPharpingPractitioner();
   if (d > 3.5) return false;
-  if (!currentTarget) return true;
+  if (!currentTarget) return !currentAction;
   const targetDist = distanceToTarget();
-  return targetDist > 4 || (d <= 2.2 && d + 0.5 < targetDist);
+  return (targetDist > 4 && d <= 2.6) || (d <= 2.2 && d + 0.5 < targetDist);
 }
 function talkToPharpingPractitioner() {
   const lookY = ctx.world.getHeight(2021.8, -44.2) + 1.0;
