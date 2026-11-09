@@ -16,8 +16,18 @@
  */
 import { DEBUG_DIALOGUES } from '../data/dialogues/debug.js';
 import { PROLOGUE_DIALOGUES } from '../data/dialogues/prologue.js';
+import { CH1_DIALOGUES } from '../data/dialogues/ch1.js';
+import { CH2_DIALOGUES } from '../data/dialogues/ch2.js';
+import { CH3_DIALOGUES } from '../data/dialogues/ch3.js';
+import { CH4_DIALOGUES } from '../data/dialogues/ch4.js';
+import { CH5_DIALOGUES } from '../data/dialogues/ch5.js';
 import '../i18n/quests.js';
 import '../i18n/prologue.js';
+import '../i18n/ch1.js';
+import '../i18n/ch2.js';
+import '../i18n/ch3.js';
+import '../i18n/ch4.js';
+import '../i18n/ch5.js';
 
 const TYPEWRITER_SPEED = 52; // chars per second
 
@@ -341,13 +351,20 @@ export function createDialogue(ctx) {
     return list;
   }
 
-  // Register debug & prologue dialogues + auto-discover chapter dialogues (`src/data/dialogues/*.js`)
+  // Register debug, prologue & chapter dialogues + auto-discover chapter dialogues (`src/data/dialogues/*.js`)
   register(DEBUG_DIALOGUES);
   register(PROLOGUE_DIALOGUES);
-  const chapterDialogueModules =
-    (typeof import.meta.glob === 'function' &&
-      import.meta.glob('../data/dialogues/*.js', { eager: true })) ||
-    {};
+  register(CH1_DIALOGUES);
+  register(CH2_DIALOGUES);
+  register(CH3_DIALOGUES);
+  register(CH4_DIALOGUES);
+  register(CH5_DIALOGUES);
+  let chapterDialogueModules = {};
+  try {
+    chapterDialogueModules = import.meta.glob('../data/dialogues/*.js', { eager: true }) || {};
+  } catch {
+    chapterDialogueModules = {};
+  }
   for (const mod of Object.values(chapterDialogueModules)) {
     if (!mod || typeof mod !== 'object') continue;
     for (const val of Object.values(mod)) {

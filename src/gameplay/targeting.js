@@ -30,17 +30,17 @@ export function createTargeting(ctx) {
       const active = ctx.enemies.getActiveEnemies() || [];
       for (let i = 0; i < active.length; i++) {
         const e = active[i];
-        if (e && e.state !== 'liberated' && e.hp > 0) list.push(e);
+        if (e && e.state !== 'liberated' && e.state !== 'calmed' && e.hp > 0) list.push(e);
       }
     } else if (ctx.enemies?.queryCone && origin) {
       const cone = ctx.enemies.queryCone(origin, aimHeading, range, halfAngle) || [];
       for (let i = 0; i < cone.length; i++) {
         const e = cone[i];
-        if (e && e.state !== 'liberated' && e.hp > 0) list.push(e);
+        if (e && e.state !== 'liberated' && e.state !== 'calmed' && e.hp > 0) list.push(e);
       }
     }
     const activeBoss = ctx.bosses?.getActiveBoss?.()?.getInternalState?.() || state.boss?.active;
-    if (activeBoss && !activeBoss.dead && (activeBoss.hp ?? 1) > 0 && activeBoss.pos) {
+    if (activeBoss && !activeBoss.dead && !activeBoss.defeated && (activeBoss.hp ?? 1) > 0 && activeBoss.pos) {
       list.push(activeBoss);
     }
     return list;
@@ -94,21 +94,25 @@ export function createTargeting(ctx) {
     };
   }
 
-  function acquire({ range = 14, halfAngle = Math.PI * 0.45, closeRadius = 2.5, useMouse = true } = {}) {
+  function acquire({ range = 14, halfAngle = Math.PI * 0.45, closeRadius = 10, useMouse = true } = {}) {
     const origin = state.player?.position || { x: 0, y: 0, z: 0 };
     const ox = Number(origin.x) || 0;
     const oz = Number(origin.z) || 0;
     const playerHeading = Number(state.player?.heading) || 0;
+    const effectiveCloseRadius = Math.max(Number(closeRadius) || 0, Math.min(range, 10));
 
     const mouseAim = useMouse ? getMouseAimDirection(origin) : null;
     if (mouseAim) {
-      // When mouse cursor is active on desktop, aim toward the mouse cursor,
-      // with gentle soft-target snapping only within a narrow cone (±24°) around the cursor ray.
+      // When mouse cursor is active on desktop, first check if an enemy lies within
+      // a ±28° cone around the cursor ray (or near the cursor world point).
+      // If none is in the mouse cone, fall through to player forward cone & 360° auto-target search
+      // so an idle mouse cursor off to the side never causes bolts to miss enemies in front of the player.
       const mouseDir = mouseAim.dir;
       const fwdX = -Math.sin(mouseDir);
       const fwdZ = -Math.cos(mouseDir);
-      const cosMouseCone = Math.cos((24 * Math.PI) / 180);
-      const candidates = getActiveCandidateList(origin, range, (24 * Math.PI) / 180, mouseDir);
+      const mouseConeRad = (28 * Math.PI) / 180;
+      const cosMouseCone = Math.cos(mouseConeRad);
+      const candidates = getActiveCandidateList(origin, range, mouseConeRad, mouseDir);
 
       let bestMouseTarget = null;
       let bestScore = Infinity;
@@ -121,7 +125,7 @@ export function createTargeting(ctx) {
         if (dist > range || dist <= 1e-4) continue;
         const dot = (dx / dist) * fwdX + (dz / dist) * fwdZ;
         const cursorDist = Math.hypot(ep.x - mouseAim.point.x, ep.z - mouseAim.point.z);
-        if (dot >= cosMouseCone || cursorDist <= 1.8) {
+        if (dot >= cosMouseCone || cursorDist <= 2.0) {
           const score = cursorDist * 0.7 + dist * 0.3;
           if (score < bestScore) {
             bestScore = score;
@@ -146,12 +150,6 @@ export function createTargeting(ctx) {
           targetPos: bestMouseTarget.position.clone(),
         };
       }
-
-      return {
-        target: null,
-        dir: mouseDir,
-        targetPos: mouseAim.point,
-      };
     }
 
     let bestTarget = null;
@@ -166,7 +164,7 @@ export function createTargeting(ctx) {
       const coneCandidates = ctx.enemies.queryCone(origin, playerHeading, range, halfAngle) || [];
       for (let i = 0; i < coneCandidates.length; i++) {
         const e = coneCandidates[i];
-        if (!e || e.state === 'liberated' || e.hp <= 0) continue;
+        if (!e || e.state === 'liberated' || e.state === 'calmed' || e.hp <= 0) continue;
         const ep = getEnemyXZ(e);
         const dist = Math.hypot(ep.x - ox, ep.z - oz);
         if (dist < bestDist) {
@@ -178,7 +176,7 @@ export function createTargeting(ctx) {
       const active = ctx.enemies.getActiveEnemies() || [];
       for (let i = 0; i < active.length; i++) {
         const e = active[i];
-        if (!e || e.state === 'liberated' || e.hp <= 0) continue;
+        if (!e || e.state === 'liberated' || e.state === 'calmed' || e.hp <= 0) continue;
         const ep = getEnemyXZ(e);
         const dx = ep.x - ox;
         const dz = ep.z - oz;
@@ -197,33 +195,51 @@ export function createTargeting(ctx) {
 
     // Also check active Boss in forward cone
     const activeBoss = ctx.bosses?.getActiveBoss?.()?.getInternalState?.() || state.boss?.active;
-    if (activeBoss && !activeBoss.dead && (activeBoss.hp ?? 1) > 0 && activeBoss.pos) {
+    if (activeBoss && !activeBoss.dead && !activeBoss.defeated && (activeBoss.hp ?? 1) > 0 && activeBoss.pos) {
       const ep = getEnemyXZ(activeBoss);
       const dx = ep.x - ox;
       const dz = ep.z - oz;
       const dist = Math.hypot(dx, dz);
       if (dist <= range) {
         const dot = dist > 1e-4 ? (dx / dist) * fwdX + (dz / dist) * fwdZ : 1;
-        if ((dot >= cosHalf || dist <= closeRadius) && dist < bestDist) {
+        if ((dot >= cosHalf || dist <= effectiveCloseRadius) && dist < bestDist) {
           bestDist = dist;
           bestTarget = activeBoss;
         }
       }
     }
 
-    // 2. Fallback search: if no enemy in forward cone, check within 2.5m 360° around player
-    if (!bestTarget && closeRadius > 0) {
-      const nearCandidates = ctx.enemies?.queryCircle
-        ? ctx.enemies.queryCircle(ox, oz, closeRadius)
-        : (ctx.enemies?.getActiveEnemies ? ctx.enemies.getActiveEnemies() : []);
-      for (let i = 0; i < nearCandidates.length; i++) {
-        const e = nearCandidates[i];
-        if (!e || e.state === 'liberated' || e.hp <= 0) continue;
-        const ep = getEnemyXZ(e);
-        const dist = Math.hypot(ep.x - ox, ep.z - oz);
-        if (dist <= closeRadius && dist < bestDist) {
-          bestDist = dist;
-          bestTarget = e;
+    // 2. Fallback search: if no enemy in forward cone, check 360° around player (close range up to range)
+    if (!bestTarget && range > 0) {
+      const searchRadii = effectiveCloseRadius < range ? [effectiveCloseRadius, range] : [range];
+      for (let rIdx = 0; rIdx < searchRadii.length && !bestTarget; rIdx++) {
+        const searchR = searchRadii[rIdx];
+        const nearCandidates = ctx.enemies?.queryCircle
+          ? ctx.enemies.queryCircle(ox, oz, searchR)
+          : (ctx.enemies?.getActiveEnemies ? ctx.enemies.getActiveEnemies() : []);
+        for (let i = 0; i < nearCandidates.length; i++) {
+          const e = nearCandidates[i];
+          if (!e || e.state === 'liberated' || e.state === 'calmed' || e.hp <= 0) continue;
+          const ep = getEnemyXZ(e);
+          const dist = Math.hypot(ep.x - ox, ep.z - oz);
+          if (dist <= searchR && dist < bestDist) {
+            bestDist = dist;
+            bestTarget = e;
+          }
+        }
+        if (
+          activeBoss &&
+          !activeBoss.dead &&
+          !activeBoss.defeated &&
+          (activeBoss.hp ?? 1) > 0 &&
+          activeBoss.pos
+        ) {
+          const ep = getEnemyXZ(activeBoss);
+          const dist = Math.hypot(ep.x - ox, ep.z - oz);
+          if (dist <= searchR && dist < bestDist) {
+            bestDist = dist;
+            bestTarget = activeBoss;
+          }
         }
       }
     }
@@ -244,6 +260,14 @@ export function createTargeting(ctx) {
         target: bestTarget,
         dir,
         targetPos: bestTarget.position.clone(),
+      };
+    }
+
+    if (mouseAim) {
+      return {
+        target: null,
+        dir: mouseAim.dir,
+        targetPos: mouseAim.point,
       };
     }
 

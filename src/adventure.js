@@ -13,6 +13,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 
 import './style.css';
+import './ui/muralPrototype.css';
 import { CONFIG } from './config.js';
 import { createBus } from './core/events.js';
 import { createInput } from './core/input.js';
@@ -75,6 +76,7 @@ import { createRemotePilgrims } from './gameplay/remotePilgrims.js';
 import { createCoopLobbyUi } from './ui/coopLobby.js';
 import { createAppearanceUi } from './ui/appearance.js';
 import { createModeSwitch } from './ui/modeSwitch.js';
+import { createMuralPrototype } from './ui/muralPrototype.js';
 
 // ---------------------------------------------------------------- renderer
 if (typeof HTMLCanvasElement !== 'undefined' && !HTMLCanvasElement.prototype.__stupaPatched2D) {
@@ -237,6 +239,7 @@ const skillbar = createSkillbar(ctx);
 const inventoryUi = createInventoryUi(ctx);
 const appearanceUi = createAppearanceUi(ctx);
 const cloudSave = createCloudSave(ctx);
+const muralPrototype = createMuralPrototype(ctx);
 createSettingsUi(ctx);
 createModeSwitch(ctx, 'adventure', document.getElementById('settings-mode-mount'));
 const dialogue = createDialogue(ctx);
@@ -260,6 +263,7 @@ const modules = [
   codex, waypoints, quests, npcs,
   coop, remotePilgrims,
   cameraRig,
+  muralPrototype,
   merit, interaction, audio, hud, lampOfferingUi, stupaBuilderUi, coopLobbyUi, skillbar, inventoryUi, appearanceUi, dialogue, questUi, minimap, credits,
 ];
 

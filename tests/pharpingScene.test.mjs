@@ -153,6 +153,10 @@ test('Pharping renders 3D drought monsters and Drought Lord that pacify across c
   const lord = object('StoryDroughtLord');
   const practitioner = object('StoryPharpingPractitioner');
   assert.ok(monsters && sprite && devil && preta && lord && practitioner);
+  assert.equal(scene.practitioner?.id, 'story:pharping:practitioner');
+  assert.equal(scene.practitioner?.x, 2021.8);
+  assert.equal(scene.practitioner?.z, -44.2);
+  assert.equal(scene.practitioner?.radius, 3.5);
 
   scene.restore('spring1');
   assert.equal(sprite.scale.x, 1);

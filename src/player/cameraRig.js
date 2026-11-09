@@ -1,7 +1,7 @@
 /**
  * Camera rig — cinematic orbit in 'intro' mode, smooth fly-in to Pilgrim
  * close-up in 'customizing' studio mode, front portrait camera toggle ('V'),
- * and third-person follow with mouse/touch orbit, zoom (1.4–14m), stupa
+ * and third-person follow with mouse/touch orbit, zoom (1.4–18m), stupa
  * collision avoidance, and side-angle framing during prostrations in 'play' mode.
  */
 const TWO_PI = Math.PI * 2;
@@ -253,6 +253,46 @@ export function createCameraRig(ctx) {
       }
     }
     pos.y = Math.max(0.55, pos.y);
+  }
+
+  function applyStupaCloseElevation(pos, look) {
+    if (frontCamActive) return;
+    const pPos = state.player.position;
+    const actualHorizDist = Math.hypot(pos.x - pPos.x, pos.z - pPos.z);
+    if (actualHorizDist >= 2.4) return;
+
+    const closeRatio = Math.max(0, Math.min(1, (2.4 - actualHorizDist) / 2.4));
+    const smoothClose = closeRatio * closeRatio * (3 - 2 * closeRatio);
+    const zoomAdjust = Math.max(-0.45, (distance - 7.5) * 0.16);
+    const stupaCloseLift = (0.55 + 0.80 * smoothClose) * closeRatio + zoomAdjust * smoothClose;
+    const minOverheadY = pPos.y + 2.25 + 0.70 * smoothClose + zoomAdjust * smoothClose;
+    pos.y = Math.max(pos.y + stupaCloseLift, minOverheadY);
+
+    // Keep vertical pitch natural when horizontal distance between look and pos is compressed
+    const rayHoriz = Math.hypot(pos.x - look.x, pos.z - look.z);
+    const baseSlope = Math.max(0.08, Math.tan(Math.max(0.05, Math.min(1.0, pitch))));
+    const targetSlope = baseSlope + (0.24 + Math.max(0, (distance - 7.5) * 0.025)) * smoothClose;
+    const naturalLookY = pos.y - rayHoriz * targetSlope;
+    look.y = look.y + (naturalLookY - look.y) * smoothClose;
+  }
+
+  function updatePlayerProximityVisibility() {
+    const pPos = state.player?.position;
+    if (!pPos) return;
+    const horizDist = Math.hypot(camera.position.x - pPos.x, camera.position.z - pPos.z);
+    const headDist = Math.hypot(
+      camera.position.x - pPos.x,
+      camera.position.y - (pPos.y + 1.5),
+      camera.position.z - pPos.z
+    );
+    const shouldHide =
+      state.mode === 'play' &&
+      !state.customizing &&
+      !frontCamActive &&
+      (horizDist < 1.35 || headDist < 1.25);
+    const visible = !shouldHide;
+    if (ctx.player?.mesh) ctx.player.mesh.visible = visible;
+    if (state.player?.mesh) state.player.mesh.visible = visible;
   }
 
   function computeDungeonRayHit(look, pos, useFeather) {
@@ -601,6 +641,7 @@ export function createCameraRig(ctx) {
       }
     }
     bus.emit('camera:frontChanged', { active: frontCamActive });
+    updatePlayerProximityVisibility();
     return frontCamActive;
   }
 
@@ -623,24 +664,34 @@ export function createCameraRig(ctx) {
   });
 
   function snapCameraToPlayer() {
-    yaw = frontCamActive
-      ? wrapAngle((state.player.heading || 0) + Math.PI)
-      : (state.player.heading || 0);
-    const pPos = state.player.position;
     const isStupa = (state.zone === 'stupa');
+    const isMural25D = !isStupa && (state.muralProtoMode === 'optionA' || state.muralProtoMode === 'optionB');
+    if (isMural25D) {
+      yaw = Math.PI * 0.5;
+      pitch = 0.34;
+      distance = 10.2;
+      targetDistance = 10.2;
+    } else {
+      yaw = frontCamActive
+        ? wrapAngle((state.player.heading || 0) + Math.PI)
+        : (state.player.heading || 0);
+    }
+    const pPos = state.player.position;
     const lookHeight = 1.45;
     smoothedStupaLookOffset.set(0, 0, 0);
     desiredLook.set(pPos.x, pPos.y + lookHeight, pPos.z);
     const cosP = Math.cos(pitch);
     const sinP = Math.sin(pitch);
+    const zoomOutTacticalLift = !frontCamActive && !isMural25D && distance > 7.5 ? (distance - 7.5) * 0.28 : 0;
     desiredPos.set(
       pPos.x + Math.sin(yaw) * cosP * distance,
-      pPos.y + 1.35 + sinP * distance,
+      pPos.y + 1.35 + sinP * distance + zoomOutTacticalLift,
       pPos.z + Math.cos(yaw) * cosP * distance
     );
     dungeonRayScale = 1;
     if (isStupa) {
       clampStupaCamera(desiredPos, desiredLook);
+      applyStupaCloseElevation(desiredPos, desiredLook);
     } else if (hasActiveDungeonGeometry()) {
       clampDungeonCamera(desiredPos, desiredLook, 1, false);
     } else {
@@ -655,6 +706,7 @@ export function createCameraRig(ctx) {
     camera.lookAt(currentLook);
     camera.updateMatrixWorld();
     camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+    updatePlayerProximityVisibility();
   }
 
   bus.on('zone:change', snapCameraToPlayer);
@@ -725,6 +777,7 @@ export function createCameraRig(ctx) {
       camera.lookAt(currentLook);
       camera.updateMatrixWorld();
       camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+      updatePlayerProximityVisibility();
       return;
     }
 
@@ -737,6 +790,7 @@ export function createCameraRig(ctx) {
       currentLook.lerp(introLook, s);
       camera.position.copy(currentPos);
       camera.lookAt(currentLook);
+      updatePlayerProximityVisibility();
       return;
     }
 
@@ -767,7 +821,7 @@ export function createCameraRig(ctx) {
         pitch = Math.max(-0.12, Math.min(1.18, pitch));
       }
       if (input.zoom !== 0) {
-        targetDistance = Math.max(minZoomDist, Math.min(14, targetDistance + input.zoom * 0.01));
+        targetDistance = Math.max(minZoomDist, Math.min(18, targetDistance + input.zoom * 0.01));
       }
     }
 
@@ -796,16 +850,33 @@ export function createCameraRig(ctx) {
     }
 
     // 3. Optional side-angle framing during prostration so full-body bow + stupa are visible
-    let activeYaw = yaw;
-    let activePitch = pitch;
-    let activeDist = distance;
+    const isStupa = (state.zone === 'stupa');
+    const isMural25D = !isStupa && (state.muralProtoMode === 'optionA' || state.muralProtoMode === 'optionB');
+    const targetFov = isMural25D ? 40 : 55;
+    if (typeof camera.fov === 'number' && Math.abs(camera.fov - targetFov) > 0.05) {
+      camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 8);
+      camera.updateProjectionMatrix?.();
+    } else if (typeof camera.fov === 'number' && camera.fov !== targetFov) {
+      camera.fov = targetFov;
+      camera.updateProjectionMatrix?.();
+    }
+
+    if (isMural25D) {
+      yaw = lerpAngle(yaw, Math.PI * 0.5, Math.min(1, dt * 8));
+      pitch = 0.34;
+      targetDistance = 10.2;
+    }
+
+    let activeYaw = isMural25D ? Math.PI * 0.5 : yaw;
+    let activePitch = isMural25D ? 0.34 : pitch;
+    let activeDist = isMural25D ? 10.2 : distance;
     // Lower lookHeight smoothly when zoomed in close or in frontCam mode so we frame the face/chest!
     const closeFactor = Math.max(0, Math.min(1, (3.8 - distance) / 1.8));
     let lookHeight = frontCamActive
       ? (distance < 1.85 ? 1.38 : 1.24)
       : (1.45 - 0.12 * closeFactor);
 
-    if (state.player.action === 'prostrate' && !frontCamActive) {
+    if (state.player.action === 'prostrate' && !frontCamActive && !isMural25D) {
       const sideYaw = state.player.heading + 1.08;
       activeYaw = lerpAngle(yaw, sideYaw, 0.65);
       activePitch = Math.max(0.14, Math.min(0.42, pitch * 0.7 + 0.08));
@@ -815,7 +886,6 @@ export function createCameraRig(ctx) {
       lookHeight = 0.82;
     }
 
-    const isStupa = (state.zone === 'stupa');
     const mapDef = !isStupa ? ctx.world?.getMap(state.zone) : null;
     const pPos = state.player.position;
     desiredLook.set(pPos.x, pPos.y + lookHeight, pPos.z);
@@ -842,15 +912,17 @@ export function createCameraRig(ctx) {
 
     const cosP = Math.cos(activePitch);
     const sinP = Math.sin(activePitch);
+    const zoomOutTacticalLift = !frontCamActive && !isMural25D && activeDist > 7.5 ? (activeDist - 7.5) * 0.28 : 0;
     desiredPos.set(
       pPos.x + smoothedStupaLookOffset.x + Math.sin(activeYaw) * cosP * activeDist,
-      pPos.y + (frontCamActive ? 1.28 : 1.35) + sinP * activeDist,
+      pPos.y + (frontCamActive ? 1.28 : 1.35) + sinP * activeDist + zoomOutTacticalLift,
       pPos.z + smoothedStupaLookOffset.z + Math.cos(activeYaw) * cosP * activeDist
     );
 
     if (isStupa) {
       // 4. Keep camera outside stupa collider (r > ~20.1) and above plaza ground
       clampStupaCamera(desiredPos, desiredLook);
+      applyStupaCloseElevation(desiredPos, desiredLook);
     } else {
       clampWildCamera(desiredPos, desiredLook, mapDef, dt, false);
     }
@@ -887,12 +959,21 @@ export function createCameraRig(ctx) {
     camera.lookAt(currentLook);
     camera.updateMatrixWorld();
     camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+    updatePlayerProximityVisibility();
   }
 
   const api = {
     update,
     getYaw() { return yaw; },
     setYaw(nextYaw) { if (Number.isFinite(nextYaw)) yaw = wrapAngle(nextYaw); },
+    getDistance() { return distance; },
+    setDistance(nextDist) {
+      if (Number.isFinite(nextDist)) {
+        const minZoomDist = frontCamActive ? 1.35 : 1.75;
+        targetDistance = Math.max(minZoomDist, Math.min(18, nextDist));
+        distance = targetDistance;
+      }
+    },
     isFrontCam() { return frontCamActive; },
     setFrontCam,
     toggleFrontCam() { return setFrontCam(!frontCamActive); },

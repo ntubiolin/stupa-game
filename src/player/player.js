@@ -1635,6 +1635,7 @@ export function createPlayer(ctx) {
         bus.emit('merit', { type: 'prostration' });
         bus.emit('vitals:restore', {
           hp: config.VITALS?.restore?.prostrationHp ?? 25,
+          mp: config.VITALS?.restore?.prostrationMp ?? 15,
           source: 'prostration',
         });
         bus.emit('sfx', { name: 'bowl' });
@@ -1903,6 +1904,7 @@ export function createPlayer(ctx) {
       return previewPose;
     },
   };
+  state.player.mesh = root;
   ctx.player = api;
   return api;
 }

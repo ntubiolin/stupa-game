@@ -53,14 +53,14 @@ function makeRiverTexture() {
   const c = canvas.getContext('2d');
   if (!c) return null;
 
-  c.fillStyle = '#1b6ca8';
+  c.fillStyle = '#0f8a96';
   c.fillRect(0, 0, 128, 256);
 
-  for (let i = 0; i < 42; i++) {
+  for (let i = 0; i < 48; i++) {
     const x = (i * 37) % 120;
     const y = (i * 53) % 256;
-    c.fillStyle = i % 2 === 0 ? 'rgba(125, 211, 252, 0.38)' : 'rgba(224, 242, 254, 0.28)';
-    c.fillRect(x, y, 12, 28);
+    c.fillStyle = i % 2 === 0 ? 'rgba(153, 246, 228, 0.45)' : 'rgba(254, 243, 199, 0.28)';
+    c.fillRect(x, y, 10, 32);
   }
 
   const tex = new THREE.CanvasTexture(canvas);
@@ -243,11 +243,12 @@ export function createMap(ctx) {
     return baseH;
   };
 
-  const valleyGreen = new THREE.Color(0x5d8a41);
-  const barleyGold = new THREE.Color(0x9ab046);
-  const riverBankCol = new THREE.Color(0x7c7458);
-  const ridgeRockCol = new THREE.Color(0x786d5f);
-  const snowPastureCol = new THREE.Color(0xdbe4ea);
+  const valleyGreen = new THREE.Color(0x82a842);     // SEASON sunlit emerald meadow
+  const barleyGold = new THREE.Color(0xdca23a);      // SEASON storybook golden-amber barley terraces
+  const harvestAmber = new THREE.Color(0xebb844);    // Sunlit harvest gold stripe
+  const riverBankCol = new THREE.Color(0x9e8c64);    // Warm sunlit river gravel bank
+  const ridgeRockCol = new THREE.Color(0x988672);    // Warm limestone spur rock
+  const snowPastureCol = new THREE.Color(0xeaf2f8);  // Bright alpine snow pasture
   const tmpCol = new THREE.Color();
 
   const { mesh: terrainMesh } = createHeightfieldTerrain(ctx, {
@@ -260,19 +261,30 @@ export function createMap(ctx) {
       // Snowline transition in the northern Alpine Pasture (lz < -50)
       if (lz < -50) {
         const snowMix = Math.min(1, (-50 - lz) / 22);
-        return tmpCol.lerpColors(valleyGreen, snowPastureCol, snowMix * 0.78);
+        return tmpCol.lerpColors(valleyGreen, snowPastureCol, snowMix * 0.82);
       }
-      // Yumbulagang ridge & high rock
+      // Yumbulagang ridge & high limestone rock
       if (y > 2.2) {
         return tmpCol.lerpColors(valleyGreen, ridgeRockCol, Math.min(1, (y - 2.2) / 2.2));
       }
-      // River channel & banks
+      // Braided river channel & warm pebble banks
       if (Math.abs(lx) < 7.0 && lz > -48 && lz < 72) {
-        return tmpCol.lerpColors(riverBankCol, valleyGreen, 0.35);
+        return tmpCol.lerpColors(riverBankCol, valleyGreen, 0.38);
       }
-      return tmpCol.lerpColors(valleyGreen, barleyGold, noise * 0.55);
+      // Terraced golden barley belt on West & East banks
+      if (Math.abs(lx) >= 7.5 && Math.abs(lx) <= 27.5 && lz > -22 && lz < 62) {
+        const terraceStripe = Math.sin(lz * 0.34 + (lx > 0 ? 0.8 : 0)) * 0.5 + 0.5;
+        tmpCol.lerpColors(valleyGreen, barleyGold, 0.62 + noise * 0.28);
+        return tmpCol.lerp(harvestAmber, terraceStripe * 0.35);
+      }
+      return tmpCol.lerpColors(valleyGreen, barleyGold, 0.28 + noise * 0.52);
     },
   });
+  if (terrainMesh.material) {
+    terrainMesh.material.emissive = new THREE.Color(0x362814);
+    terrainMesh.material.emissiveIntensity = 0.25;
+    terrainMesh.material.roughness = 0.86;
+  }
   group.add(terrainMesh);
 
   // Valley rim mountains (leaving north open for Mount Yarlha Shampo)
@@ -284,103 +296,152 @@ export function createMap(ctx) {
     heightRange: [40, 78],
   });
 
-  // Shared Tibetan architectural & natural materials (instantiated per createMap call)
-  const stoneWallMat = new THREE.MeshStandardMaterial({ color: 0xe7dfd3, roughness: 0.86 });
-  const dressedStoneMat = new THREE.MeshStandardMaterial({ color: 0x9b9284, roughness: 0.9 });
-  const redFriezeMat = new THREE.MeshStandardMaterial({ color: 0x881d16, roughness: 0.78 });
-  const darkWoodMat = new THREE.MeshStandardMaterial({ color: 0x2f1d12, roughness: 0.86 });
-  const timberMat = new THREE.MeshStandardMaterial({ color: 0x5c3d28, roughness: 0.86 });
+  // Shared glow texture & Tibetan architectural / natural materials (instantiated per createMap call)
+  const glowTex = makeYarlungGlowTexture();
+  const stoneWallMat = new THREE.MeshStandardMaterial({
+    color: 0xf2eae0,
+    emissive: new THREE.Color(0x2e2318),
+    emissiveIntensity: 0.2,
+    roughness: 0.84,
+  });
+  const dressedStoneMat = new THREE.MeshStandardMaterial({
+    color: 0xa89d8e,
+    emissive: new THREE.Color(0x241d15),
+    emissiveIntensity: 0.18,
+    roughness: 0.88,
+  });
+  const redFriezeMat = new THREE.MeshStandardMaterial({
+    color: 0x991b1b,
+    emissive: new THREE.Color(0x3b0a0a),
+    emissiveIntensity: 0.22,
+    roughness: 0.76,
+  });
+  const darkWoodMat = new THREE.MeshStandardMaterial({ color: 0x3b2416, roughness: 0.85 });
+  const timberMat = new THREE.MeshStandardMaterial({
+    color: 0x6b472e,
+    emissive: new THREE.Color(0x24150b),
+    emissiveIntensity: 0.18,
+    roughness: 0.84,
+  });
   const goldRoofMat = new THREE.MeshStandardMaterial({
     color: 0xfacc15,
-    roughness: 0.26,
-    metalness: 0.8,
-    emissive: new THREE.Color(0xb45309),
-    emissiveIntensity: 0.38,
+    roughness: 0.24,
+    metalness: 0.82,
+    emissive: new THREE.Color(0xd97706),
+    emissiveIntensity: 0.44,
   });
   const warmWindowMat = new THREE.MeshStandardMaterial({
     color: 0xfde68a,
-    roughness: 0.35,
+    roughness: 0.32,
     emissive: new THREE.Color(0xf59e0b),
-    emissiveIntensity: 0.55,
+    emissiveIntensity: 0.62,
   });
   const bannerClothMat = new THREE.MeshStandardMaterial({
     color: 0x1e293b,
     roughness: 0.72,
     emissive: new THREE.Color(0x0f172a),
-    emissiveIntensity: 0.2,
+    emissiveIntensity: 0.22,
   });
   const prayerFlagPalette = [0x2563eb, 0xf8fafc, 0xdc2626, 0x16a34a, 0xeab308];
   const prayerFlagMats = prayerFlagPalette.map(
     (hex) =>
       new THREE.MeshStandardMaterial({
         color: hex,
-        roughness: 0.65,
+        roughness: 0.62,
         side: THREE.DoubleSide,
         emissive: new THREE.Color(hex),
-        emissiveIntensity: 0.16,
+        emissiveIntensity: 0.24,
       }),
   );
 
-  // ---------------------------------------------------------------- 2. Mount Yarlha Shampo (Northern Backdrop Peak at z ~ -155)
+  // ---------------------------------------------------------------- 2. Mount Yarlha Shampo (Colossal Fluted Glacial Pyramid at z ~ -155)
   const shampoGroup = new THREE.Group();
   shampoGroup.name = 'MountYarlhaShampo';
   shampoGroup.position.set(origin.x, 0, origin.z - 155);
   group.add(shampoGroup);
 
   const mtnBaseMat = new THREE.MeshStandardMaterial({
-    color: 0x475569,
-    roughness: 0.88,
+    color: 0x3b4963,
+    emissive: new THREE.Color(0x1e293b),
+    emissiveIntensity: 0.24,
+    roughness: 0.86,
+    flatShading: true,
   });
   const mtnSnowMat = new THREE.MeshStandardMaterial({
-    color: 0xf8fafc,
-    roughness: 0.42,
-    metalness: 0.1,
-    emissive: new THREE.Color(0x38bdf8),
-    emissiveIntensity: 0.24,
+    color: 0xfefce8,
+    roughness: 0.36,
+    metalness: 0.12,
+    emissive: new THREE.Color(0xfde68a),
+    emissiveIntensity: 0.32,
+    flatShading: true,
+  });
+  const lavenderGullyMat = new THREE.MeshStandardMaterial({
+    color: 0xc4b5fd,
+    roughness: 0.28,
+    metalness: 0.24,
+    emissive: new THREE.Color(0x4f46e5),
+    emissiveIntensity: 0.38,
+    flatShading: true,
   });
   const glacierSeracMat = new THREE.MeshStandardMaterial({
     color: 0xbae6fd,
-    roughness: 0.22,
+    roughness: 0.2,
     metalness: 0.38,
     emissive: new THREE.Color(0x0284c7),
-    emissiveIntensity: 0.48,
+    emissiveIntensity: 0.5,
+    flatShading: true,
   });
   const summitGoldSnowMat = new THREE.MeshStandardMaterial({
-    color: 0xfef3c7,
-    roughness: 0.32,
-    metalness: 0.25,
+    color: 0xfffbeb,
+    roughness: 0.26,
+    metalness: 0.28,
     emissive: new THREE.Color(0xf59e0b),
-    emissiveIntensity: 0.45,
+    emissiveIntensity: 0.62,
+    flatShading: true,
   });
   const cloudBandMat = new THREE.MeshBasicMaterial({
-    color: 0xe2e8f0,
+    color: 0xfde68a,
     transparent: true,
-    opacity: 0.48,
+    opacity: 0.44,
     depthWrite: false,
   });
 
-  // Main colossal pyramid peak + golden-lit sacred summit + flanking glacial shoulders
-  const mainPeakBase = new THREE.Mesh(new THREE.ConeGeometry(56, 70, 7), mtnBaseMat);
-  mainPeakBase.position.set(0, 35, 0);
-  const mainPeakSnow = new THREE.Mesh(new THREE.ConeGeometry(36, 48, 7), mtnSnowMat);
-  mainPeakSnow.position.set(0, 58, 0);
-  const summitGoldCrown = new THREE.Mesh(new THREE.ConeGeometry(16.5, 22, 7), summitGoldSnowMat);
-  summitGoldCrown.position.set(0, 73.5, 0);
+  // Colossal 4-sided fluted glacial pyramid peak towering high above the northern valley rim
+  const mainPeakBase = new THREE.Mesh(new THREE.ConeGeometry(68, 86, 6), mtnBaseMat);
+  mainPeakBase.position.set(0, 42, 0);
+  const mainPeakSnow = new THREE.Mesh(new THREE.ConeGeometry(48, 72, 4), mtnSnowMat);
+  mainPeakSnow.rotation.y = Math.PI / 4;
+  mainPeakSnow.position.set(0, 66, 2);
+  const summitGoldCrown = new THREE.Mesh(new THREE.ConeGeometry(24, 38, 4), summitGoldSnowMat);
+  summitGoldCrown.rotation.y = Math.PI / 4;
+  summitGoldCrown.position.set(0, 91, 2);
 
-  const westShoulder = new THREE.Mesh(new THREE.ConeGeometry(35, 54, 6), mtnSnowMat);
-  westShoulder.position.set(-44, 27, 8);
-  const eastShoulder = new THREE.Mesh(new THREE.ConeGeometry(35, 52, 6), mtnSnowMat);
-  eastShoulder.position.set(44, 26, 10);
+  const westShoulder = new THREE.Mesh(new THREE.ConeGeometry(42, 68, 5), mtnSnowMat);
+  westShoulder.position.set(-52, 34, 8);
+  westShoulder.rotation.y = 0.28;
+  const eastShoulder = new THREE.Mesh(new THREE.ConeGeometry(42, 66, 5), mtnSnowMat);
+  eastShoulder.position.set(52, 33, 10);
+  eastShoulder.rotation.y = -0.28;
 
-  // Jagged faceted glacier ridges & ice seracs descending the south face toward the pasture arena
+  // Fluted glacial pyramid ribs & lavender-blue glacial gullies descending the south face
   const glacierSpurSpecs = [
-    { x: -22, y: 18, z: 24, r: 16, h: 36, rotY: 0.35, mat: mtnSnowMat },
-    { x: 22, y: 17, z: 25, r: 15, h: 34, rotY: -0.35, mat: mtnSnowMat },
-    { x: 0, y: 15, z: 30, r: 18, h: 30, rotY: 0.12, mat: glacierSeracMat },
-    { x: -12, y: 10, z: 38, r: 9.5, h: 21, rotY: 0.48, mat: glacierSeracMat },
-    { x: 12, y: 10, z: 38, r: 9.5, h: 21, rotY: -0.42, mat: glacierSeracMat },
-    { x: -32, y: 12, z: 28, r: 11, h: 24, rotY: 0.22, mat: glacierSeracMat },
-    { x: 32, y: 12, z: 28, r: 11, h: 24, rotY: -0.22, mat: glacierSeracMat },
+    // Sunlit golden-white pyramidal arête ribs
+    { x: 0, y: 52, z: 18, r: 14, h: 64, rotY: Math.PI / 4, mat: summitGoldSnowMat },
+    { x: -18, y: 42, z: 16, r: 13, h: 54, rotY: 0.55, mat: summitGoldSnowMat },
+    { x: 18, y: 41, z: 16, r: 13, h: 52, rotY: -0.55, mat: mtnSnowMat },
+    // Deep lavender-blue glacial gullies recessed between the sunlit ribs
+    { x: -9, y: 44, z: 19, r: 10.5, h: 52, rotY: 0.22, mat: lavenderGullyMat },
+    { x: 9, y: 44, z: 19, r: 10.5, h: 52, rotY: -0.22, mat: lavenderGullyMat },
+    { x: -28, y: 28, z: 22, r: 12, h: 38, rotY: 0.38, mat: lavenderGullyMat },
+    { x: 28, y: 28, z: 22, r: 12, h: 38, rotY: -0.38, mat: lavenderGullyMat },
+    // Lower crystalline glacier seracs & icefalls approaching the pasture arena
+    { x: -22, y: 18, z: 26, r: 16, h: 36, rotY: 0.35, mat: mtnSnowMat },
+    { x: 22, y: 17, z: 27, r: 15, h: 34, rotY: -0.35, mat: mtnSnowMat },
+    { x: 0, y: 16, z: 32, r: 18, h: 32, rotY: 0.12, mat: glacierSeracMat },
+    { x: -13, y: 11, z: 40, r: 10, h: 23, rotY: 0.48, mat: glacierSeracMat },
+    { x: 13, y: 11, z: 40, r: 10, h: 23, rotY: -0.42, mat: glacierSeracMat },
+    { x: -35, y: 14, z: 30, r: 12, h: 26, rotY: 0.22, mat: glacierSeracMat },
+    { x: 35, y: 14, z: 30, r: 12, h: 26, rotY: -0.22, mat: glacierSeracMat },
   ];
   const shampoSpurGeo = new THREE.ConeGeometry(1, 1, 5);
   for (const sp of glacierSpurSpecs) {
@@ -391,13 +452,91 @@ export function createMap(ctx) {
     shampoGroup.add(spur);
   }
 
-  const cloudRing1 = new THREE.Mesh(new THREE.TorusGeometry(36, 3.2, 8, 24), cloudBandMat);
-  cloudRing1.rotation.x = Math.PI / 2;
-  cloudRing1.position.set(0, 36, 0);
+  // Halo of Firewatch Golden-Hour Crepuscular Sunbeams (God Rays) radiating from behind Mount Yarlha Shampo
+  const shampoBackHaloMat = new THREE.MeshBasicMaterial({
+    map: glowTex,
+    color: 0xffb36b,
+    transparent: true,
+    opacity: 0.42,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const shampoBackHalo = new THREE.Mesh(new THREE.PlaneGeometry(195, 118), shampoBackHaloMat);
+  shampoBackHalo.position.set(0, 62, -14);
+  shampoGroup.add(shampoBackHalo);
 
-  const cloudRing2 = new THREE.Mesh(new THREE.TorusGeometry(26, 2.4, 8, 20), cloudBandMat);
+  const godRayGeo = new THREE.ConeGeometry(9.5, 124, 10, 1, true);
+  godRayGeo.translate(0, 62, 0);
+  const shampoGodRays = [];
+  const godRayAngles = [-0.72, -0.54, -0.36, -0.18, 0, 0.18, 0.36, 0.54, 0.72];
+  for (let i = 0; i < godRayAngles.length; i++) {
+    const ang = godRayAngles[i];
+    const isCoral = i % 2 === 1;
+    const grMat = new THREE.MeshBasicMaterial({
+      color: isCoral ? 0xff9458 : 0xffd166,
+      transparent: true,
+      opacity: isCoral ? 0.14 : 0.17,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const grMesh = new THREE.Mesh(godRayGeo, grMat);
+    grMesh.position.set(Math.sin(ang) * 14, 34, -10);
+    grMesh.rotation.z = -ang;
+    grMesh.rotation.x = 0.12;
+    grMesh.scale.set(0.85 + (i % 3) * 0.22, 0.92 + (i % 2) * 0.18, 0.5);
+    shampoGroup.add(grMesh);
+    shampoGodRays.push({
+      mesh: grMesh,
+      mat: grMat,
+      baseAngle: -ang,
+      baseOpacity: isCoral ? 0.14 : 0.17,
+      phase: i * 0.85,
+    });
+  }
+
+  // Soft Purple-Amber Valley Mist floating at the base of Mount Yarlha Shampo
+  const shampoBaseMistGeo = new THREE.PlaneGeometry(1, 1);
+  shampoBaseMistGeo.rotateX(-Math.PI / 2);
+  const shampoBaseMistLayers = [];
+  const shampoMistSpecs = [
+    { x: 0, y: 4.2, z: 44, sx: 118, sz: 38, color: 0xd8b4fe, opacity: 0.26, speed: 0.28 },
+    { x: -16, y: 7.5, z: 36, sx: 110, sz: 34, color: 0xfdba74, opacity: 0.24, speed: -0.24 },
+    { x: 16, y: 11.2, z: 28, sx: 124, sz: 36, color: 0xc4b5fd, opacity: 0.25, speed: 0.22 },
+    { x: 0, y: 15.8, z: 22, sx: 132, sz: 40, color: 0xfde68a, opacity: 0.22, speed: -0.20 },
+  ];
+  for (let i = 0; i < shampoMistSpecs.length; i++) {
+    const ms = shampoMistSpecs[i];
+    const mMat = new THREE.MeshBasicMaterial({
+      map: glowTex,
+      color: ms.color,
+      transparent: true,
+      opacity: ms.opacity,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const mMesh = new THREE.Mesh(shampoBaseMistGeo, mMat);
+    mMesh.position.set(ms.x, ms.y, ms.z);
+    mMesh.scale.set(ms.sx, 1, ms.sz);
+    shampoGroup.add(mMesh);
+    shampoBaseMistLayers.push({
+      mesh: mMesh,
+      mat: mMat,
+      baseX: ms.x,
+      baseOpacity: ms.opacity,
+      speed: ms.speed,
+      phase: i * 1.2,
+    });
+  }
+
+  const cloudRing1 = new THREE.Mesh(new THREE.TorusGeometry(42, 3.4, 8, 24), cloudBandMat);
+  cloudRing1.rotation.x = Math.PI / 2;
+  cloudRing1.position.set(0, 44, 2);
+
+  const cloudRing2 = new THREE.Mesh(new THREE.TorusGeometry(30, 2.5, 8, 20), cloudBandMat);
   cloudRing2.rotation.x = Math.PI / 2 + 0.08;
-  cloudRing2.position.set(0, 50, 0);
+  cloudRing2.position.set(0, 64, 2);
 
   shampoGroup.add(
     mainPeakBase,
@@ -409,36 +548,75 @@ export function createMap(ctx) {
     cloudRing2,
   );
 
-  // ---------------------------------------------------------------- 3. Central Yarlung River, Shimmering Banks & Bridge
+  // ---------------------------------------------------------------- 3. Braided Turquoise Yarlung River, Weeping Willows & Bridge
   const riverTex = makeRiverTexture();
   const riverMat = new THREE.MeshStandardMaterial({
-    color: 0x38bdf8,
+    color: 0x2dd4bf,
     map: riverTex || null,
-    roughness: 0.15,
-    metalness: 0.45,
-    emissive: new THREE.Color(0x0369a1),
-    emissiveIntensity: 0.38,
+    roughness: 0.14,
+    metalness: 0.42,
+    emissive: new THREE.Color(0x0d9488),
+    emissiveIntensity: 0.44,
     transparent: true,
-    opacity: 0.88,
+    opacity: 0.9,
   });
-  const riverGeo = new THREE.PlaneGeometry(9.5, 122, 4, 24);
+  const riverGeo = new THREE.PlaneGeometry(9.8, 122, 6, 28);
   riverGeo.rotateX(-Math.PI / 2);
   const riverMesh = new THREE.Mesh(riverGeo, riverMat);
   riverMesh.position.set(origin.x, 0.14, origin.z + 12);
   group.add(riverMesh);
 
+  // Secondary Braided Turquoise Side-Channel Ribbons & Gravel Sandbar Islets (0 colliders)
+  const braidRibbonGeo = new THREE.PlaneGeometry(2.3, 98, 2, 24);
+  braidRibbonGeo.rotateX(-Math.PI / 2);
+  const bPos = braidRibbonGeo.attributes.position;
+  for (let i = 0; i < bPos.count; i++) {
+    const bz = bPos.getZ(i);
+    bPos.setX(i, bPos.getX(i) + Math.sin(bz * 0.11) * 1.15);
+  }
+  braidRibbonGeo.computeVertexNormals();
+  for (const side of [-1, 1]) {
+    const braidRibbon = new THREE.Mesh(braidRibbonGeo, riverMat);
+    braidRibbon.position.set(origin.x + side * 4.2, 0.146, origin.z + 10);
+    braidRibbon.scale.x = side;
+    group.add(braidRibbon);
+  }
+
+  const sandbarGeo = new THREE.CylinderGeometry(0.95, 1.48, 0.12, 8);
+  const sandbarMat = new THREE.MeshStandardMaterial({
+    color: 0xb4a284,
+    emissive: new THREE.Color(0x2e2518),
+    emissiveIntensity: 0.18,
+    roughness: 0.85,
+  });
+  const sandbarSpots = [
+    { lx: -2.6, lz: 60, sx: 1.1, sz: 2.4 },
+    { lx: 2.5, lz: 50, sx: 1.0, sz: 2.1 },
+    { lx: -2.4, lz: 30, sx: 1.15, sz: 2.6 },
+    { lx: 2.6, lz: 18, sx: 1.05, sz: 2.3 },
+    { lx: -2.5, lz: 2, sx: 1.1, sz: 2.5 },
+    { lx: 2.4, lz: -14, sx: 1.0, sz: 2.2 },
+    { lx: -2.3, lz: -28, sx: 1.1, sz: 2.3 },
+  ];
+  for (const sb of sandbarSpots) {
+    const bar = new THREE.Mesh(sandbarGeo, sandbarMat);
+    bar.position.set(origin.x + sb.lx, 0.12, origin.z + sb.lz);
+    bar.scale.set(sb.sx, 1, sb.sz);
+    group.add(bar);
+  }
+
   // Shimmering white-cyan foam bank edges along West & East river margins
   const foamEdgeMat = new THREE.MeshBasicMaterial({
-    color: 0xe0f2fe,
+    color: 0xccfbf1,
     transparent: true,
-    opacity: 0.42,
+    opacity: 0.44,
     depthWrite: false,
   });
-  const foamStripGeo = new THREE.PlaneGeometry(0.55, 120, 1, 16);
+  const foamStripGeo = new THREE.PlaneGeometry(0.58, 120, 1, 16);
   foamStripGeo.rotateX(-Math.PI / 2);
   for (const side of [-1, 1]) {
     const foamStrip = new THREE.Mesh(foamStripGeo, foamEdgeMat);
-    foamStrip.position.set(origin.x + side * 4.45, 0.152, origin.z + 12);
+    foamStrip.position.set(origin.x + side * 4.85, 0.154, origin.z + 12);
     group.add(foamStrip);
   }
 
@@ -481,10 +659,10 @@ export function createMap(ctx) {
   const reedGeo = new THREE.ConeGeometry(0.14, 0.95, 5);
   reedGeo.translate(0, 0.47, 0);
   const reedMat = new THREE.MeshStandardMaterial({
-    color: 0x4d7c3f,
-    roughness: 0.82,
-    emissive: new THREE.Color(0x1e3a1a),
-    emissiveIntensity: 0.18,
+    color: 0x659b48,
+    roughness: 0.78,
+    emissive: new THREE.Color(0x284218),
+    emissiveIntensity: 0.24,
   });
   const reedInstanced = new THREE.InstancedMesh(reedGeo, reedMat, reedCount);
   reedInstanced.name = 'RiverReedsInstanced';
@@ -508,24 +686,49 @@ export function createMap(ctx) {
   reedInstanced.instanceMatrix.needsUpdate = true;
   group.add(reedInstanced);
 
-  // Riverside Tibetan willow trees (`柳樹`, 0 colliders) framing the valley stream
+  // Riverside & Watermill Weeping Willow Trees (`垂柳`, 0 colliders) with drooping frond curtains
   const willowFoliageMat = new THREE.MeshStandardMaterial({
-    color: 0x5c8d40,
-    roughness: 0.8,
-    emissive: new THREE.Color(0x233d14),
-    emissiveIntensity: 0.16,
+    color: 0x76a83c,
+    roughness: 0.76,
+    emissive: new THREE.Color(0x2e4814),
+    emissiveIntensity: 0.26,
   });
-  const willowTrunkGeo = new THREE.CylinderGeometry(0.18, 0.28, 2.3, 7);
-  const willowCrownGeo = new THREE.DodecahedronGeometry(1.45, 1);
+  const willowFrondMat = new THREE.MeshStandardMaterial({
+    color: 0x9ec648,
+    roughness: 0.72,
+    emissive: new THREE.Color(0x3f5e16),
+    emissiveIntensity: 0.28,
+  });
+  const willowTrunkGeo = new THREE.CylinderGeometry(0.18, 0.3, 2.4, 7);
+  const willowCrownGeo = new THREE.DodecahedronGeometry(1.5, 1);
   const willowSpots = [
-    { lx: -7.4, lz: 56, s: 1.05 },
-    { lx: 7.6, lz: 58, s: 0.95 },
-    { lx: -7.8, lz: 28, s: 1.1 },
-    { lx: 7.5, lz: 24, s: 1.0 },
-    { lx: -7.2, lz: -6, s: 0.92 },
-    { lx: 7.4, lz: -12, s: 0.96 },
+    { lx: -7.5, lz: 64, s: 1.08 },
+    { lx: 7.8, lz: 62, s: 1.02 },
+    { lx: -7.4, lz: 52, s: 1.12 },
+    { lx: 8.2, lz: 51, s: 1.15 }, // Flanking the village watermill flume
+    { lx: 8.4, lz: 43.5, s: 1.06 }, // Beside the watermill & bridge east bank
+    { lx: -7.8, lz: 35, s: 1.05 },
+    { lx: -7.8, lz: 24, s: 1.12 },
+    { lx: 7.6, lz: 22, s: 1.04 },
+    { lx: -7.5, lz: 8, s: 0.98 },
+    { lx: 7.7, lz: 6, s: 1.02 },
+    { lx: -7.2, lz: -8, s: 0.94 },
+    { lx: 7.4, lz: -14, s: 0.96 },
   ];
-  for (const ws of willowSpots) {
+
+  const FRONDS_PER_WILLOW = 10;
+  const willowFrondGeo = new THREE.ConeGeometry(0.24, 1.85, 5);
+  willowFrondGeo.translate(0, -0.85, 0);
+  const willowFrondInstanced = new THREE.InstancedMesh(
+    willowFrondGeo,
+    willowFrondMat,
+    willowSpots.length * FRONDS_PER_WILLOW,
+  );
+  willowFrondInstanced.name = 'WeepingWillowFrondsInstanced';
+  let frondIdx = 0;
+
+  for (let wi = 0; wi < willowSpots.length; wi++) {
+    const ws = willowSpots[wi];
     const wx = origin.x + ws.lx;
     const wz = origin.z + ws.lz;
     const wy = getTerrainHeight(wx, wz);
@@ -533,17 +736,36 @@ export function createMap(ctx) {
     wTree.position.set(wx, wy, wz);
     wTree.scale.setScalar(ws.s);
     const trunk = new THREE.Mesh(willowTrunkGeo, timberMat);
-    trunk.position.y = 1.1;
-    trunk.rotation.z = ws.lx < 0 ? -0.08 : 0.08;
+    trunk.position.y = 1.15;
+    trunk.rotation.z = ws.lx < 0 ? -0.1 : 0.1;
     const crownMain = new THREE.Mesh(willowCrownGeo, willowFoliageMat);
-    crownMain.position.set(0, 2.55, 0);
-    crownMain.scale.set(1.25, 0.92, 1.2);
+    crownMain.position.set(0, 2.65, 0);
+    crownMain.scale.set(1.32, 0.94, 1.28);
     const crownSide = new THREE.Mesh(willowCrownGeo, willowFoliageMat);
-    crownSide.position.set(ws.lx < 0 ? 0.65 : -0.65, 2.15, 0.3);
-    crownSide.scale.set(0.85, 0.78, 0.85);
-    wTree.add(trunk, crownMain, crownSide);
+    crownSide.position.set(ws.lx < 0 ? 0.72 : -0.72, 2.25, 0.32);
+    crownSide.scale.set(0.92, 0.82, 0.92);
+    const crownRear = new THREE.Mesh(willowCrownGeo, willowFoliageMat);
+    crownRear.position.set(ws.lx < 0 ? -0.48 : 0.48, 2.35, -0.45);
+    crownRear.scale.set(0.84, 0.76, 0.84);
+    wTree.add(trunk, crownMain, crownSide, crownRear);
     group.add(wTree);
+
+    // Drooping weeping willow frond curtains around the canopy perimeter
+    for (let f = 0; f < FRONDS_PER_WILLOW; f++) {
+      const ang = (f / FRONDS_PER_WILLOW) * TWO_PI + wi * 0.4;
+      const rad = (1.15 + (f % 2) * 0.35) * ws.s;
+      const fx = wx + Math.cos(ang) * rad;
+      const fz = wz + Math.sin(ang) * rad;
+      const fy = wy + (2.55 + (f % 3) * 0.18) * ws.s;
+      dummy.position.set(fx, fy, fz);
+      dummy.rotation.set(Math.sin(ang) * 0.12, ang, -Math.cos(ang) * 0.12);
+      dummy.scale.set(ws.s, ws.s * (0.9 + (f % 3) * 0.18), ws.s);
+      dummy.updateMatrix();
+      willowFrondInstanced.setMatrixAt(frondIdx++, dummy.matrix);
+    }
   }
+  willowFrondInstanced.instanceMatrix.needsUpdate = true;
+  group.add(willowFrondInstanced);
 
   // Wooden bridge across the river at (0, 42) — enhanced with carved Tibetan bridge gateposts & prayer flags
   const bridgeGroup = new THREE.Group();
@@ -651,57 +873,74 @@ export function createMap(ctx) {
     maxZ: origin.z + BRIDGE_LZ + BRIDGE_HALF_Z,
   });
 
-  // ---------------------------------------------------------------- 4. Terraced Golden Barley Fields & Wildflowers (`InstancedMesh`, 0 colliders)
-  // Low dry-stone terrace field borders (`青稞梯田石埂`, 0 colliders) on both banks
-  const terraceWallGeo = new THREE.BoxGeometry(12.5, 0.28, 0.42);
+  // ---------------------------------------------------------------- 4. SEASON Swaying Golden Barley Terraces & Wildflowers (`InstancedMesh`, 0 colliders)
+  // Low dry-stone terrace field borders (`青稞梯田石埂`, 0 colliders) + golden barley sheaves on both banks
+  const terraceWallGeo = new THREE.BoxGeometry(13.8, 0.32, 0.46);
+  const barleySheafGeo = new THREE.ConeGeometry(0.46, 0.92, 6);
+  const barleyMat = new THREE.MeshStandardMaterial({
+    color: 0xf2b938,
+    roughness: 0.66,
+    emissive: new THREE.Color(0x85580f),
+    emissiveIntensity: 0.36,
+  });
   const terracePlots = [
-    { lx: -15.5, lz: 48, rotY: 0.04 },
-    { lx: -15.5, lz: 28, rotY: -0.03 },
-    { lx: -15.5, lz: 8, rotY: 0.02 },
-    { lx: 15.5, lz: 28, rotY: -0.04 },
-    { lx: 15.5, lz: 10, rotY: 0.03 },
-    { lx: 15.5, lz: -8, rotY: -0.02 },
+    { lx: -15.5, lz: 52, rotY: 0.04 },
+    { lx: -15.5, lz: 34, rotY: -0.03 },
+    { lx: -15.5, lz: 16, rotY: 0.02 },
+    { lx: -15.5, lz: -2, rotY: -0.02 },
+    { lx: 15.5, lz: 30, rotY: -0.04 },
+    { lx: 15.5, lz: 14, rotY: 0.03 },
+    { lx: 15.5, lz: -2, rotY: -0.02 },
+    { lx: 15.5, lz: -16, rotY: 0.02 },
   ];
-  for (const tp of terracePlots) {
+  for (let ti = 0; ti < terracePlots.length; ti++) {
+    const tp = terracePlots[ti];
     const tx = origin.x + tp.lx;
     const tz = origin.z + tp.lz;
     const ty = getTerrainHeight(tx, tz);
     const bund = new THREE.Mesh(terraceWallGeo, dressedStoneMat);
-    bund.position.set(tx, ty + 0.1, tz);
+    bund.position.set(tx, ty + 0.12, tz);
     bund.rotation.y = tp.rotY;
     group.add(bund);
+
+    // Harvested golden barley stook sheaves stacked beside the terrace stone bund
+    for (const sideX of [-4.2, 4.2]) {
+      const sheaf = new THREE.Mesh(barleySheafGeo, barleyMat);
+      sheaf.position.set(tx + sideX, ty + 0.45, tz + 0.65);
+      sheaf.rotation.y = ti * 0.7;
+      group.add(sheaf);
+    }
   }
 
-  // Dense swaying golden barley stalks (`青稞麥浪`, 320 instances in 1 draw call)
-  const barleyCount = 320;
-  const stalkGeo = new THREE.ConeGeometry(0.18, 1.24, 5);
-  stalkGeo.translate(0, 0.62, 0);
-  const barleyMat = new THREE.MeshStandardMaterial({
-    color: 0xd4c246,
-    roughness: 0.72,
-    emissive: new THREE.Color(0x5c480e),
-    emissiveIntensity: 0.24,
-  });
+  // Dense swaying golden barley stalks (`青稞麥浪`, 460 instances in 1 draw call with golden-amber tint variation)
+  const barleyCount = 460;
+  const stalkGeo = new THREE.ConeGeometry(0.21, 1.34, 5);
+  stalkGeo.translate(0, 0.67, 0);
   const barleyInstanced = new THREE.InstancedMesh(stalkGeo, barleyMat, barleyCount);
   barleyInstanced.name = 'BarleyFieldsInstanced';
   const bRng = seededRandom(3401);
+  const bCol = new THREE.Color();
+  const barleyTints = [0xf5c542, 0xe5a932, 0xfbd34d, 0xdca23a];
 
   for (let i = 0; i < barleyCount; i++) {
     const bank = i % 2 === 0 ? -1 : 1; // west bank & east bank
-    const lx = bank * (8.5 + bRng() * 14.0);
-    const lz = -18 + bRng() * 78; // z from -18 to +60
+    const lx = bank * (8.2 + bRng() * 16.5);
+    const lz = -20 + bRng() * 80; // z from -20 to +60
     const wx = origin.x + lx;
     const wz = origin.z + lz;
     const wy = getHeight(wx, wz);
 
     dummy.position.set(wx, wy, wz);
-    dummy.rotation.set((bRng() - 0.5) * 0.15, bRng() * TWO_PI, (bRng() - 0.5) * 0.15);
-    const s = 0.82 + bRng() * 0.58;
+    dummy.rotation.set((bRng() - 0.5) * 0.16, bRng() * TWO_PI, (bRng() - 0.5) * 0.16);
+    const s = 0.85 + bRng() * 0.62;
     dummy.scale.set(s, s, s);
     dummy.updateMatrix();
     barleyInstanced.setMatrixAt(i, dummy.matrix);
+    bCol.setHex(barleyTints[i % barleyTints.length]);
+    barleyInstanced.setColorAt(i, bCol);
   }
   barleyInstanced.instanceMatrix.needsUpdate = true;
+  if (barleyInstanced.instanceColor) barleyInstanced.instanceColor.needsUpdate = true;
   group.add(barleyInstanced);
 
   // Alpine wildflowers scattered across the valley meadows (`InstancedMesh`, 0 colliders)
@@ -1145,6 +1384,94 @@ export function createMap(ctx) {
   );
   pushCollider(ctx, 'yarlung', { type: 'circle', x: palaceX - 6.0, z: palaceZ - 0.4, r: 3.4 });
 
+  // Craggy Limestone Spur Buttresses beneath Yumbulagang Palace so it grows out of the razor-edge ridge (0 colliders)
+  const limestoneSpurMat = new THREE.MeshStandardMaterial({
+    color: 0xc2b29b,
+    emissive: new THREE.Color(0x33271a),
+    emissiveIntensity: 0.24,
+    roughness: 0.86,
+    flatShading: true,
+  });
+  const limestoneShadowMat = new THREE.MeshStandardMaterial({
+    color: 0x857764,
+    emissive: new THREE.Color(0x211a12),
+    emissiveIntensity: 0.2,
+    roughness: 0.9,
+    flatShading: true,
+  });
+  const buttressPillarGeo = new THREE.ConeGeometry(1.0, 1.0, 5);
+  const buttressCragGeo = new THREE.DodecahedronGeometry(1.0, 0);
+  const limestoneButtressSpecs = [
+    // Sheer vertical limestone ribs directly beneath the Central Watchtower (Utse) & Lower Hall
+    { x: -7.6, y: -1.4, z: -2.4, sx: 2.8, sy: 6.2, sz: 2.2, rotY: 0.35, shadow: false, isCone: true },
+    { x: -8.4, y: -1.2, z: 0.4, sx: 3.1, sy: 6.8, sz: 2.5, rotY: -0.42, shadow: true, isCone: true },
+    { x: -6.2, y: -1.5, z: -3.2, sx: 2.5, sy: 5.6, sz: 2.1, rotY: 0.68, shadow: false, isCone: true },
+    { x: -5.4, y: -1.6, z: 2.9, sx: 2.6, sy: 5.4, sz: 2.2, rotY: -0.55, shadow: false, isCone: true },
+    // Razor-edge eastern & southern spur buttresses descending toward the valley floor
+    { x: -2.8, y: -1.8, z: -3.4, sx: 2.4, sy: 4.8, sz: 1.9, rotY: 0.25, shadow: false, isCone: true },
+    { x: -2.6, y: -1.8, z: 3.3, sx: 2.4, sy: 4.8, sz: 1.9, rotY: -0.25, shadow: true, isCone: true },
+    { x: 0.6, y: -2.1, z: -3.8, sx: 2.2, sy: 4.2, sz: 1.8, rotY: 0.48, shadow: false, isCone: true },
+    { x: 0.8, y: -2.1, z: 3.6, sx: 2.2, sy: 4.2, sz: 1.8, rotY: -0.48, shadow: true, isCone: true },
+    { x: 4.2, y: -2.4, z: -2.8, sx: 2.0, sy: 3.6, sz: 1.7, rotY: 0.18, shadow: false, isCone: true },
+    { x: 4.5, y: -2.4, z: 2.6, sx: 2.0, sy: 3.6, sz: 1.7, rotY: -0.22, shadow: true, isCone: true },
+    // Angular crag outcrops jutting from the cliff shoulder
+    { x: -6.8, y: 0.4, z: -2.9, sx: 1.8, sy: 2.4, sz: 1.5, rotY: 0.4, shadow: false, isCone: false },
+    { x: -6.6, y: 0.3, z: 2.7, sx: 1.7, sy: 2.2, sz: 1.5, rotY: -0.35, shadow: true, isCone: false },
+    { x: -3.6, y: -0.4, z: -3.1, sx: 1.9, sy: 1.8, sz: 1.4, rotY: 0.7, shadow: false, isCone: false },
+    { x: -3.4, y: -0.4, z: 3.0, sx: 1.9, sy: 1.8, sz: 1.4, rotY: -0.6, shadow: false, isCone: false },
+  ];
+  for (let i = 0; i < limestoneButtressSpecs.length; i++) {
+    const lb = limestoneButtressSpecs[i];
+    const bMesh = new THREE.Mesh(
+      lb.isCone ? buttressPillarGeo : buttressCragGeo,
+      lb.shadow ? limestoneShadowMat : limestoneSpurMat,
+    );
+    bMesh.position.set(lb.x, lb.y, lb.z);
+    bMesh.scale.set(lb.sx, lb.sy, lb.sz);
+    bMesh.rotation.y = lb.rotY;
+    bMesh.castShadow = true;
+    bMesh.receiveShadow = true;
+    palaceGroup.add(bMesh);
+  }
+
+  // Long Cascading 5-Color Prayer-Flag Lines strung from Yumbulagang Watchtower down to the terraced valley
+  const palaceRopeMat = new THREE.MeshStandardMaterial({
+    color: 0xd6c4a2,
+    roughness: 0.88,
+  });
+  const palaceFlagCascadeSpecs = [
+    { p0: [-4.7, 9.1, -1.8], p1: [5.5, 2.2, -5.8], p2: [17.5, -2.6, -9.5], count: 14 },
+    { p0: [-4.7, 9.1, -0.4], p1: [6.2, 2.5, -1.2], p2: [19.0, -2.7, -2.2], count: 14 },
+    { p0: [-4.7, 8.8, 0.4], p1: [5.8, 2.1, 3.8], p2: [18.2, -2.6, 7.4], count: 14 },
+    { p0: [-2.4, 4.9, -2.4], p1: [5.2, 0.4, -7.2], p2: [14.5, -2.8, -11.6], count: 12 },
+    { p0: [-2.4, 4.9, 2.4], p1: [5.4, 0.5, 6.8], p2: [15.0, -2.8, 11.2], count: 12 },
+  ];
+  for (let ci = 0; ci < palaceFlagCascadeSpecs.length; ci++) {
+    const cs = palaceFlagCascadeSpecs[ci];
+    const curve = new THREE.QuadraticBezierCurve3(
+      new THREE.Vector3(...cs.p0),
+      new THREE.Vector3(...cs.p1),
+      new THREE.Vector3(...cs.p2),
+    );
+    const ropeGeo = new THREE.TubeGeometry(curve, 16, 0.022, 5, false);
+    palaceGroup.add(new THREE.Mesh(ropeGeo, palaceRopeMat));
+
+    const yaw = Math.atan2(cs.p2[2] - cs.p0[2], cs.p2[0] - cs.p0[0]);
+    for (let f = 1; f <= cs.count; f++) {
+      const u = f / (cs.count + 1);
+      const pt = curve.getPoint(u);
+      const flag = new THREE.Mesh(bridgeFlagGeo, prayerFlagMats[(ci + f) % 5]);
+      flag.position.set(pt.x, pt.y - 0.16, pt.z);
+      flag.rotation.y = -yaw;
+      palaceGroup.add(flag);
+      bridgeFlagMeshes.push({
+        mesh: flag,
+        baseZ: pt.z,
+        phase: ci * 1.1 + f * 0.55,
+      });
+    }
+  }
+
   // ---------------------------------------------------------------- 8. Sheldrak Crystal Cave (4060, -30) & 4-Pillar Light-Reflection Puzzle
   const caveX = origin.x + 60;
   const caveZ = origin.z - 30;
@@ -1154,7 +1481,6 @@ export function createMap(ctx) {
   caveGroup.position.set(caveX, caveY, caveZ);
   group.add(caveGroup);
 
-  const glowTex = makeYarlungGlowTexture();
   const cliffMat = new THREE.MeshStandardMaterial({
     color: 0x3b495e,
     roughness: 0.88,
@@ -1887,18 +2213,30 @@ export function createMap(ctx) {
     // 2. Rotate village watermill wheel
     waterWheel.rotation.x += dt * 1.45;
 
-    // 3. Gentle wind sway on barley field & riverside reeds InstancedMeshes + prayer flags
-    barleyInstanced.rotation.z = Math.sin(animTime * 1.8) * 0.012;
-    reedInstanced.rotation.z = Math.cos(animTime * 2.1) * 0.014;
+    // 3. Gentle wind sway on barley field, weeping willows & riverside reeds InstancedMeshes + prayer flags
+    barleyInstanced.rotation.z = Math.sin(animTime * 1.9) * 0.016;
+    barleyInstanced.rotation.x = Math.cos(animTime * 1.4) * 0.008;
+    reedInstanced.rotation.z = Math.cos(animTime * 2.1) * 0.015;
+    willowFrondInstanced.rotation.z = Math.sin(animTime * 1.65) * 0.018;
     for (let i = 0; i < bridgeFlagMeshes.length; i++) {
       const bf = bridgeFlagMeshes[i];
       bf.mesh.rotation.z = Math.sin(animTime * 4.2 + bf.phase) * 0.14;
     }
 
-    // 4. Drift cloud bands around Mount Yarlha Shampo & pulse glacier veins
+    // 4. Drift cloud bands, crepuscular God Rays & base mist around Mount Yarlha Shampo + pulse glacier veins
     cloudRing1.rotation.z += dt * 0.12;
     cloudRing2.rotation.z -= dt * 0.16;
     glacierVeinMat.emissiveIntensity = 0.62 + Math.sin(animTime * 2.0) * 0.16;
+    shampoBackHaloMat.opacity = 0.22 + Math.sin(animTime * 1.3) * 0.05;
+    for (let i = 0; i < shampoGodRays.length; i++) {
+      const gr = shampoGodRays[i];
+      gr.mat.opacity = gr.baseOpacity + Math.sin(animTime * gr.speed + gr.phase) * 0.04;
+    }
+    for (let i = 0; i < shampoBaseMistLayers.length; i++) {
+      const ml = shampoBaseMistLayers[i];
+      ml.mesh.position.x = ml.baseX + Math.sin(animTime * ml.driftSpeed + ml.phase) * 3.8;
+      ml.mat.opacity = ml.baseOpacity + Math.cos(animTime * (ml.driftSpeed * 1.4) + ml.phase) * 0.035;
+    }
     arenaMandalaMat.opacity = 0.66 + Math.sin(animTime * 1.6) * 0.08;
 
     // 5. Gentle grazing nod for village calmed yaks

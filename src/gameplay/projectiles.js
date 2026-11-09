@@ -500,7 +500,8 @@ export function createProjectiles(ctx) {
       enh: null,
       maxHits: 1,
       mpRestore: 2,
-      hitRadius: 0.55,
+      hitRadius: 0.68,
+      target: null,
       hitIds: new Set(),
     });
   }
@@ -558,6 +559,7 @@ export function createProjectiles(ctx) {
       hb.active = false;
       hb.group.visible = false;
       hb.hitbox.visible = false;
+      hb.target = null;
       hb.hitIds.clear();
     }
   }
@@ -616,7 +618,7 @@ export function createProjectiles(ctx) {
       slot.heading = heading;
       slot.pos.set(ox, oy, oz);
       slot.speed = params.speed ?? 22.0;
-      slot.maxRange = params.range ?? 14.0;
+      slot.maxRange = params.maxRange ?? params.range ?? 14.0;
       slot.lifetime = slot.maxRange / Math.max(1, slot.speed);
       let dmgMult = params.damageMult ?? 0.60;
       if (!params.tsogyalBoosted && ctx.powers?.consumeTsogyalHum?.()) {
@@ -627,7 +629,8 @@ export function createProjectiles(ctx) {
       slot.enh = params.enh ?? null;
       slot.maxHits = params.maxHits ?? (slot.enh === 'a' ? 3 : 1);
       slot.mpRestore = params.mpRestore ?? (slot.enh === 'b' ? 3 : 2);
-      slot.hitRadius = params.hitRadius ?? 0.55;
+      slot.hitRadius = params.hitRadius ?? 0.68;
+      slot.target = params.target || null;
       slot.hitIds.clear();
 
       slot.group.position.copy(slot.pos);
@@ -889,12 +892,79 @@ export function createProjectiles(ctx) {
     const rawEnemies = ctx.enemies?.getActiveEnemies ? ctx.enemies.getActiveEnemies() : [];
     const activeBossState = ctx.bosses?.getActiveBoss?.()?.getInternalState?.();
     const enemiesList =
-      activeBossState && !activeBossState.defeated && activeBossState.hp > 0
+      activeBossState && !activeBossState.defeated && !activeBossState.dead && activeBossState.hp > 0
         ? [...rawEnemies, activeBossState]
         : rawEnemies;
+    const humHomingConeCos = Math.cos((65 * Math.PI) / 180);
     for (let i = 0; i < HUM_POOL_CAP; i++) {
       const hb = humBoltPool[i];
       if (!hb.active) continue;
+
+      if (
+        hb.target &&
+        (hb.target.state === 'liberated' ||
+          hb.target.state === 'calmed' ||
+          hb.target.dead ||
+          hb.target.defeated ||
+          (hb.target.hp ?? 0) <= 0 ||
+          hb.hitIds.has(hb.target.id))
+      ) {
+        hb.target = null;
+      }
+
+      if (!hb.target && isCombat && enemiesList.length > 0) {
+        let bestTarget = null;
+        let bestDist = 10.0;
+        for (let eIdx = 0; eIdx < enemiesList.length; eIdx++) {
+          const e = enemiesList[eIdx];
+          if (
+            !e ||
+            e.state === 'liberated' ||
+            e.state === 'calmed' ||
+            e.dead ||
+            e.defeated ||
+            (e.hp ?? 0) <= 0 ||
+            hb.hitIds.has(e.id)
+          ) {
+            continue;
+          }
+          const ep = e.pos || e.position || e.root?.position;
+          if (!ep) continue;
+          const dx = ep.x - hb.pos.x;
+          const dz = ep.z - hb.pos.z;
+          const d = Math.hypot(dx, dz);
+          if (d > bestDist || d <= 1e-4) continue;
+          const dot = (dx / d) * hb.dir.x + (dz / d) * hb.dir.z;
+          if (dot >= humHomingConeCos) {
+            bestDist = d;
+            bestTarget = e;
+          }
+        }
+        hb.target = bestTarget;
+      }
+
+      if (hb.target) {
+        const ep = hb.target.pos || hb.target.position || hb.target.root?.position;
+        if (ep) {
+          const dx = ep.x - hb.pos.x;
+          const dz = ep.z - hb.pos.z;
+          const d = Math.hypot(dx, dz);
+          if (d > 1e-4) {
+            const tx = dx / d;
+            const tz = dz / d;
+            const turn = Math.min(1, dt * 7.5);
+            hb.dir.x += (tx - hb.dir.x) * turn;
+            hb.dir.z += (tz - hb.dir.z) * turn;
+            const len = Math.hypot(hb.dir.x, hb.dir.z);
+            if (len > 1e-5) {
+              hb.dir.x /= len;
+              hb.dir.z /= len;
+            }
+            hb.heading = Math.atan2(-hb.dir.x, -hb.dir.z);
+            hb.group.rotation.y = hb.heading;
+          }
+        }
+      }
 
       const stepDist = hb.speed * dt;
       hb.age += dt;
@@ -946,7 +1016,7 @@ export function createProjectiles(ctx) {
       if (isCombat && enemiesList.length > 0) {
         for (let eIdx = 0; eIdx < enemiesList.length; eIdx++) {
           const e = enemiesList[eIdx];
-          if (!e || e.state === 'liberated' || e.hp <= 0) continue;
+          if (!e || e.state === 'liberated' || e.state === 'calmed' || e.hp <= 0) continue;
           if (hb.hitIds.has(e.id)) continue;
 
           const edx = e.pos.x - hb.pos.x;
@@ -962,7 +1032,8 @@ export function createProjectiles(ctx) {
               ? ctx.vitals.rollDamage(atk, { mult })
               : { amount: Math.max(1, Math.round(atk * mult)), crit: false };
 
-            ctx.enemies?.damage?.(e.id, rolled.amount, 'magic', {
+            ctx.enemies?.damage?.(e.id, rolled.amount, {
+              type: 'magic',
               crit: rolled.crit,
               source: 'humBolt',
               knockback: 0.4,
@@ -982,6 +1053,7 @@ export function createProjectiles(ctx) {
               hb.active = false;
               hb.group.visible = false;
               hb.hitbox.visible = false;
+              hb.target = null;
               break;
             }
           }
@@ -994,6 +1066,7 @@ export function createProjectiles(ctx) {
         hb.active = false;
         hb.group.visible = false;
         hb.hitbox.visible = false;
+        hb.target = null;
         continue;
       }
 
@@ -1409,6 +1482,7 @@ export function createProjectiles(ctx) {
     update,
     spawn,
     fireHumBolt: (params) => spawn('humBolt', params),
+    spawnHumBolt: (params) => spawn('humBolt', params),
     dispelInArea,
     reflectMagicProjectileAt,
     clear,

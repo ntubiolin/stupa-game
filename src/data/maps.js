@@ -220,23 +220,27 @@ import TOJI_MAP from './maps/toji.js';
 import KOYASAN_MAP from './maps/koyasan.js';
 
 // Auto-discover chapter map definitions (`src/data/maps/*.js`) and chapter i18n (`src/i18n/*.js`)
-if (typeof import.meta.glob === 'function') {
+const fallbackMapModules = {
+  grove: { GROVE_MAP },
+  pharping: { PHARPING_MAP },
+  mangyul: { MANGYUL_MAP },
+  yarlung: { YARLUNG_MAP },
+  samye: { SAMYE_MAP },
+  chimphu: { CHIMPHU_MAP },
+  terma: { TERMA_MAP },
+  toji: { TOJI_MAP },
+  koyasan: { KOYASAN_MAP },
+};
+let chapterMapModules = fallbackMapModules;
+try {
   import.meta.glob('../i18n/*.js', { eager: true });
+  chapterMapModules = {
+    ...fallbackMapModules,
+    ...(import.meta.glob('./maps/*.js', { eager: true }) || {}),
+  };
+} catch {
+  chapterMapModules = fallbackMapModules;
 }
-const chapterMapModules =
-  typeof import.meta.glob === 'function'
-    ? import.meta.glob('./maps/*.js', { eager: true })
-    : {
-        grove: { GROVE_MAP },
-        pharping: { PHARPING_MAP },
-        mangyul: { MANGYUL_MAP },
-        yarlung: { YARLUNG_MAP },
-        samye: { SAMYE_MAP },
-        chimphu: { CHIMPHU_MAP },
-        terma: { TERMA_MAP },
-        toji: { TOJI_MAP },
-        koyasan: { KOYASAN_MAP },
-      };
 for (const mod of Object.values(chapterMapModules)) {
   if (!mod || typeof mod !== 'object') continue;
   for (const val of Object.values(mod)) {

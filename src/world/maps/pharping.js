@@ -114,6 +114,36 @@ function getKilayaMandalaTexture() {
   return tex;
 }
 
+let _pharpingSunbeamTex = null;
+function getPharpingSunbeamTexture() {
+  if (_pharpingSunbeamTex) return _pharpingSunbeamTex;
+  if (typeof document === 'undefined' || typeof document.createElement !== 'function') return null;
+  const canvas = document.createElement('canvas');
+  if (!canvas || typeof canvas.getContext !== 'function') return null;
+  canvas.width = 128;
+  canvas.height = 256;
+  const g = canvas.getContext('2d');
+  if (g) {
+    g.clearRect(0, 0, 128, 256);
+    for (let y = 0; y < 256; y++) {
+      const v = y / 255;
+      const vAlpha = Math.sin(v * Math.PI) * (1.0 - v * 0.32);
+      const grad = g.createLinearGradient(0, y, 128, y);
+      grad.addColorStop(0.0, 'rgba(255, 220, 145, 0.0)');
+      grad.addColorStop(0.24, `rgba(255, 208, 125, ${(vAlpha * 0.44).toFixed(4)})`);
+      grad.addColorStop(0.5, `rgba(255, 240, 192, ${(vAlpha * 0.90).toFixed(4)})`);
+      grad.addColorStop(0.76, `rgba(255, 208, 125, ${(vAlpha * 0.44).toFixed(4)})`);
+      grad.addColorStop(1.0, 'rgba(255, 220, 145, 0.0)');
+      g.fillStyle = grad;
+      g.fillRect(0, y, 128, 1);
+    }
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  _pharpingSunbeamTex = tex;
+  return tex;
+}
+
 export function createMap(ctx) {
   const mapDef = ctx.world?.getMap?.('pharping') || {
     id: 'pharping',
@@ -181,38 +211,52 @@ export function createMap(ctx) {
     return h;
   };
 
-  // Dry vs Lush Green vertex palettes for `ch1.rain` transformation
-  const dryOchre = new THREE.Color(0x9a5d34);
-  const dryCrack = new THREE.Color(0x7c4322);
-  const dryPath = new THREE.Color(0xb58354);
-  const drySlate = new THREE.Color(0x5c4a3e);
+  // Brighter Painterly SEASON x Firewatch Terrain Palettes (vivid at 17:16 dusk)
+  // Drought: warm Firewatch golden-terracotta, sunlit amber-ochre & rose-slate cliffs
+  const dryOchre = new THREE.Color(0xc87d44);
+  const dryCrack = new THREE.Color(0xa65c2e);
+  const dryMeadowGold = new THREE.Color(0xd69b4c);
+  const dryPath = new THREE.Color(0xdcb07a);
+  const drySlate = new THREE.Color(0x84685c);
 
-  const wetGreen = new THREE.Color(0x4f7d44);
-  const wetMeadow = new THREE.Color(0x639150);
-  const wetPath = new THREE.Color(0x7d7258);
-  const wetSlate = new THREE.Color(0x4c584e);
+  // Post-rain (`ch1.rain`): luminous SEASON emerald-ochre, sunlit sage meadow & warm flagstone path
+  const wetGreen = new THREE.Color(0x5fa352);
+  const wetMeadow = new THREE.Color(0x8ab858);
+  const wetPath = new THREE.Color(0xa89874);
+  const wetSlate = new THREE.Color(0x667a6c);
   const tmpCol = new THREE.Color();
   const tmpDry = new THREE.Color();
   const tmpWet = new THREE.Color();
 
   function computeDryWetColor(wx, wz, y, lx, lz, rainMix) {
     const noise = Math.sin(lx * 0.14) * Math.cos(lz * 0.14) * 0.5 + 0.5;
-    // Dry color
+    const micro = Math.sin(lx * 0.31 - lz * 0.27) * 0.5 + 0.5;
+    // Dry color: warm Firewatch golden-terracotta & amber-ochre
     if (y > 2.2) {
-      tmpDry.lerpColors(dryOchre, drySlate, Math.min(1, (y - 2.2) / 4.0));
+      tmpDry.lerpColors(dryOchre, drySlate, Math.min(1, (y - 2.2) / 4.2));
+      if (micro > 0.58) tmpDry.lerp(dryMeadowGold, 0.24);
     } else if (Math.abs(lx + 15) < 6 && lz > -45 && lz < 78) {
-      tmpDry.lerpColors(dryPath, dryOchre, 0.35);
+      tmpDry.lerpColors(dryPath, dryMeadowGold, 0.32);
+    } else if (Math.abs(lx - 15) < 5.5 && lz > -48 && lz < 20) {
+      // Sunlit pilgrimage trail ascending to Yangleshö Cave
+      tmpDry.lerpColors(dryPath, dryOchre, 0.30);
     } else {
-      tmpDry.lerpColors(dryCrack, dryOchre, noise);
+      tmpDry.lerpColors(dryCrack, dryOchre, noise * 0.72 + micro * 0.28);
+      if (noise > 0.52) {
+        tmpDry.lerp(dryMeadowGold, (noise - 0.52) * 0.65);
+      }
     }
 
-    // Wet color
+    // Wet color: luminous SEASON emerald-ochre & sunlit meadow
     if (y > 2.2) {
-      tmpWet.lerpColors(wetGreen, wetSlate, Math.min(1, (y - 2.2) / 4.0));
+      tmpWet.lerpColors(wetGreen, wetSlate, Math.min(1, (y - 2.2) / 4.2));
+      if (micro > 0.55) tmpWet.lerp(wetMeadow, 0.28);
     } else if (Math.abs(lx + 15) < 6 && lz > -45 && lz < 78) {
-      tmpWet.lerpColors(wetPath, wetGreen, 0.45);
+      tmpWet.lerpColors(wetPath, wetMeadow, 0.38);
+    } else if (Math.abs(lx - 15) < 5.5 && lz > -48 && lz < 20) {
+      tmpWet.lerpColors(wetPath, wetGreen, 0.35);
     } else {
-      tmpWet.lerpColors(wetGreen, wetMeadow, noise);
+      tmpWet.lerpColors(wetGreen, wetMeadow, noise * 0.68 + micro * 0.32);
     }
 
     return tmpCol.lerpColors(tmpDry, tmpWet, rainMix);
@@ -225,8 +269,15 @@ export function createMap(ctx) {
     heightFn: getHeight,
     colorFn: (wx, wz, y, lx, lz) => computeDryWetColor(wx, wz, y, lx, lz, 0),
   });
+  if (terrainMesh.material) {
+    terrainMesh.material.emissive = new THREE.Color(0x28180c);
+    terrainMesh.material.emissiveIntensity = 0.16;
+  }
   // CRITICAL INVARIANT: terrainMesh MUST remain group.children[0]
   group.add(terrainMesh);
+
+  const dryTerrainEmissive = new THREE.Color(0x28180c);
+  const wetTerrainEmissive = new THREE.Color(0x162614);
 
   function updateTerrainColors(rainMix) {
     const posAttr = terrainMesh.geometry.attributes.position;
@@ -240,6 +291,9 @@ export function createMap(ctx) {
       colAttr.setXYZ(i, c.r, c.g, c.b);
     }
     colAttr.needsUpdate = true;
+    if (terrainMesh.material?.emissive) {
+      terrainMesh.material.emissive.lerpColors(dryTerrainEmissive, wetTerrainEmissive, rainMix);
+    }
   }
 
   // Distant Himalayan foothill rim
@@ -1066,6 +1120,152 @@ export function createMap(ctx) {
   entranceShaft.rotation.x = -0.34;
   caveGroup.add(entranceShaft);
 
+  // Warm golden butter-lamp rock-wall bounce plates inside Yangleshö Cave (0 PointLights)
+  const wallBounceGeo = new THREE.PlaneGeometry(1, 1);
+  const caveWallBounceMat = new THREE.MeshBasicMaterial({
+    map: glowTex,
+    color: 0xffa938,
+    transparent: true,
+    opacity: 0.28,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    toneMapped: false,
+  });
+  for (const [bx, by, bz, ry, sx, sy] of [
+    [-4.8, 2.2, -1.2, Math.PI * 0.42, 6.2, 4.4],
+    [4.8, 2.2, -1.2, -Math.PI * 0.42, 6.2, 4.4],
+    [0.0, 2.5, -5.2, 0.0, 7.4, 4.8],
+    [-3.4, 1.8, 2.1, Math.PI * 0.22, 4.5, 3.4],
+    [3.4, 1.8, 2.1, -Math.PI * 0.22, 4.5, 3.4],
+  ]) {
+    const wb = new THREE.Mesh(wallBounceGeo, caveWallBounceMat);
+    wb.position.set(bx, by, bz);
+    wb.rotation.y = ry;
+    wb.scale.set(sx, sy, 1);
+    caveGroup.add(wb);
+  }
+
+  // Real-World White Silk Khatag (哈達) Offering Scarves & Tibetan Retreat Facade Materials
+  const khatagMat = new THREE.MeshStandardMaterial({
+    color: 0xfaf8f2,
+    roughness: 0.55,
+    metalness: 0.04,
+    emissive: 0x3a3224,
+    emissiveIntensity: 0.46,
+    side: THREE.DoubleSide,
+  });
+  const retreatWhitewashMat = new THREE.MeshStandardMaterial({
+    color: 0xf2eadc,
+    roughness: 0.88,
+    emissive: 0x261d14,
+    emissiveIntensity: 0.16,
+  });
+  const retreatMaroonMat = new THREE.MeshStandardMaterial({
+    color: 0x7c1f1a,
+    roughness: 0.74,
+    emissive: 0x240907,
+    emissiveIntensity: 0.18,
+  });
+  const fantsangBlackMat = new THREE.MeshStandardMaterial({
+    color: 0x221b18,
+    roughness: 0.86,
+  });
+
+  const khatagBandGeo = new THREE.BoxGeometry(0.95, 0.11, 0.05);
+  const khatagTailGeo = new THREE.PlaneGeometry(0.24, 1.18);
+
+  function createKhatagGarland(spanWidth = 5.4, sag = 0.45, tailCount = 5) {
+    const kGrp = new THREE.Group();
+    const segs = 10;
+    for (let s = 0; s < segs; s++) {
+      const u = (s + 0.5) / segs;
+      const x = (u - 0.5) * spanWidth;
+      const y = -4 * u * (1 - u) * sag;
+      const slope = -4 * (1 - 2 * u) * (sag / spanWidth);
+      const sw = new THREE.Mesh(khatagBandGeo, khatagMat);
+      sw.position.set(x, y, Math.sin(u * Math.PI) * 0.12);
+      sw.scale.set((spanWidth / segs) * 1.12, 1, 1);
+      sw.rotation.z = Math.atan(slope);
+      kGrp.add(sw);
+    }
+    for (let t = 0; t < tailCount; t++) {
+      const u = tailCount === 1 ? 0.5 : t / (tailCount - 1);
+      const x = (u - 0.5) * (spanWidth * 0.86);
+      const y = -4 * u * (1 - u) * sag;
+      const tail = new THREE.Mesh(khatagTailGeo, khatagMat);
+      tail.position.set(x, y - 0.56, 0.08 + Math.sin(u * Math.PI) * 0.08);
+      tail.rotation.set(0.08, (t % 2 === 0 ? 1 : -1) * 0.12, (u - 0.5) * 0.14);
+      kGrp.add(tail);
+    }
+    return kGrp;
+  }
+
+  const retreatWallGeo = new THREE.BoxGeometry(3.4, 3.2, 1.35);
+  const retreatPenmaGeo = new THREE.BoxGeometry(3.52, 0.46, 1.44);
+  const retreatCorniceGeo = new THREE.BoxGeometry(3.68, 0.14, 1.56);
+  const fantsangBorderGeo = new THREE.BoxGeometry(1.12, 1.18, 0.08);
+  const mirrorBossGeo = new THREE.CylinderGeometry(0.11, 0.11, 0.08, 10);
+  mirrorBossGeo.rotateX(Math.PI / 2);
+
+  function createCliffRetreatFacade(name) {
+    const rGrp = new THREE.Group();
+    rGrp.name = name;
+
+    const wall = new THREE.Mesh(retreatWallGeo, retreatWhitewashMat);
+    wall.position.y = 1.6;
+    wall.castShadow = true;
+    wall.receiveShadow = true;
+
+    const penma = new THREE.Mesh(retreatPenmaGeo, retreatMaroonMat);
+    penma.position.y = 3.38;
+
+    const cornice = new THREE.Mesh(retreatCorniceGeo, brassFinialMat);
+    cornice.position.y = 3.68;
+
+    // Traditional black trapezoid-style Tibetan window border (fantsang) + carved wooden frame & warm glow
+    const fantsang = new THREE.Mesh(fantsangBorderGeo, fantsangBlackMat);
+    fantsang.position.set(0, 1.92, 0.66);
+    const wFrame = new THREE.Mesh(winFrameGeo, timberMat);
+    wFrame.position.set(0, 1.92, 0.70);
+    const wPane = new THREE.Mesh(winPaneGeo, windowGlowMat);
+    wPane.position.set(0, 1.92, 0.76);
+
+    rGrp.add(wall, penma, cornice, fantsang, wFrame, wPane);
+
+    for (const bx of [-1.05, 0, 1.05]) {
+      const boss = new THREE.Mesh(mirrorBossGeo, brassFinialMat);
+      boss.position.set(bx, 3.38, 0.73);
+      rGrp.add(boss);
+    }
+
+    // Draped white silk Khatag above the retreat window lintel
+    const winKhatag = createKhatagGarland(1.45, 0.18, 2);
+    winKhatag.position.set(0, 2.58, 0.75);
+    rGrp.add(winKhatag);
+
+    return rGrp;
+  }
+
+  // Draped white silk Khatags across Yangleshö Cave brow, archway shrines & meditation seat
+  const yangleshoBrowKhatag = createKhatagGarland(6.8, 0.58, 7);
+  yangleshoBrowKhatag.name = 'YangleshoBrowKhatag';
+  yangleshoBrowKhatag.position.set(0, 5.15, 2.15);
+  caveGroup.add(yangleshoBrowKhatag);
+
+  const yangleshoSeatKhatag = createKhatagGarland(1.9, 0.22, 3);
+  yangleshoSeatKhatag.position.set(0, 0.42, -0.52);
+  caveGroup.add(yangleshoSeatKhatag);
+
+  // Traditional maroon-and-whitewashed Tibetan retreat house facades flanking Yangleshö Cave approach (0 colliders)
+  const yangleshoRetreatWest = createCliffRetreatFacade('YangleshoRetreatFacadeWest');
+  yangleshoRetreatWest.position.set(-7.8, 0.0, 2.8);
+  yangleshoRetreatWest.rotation.y = 0.36;
+  const yangleshoRetreatEast = createCliffRetreatFacade('YangleshoRetreatFacadeEast');
+  yangleshoRetreatEast.position.set(7.8, 0.0, 2.5);
+  yangleshoRetreatEast.rotation.y = -0.36;
+  caveGroup.add(yangleshoRetreatWest, yangleshoRetreatEast);
+
   // Floating golden cave dust motes inside Yangleshö Cave
   const caveDustCount = 46;
   const caveDustGeo = new THREE.BufferGeometry();
@@ -1134,6 +1334,12 @@ export function createMap(ctx) {
     nicheBack.position.set(Math.cos(outAngle) * 0.38, 0.66, Math.sin(outAngle) * 0.38);
     nicheBack.rotation.y = -outAngle + Math.PI / 2;
 
+    // White silk Khatag scarf draped over the top of each rock shrine niche
+    const nicheKhatag = new THREE.Mesh(khatagBandGeo, khatagMat);
+    nicheKhatag.position.set(Math.cos(outAngle) * 0.36, 1.33, Math.sin(outAngle) * 0.36);
+    nicheKhatag.rotation.y = -outAngle + Math.PI / 2;
+    nicheKhatag.scale.set(0.84, 1.1, 6.2);
+
     const pedestal = new THREE.Mesh(
       new THREE.CylinderGeometry(0.28, 0.36, 0.68, 8),
       springStoneMat,
@@ -1163,7 +1369,7 @@ export function createMap(ctx) {
     lampPool.position.y = 0.03;
     lampPool.scale.set(3.2, 1, 3.2);
 
-    nGrp.add(nicheBack, pedestal, bowl, flameGrp, lampPool);
+    nGrp.add(nicheBack, nicheKhatag, pedestal, bowl, flameGrp, lampPool);
     group.add(nGrp);
 
     const lampObj = {
@@ -1375,6 +1581,40 @@ export function createMap(ctx) {
   asuraMouthPool.scale.set(11.0, 1, 8.5);
   asuraGroup.add(asuraMouthPool);
 
+  // Real-World Asura Cave Entrance Details: Draped White Silk Khatags, Handprint Rock Shrine, Butter-Lamp Bounce Plates & Retreat Facades
+  const asuraBrowKhatag = createKhatagGarland(8.6, 0.68, 9);
+  asuraBrowKhatag.name = 'AsuraBrowKhatag';
+  asuraBrowKhatag.position.set(0, 5.65, -13.4);
+  asuraGroup.add(asuraBrowKhatag);
+
+  const asuraShrineLeftKhatag = createKhatagGarland(3.2, 0.34, 4);
+  asuraShrineLeftKhatag.position.set(-5.6, 2.75, -13.6);
+  asuraShrineLeftKhatag.rotation.y = 0.28;
+  const asuraShrineRightKhatag = createKhatagGarland(3.2, 0.34, 4);
+  asuraShrineRightKhatag.position.set(5.6, 2.75, -13.6);
+  asuraShrineRightKhatag.rotation.y = -0.28;
+  asuraGroup.add(asuraShrineLeftKhatag, asuraShrineRightKhatag);
+
+  for (const [bx, by, bz, ry, sx, sy] of [
+    [-5.8, 2.2, -13.5, 0.32, 6.4, 4.6],
+    [5.8, 2.2, -13.5, -0.32, 6.4, 4.6],
+    [0.0, 3.0, -15.2, 0.0, 9.2, 5.4],
+  ]) {
+    const awb = new THREE.Mesh(wallBounceGeo, caveWallBounceMat);
+    awb.position.set(bx, by, bz);
+    awb.rotation.y = ry;
+    awb.scale.set(sx, sy, 1);
+    asuraGroup.add(awb);
+  }
+
+  const asuraRetreatWest = createCliffRetreatFacade('AsuraRetreatFacadeWest');
+  asuraRetreatWest.position.set(-11.4, 0.2, -12.2);
+  asuraRetreatWest.rotation.y = 0.42;
+  const asuraRetreatEast = createCliffRetreatFacade('AsuraRetreatFacadeEast');
+  asuraRetreatEast.position.set(11.4, 0.2, -12.2);
+  asuraRetreatEast.rotation.y = -0.42;
+  asuraGroup.add(asuraRetreatWest, asuraRetreatEast);
+
   // Escort Canyon Craggy Rock Arches along the western ambush canyon route (0 colliders)
   const canyonArchGeo = new THREE.DodecahedronGeometry(2.4, 1);
   const canyonArchSpecs = [
@@ -1402,6 +1642,241 @@ export function createMap(ctx) {
     archGrp.add(pNorth, pSouth, lintel);
     group.add(archGrp);
   }
+
+  // ---------------------------------------------------------------- 7b. Pilgrimage Stone Staircase & Real-World Overhead Lungta Prayer Flag Canopy Webs
+  // Stepped stone staircase ascending toward Yangleshö Cave (20, -45) and up the northern ridge to Asura Cave (-10, -80) (0 colliders)
+  const stepSlabGeo = new THREE.BoxGeometry(2.8, 0.14, 0.92);
+  const stepSlabMat = new THREE.MeshStandardMaterial({
+    color: 0x9c8872,
+    roughness: 0.90,
+    emissive: 0x241910,
+    emissiveIntensity: 0.12,
+  });
+  const stairWaypoints = [];
+  // Segment A: Valley trail (14, 12) -> Yangleshö Cave forecourt (20, -35)
+  for (let s = 0; s < 24; s++) {
+    const u = s / 23;
+    const lx = THREE.MathUtils.lerp(13.5, 19.8, u) + Math.sin(u * Math.PI * 2) * 1.1;
+    const lz = THREE.MathUtils.lerp(10.0, -34.5, u);
+    stairWaypoints.push({ lx, lz, ry: -0.14 + Math.cos(u * Math.PI * 2) * 0.08 });
+  }
+  // Segment B: Yangleshö cliff side (12, -48) -> Asura Cave southern approach (-10, -63)
+  for (let s = 0; s < 18; s++) {
+    const u = s / 17;
+    const lx = THREE.MathUtils.lerp(11.5, -9.8, u) + Math.sin(u * Math.PI) * 1.4;
+    const lz = THREE.MathUtils.lerp(-48.5, -62.5, u);
+    stairWaypoints.push({ lx, lz, ry: 0.65 });
+  }
+  const stairInst = new THREE.InstancedMesh(stepSlabGeo, stepSlabMat, stairWaypoints.length);
+  stairInst.name = 'PharpingPilgrimageStairs';
+  stairInst.receiveShadow = true;
+  for (let i = 0; i < stairWaypoints.length; i++) {
+    const sw = stairWaypoints[i];
+    const wx = origin.x + sw.lx;
+    const wz = origin.z + sw.lz;
+    const wy = getHeight(wx, wz);
+    dummyObj.position.set(wx, wy + 0.04, wz);
+    dummyObj.rotation.set(0, sw.ry, 0);
+    dummyObj.scale.set(1.0 + (i % 3) * 0.08, 1.0, 1.0);
+    dummyObj.updateMatrix();
+    stairInst.setMatrixAt(i, dummyObj.matrix);
+    const shade = 0.88 + ((i * 13) % 7) * 0.03;
+    stairInst.setColorAt(i, terraceColor.setRGB(shade * 1.04, shade * 0.98, shade * 0.90));
+  }
+  stairInst.instanceMatrix.needsUpdate = true;
+  if (stairInst.instanceColor) stairInst.instanceColor.needsUpdate = true;
+  group.add(stairInst);
+
+  // Multi-strand overhead 5-color Lungta prayer flag canopy webs strung high between pine trees & cliff faces
+  const canopyFlagLines = [
+    // Over the lower pilgrimage staircase toward Yangleshö Cave
+    { start: [8, 5.2, -4], end: [24, 5.8, -14], sag: 1.15, flags: 18 },
+    { start: [24, 5.8, -14], end: [10, 6.2, -24], sag: 1.25, flags: 18 },
+    { start: [10, 6.2, -24], end: [27, 6.8, -33], sag: 1.30, flags: 18 },
+    { start: [12, 6.6, -34], end: [28, 7.6, -42], sag: 1.35, flags: 18 },
+    // crisscrossing high above Yangleshö Cave entrance & retreat houses (20, -45)
+    { start: [11, 7.4, -41], end: [29, 7.8, -42], sag: 1.40, flags: 20 },
+    { start: [12, 8.5, -44], end: [28, 8.8, -45], sag: 1.55, flags: 20 },
+    { start: [14, 9.8, -47], end: [26, 9.6, -39], sag: 1.35, flags: 18 },
+    { start: [26, 9.6, -47], end: [13, 8.9, -38], sag: 1.35, flags: 18 },
+    // Spanning the upper cliff trail from Yangleshö Cave (20, -45) to Asura Cave (-10, -80)
+    { start: [14, 7.8, -48], end: [1, 8.2, -56], sag: 1.40, flags: 18 },
+    { start: [1, 8.2, -56], end: [-16, 8.6, -63], sag: 1.45, flags: 18 },
+    { start: [6, 8.4, -52], end: [-12, 8.8, -61], sag: 1.35, flags: 18 },
+    // High canopy web across Asura Cave cliff mouth & monoliths (-10, -80)
+    { start: [-24, 8.8, -74], end: [4, 9.2, -74], sag: 1.85, flags: 22 },
+    { start: [-22, 10.2, -82], end: [2, 10.4, -82], sag: 1.75, flags: 22 },
+    { start: [-21, 11.4, -90], end: [1, 11.4, -76], sag: 1.65, flags: 20 },
+    { start: [1, 11.4, -90], end: [-21, 11.2, -76], sag: 1.65, flags: 20 },
+  ];
+
+  const lungtaRopePositions = [];
+  const lungtaFlagTransforms = [];
+  for (let lIdx = 0; lIdx < canopyFlagLines.length; lIdx++) {
+    const line = canopyFlagLines[lIdx];
+    const [sx, syOff, sz] = line.start;
+    const [ex, eyOff, ez] = line.end;
+    const startVec = new THREE.Vector3(
+      origin.x + sx,
+      getHeight(origin.x + sx, origin.z + sz) + syOff,
+      origin.z + sz,
+    );
+    const endVec = new THREE.Vector3(
+      origin.x + ex,
+      getHeight(origin.x + ex, origin.z + ez) + eyOff,
+      origin.z + ez,
+    );
+    const yaw = Math.atan2(endVec.x - startVec.x, endVec.z - startVec.z);
+    const segs = line.flags + 2;
+    let prevPt = startVec.clone();
+    for (let s = 1; s <= segs; s++) {
+      const u = s / segs;
+      const pt = new THREE.Vector3().lerpVectors(startVec, endVec, u);
+      pt.y -= 4 * u * (1 - u) * line.sag;
+      lungtaRopePositions.push(prevPt.x, prevPt.y, prevPt.z, pt.x, pt.y, pt.z);
+      prevPt = pt;
+      if (s >= 1 && s <= line.flags) {
+        lungtaFlagTransforms.push({
+          x: pt.x,
+          y: pt.y - 0.16,
+          z: pt.z,
+          yaw: yaw + Math.PI * 0.5,
+          tilt: 0.18 + ((lIdx + s) % 3) * 0.08,
+          colorIdx: (lIdx * 2 + s) % 5,
+        });
+      }
+    }
+  }
+
+  const lungtaRopeGeo = new THREE.BufferGeometry();
+  lungtaRopeGeo.setAttribute('position', new THREE.Float32BufferAttribute(lungtaRopePositions, 3));
+  const lungtaRopeMat = new THREE.LineBasicMaterial({ color: 0x5c4738, transparent: true, opacity: 0.78 });
+  const lungtaRopeLines = new THREE.LineSegments(lungtaRopeGeo, lungtaRopeMat);
+  lungtaRopeLines.name = 'PharpingPrayerFlagRopes';
+  group.add(lungtaRopeLines);
+
+  const lungtaQuadGeo = new THREE.PlaneGeometry(0.38, 0.30);
+  const lungtaInstMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    roughness: 0.76,
+    emissive: 0x2a1d12,
+    emissiveIntensity: 0.22,
+    side: THREE.DoubleSide,
+  });
+  const lungtaInst = new THREE.InstancedMesh(lungtaQuadGeo, lungtaInstMat, lungtaFlagTransforms.length);
+  lungtaInst.name = 'PharpingPrayerFlagCanopy';
+  const lungtaPalette = [
+    new THREE.Color(0x2563eb), // Tibetan blue (sky/space)
+    new THREE.Color(0xf8fafc), // Tibetan white (air/wind)
+    new THREE.Color(0xdc2626), // Tibetan red (fire)
+    new THREE.Color(0x16a34a), // Tibetan green (water)
+    new THREE.Color(0xfacc15), // Tibetan yellow (earth)
+  ];
+  for (let i = 0; i < lungtaFlagTransforms.length; i++) {
+    const fl = lungtaFlagTransforms[i];
+    dummyObj.position.set(fl.x, fl.y, fl.z);
+    dummyObj.rotation.set(fl.tilt, fl.yaw, 0);
+    dummyObj.scale.set(1, 1, 1);
+    dummyObj.updateMatrix();
+    lungtaInst.setMatrixAt(i, dummyObj.matrix);
+    lungtaInst.setColorAt(i, lungtaPalette[fl.colorIdx]);
+  }
+  lungtaInst.instanceMatrix.needsUpdate = true;
+  if (lungtaInst.instanceColor) lungtaInst.instanceColor.needsUpdate = true;
+  group.add(lungtaInst);
+
+  // ---------------------------------------------------------------- 7c. Dramatic Firewatch Forest Canopy Sunbeams (10 God Rays) & Valley Terrace Mist
+  const sunbeamsGroup = new THREE.Group();
+  sunbeamsGroup.name = 'PharpingCanopySunbeams';
+  const sunbeamTex = getPharpingSunbeamTexture();
+  const sunbeamPlaneGeo = new THREE.PlaneGeometry(1, 1);
+  const pharpingSunbeams = [];
+  const pharpingSunbeamSpecs = [
+    // 1. Yangleshö Cave sacred entrance & Khatag brow shaft
+    { lx: 18.2, lz: -41.5, y: 11.5, w: 9.2, h: 25.0, rotY: 0.26, rotZ: -0.44, opacity: 0.18, color: 0xffd27d },
+    // 2. Upper Pilgrimage Stone Staircase shaft (below Yangleshö)
+    { lx: 16.5, lz: -24.0, y: 10.8, w: 8.4, h: 23.5, rotY: -0.18, rotZ: -0.42, opacity: 0.16, color: 0xffc86b },
+    // 3. Lower Pilgrimage Stone Staircase shaft
+    { lx: 13.0, lz: -6.0, y: 10.4, w: 8.0, h: 22.5, rotY: 0.22, rotZ: -0.41, opacity: 0.15, color: 0xffc668 },
+    // 4. Mountain Trail between Yangleshö and Asura Cave
+    { lx: 2.0, lz: -55.0, y: 11.8, w: 8.6, h: 24.5, rotY: 0.32, rotZ: -0.45, opacity: 0.15, color: 0xffd480 },
+    // 5. Asura Cave upper shrine & Khatag gateway shaft
+    { lx: -11.5, lz: -74.0, y: 13.0, w: 9.8, h: 26.5, rotY: 0.18, rotZ: -0.46, opacity: 0.17, color: 0xffc466 },
+    // 6. Pharping Village Cobbled Plaza & Stone Well shaft
+    { lx: -31.5, lz: 53.5, y: 10.5, w: 9.4, h: 23.0, rotY: 0.24, rotZ: -0.40, opacity: 0.16, color: 0xffce74 },
+    // 7. Sacred Naga Spring 1 (-55, 10) forest canopy shaft
+    { lx: -56.0, lz: 10.0, y: 10.2, w: 7.6, h: 22.0, rotY: 0.30, rotZ: -0.42, opacity: 0.15, color: 0xffd07a },
+    // 8. Sacred Naga Spring 2 (40, 30) forest canopy shaft
+    { lx: 38.5, lz: 30.0, y: 10.2, w: 7.8, h: 22.0, rotY: -0.24, rotZ: -0.42, opacity: 0.15, color: 0xffd07a },
+    // 9. Sacred Naga Spring 3 (10, -20) forest canopy shaft
+    { lx: 8.5, lz: -20.0, y: 10.4, w: 7.6, h: 22.5, rotY: 0.15, rotZ: -0.43, opacity: 0.15, color: 0xffd482 },
+    // 10. South Return Gate & Agricultural Terraces golden-hour shaft
+    { lx: -1.5, lz: 72.0, y: 10.0, w: 8.8, h: 22.0, rotY: 0.12, rotZ: -0.39, opacity: 0.14, color: 0xffc668 },
+  ];
+
+  for (let i = 0; i < pharpingSunbeamSpecs.length; i++) {
+    const sb = pharpingSunbeamSpecs[i];
+    const sbMat = new THREE.MeshBasicMaterial({
+      ...(sunbeamTex ? { map: sunbeamTex } : {}),
+      color: sb.color,
+      transparent: true,
+      opacity: sb.opacity,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      toneMapped: false,
+    });
+    const sbMesh = new THREE.Mesh(sunbeamPlaneGeo, sbMat);
+    sbMesh.position.set(origin.x + sb.lx, sb.y, origin.z + sb.lz);
+    sbMesh.rotation.set(0.10, sb.rotY, sb.rotZ);
+    sbMesh.scale.set(sb.w, sb.h, 1);
+    sunbeamsGroup.add(sbMesh);
+    pharpingSunbeams.push({ mat: sbMat, baseOpacity: sb.opacity, phase: i * 1.13 });
+  }
+  group.add(sunbeamsGroup);
+
+  // Layered soft valley mist planes hovering over the lower Kathmandu valley terraces & hillside cliffs
+  const valleyMistGroup = new THREE.Group();
+  valleyMistGroup.name = 'PharpingValleyMist';
+  const terraceMistLowerGeo = new THREE.RingGeometry(24, 96, 48);
+  terraceMistLowerGeo.rotateX(-Math.PI / 2);
+  const terraceMistLowerMat = new THREE.MeshBasicMaterial({
+    color: 0xd9b09a,
+    transparent: true,
+    opacity: 0.18,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const terraceMistLower = new THREE.Mesh(terraceMistLowerGeo, terraceMistLowerMat);
+  terraceMistLower.position.set(origin.x, 0.85, origin.z + 24);
+  valleyMistGroup.add(terraceMistLower);
+
+  const cliffMistUpperGeo = new THREE.RingGeometry(18, 78, 48);
+  cliffMistUpperGeo.rotateX(-Math.PI / 2);
+  const cliffMistUpperMat = new THREE.MeshBasicMaterial({
+    color: 0xc4a4be,
+    transparent: true,
+    opacity: 0.16,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const cliffMistUpper = new THREE.Mesh(cliffMistUpperGeo, cliffMistUpperMat);
+  cliffMistUpper.position.set(origin.x + 4, 2.35, origin.z - 52);
+  valleyMistGroup.add(cliffMistUpper);
+
+  const outerRimMistGeo = new THREE.RingGeometry(88, 138, 56);
+  outerRimMistGeo.rotateX(-Math.PI / 2);
+  const outerRimMistMat = new THREE.MeshBasicMaterial({
+    color: 0xd4a89e,
+    transparent: true,
+    opacity: 0.21,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const outerRimMist = new THREE.Mesh(outerRimMistGeo, outerRimMistMat);
+  outerRimMist.position.set(origin.x, 3.1, origin.z);
+  valleyMistGroup.add(outerRimMist);
+  group.add(valleyMistGroup);
 
   // ---------------------------------------------------------------- 8. Scatter Valley Rocks
   const rng = seededRandom(3201);
@@ -1661,15 +2136,26 @@ export function createMap(ctx) {
       }
     }
 
-    // Scale central cave sanctuary & ceiling bounce glow with lit butter lamps
+    // Scale central cave sanctuary, wall & ceiling bounce glow with lit butter lamps
     const lampProgress = litLampCount / 7;
     sanctuaryGlowMat.opacity =
       0.16 + lampProgress * 0.42 + Math.sin(animTime * 3.2) * 0.03;
     vaultBounceMat.opacity =
       0.12 + lampProgress * 0.28 + Math.cos(animTime * 2.8) * 0.025;
+    caveWallBounceMat.opacity =
+      0.22 + lampProgress * 0.26 + Math.sin(animTime * 3.5) * 0.03;
     altarGlowMat.opacity =
       0.44 + lampProgress * 0.24 + Math.sin(animTime * 4.0) * 0.04;
     shaftMat.opacity = 0.09 + Math.sin(animTime * 1.9) * 0.025;
+
+    // Shimmer the 10 Firewatch forest canopy sunbeam shafts & valley mist layers
+    for (let i = 0; i < pharpingSunbeams.length; i++) {
+      const sb = pharpingSunbeams[i];
+      sb.mat.opacity = sb.baseOpacity + 0.03 * Math.sin(animTime * 1.4 + sb.phase);
+    }
+    terraceMistLowerMat.opacity = 0.17 + 0.035 * Math.sin(animTime * 0.9);
+    cliffMistUpperMat.opacity = 0.15 + 0.035 * Math.cos(animTime * 1.1);
+    outerRimMistMat.opacity = 0.20 + 0.04 * Math.sin(animTime * 0.75 + 0.8);
 
     // Subtle pulse on Asura Cave Boss Arena mandala & runes
     arenaMandalaMat.opacity = 0.48 + Math.sin(animTime * 2.4) * 0.1;

@@ -551,6 +551,22 @@ export function createQuestUi(ctx) {
     `;
   }
 
+  const CHAPTER_INTRO_ART = {
+    prologue: 'maps/wild.jpg',
+    wild: 'maps/wild.jpg',
+    ch1: 'maps/pharping.jpg',
+    pharping: 'maps/pharping.jpg',
+    ch2: 'maps/mangyul.jpg',
+    mangyul: 'maps/mangyul.jpg',
+    ch3: 'maps/yarlung.jpg',
+    yarlung: 'maps/yarlung.jpg',
+    ch4: 'maps/samye.jpg',
+    samye: 'maps/samye.jpg',
+    ch5: 'maps/samye.jpg',
+    chimphu: 'maps/samye.jpg',
+    terma: 'maps/samye.jpg',
+  };
+
   function showChapterIntro(payload = {}) {
     if (!chapterIntroEl) return;
     activeIntroPayload = payload;
@@ -566,6 +582,13 @@ export function createQuestUi(ctx) {
     const mural = getChapterMural(inferredChapter);
     activeIntroMuralId = mural?.id || 'ch1';
     activeIntroFocusQuestId = payload.revealQuestId || payload.focusQuestId || null;
+
+    const introArtUrl =
+      CHAPTER_INTRO_ART[inferredChapter] ||
+      CHAPTER_INTRO_ART[activeIntroMuralId] ||
+      CHAPTER_INTRO_ART[state.zone] ||
+      'maps/wild.jpg';
+    chapterIntroEl.style.background = `radial-gradient(circle at 50% 45%, rgba(255, 198, 108, 0.22) 0%, rgba(26, 14, 12, 0.72) 65%, rgba(10, 7, 12, 0.90) 100%), url("${introArtUrl}") center / cover no-repeat`;
 
     const locKey = payload.locationKey || mural?.locationKey;
     const eraKey = payload.eraKey || mural?.eraKey;

@@ -434,19 +434,85 @@ export function createLamps(ctx) {
         }
         return null;
       },
+      quickCooldownUntil: 0,
     };
     stations.push(station);
 
-    // Register interactable (1 per station)
+    function quickLightStation(st) {
+      const now = state.elapsed || 0;
+      if (now < (st.quickCooldownUntil || 0)) return false;
+
+      const lampMp = config.VITALS?.restore?.lampMp ?? 15;
+      bus.emit('player:gesture', { name: 'light', target: st.worldPos });
+
+      const nextLamp = st.findNextUnlit();
+      if (nextLamp) {
+        const lampIdx = nextLamp.idx ?? st.lamps.indexOf(nextLamp);
+        nextLamp.lit = true;
+        nextLamp.burnRemaining = BURN_DURATION;
+        nextLamp.igniteAnim = 0.01;
+        nextLamp.flame.visible = true;
+        nextLamp.glow.visible = true;
+
+        bus.emit('sfx', { name: 'light' });
+        bus.emit('merit', { type: 'lamp', source: 'quickLamp' });
+        bus.emit('vitals:restore', {
+          mp: lampMp,
+          source: 'lampQuick',
+        });
+        bus.emit('lamp:litByPlayer', { stationIdx: st.stationIdx, lampIdx, quick: true });
+        bus.emit('toast', {
+          key: 'toast.lampQuickMp',
+          params: { mp: lampMp },
+          kind: 'merit',
+        });
+        return true;
+      }
+
+      // All bowls on this station are already lit -> Refill ghee offering (+MP without modal)
+      st.quickCooldownUntil = now + 2.0;
+      for (let i = 0; i < st.lamps.length; i++) {
+        const entry = st.lamps[i];
+        entry.lit = true;
+        entry.burnRemaining = Math.max(entry.burnRemaining, BURN_DURATION);
+        entry.igniteAnim = 0.45;
+        entry.flame.visible = true;
+        entry.glow.visible = true;
+      }
+      bus.emit('sfx', { name: 'light' });
+      bus.emit('merit', { type: 'lamp', source: 'quickRefill' });
+      bus.emit('vitals:restore', {
+        mp: lampMp,
+        source: 'lampQuick',
+      });
+      bus.emit('toast', {
+        key: 'toast.lampRefillMp',
+        params: { mp: lampMp },
+        kind: 'merit',
+      });
+      return true;
+    }
+
+    station.quickLight = () => quickLightStation(station);
+
+    // Register primary [E] interactable (Light & Open Prayer Dedication List)
     ctx.interactables.push({
       id: station.id,
       kind: 'lamp',
       zone: 'stupa',
       getPosition: () => station.worldPos,
       radius: L.interactRadius || 2.2,
+      priority: 3,
       action: 'interact',
       labelKey: 'prompt.lightLamp',
-      isAvailable: () => Boolean(station.findNextUnlit()),
+      getLabel: () => {
+        const lit = station.countLit();
+        const total = station.lamps.length;
+        return station.findNextUnlit()
+          ? i18n.t('prompt.lampWithCount', { lit, total })
+          : i18n.t('prompt.lampOffered', { lit, total });
+      },
+      isAvailable: () => true,
       onInteract: () => {
         const nextLamp = station.findNextUnlit();
         if (!nextLamp) {
@@ -479,6 +545,28 @@ export function createLamps(ctx) {
         if (!station.findNextUnlit()) {
           bus.emit('toast', { key: 'toast.allLit' });
         }
+      },
+    });
+
+    // Register secondary [F] interactable (Quick Light / Refill Ghee for +MP WITHOUT opening modal)
+    ctx.interactables.push({
+      id: `${station.id}-quick`,
+      kind: 'lampQuick',
+      zone: 'stupa',
+      getPosition: () => station.worldPos,
+      radius: L.interactRadius || 2.2,
+      priority: 2,
+      action: 'feed',
+      labelKey: 'prompt.lampQuickMp',
+      getLabel: () => {
+        const mp = config.VITALS?.restore?.lampMp ?? 15;
+        return station.findNextUnlit()
+          ? i18n.t('prompt.lampQuickMp', { mp })
+          : i18n.t('prompt.lampRefillMp', { mp });
+      },
+      isAvailable: () => (state.elapsed || 0) >= (station.quickCooldownUntil || 0),
+      onInteract: () => {
+        quickLightStation(station);
       },
     });
   });
@@ -683,16 +771,35 @@ export function createLamps(ctx) {
     }
   }
 
+  function quickLightNearest() {
+    if (!stations.length) return false;
+    const pPos = state.player?.position;
+    let bestSt = stations[0];
+    let bestDist = Infinity;
+    if (pPos) {
+      for (let i = 0; i < stations.length; i++) {
+        const d = Math.hypot(pPos.x - stations[i].worldPos.x, pPos.z - stations[i].worldPos.z);
+        if (d < bestDist) {
+          bestDist = d;
+          bestSt = stations[i];
+        }
+      }
+    }
+    return bestSt?.quickLight ? bestSt.quickLight() : false;
+  }
+
   const api = {
     update,
     stations,
     lightLampAt,
+    quickLightNearest,
   };
 
   ctx.lamps = api;
   ctx.debug?.register('lamps', {
     stations: () => stations,
     lightLampAt: (sIdx, lIdx, bonus) => lightLampAt(sIdx, lIdx, bonus),
+    quickLightNearest: () => quickLightNearest(),
   });
 
   return api;

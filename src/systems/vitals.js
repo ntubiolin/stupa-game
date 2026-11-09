@@ -33,6 +33,7 @@ export function createVitals(ctx) {
     faintExpLossRatio: 0.1,
     restore: {
       prostrationHp: 25,
+      prostrationMp: 15,
       lampMp: 15,
       monkeyMp: 10,
       maniMp: 1,

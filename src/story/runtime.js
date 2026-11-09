@@ -338,7 +338,36 @@ async function enterBeat({ beat }) {
   }
   refreshHud(); storyAudio.enterBeat(beat);
 }
-function interact() { if (!isAnyModalOpen() && currentAction && (!currentTarget || distanceToTarget() <= 4)) currentAction(); }
+function distanceToPharpingPractitioner() {
+  if (state.zone !== 'pharping') return Infinity;
+  return Math.hypot(state.player.position.x - 2021.8, state.player.position.z - -44.2);
+}
+function isNearPharpingPractitioner() {
+  const d = distanceToPharpingPractitioner();
+  if (d > 3.5) return false;
+  if (!currentTarget) return true;
+  const targetDist = distanceToTarget();
+  return targetDist > 4 || (d <= 2.2 && d + 0.5 < targetDist);
+}
+function talkToPharpingPractitioner() {
+  const lookY = ctx.world.getHeight(2021.8, -44.2) + 1.0;
+  faceTarget({ x: 2021.8, y: lookY, z: -44.2 }, 0.45);
+  showCard(
+    'chapter.pharping.practitioner.title',
+    'chapter.pharping.practitioner.body',
+    'chapter.pharping.practitioner.close',
+    () => {},
+    'legend',
+  );
+}
+function interact() {
+  if (isAnyModalOpen()) return;
+  if (isNearPharpingPractitioner()) {
+    talkToPharpingPractitioner();
+    return;
+  }
+  if (currentAction && (!currentTarget || distanceToTarget() <= 4)) currentAction();
+}
 function distanceToTarget() { return currentTarget ? Math.hypot(state.player.position.x - currentTarget.x, state.player.position.z - currentTarget.z) : 0; }
 function guide() {
   if (isAnyModalOpen() || !currentTarget) return;
@@ -635,8 +664,19 @@ function frame(now) {
     waypoint.style.left = `${(p.x + 1) * 50}%`; waypoint.style.top = `${(1 - p.y) * 50}%`;
     waypoint.querySelector('small').textContent = t('distance', { m: Math.round(distanceToTarget()) });
   } else waypoint.hidden = true;
-  hud.querySelector('.story-hint').textContent = currentTarget ? `${t('approach')} · ${t('distance', { m: Math.round(distanceToTarget()) })}` : '';
-  hud.querySelector('[data-action="interact"]').disabled = state.uiOpen || (currentTarget && distanceToTarget() > 4);
+  const nearPractitioner = isNearPharpingPractitioner();
+  const actBtn = hud.querySelector('[data-action="interact"]');
+  if (nearPractitioner) {
+    actBtn.hidden = false;
+    actBtn.textContent = t('chapter.pharping.practitioner.action');
+  } else {
+    actBtn.textContent = activeChapter ? chapterText('action') : currentLabel ? t(currentLabel) : t('phone');
+    actBtn.hidden = !currentAction;
+  }
+  hud.querySelector('.story-hint').textContent = nearPractitioner
+    ? `${t('chapter.pharping.practitioner.action')} · ${t('distance', { m: Math.round(distanceToPharpingPractitioner()) })}`
+    : currentTarget ? `${t('approach')} · ${t('distance', { m: Math.round(distanceToTarget()) })}` : '';
+  actBtn.disabled = state.uiOpen || (!nearPractitioner && Boolean(currentTarget && distanceToTarget() > 4));
   hud.classList.toggle('story-hud-obscured', state.uiOpen);
   renderer.render(scene, camera); requestAnimationFrame(frame);
 }

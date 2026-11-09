@@ -2,6 +2,21 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 /**
+ * Shared reactive uniforms for SEASON × Firewatch terrain, rock, and mountain shaders.
+ * Updated every frame by `createSky(ctx)`.
+ */
+export const SKY_SHADER_UNIFORMS = {
+  uSunDir: { value: new THREE.Vector3(0.4, 0.8, 0.3) },
+  uSunColor: { value: new THREE.Color(0xfff1d0) },
+  uTwilightFactor: { value: 0.0 },
+  uNightFactor: { value: 0.0 },
+  uFogNearColor: { value: new THREE.Color(0xf2c894) },
+  uFogMidColor: { value: new THREE.Color(0xd88c72) },
+  uFogFarColor: { value: new THREE.Color(0x5c4f82) },
+  uTime: { value: 0.0 },
+};
+
+/**
  * Sky dome, sun/moon/stars shader, directional sun & moon lights, hemisphere
  * ambient light, scene environment map (PMREM), fog, and exposure control.
  *
@@ -262,47 +277,59 @@ export function createSky(ctx) {
   skyMesh.renderOrder = -1000;
   scene.add(skyMesh);
 
-  // ---------------------------------------------------------------- Palettes for smooth interpolation
+  // ---------------------------------------------------------------- Palettes for smooth interpolation (SEASON × Firewatch)
   const PALETTE = {
     day: {
-      zenith: new THREE.Color(0x144896),
-      mid: new THREE.Color(0x3b82c8),
-      horizon: new THREE.Color(0xa8cde8),
-      ground: new THREE.Color(0x6e6052),
-      sun: new THREE.Color(0xfff1d0),
-      hemiSky: new THREE.Color(0x88bcf2),
-      hemiGround: new THREE.Color(0x8b7660),
-      fog: new THREE.Color(0xa6cae3),
+      zenith: new THREE.Color(0x164a96),
+      mid: new THREE.Color(0x3e88cc),
+      horizon: new THREE.Color(0xe6c8a0),
+      ground: new THREE.Color(0x7a6550),
+      sun: new THREE.Color(0xfff0c4),
+      hemiSky: new THREE.Color(0x9bc8f5),
+      hemiGround: new THREE.Color(0x9c7e62),
+      fog: new THREE.Color(0xdcc2a4),
+      fogNear: new THREE.Color(0xf2c894),
+      fogMid: new THREE.Color(0xd88c72),
+      fogFar: new THREE.Color(0x685c8c),
     },
     golden: {
-      zenith: new THREE.Color(0x223063),
-      mid: new THREE.Color(0x9c4b64),
-      horizon: new THREE.Color(0xee853c),
-      ground: new THREE.Color(0x452d2a),
-      sun: new THREE.Color(0xff8b3d),
-      hemiSky: new THREE.Color(0xe68a5c),
-      hemiGround: new THREE.Color(0x573b34),
-      fog: new THREE.Color(0xd67c49),
+      zenith: new THREE.Color(0x2a2456),
+      mid: new THREE.Color(0xb84a5a),
+      horizon: new THREE.Color(0xf78838),
+      ground: new THREE.Color(0x54322c),
+      sun: new THREE.Color(0xff9642),
+      hemiSky: new THREE.Color(0xf09565),
+      hemiGround: new THREE.Color(0x6e473b),
+      fog: new THREE.Color(0xe27d48),
+      fogNear: new THREE.Color(0xf7a456),
+      fogMid: new THREE.Color(0xe0634e),
+      fogFar: new THREE.Color(0x4d3562),
     },
     dusk: {
-      zenith: new THREE.Color(0x0c1330),
-      mid: new THREE.Color(0x3d234a),
-      horizon: new THREE.Color(0x9e453b),
-      ground: new THREE.Color(0x211824),
-      sun: new THREE.Color(0xff6b3d),
-      hemiSky: new THREE.Color(0x634b78),
-      hemiGround: new THREE.Color(0x2b2230),
-      fog: new THREE.Color(0x563547),
+      zenith: new THREE.Color(0x101334),
+      mid: new THREE.Color(0x4c2654),
+      horizon: new THREE.Color(0xb84a3e),
+      ground: new THREE.Color(0x2a1d2e),
+      sun: new THREE.Color(0xff7242),
+      hemiSky: new THREE.Color(0x78588e),
+      hemiGround: new THREE.Color(0x3d2d42),
+      fog: new THREE.Color(0x683c54),
+      fogNear: new THREE.Color(0xc4644e),
+      fogMid: new THREE.Color(0x7c3f58),
+      fogFar: new THREE.Color(0x2c2248),
     },
     night: {
       zenith: new THREE.Color(0x050916),
-      mid: new THREE.Color(0x0d1733),
-      horizon: new THREE.Color(0x182747),
-      ground: new THREE.Color(0x0c1221),
+      mid: new THREE.Color(0x0e1938),
+      horizon: new THREE.Color(0x1c2e54),
+      ground: new THREE.Color(0x0e1526),
       sun: new THREE.Color(0xff7744),
-      hemiSky: new THREE.Color(0x324f85),
-      hemiGround: new THREE.Color(0x1d263b),
-      fog: new THREE.Color(0x131f3a),
+      hemiSky: new THREE.Color(0x3a5a96),
+      hemiGround: new THREE.Color(0x222c44),
+      fog: new THREE.Color(0x162442),
+      fogNear: new THREE.Color(0x283e66),
+      fogMid: new THREE.Color(0x1c2c52),
+      fogFar: new THREE.Color(0x111a36),
     },
   };
 
@@ -647,7 +674,7 @@ export function createSky(ctx) {
     if (dayTintWeight > 0.001) {
       hemiLight.color.lerp(seasonProf.horizonTint, dayTintWeight * 0.55);
     }
-    hemiLight.intensity = THREE.MathUtils.lerp(isJapanZone ? 0.76 : 0.65, 0.42, nightFactor);
+    hemiLight.intensity = THREE.MathUtils.lerp(isJapanZone ? 0.76 : 0.78, 0.45, nightFactor);
 
     // Fog color & density per map (map.sky or map.atmosphere overrides default)
     const mapDef = ctx.world?.getMap(state.zone);
@@ -663,7 +690,21 @@ export function createSky(ctx) {
         scene.fog.color.lerp(uniforms.uHorizonColor.value, isJapanZone ? (1.0 - nightFactor) * 0.72 : dayTintWeight * 0.45);
       }
     }
-    scene.fog.density = (skyCfg?.fogDensity ?? 0.0022) * seasonProf.fogScale * (isJapanZone ? 1.12 : 1.0);
+    scene.fog.density = (skyCfg?.fogDensity ?? 0.0020) * seasonProf.fogScale * (isJapanZone ? 1.12 : 1.0);
+
+    // Update shared SEASON × Firewatch multi-stop fog & sun uniforms
+    SKY_SHADER_UNIFORMS.uSunDir.value.copy(state.time.sunDir);
+    SKY_SHADER_UNIFORMS.uSunColor.value.copy(uniforms.uSunColor.value);
+    SKY_SHADER_UNIFORMS.uTwilightFactor.value = twilightFactor;
+    SKY_SHADER_UNIFORMS.uNightFactor.value = nightFactor;
+    SKY_SHADER_UNIFORMS.uTime.value = state.elapsed || 0;
+    SKY_SHADER_UNIFORMS.uFogNearColor.value.lerpColors(pA.fogNear, pB.fogNear, blend);
+    SKY_SHADER_UNIFORMS.uFogMidColor.value.lerpColors(pA.fogMid, pB.fogMid, blend);
+    SKY_SHADER_UNIFORMS.uFogFarColor.value.lerpColors(pA.fogFar, pB.fogFar, blend);
+    if (skyCfg?.fogColor != null) {
+      SKY_SHADER_UNIFORMS.uFogNearColor.value.lerp(scene.fog.color, 0.32);
+      SKY_SHADER_UNIFORMS.uFogMidColor.value.lerp(scene.fog.color, 0.24);
+    }
 
     // Evaluate cave interior profile (Terma subterranean dungeon or chapter caves)
     const caveProfile = computeCaveProfile();
@@ -741,8 +782,8 @@ export function createSky(ctx) {
 
       hemiLight.position.set(centerX, 50, centerZ);
 
-      const dayStrength = smoothstep(-0.04, 0.25, sunY);
-      sunLight.intensity = dayStrength * 1.65 * seasonProf.sunIntensityMult;
+      const dayStrength = smoothstep(-0.08, 0.22, sunY);
+      sunLight.intensity = dayStrength * 1.68 * seasonProf.sunIntensityMult;
       sunLight.color.copy(uniforms.uSunColor.value);
       sunLight.target.position.set(centerX, 0, centerZ);
       const sunDist = 75;

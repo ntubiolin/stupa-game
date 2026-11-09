@@ -233,6 +233,9 @@ export const MIGOI_KING_DEF = {
   radius: 1.35,
   height: 3.8,
   arena: { map: 'wild', x: 1000, z: -48, r: MIGOI_ARENA_RADIUS },
+  warnRadius: MIGOI_ARENA_RADIUS - 0.5,
+  engageRadius: 12.0,
+  oathStoneOffset: { x: 0, z: -1.5 },
   buildModel: buildMigoiKingModel,
   phases: [
     {

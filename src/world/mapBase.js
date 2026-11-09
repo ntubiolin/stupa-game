@@ -1,5 +1,120 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { SKY_SHADER_UNIFORMS } from './sky.js';
+
+/**
+ * Inject SEASON: A letter to the future × Firewatch painterly shader hooks into a Three.js material:
+ *  1. Half-Lambert wrapped diffuse + Warm/Cool Watercolor Shadow Ramp (prevents muddy/black dusk slopes)
+ *  2. Grazing Sun Rim Light (golden-amber Fresnel backlight on edges facing the sun)
+ *  3. Firewatch Multi-Stop Color-Ramp Distance Fog (Near Amber -> Mid Coral-Rose -> Far Violet-Indigo) + Valley Height Mist
+ */
+export function applySeasonFirewatchShader(material, opts = {}) {
+  if (!material || typeof material !== 'object') return material;
+  const rimStrength = opts.rimStrength ?? 0.38;
+  const fogRampStrength = opts.fogRampStrength ?? 0.82;
+  const receiveValleyMist = opts.receiveValleyMist === false ? 0.0 : 1.0;
+
+  material.customProgramCacheKey = () =>
+    `season-firewatch-v1-${rimStrength}-${fogRampStrength}-${receiveValleyMist}`;
+
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uSunDir = SKY_SHADER_UNIFORMS.uSunDir;
+    shader.uniforms.uSunColor = SKY_SHADER_UNIFORMS.uSunColor;
+    shader.uniforms.uTwilightFactor = SKY_SHADER_UNIFORMS.uTwilightFactor;
+    shader.uniforms.uNightFactor = SKY_SHADER_UNIFORMS.uNightFactor;
+    shader.uniforms.uFogNearColor = SKY_SHADER_UNIFORMS.uFogNearColor;
+    shader.uniforms.uFogMidColor = SKY_SHADER_UNIFORMS.uFogMidColor;
+    shader.uniforms.uFogFarColor = SKY_SHADER_UNIFORMS.uFogFarColor;
+    shader.uniforms.uSfRimStrength = { value: rimStrength };
+    shader.uniforms.uSfFogRampStrength = { value: fogRampStrength };
+    shader.uniforms.uSfValleyMist = { value: receiveValleyMist };
+
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        /* glsl */ `
+        #include <common>
+        varying vec3 vSfWorldPos;
+        varying vec3 vSfWorldNormal;
+        `
+      )
+      .replace(
+        '#include <project_vertex>',
+        /* glsl */ `
+        #include <project_vertex>
+        vec4 sfLocalPos = vec4( transformed, 1.0 );
+        vec3 sfObjNormal = vec3( 0.0, 1.0, 0.0 );
+        #ifndef FLAT_SHADED
+          sfObjNormal = objectNormal;
+        #endif
+        #ifdef USE_INSTANCING
+          sfLocalPos = instanceMatrix * sfLocalPos;
+          sfObjNormal = mat3( instanceMatrix ) * sfObjNormal;
+        #endif
+        vSfWorldPos = ( modelMatrix * sfLocalPos ).xyz;
+        vSfWorldNormal = normalize( mat3( modelMatrix ) * sfObjNormal + vec3( 0.0, 1e-5, 0.0 ) );
+        `
+      );
+
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        /* glsl */ `
+        #include <common>
+        uniform vec3 uSunDir;
+        uniform vec3 uSunColor;
+        uniform float uTwilightFactor;
+        uniform float uNightFactor;
+        uniform vec3 uFogNearColor;
+        uniform vec3 uFogMidColor;
+        uniform vec3 uFogFarColor;
+        uniform float uSfRimStrength;
+        uniform float uSfFogRampStrength;
+        uniform float uSfValleyMist;
+        varying vec3 vSfWorldPos;
+        varying vec3 vSfWorldNormal;
+        `
+      )
+      .replace(
+        '#include <opaque_fragment>',
+        /* glsl */ `
+        #include <opaque_fragment>
+        vec3 sfN = normalize( vSfWorldNormal );
+        vec3 sfL = normalize( uSunDir + vec3( 0.0, 1e-4, 0.0 ) );
+        float sfHalfLambert = dot( sfN, sfL ) * 0.5 + 0.5;
+        float sfLightBand = smoothstep( 0.26, 0.72, sfHalfLambert );
+        float sfDayVis = clamp( 1.0 - uNightFactor * 0.82, 0.0, 1.0 );
+        vec3 sfCoolShadowTint = mix( vec3( 0.44, 0.40, 0.58 ), vec3( 0.56, 0.38, 0.50 ), uTwilightFactor );
+        vec3 sfWarmSunTint = mix( vec3( 1.05, 0.99, 0.89 ), uSunColor * 1.12, 0.45 );
+        vec3 sfShadowFill = diffuseColor.rgb * sfCoolShadowTint * ( 0.30 + 0.18 * uTwilightFactor ) * ( 1.0 - sfLightBand ) * sfDayVis;
+        gl_FragColor.rgb = max( gl_FragColor.rgb, sfShadowFill );
+        gl_FragColor.rgb = mix( gl_FragColor.rgb, gl_FragColor.rgb * sfWarmSunTint, sfLightBand * 0.24 * sfDayVis );
+        vec3 sfV = normalize( cameraPosition - vSfWorldPos + vec3( 0.0, 1e-4, 0.0 ) );
+        float sfFresnel = pow( clamp( 1.0 - max( 0.0, dot( sfN, sfV ) ), 0.0, 1.0 ), 2.8 );
+        float sfSunGrazing = smoothstep( -0.25, 0.65, dot( sfN, sfL ) ) * sfDayVis;
+        gl_FragColor.rgb += uSunColor * sfFresnel * sfSunGrazing * uSfRimStrength * ( 0.45 + 0.65 * uTwilightFactor );
+        `
+      )
+      .replace(
+        '#include <fog_fragment>',
+        /* glsl */ `
+        #include <fog_fragment>
+        float sfDist = length( vSfWorldPos - cameraPosition );
+        float sfMidT = smoothstep( 42.0, 128.0, sfDist );
+        float sfFarT = smoothstep( 118.0, 230.0, sfDist );
+        vec3 sfRampFog = mix( uFogNearColor, uFogMidColor, sfMidT );
+        sfRampFog = mix( sfRampFog, uFogFarColor, sfFarT );
+        float sfDistFog = smoothstep( 30.0, 215.0, sfDist ) * uSfFogRampStrength;
+        float sfValleyFog = smoothstep( 14.0, -3.0, vSfWorldPos.y ) * smoothstep( 16.0, 92.0, sfDist ) * 0.32 * uSfValleyMist;
+        float sfFogMix = clamp( sfDistFog + sfValleyFog, 0.0, 0.88 );
+        gl_FragColor.rgb = mix( gl_FragColor.rgb, sfRampFog, sfFogMix );
+        `
+      );
+  };
+
+  material.needsUpdate = true;
+  return material;
+}
 
 /**
  * Deterministic pseudo-random number generator with fixed seed.
@@ -25,16 +140,16 @@ export function pushCollider(ctx, mapId, shape) {
 }
 
 /**
- * Generate a seamless procedural ground micro-detail & bump CanvasTexture
+ * Generate a seamless 256×256 SEASON-style painterly gouache ground detail & bump CanvasTexture
  * in browser environments (`typeof document !== 'undefined'`).
- * Uses neutral warm-grey/white tones (`rgb(215..255)`) so it multiplies cleanly
- * with `vertexColors: true` while providing crisp `bumpMap` micro-relief.
+ * Uses warm-cream / cool-slate painterly brush strokes (`rgb(208..255)`) so it multiplies cleanly
+ * with `vertexColors: true` while providing crisp hand-painted texture and `bumpMap` micro-relief.
  */
 export function createGroundDetailTexture(seed = 4109) {
   if (typeof document === 'undefined' || typeof document.createElement !== 'function') {
     return null;
   }
-  const size = 128;
+  const size = 256;
   const canvas = document.createElement('canvas');
   if (!canvas || typeof canvas.getContext !== 'function') return null;
   canvas.width = size;
@@ -43,33 +158,55 @@ export function createGroundDetailTexture(seed = 4109) {
   if (!g || typeof g.fillRect !== 'function') return null;
 
   const rng = seededRandom(seed);
-  g.fillStyle = 'rgb(238, 236, 232)';
+  g.fillStyle = 'rgb(236, 232, 224)';
   g.fillRect(0, 0, size, size);
 
-  // Fine turf & wind-swept soil/stone striations (wrapped seamlessly across tile edges)
-  for (let i = 0; i < 420; i++) {
+  // 1. Broad overlapping SEASON-style gouache wash patches (wrapped seamlessly across tile edges)
+  for (let i = 0; i < 240; i++) {
     const x = Math.floor(rng() * size);
     const y = Math.floor(rng() * size);
-    const w = 2 + Math.floor(rng() * 6);
-    const h = 1 + (rng() > 0.78 ? 1 : 0);
-    const v = 216 + Math.floor(rng() * 36);
-    const warm = Math.floor((rng() - 0.5) * 6);
-    g.fillStyle = `rgb(${Math.min(255, v + warm)}, ${v}, ${Math.max(215, v - warm)})`;
+    const w = 10 + Math.floor(rng() * 24);
+    const h = 4 + Math.floor(rng() * 10);
+    const v = 222 + Math.floor(rng() * 26);
+    const warmShift = Math.floor((rng() - 0.45) * 14);
+    const r = THREE.MathUtils.clamp(v + warmShift, 210, 255);
+    const gr = THREE.MathUtils.clamp(v + Math.floor(warmShift * 0.35), 210, 255);
+    const b = THREE.MathUtils.clamp(v - warmShift, 208, 255);
+    g.fillStyle = `rgb(${r}, ${gr}, ${b})`;
+    for (const dx of [0, -size, size]) {
+      for (const dy of [0, -size, size]) {
+        if (x + dx + w > 0 && x + dx < size && y + dy + h > 0 && y + dy < size) {
+          g.fillRect(x + dx, y + dy, w, h);
+        }
+      }
+    }
+  }
+
+  // 2. Painterly turf & wind-swept soil/stone brushwork striations
+  for (let i = 0; i < 680; i++) {
+    const x = Math.floor(rng() * size);
+    const y = Math.floor(rng() * size);
+    const w = 3 + Math.floor(rng() * 11);
+    const h = 1 + (rng() > 0.68 ? 2 : 1);
+    const v = 212 + Math.floor(rng() * 38);
+    const warm = Math.floor((rng() - 0.48) * 10);
+    g.fillStyle = `rgb(${Math.min(255, v + warm)}, ${v}, ${Math.max(208, v - warm)})`;
     g.fillRect(x, y, w, h);
     if (x + w > size) g.fillRect(x - size, y, w, h);
     if (y + h > size) g.fillRect(x, y - size, w, h);
   }
 
-  // Organic pebbles, soil grain & snow/quartz micro-specks
-  for (let i = 0; i < 360; i++) {
+  // 3. Organic pebbles, soil grain & sunlit quartz/wildflower micro-specks
+  for (let i = 0; i < 520; i++) {
     const x = Math.floor(rng() * size);
     const y = Math.floor(rng() * size);
-    const s = rng() > 0.82 ? 2 : 1;
-    const isHighlight = rng() > 0.52;
+    const s = rng() > 0.78 ? 2 : 1;
+    const isHighlight = rng() > 0.48;
     const v = isHighlight
       ? 244 + Math.floor(rng() * 12)
-      : 215 + Math.floor(rng() * 18);
-    g.fillStyle = `rgb(${v}, ${Math.max(215, v - 1)}, ${Math.max(215, v - 3)})`;
+      : 210 + Math.floor(rng() * 20);
+    const warm = isHighlight ? 3 : -2;
+    g.fillStyle = `rgb(${Math.min(255, v + warm)}, ${Math.max(208, v)}, ${Math.max(206, v - warm)})`;
     g.fillRect(x, y, s, s);
     if (x + s > size) g.fillRect(x - size, y, s, s);
     if (y + s > size) g.fillRect(x, y - size, s, s);
@@ -78,7 +215,7 @@ export function createGroundDetailTexture(seed = 4109) {
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(32, 32);
+  tex.repeat.set(28, 28);
   tex.needsUpdate = true;
   return tex;
 }
@@ -135,9 +272,14 @@ export function createHeightfieldTerrain(ctx, {
   const detailTex = createGroundDetailTexture();
   const terrainMat = new THREE.MeshStandardMaterial({
     vertexColors: true,
-    roughness: 0.94,
+    roughness: 0.92,
     metalness: 0.02,
-    ...(detailTex ? { map: detailTex, bumpMap: detailTex, bumpScale: 0.06 } : {}),
+    ...(detailTex ? { map: detailTex, bumpMap: detailTex, bumpScale: 0.07 } : {}),
+  });
+  applySeasonFirewatchShader(terrainMat, {
+    rimStrength: 0.28,
+    fogRampStrength: 0.80,
+    receiveValleyMist: true,
   });
 
   const mesh = new THREE.Mesh(terrainGeo, terrainMat);
@@ -315,8 +457,13 @@ export function scatterRocks(ctx, group, {
   const rockMat = new THREE.MeshStandardMaterial({
     color,
     vertexColors: true,
-    roughness: 0.90,
+    roughness: 0.88,
     metalness: 0.05,
+  });
+  applySeasonFirewatchShader(rockMat, {
+    rimStrength: 0.46,
+    fogRampStrength: 0.82,
+    receiveValleyMist: true,
   });
 
   const instanced = new THREE.InstancedMesh(baseGeo, rockMat, placed.length);
@@ -337,7 +484,7 @@ export function scatterRocks(ctx, group, {
     instanced.setMatrixAt(i, dummy.matrix);
 
     const shade = 0.88 + colRng() * 0.24;
-    const warm = (colRng() - 0.5) * 0.06;
+    const warm = (colRng() - 0.5) * 0.08;
     instCol.setRGB(
       THREE.MathUtils.clamp(shade + warm, 0.75, 1.15),
       THREE.MathUtils.clamp(shade, 0.75, 1.15),
@@ -356,9 +503,9 @@ export const scatterProps = scatterRocks;
 
 /**
  * Create a single faceted Himalayan peak geometry with ridge/gully displacement
- * and slope + elevation-aware vertex coloring.
+ * and SEASON × Firewatch Alpenglow + cool violet-indigo gully vertex coloring.
  */
-export function buildHimalayanPeakGeometry(peakR, peakH, seedIdx = 0, snowLine = 0.44, radialSegs = 10, heightSegs = 5) {
+export function buildHimalayanPeakGeometry(peakR, peakH, seedIdx = 0, snowLine = 0.44, radialSegs = 10, heightSegs = 5, layerTone = 'outer') {
   const cone = new THREE.ConeGeometry(peakR, peakH, radialSegs, heightSegs);
   const cPos = cone.attributes.position;
   const phase1 = seedIdx * 1.73;
@@ -409,25 +556,38 @@ export function buildHimalayanPeakGeometry(peakR, peakH, seedIdx = 0, snowLine =
     let r;
     let g;
     let b;
-    if (u >= localSnowLine) {
-      // Gleaming snow ridges & glacial blue-white gullies
+    if (layerTone === 'foothill') {
+      // Foreground Firewatch dark pine-slate & warm sienna silhouette ridge
+      const crestT = THREE.MathUtils.clamp(u * 0.85 + ridgeFactor * 0.12, 0, 1);
+      r = THREE.MathUtils.lerp(0.18, 0.38, crestT);
+      g = THREE.MathUtils.lerp(0.19, 0.31, crestT);
+      b = THREE.MathUtils.lerp(0.26, 0.36, crestT);
+    } else if (layerTone === 'midridge') {
+      // Midground Firewatch terracotta-ochre & plum-rose layered ridge
+      const crestT = THREE.MathUtils.clamp(u * 0.9 + ridgeFactor * 0.15, 0, 1);
+      r = THREE.MathUtils.lerp(0.28, 0.64, crestT);
+      g = THREE.MathUtils.lerp(0.22, 0.42, crestT);
+      b = THREE.MathUtils.lerp(0.34, 0.48, crestT);
+    } else if (u >= localSnowLine) {
+      // Outer Himalayan snow peaks with coral-gold Alpenglow on sunlit ridges & cool violet-blue shadow gullies
       const snowT = THREE.MathUtils.clamp((u - localSnowLine) / Math.max(0.12, 1 - localSnowLine), 0, 1);
-      const sunExpose = THREE.MathUtils.clamp(0.5 + ridgeFactor * 0.35 + ny * 0.25, 0, 1);
-      r = THREE.MathUtils.lerp(0.76, 0.96, sunExpose * 0.7 + snowT * 0.3);
-      g = THREE.MathUtils.lerp(0.84, 0.98, sunExpose * 0.7 + snowT * 0.3);
-      b = THREE.MathUtils.lerp(0.95, 1.00, sunExpose * 0.7 + snowT * 0.3);
-    } else if (u >= localSnowLine - 0.13) {
-      // Frost-streaked alpine scree transition zone
-      const screeT = (u - (localSnowLine - 0.13)) / 0.13;
-      r = THREE.MathUtils.lerp(0.32, 0.68, screeT);
-      g = THREE.MathUtils.lerp(0.34, 0.73, screeT);
-      b = THREE.MathUtils.lerp(0.38, 0.80, screeT);
+      const sunExpose = THREE.MathUtils.clamp(0.5 + ridgeFactor * 0.38 + ny * 0.25, 0, 1);
+      const mixT = sunExpose * 0.72 + snowT * 0.28;
+      r = THREE.MathUtils.lerp(0.72, 1.00, mixT);
+      g = THREE.MathUtils.lerp(0.74, 0.93, mixT);
+      b = THREE.MathUtils.lerp(0.92, 0.88, mixT);
+    } else if (u >= localSnowLine - 0.14) {
+      // Warm coral-terracotta & frost-streaked alpine scree transition zone
+      const screeT = (u - (localSnowLine - 0.14)) / 0.14;
+      r = THREE.MathUtils.lerp(0.36, 0.76, screeT);
+      g = THREE.MathUtils.lerp(0.31, 0.68, screeT);
+      b = THREE.MathUtils.lerp(0.44, 0.78, screeT);
     } else {
-      // Dark Himalayan granite & slate lower cliffs
-      const cliffShade = THREE.MathUtils.clamp(0.19 + u * 0.28 + ridgeFactor * 0.04, 0.16, 0.38);
-      r = cliffShade * 0.94;
-      g = cliffShade * 0.98;
-      b = cliffShade * 1.06;
+      // Deep Firewatch violet-slate & sienna lower cliffs
+      const cliffShade = THREE.MathUtils.clamp(0.20 + u * 0.28 + ridgeFactor * 0.05, 0.16, 0.42);
+      r = cliffShade * 1.02;
+      g = cliffShade * 0.88;
+      b = cliffShade * 1.18;
     }
 
     cCols[v * 3 + 0] = r;
@@ -529,9 +689,103 @@ export function buildJapaneseRidgeGeometry(
 }
 
 /**
+ * Build a soft Valley Mist Ring + Diagonal Volumetric Sunbeam Planes (God Rays)
+ * around the mountain rim perimeter (0 PointLights, 2 lightweight additive meshes).
+ */
+function buildAtmosphereMistAndSunbeams(origin, innerR) {
+  const atmoGroup = new THREE.Group();
+  atmoGroup.name = 'SeasonFirewatchAtmosphere';
+
+  // 1. Valley Mist Ring around the base of the foothills
+  const mistR = Math.max(68, innerR * 0.86);
+  const mistH = 18;
+  const mistGeo = new THREE.CylinderGeometry(mistR * 1.05, mistR * 0.90, mistH, 40, 4, true);
+  const mPos = mistGeo.attributes.position;
+  const mCols = new Float32Array(mPos.count * 3);
+  for (let i = 0; i < mPos.count; i++) {
+    const vy = mPos.getY(i);
+    const vx = mPos.getX(i);
+    const vz = mPos.getZ(i);
+    const theta = Math.atan2(vz, vx);
+    const vNorm = THREE.MathUtils.clamp((vy + mistH * 0.5) / mistH, 0, 1);
+    // Smooth vertical bell curve (0 at bottom & top edges -> 0 hard seam)
+    const bell = Math.sin(vNorm * Math.PI);
+    const wave = 0.75 + 0.25 * Math.sin(theta * 5.0 + vNorm * 2.2);
+    const intensity = bell * bell * wave * 0.22;
+    mCols[i * 3 + 0] = intensity * 1.05;
+    mCols[i * 3 + 1] = intensity * 0.76;
+    mCols[i * 3 + 2] = intensity * 0.58;
+  }
+  mistGeo.setAttribute('color', new THREE.BufferAttribute(mCols, 3));
+  const mistMat = new THREE.MeshBasicMaterial({
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.65,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    fog: false,
+  });
+  const mistMesh = new THREE.Mesh(mistGeo, mistMat);
+  mistMesh.position.set(origin.x, mistH * 0.36 - 1.5, origin.z);
+  mistMesh.frustumCulled = false;
+  atmoGroup.add(mistMesh);
+
+  // 2. Diagonal Volumetric Sunbeam Planes (God Rays) slanting across the valley rim
+  const beamGeos = [];
+  const beamCount = 6;
+  const beamDist = Math.max(55, innerR * 0.62);
+  for (let b = 0; b < beamCount; b++) {
+    const angle = -0.65 + (b / (beamCount - 1)) * 1.45;
+    const beamW = 18 + (b % 3) * 5;
+    const beamL = 68 + (b % 2) * 14;
+    const plane = new THREE.PlaneGeometry(beamW, beamL, 2, 6);
+    const pPos = plane.attributes.position;
+    const pCols = new Float32Array(pPos.count * 3);
+    for (let v = 0; v < pPos.count; v++) {
+      const px = pPos.getX(v);
+      const py = pPos.getY(v);
+      const uX = 1.0 - Math.min(1, Math.abs(px) / (beamW * 0.5));
+      const uY = THREE.MathUtils.clamp((py + beamL * 0.5) / beamL, 0, 1);
+      // Fade to 0 at all 4 edges; brightest in upper-middle sun shaft
+      const shaft = Math.sin(uY * Math.PI) * Math.pow(uY, 0.45) * (uX * uX);
+      const val = shaft * 0.16;
+      pCols[v * 3 + 0] = val * 1.12;
+      pCols[v * 3 + 1] = val * 0.84;
+      pCols[v * 3 + 2] = val * 0.48;
+    }
+    plane.setAttribute('color', new THREE.BufferAttribute(pCols, 3));
+    plane.rotateZ(-0.36);
+    plane.rotateY(angle + Math.PI * 0.25);
+    plane.translate(
+      origin.x + Math.cos(angle) * beamDist,
+      beamL * 0.36,
+      origin.z + Math.sin(angle) * beamDist
+    );
+    beamGeos.push(plane);
+  }
+  const beamsMesh = new THREE.Mesh(
+    mergeGeometries(beamGeos, false),
+    new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.52,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      fog: false,
+    })
+  );
+  beamsMesh.frustumCulled = false;
+  atmoGroup.add(beamsMesh);
+
+  return atmoGroup;
+}
+
+/**
  * Add a distant multi-layered ring of mountain peaks around `origin`.
- * Supports `style: 'himalayan'` (default faceted snow peaks) and `style: 'japanese'`
- * (soft rounded Yamato-e / Higashiyama & Kōyasan mountain ridges with floating mist bands).
+ * Supports `style: 'himalayan'` (default 3-layer Firewatch & Himalayan Alpenglow peaks)
+ * and `style: 'japanese'` (soft rounded Yamato-e / Higashiyama & Kōyasan mountain ridges with floating mist bands).
  */
 export function addRimMountains(ctxOrGroup, groupOrOpts, maybeOpts = {}) {
   let group = groupOrOpts;
@@ -560,7 +814,7 @@ export function addRimMountains(ctxOrGroup, groupOrOpts, maybeOpts = {}) {
     const px = origin.x + Math.cos(a) * dist;
     const pz = origin.z + Math.sin(a) * dist;
     const peakH = minH + ((i * 53) % 29) * ((maxH - minH) / 28);
-    const peakR = (isJapanese ? 30 : 24) + ((i * 17) % 11) * 1.4;
+    const peakR = (isJapanese ? 30 : 26) + ((i * 17) % 11) * 1.45;
 
     if (isJapanese) {
       // Primary soft rounded Japanese mountain ridge oriented tangentially to the basin rim
@@ -583,18 +837,18 @@ export function addRimMountains(ctxOrGroup, groupOrOpts, maybeOpts = {}) {
       );
       mountainGeos.push(spur);
     } else {
-      // Primary jagged Himalayan peak
-      const cone = buildHimalayanPeakGeometry(peakR, peakH, i, snowLine, 10, 5);
+      // Layer 3 (Outer): Primary towering Himalayan snow peak with coral-gold Alpenglow
+      const cone = buildHimalayanPeakGeometry(peakR, peakH, i, snowLine, 10, 5, 'outer');
       cone.rotateY((i * 1.7) % (Math.PI * 2));
       cone.translate(px, peakH * 0.5 - 2, pz);
       mountainGeos.push(cone);
 
-      // Secondary flanking spur / foothill ridge for layered depth
+      // Layer 2 (Midground): Firewatch terracotta/plum flanking ridge spur
       const spurAngle = a + (((i % 2 === 0) ? 1 : -1) * (0.075 + ((i * 13) % 7) * 0.008));
-      const spurDist = Math.max(innerR - 6, dist - 7 + ((i * 11) % 9));
-      const spurH = peakH * (0.54 + ((i * 19) % 11) * 0.015);
-      const spurR = peakR * 0.66;
-      const spur = buildHimalayanPeakGeometry(spurR, spurH, i + 101, Math.min(0.82, snowLine + 0.08), 8, 4);
+      const spurDist = Math.max(innerR - 4, dist - 9 + ((i * 11) % 9));
+      const spurH = peakH * (0.58 + ((i * 19) % 11) * 0.015);
+      const spurR = peakR * 0.72;
+      const spur = buildHimalayanPeakGeometry(spurR, spurH, i + 101, Math.min(0.82, snowLine + 0.08), 8, 4, 'midridge');
       spur.rotateY(((i + 5) * 2.1) % (Math.PI * 2));
       spur.translate(
         origin.x + Math.cos(spurAngle) * spurDist,
@@ -602,6 +856,20 @@ export function addRimMountains(ctxOrGroup, groupOrOpts, maybeOpts = {}) {
         origin.z + Math.sin(spurAngle) * spurDist
       );
       mountainGeos.push(spur);
+
+      // Layer 1 (Foreground): Continuous overlapping dark pine-slate Firewatch foothill silhouette ring
+      const footAngle = a + (Math.PI / count);
+      const footDist = Math.max(76, innerR - 12 + ((i * 7) % 7));
+      const footH = Math.max(16, minH * (0.38 + ((i * 23) % 9) * 0.02));
+      const footR = peakR * 0.78;
+      const foothill = buildHimalayanPeakGeometry(footR, footH, i + 211, 0.95, 7, 3, 'foothill');
+      foothill.rotateY(((i + 9) * 1.3) % (Math.PI * 2));
+      foothill.translate(
+        origin.x + Math.cos(footAngle) * footDist,
+        footH * 0.5 - 3.0,
+        origin.z + Math.sin(footAngle) * footDist
+      );
+      mountainGeos.push(foothill);
     }
   }
 
@@ -609,7 +877,7 @@ export function addRimMountains(ctxOrGroup, groupOrOpts, maybeOpts = {}) {
     const mMeshGeo = mergeGeometries(mountainGeos, false);
     const mMat = new THREE.MeshStandardMaterial({
       vertexColors: true,
-      roughness: isJapanese ? 0.94 : 0.90,
+      roughness: isJapanese ? 0.94 : 0.88,
       metalness: 0.02,
       ...(isJapanese
         ? {
@@ -618,8 +886,18 @@ export function addRimMountains(ctxOrGroup, groupOrOpts, maybeOpts = {}) {
           }
         : {}),
     });
+    if (!isJapanese) {
+      applySeasonFirewatchShader(mMat, {
+        rimStrength: 0.52,
+        fogRampStrength: 0.86,
+        receiveValleyMist: true,
+      });
+    }
     const mMesh = new THREE.Mesh(mMeshGeo, mMat);
     mMesh.name = isJapanese ? 'japaneseRimMountains' : 'himalayanRimMountains';
+    if (!isJapanese) {
+      mMesh.add(buildAtmosphereMistAndSunbeams(origin, innerR));
+    }
     group.add(mMesh);
 
     // For Japanese maps, add floating Yamato-e horizontal mist & golden cloud ribbons (`大和繪霞・金雲`)

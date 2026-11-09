@@ -133,6 +133,65 @@ async function combat(page) {
   return cast;
 }
 
+async function verifyPharpingNpcDialogues(page) {
+  const checked = [];
+  for (const npcId of ['pharpingPractitioner', 'villageElder']) {
+    const prep = await page.evaluate((id) => {
+      const { state, npcs, world, mural, dialogue, interaction } = window.__stupa;
+      mural?.closeScroll?.();
+      dialogue?.close?.();
+      const npc = npcs.getNpc(id);
+      if (!npc) return { found: false };
+      const pz = npc.z + 1.2;
+      const py = world?.getHeight?.(npc.x, pz) ?? 0;
+      state.player.position.set(npc.x, py, pz);
+      state.player.heading = 0;
+      state.player.velocity.set(0, 0, 0);
+      state.player.action = 'idle';
+      interaction?.update?.();
+      const promptEl = document.getElementById('interaction-prompt');
+      return {
+        found: true,
+        targetId: state.interactionTarget?.id || null,
+        promptVisible: Boolean(promptEl && !promptEl.classList.contains('is-hidden')),
+      };
+    }, npcId);
+    assert.equal(prep.found, true, `Pharping NPC ${npcId} exists`);
+    assert.equal(prep.targetId, `npc-${npcId}`, `Interaction target locks onto ${npcId}`);
+    assert.equal(prep.promptVisible, true, `#interaction-prompt is visible near ${npcId}`);
+
+    await page.keyboard.press('KeyE');
+    await page.waitForFunction(
+      (id) => window.__stupa.dialogue.isOpen() === true && window.__stupa.dialogue.state().npcId === id,
+      npcId,
+      polling
+    );
+
+    const opened = await page.evaluate(() => {
+      const overlay = document.getElementById('dialogue-overlay');
+      const speaker = document.getElementById('dialogue-speaker')?.textContent?.trim() || '';
+      const st = window.__stupa.dialogue.state();
+      const overlayVisible = Boolean(overlay && !overlay.classList.contains('is-hidden'));
+      window.__stupa.dialogue.close();
+      return {
+        isOpenBeforeClose: st.open,
+        dialogueId: st.id,
+        npcId: st.npcId,
+        speaker,
+        overlayVisible,
+        isOpenAfterClose: window.__stupa.dialogue.isOpen(),
+      };
+    });
+    assert.equal(opened.isOpenBeforeClose, true);
+    assert.equal(opened.npcId, npcId);
+    assert.equal(opened.overlayVisible, true, '#dialogue-overlay is not .is-hidden');
+    assert(opened.speaker.length > 0 && !opened.speaker.startsWith('npc.'), `Speaker resolved for ${npcId}`);
+    assert.equal(opened.isOpenAfterClose, false);
+    checked.push({ npcId, dialogueId: opened.dialogueId, speaker: opened.speaker });
+  }
+  return checked;
+}
+
 async function historicalAdventure() {
   // Returning campaign profile with earned waypoints and quest-reward entries.
   // Exercise the normal waypoint and Codex readers against that saved profile.
@@ -167,7 +226,10 @@ async function historicalAdventure() {
       return { unlocked, arrived, zone: state.zone };
     }, id);
     assert.deepEqual(result, { unlocked: true, arrived: true, zone: id });
-    if (id === 'pharping') report.combat = await combat(page);
+    if (id === 'pharping') {
+      report.combat = await combat(page);
+      report.pharpingDialogues = await verifyPharpingNpcDialogues(page);
+    }
   }
   for (const id of records) {
     const entry = await page.evaluate(id => window.__stupa.codex.getEntry(id), id);

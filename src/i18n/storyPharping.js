@@ -18,6 +18,13 @@ const entries = {
   'lamp.title': ['洞口的一盞燈', 'A lamp at the cave'],
   'lamp.body': ['雨聲漸遠。洞口的石階被磨得很光滑。林澈在燈前蹲下，替一盞酥油燈點起火。微小的光在風裡輕輕搖晃。', 'The rain recedes. Countless feet have worn the cave steps smooth. Lin Che crouches and lights a butter lamp. Its small flame trembles in the wind.'],
   'lamp.action': ['點亮酥油燈', 'Light the butter lamp'],
+  'practitioner.title': ['揚列雪洞口的修行者', 'Practitioner at Yangleshö Cave'],
+  'practitioner.action': ['與洞口修行者交談', 'Speak with the cave practitioner'],
+  'practitioner.body': [
+    '岩洞旁披著絳紅法衣的修行者緩緩睜開雙眼，合掌低語：\n\n「遠來的人，這座揚列雪岩洞，正是昔日蓮花生大士閉關修持大樂蓮師與普巴金剛、調伏山谷旱障魔眾的聖地。那時帕平三年不雨、三泉乾涸，大士自印度迎請《普巴金剛續》，以悲智金剛杵摧破無明與執著，甘霖才重新落回人間。\n\n你看洞口的酥油燈——水若急著掏挖便會混濁，心若死抓不放便看不清倒影。唯有讓泥沙靜靜沉下，燈火才能照見真正的願心。」',
+    'The practitioner in crimson robes beside the cave slowly opens his eyes, palms joined in a quiet voice:\n\n"Traveler from afar, this Yangleshö Cave is the sacred ground where Guru Rinpoche once meditated on Yangdak Heruka and Vajrakīlaya to subdue the drought spirits of the valley. When Pharping suffered three rainless years and its three springs ran dry, the Master sent for the Vajrakīlaya tantras from India, piercing ignorance and clinging with compassionate resolve until rain fell once more.\n\nLook at the butter lamps by the cave mouth — water stirred in haste grows cloudy, and a heart that clutches too tightly cannot see its reflection. Only when the silt settles can the lampflame reveal the true vow."',
+  ],
+  'practitioner.close': ['合掌致意，繼續前行', 'Bow in gratitude and continue'],
   'phone.title': ['燈光與訊息', 'Lamplight and a message'],
   'phone.body': ['手機亮了起來。他望著眼前的燈，打開訊息。', 'His phone lights up. Watching the lamp, he opens the message.'],
   'phone.action': ['打開手機訊息', 'Open phone messages'],

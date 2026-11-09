@@ -146,6 +146,13 @@ export function createEnemies(ctx) {
       };
       cfg.kinds[id] = merged;
     }
+    if (cfg.kinds?.tsen?.attacks) {
+      for (const atk of cfg.kinds.tsen.attacks) {
+        if (atk.id === 'spearCharge') {
+          atk.cooldown = Math.max(atk.cooldown || 4.0, 6.8);
+        }
+      }
+    }
   }
   syncRegisteredKindsIntoConfig();
 
@@ -1262,6 +1269,9 @@ export function createEnemies(ctx) {
       wanderTimer: 1.0 + Math.random() * 3.0,
       homePos: { x: spawnPos.x, z: spawnPos.z },
       flashTimer: 0,
+      hurtT: 0,
+      staggerUntil: 0,
+      lastHitAt: -999,
       liberateTimer: 0,
       shielded: hasShielding,
       shieldTimer: hasShielding ? 3.0 : 0,
@@ -1445,6 +1455,34 @@ export function createEnemies(ctx) {
 
     if (currentZone === 'terma' && ctx.dungeon?.isActive?.() && typeof ctx.dungeon.clampPosition === 'function') {
       ctx.dungeon.clampPosition(enemy.pos, er);
+    }
+
+    // 3b. Soft body separation from player so non-charging enemies never clip inside player's body center
+    const pPos = state.player?.position;
+    if (
+      pPos &&
+      enemy.hp > 0 &&
+      enemy.state !== 'liberated' &&
+      enemy.state !== 'calmed' &&
+      !enemy.stationary &&
+      !enemy.disguised &&
+      !enemy.chargeData &&
+      (enemy.dashTimer || 0) <= 0
+    ) {
+      const minBodyDist = 0.85;
+      const pdx = enemy.pos.x - pPos.x;
+      const pdz = enemy.pos.z - pPos.z;
+      const pDist = Math.hypot(pdx, pdz);
+      if (pDist < minBodyDist) {
+        if (pDist > 1e-4) {
+          enemy.pos.x = pPos.x + (pdx / pDist) * minBodyDist;
+          enemy.pos.z = pPos.z + (pdz / pDist) * minBodyDist;
+        } else {
+          const pushAng = enemy.heading || 0;
+          enemy.pos.x = pPos.x + Math.sin(pushAng) * minBodyDist;
+          enemy.pos.z = pPos.z + Math.cos(pushAng) * minBodyDist;
+        }
+      }
     }
 
     // 4. Ground height
@@ -1843,6 +1881,11 @@ export function createEnemies(ctx) {
   }
 
   function applyStatus(idOrEnemy, kind, duration, extra = {}) {
+    if (typeof kind === 'object' && kind !== null) {
+      extra = { ...kind, ...(typeof duration === 'object' ? duration : {}) };
+      duration = kind.duration ?? duration;
+      kind = kind.type || kind.kind;
+    }
     const targetId = typeof idOrEnemy === 'object' && idOrEnemy !== null ? idOrEnemy.id : idOrEnemy;
     const enemy = activeEnemies.find((e) => e.id === targetId);
     if (!enemy || enemy.state === 'liberated' || enemy.state === 'calmed' || enemy.hp <= 0) return false;
@@ -1958,7 +2001,10 @@ export function createEnemies(ctx) {
         : 0;
 
     enemy.hp = Math.max(0, enemy.hp - dealt);
-    if (dealt > 0) enemy.provoked = true;
+    if (dealt > 0) {
+      enemy.provoked = true;
+      enemy.lastHitAt = state.elapsed || 0;
+    }
     if (dealt > 0 && !enemy.aggroedByPlayer) {
       enemy.aggroedByPlayer = true;
       enemy.wallTarget = null;
@@ -2042,17 +2088,29 @@ export function createEnemies(ctx) {
         enemy.stateTimer = cfg.hurtDuration ?? 0.25;
       }
 
-      enemy.flashTimer = 0.2;
+      enemy.hurtT = 0.28;
+      enemy.flashTimer = 0.28;
+      enemy.staggerUntil = Math.max(enemy.staggerUntil || 0, (state.elapsed || 0) + 0.18);
       for (const mat of enemy.materials) {
         mat.emissive?.setHex(0xffffff);
         if (mat.emissiveIntensity != null) mat.emissiveIntensity = 1.0;
       }
 
-      // Knockback (unless rooted, stationary, or knockback == 0)
-      const defaultKb = statusIn?.root || statusIn?.stun || enemy.stationary ? 0 : (cfg.hurtKnockback ?? 1.5);
-      const kb = enemy.stationary ? 0 : (opts.knockback !== undefined ? Number(opts.knockback) : defaultKb);
+      // Knockback (unless rooted, stationary, or noKnockback / knockback == 0)
+      const defaultKb =
+        statusIn?.root || statusIn?.stun || enemy.stationary || opts.noKnockback
+          ? 0
+          : source === 'mantra'
+            ? (cfg.hurtKnockback ?? 1.5)
+            : 0.42;
+      const kb =
+        enemy.stationary || opts.noKnockback
+          ? 0
+          : opts.knockback !== undefined
+            ? Number(opts.knockback)
+            : defaultKb;
       if (kb > 0 && !(enemy.status.root > 0)) {
-        const fromPos = opts.from || state.player?.position;
+        const fromPos = opts.from || opts.origin || state.player?.position;
         if (fromPos) {
           const dx = enemy.pos.x - fromPos.x;
           const dz = enemy.pos.z - fromPos.z;
@@ -2069,6 +2127,9 @@ export function createEnemies(ctx) {
     }
 
     // Liberated or Calmed!
+    enemy.hurtT = 0;
+    enemy.group.rotation.x = 0;
+    enemy.group.scale.setScalar(enemy.rank === 'rare' ? 1.2 : 1.0);
     if (enemy.telegraphGroup) enemy.telegraphGroup.visible = false;
     if (enemy.animNodes?.mouthOrb) enemy.animNodes.mouthOrb.visible = false;
     if (enemy.rootIndicator) enemy.rootIndicator.visible = false;
@@ -2535,10 +2596,25 @@ export function createEnemies(ctx) {
       if (pendingElitePackRespawns.length > 0) pendingElitePackRespawns.length = 0;
     }
 
+    const isTsenKind = (e) => e.kind === 'tsen' || e.kindConfig?.base === 'tsen';
+    const isTsenChasingState = (s) =>
+      s === 'chase' || s === 'notice' || s === 'windup' || s === 'attack' || s === 'recover';
+    const isTsenChargingNow = (e) =>
+      isTsenKind(e) &&
+      (((e.state === 'windup' || e.state === 'attack') && e.activeAttack?.id === 'spearCharge') ||
+        e.chargeData != null ||
+        (e.dashTimer || 0) > 0);
+
     let activeChasers = activeEnemies.filter(e => e.hp > 0 && e.zone === currentZone &&
       (e.state === 'chase' || e.state === 'notice')).length;
     let activeAttackers = activeEnemies.filter(e => e.hp > 0 && e.zone === currentZone &&
       (e.state === 'windup' || e.state === 'attack')).length;
+    let activeTsenChasers = activeEnemies.filter(
+      (e) => e.hp > 0 && e.zone === currentZone && isTsenKind(e) && isTsenChasingState(e.state)
+    ).length;
+    let activeTsenChargers = activeEnemies.filter(
+      (e) => e.hp > 0 && e.zone === currentZone && isTsenChargingNow(e)
+    ).length;
 
     // 2. Update Active Enemies
     for (let i = activeEnemies.length - 1; i >= 0; i--) {
@@ -2548,11 +2624,15 @@ export function createEnemies(ctx) {
       if (isPlayerInSafeZone && enemy.hp > 0 && enemy.state !== 'calmed' && enemy.state !== 'liberated') {
         if (enemy.state === 'chase' || enemy.state === 'notice') activeChasers--;
         if (enemy.state === 'windup' || enemy.state === 'attack') activeAttackers--;
+        if (isTsenKind(enemy) && isTsenChasingState(enemy.state)) activeTsenChasers--;
+        if (isTsenChargingNow(enemy)) activeTsenChargers--;
         returnToWander(enemy);
         clampEnemyPosition(enemy);
       }
       const wasChasing = enemy.state === 'chase' || enemy.state === 'notice';
       const wasAttacking = enemy.state === 'windup' || enemy.state === 'attack';
+      const wasTsenChasing = isTsenKind(enemy) && isTsenChasingState(enemy.state);
+      const wasTsenCharging = isTsenChargingNow(enemy);
       const isLv1NearPreta =
         currentZone === 'wild' &&
         enemy.rank === 'normal' &&
@@ -2562,7 +2642,12 @@ export function createEnemies(ctx) {
       const passive =
         (diff.passiveNearMonsters && currentZone === 'wild' && enemy.rank === 'normal') ||
         isLv1NearPreta;
-      const canNotice = enemy.provoked || (!passive && activeChasers < (diff.maxSimultaneousChasers ?? 3));
+      const recentlyHitByPlayer =
+        enemy.lastHitAt != null && (state.elapsed || 0) - enemy.lastHitAt <= 3.0;
+      const tsenCanAggro = recentlyHitByPlayer ? activeTsenChasers < 2 : activeTsenChasers < 1;
+      const canNotice =
+        (enemy.provoked || (!passive && activeChasers < (diff.maxSimultaneousChasers ?? 3))) &&
+        (!isTsenKind(enemy) || tsenCanAggro);
 
       if (enemy.kind === 'preta' && enemy.hp > 0) {
         enemy.animNodes.mouthOrb.visible = true;
@@ -2576,12 +2661,22 @@ export function createEnemies(ctx) {
         }
       }
 
-      // Flash timer tick
+      // Flash timer & hurt recoil pulse tick
       if (enemy.flashTimer > 0) {
         enemy.flashTimer -= dt;
         if (enemy.flashTimer <= 0) {
           applyIdleMaterialEmissive(enemy);
         }
+      }
+      if (enemy.hurtT > 0) {
+        enemy.hurtT = Math.max(0, enemy.hurtT - dt);
+        const hurtRatio = enemy.hurtT / 0.28;
+        enemy.group.rotation.x = -0.18 * hurtRatio;
+        const baseScale = enemy.rank === 'rare' ? 1.2 : 1.0;
+        enemy.group.scale.setScalar(baseScale * (1 + 0.08 * Math.sin(hurtRatio * Math.PI)));
+      } else if (enemy.group.rotation.x !== 0) {
+        enemy.group.rotation.x = 0;
+        enemy.group.scale.setScalar(enemy.rank === 'rare' ? 1.2 : 1.0);
       }
 
       // --- Calmed State Animation (Wild Yak grazing peacefully for ~15s before recycling)
@@ -3340,6 +3435,11 @@ export function createEnemies(ctx) {
                 continue;
               }
 
+              // Tsen cavalry: only allow spearCharge when no other Tsen is winding up or charging
+              if (atk.id === 'spearCharge' && (activeTsenChargers > 0 || (isTsenKind(enemy) && activeTsenChasers > 1 && !recentlyHitByPlayer))) {
+                continue;
+              }
+
               // Migoi: cannot use boulder and frostRoar twice in a row during natural AI
               if (enemy.kind === 'migoi' && (atk.id === 'boulder' || atk.id === 'frostRoar')) {
                 if (atk.id === enemy.lastAttackId) continue;
@@ -3362,12 +3462,18 @@ export function createEnemies(ctx) {
             }
           }
 
-          const waitingForTurn = activeAttackers >= (diff.maxSimultaneousAttackers ?? 2);
-          if (chosenAttack && !waitingForTurn) {
+          const tsenStandoff = isTsenKind(enemy) && activeTsenChasers > 1 && !recentlyHitByPlayer;
+          const waitingForTurn = activeAttackers >= (diff.maxSimultaneousAttackers ?? 2) || tsenStandoff;
+          const isStaggered =
+            (state.elapsed || 0) < (enemy.staggerUntil || 0) &&
+            !enemy.chargeData &&
+            (enemy.dashTimer || 0) <= 0;
+
+          if (chosenAttack && !waitingForTurn && !isStaggered) {
             startEnemyAttack(enemy, chosenAttack, false);
-          } else if (effSpeed > 0) {
-            // Move toward player until stopDistance (or kite away if closer than preferredMinDist)
-            const waitingDistance = (enemy.kindConfig.stopDistance ?? 1.2) + 1.4;
+          } else if (effSpeed > 0 && !isStaggered) {
+            // Move toward player until stopDistance (or kite/circle at standoff distance when waiting)
+            const waitingDistance = (enemy.kindConfig.stopDistance ?? 1.2) + (isTsenKind(enemy) ? 4.2 : 1.4);
             const prefMin = waitingForTurn ? waitingDistance : (enemy.kindConfig.preferredMinDist ?? 0);
             const stopDist = Math.max(enemy.kindConfig.stopDistance ?? 1.2, prefMin);
             if (prefMin > 0 && distToPlayer < prefMin - 0.3 && distToPlayer > 0.05) {
@@ -3379,6 +3485,14 @@ export function createEnemies(ctx) {
               const moveDist = Math.min(effSpeed * dt, distToPlayer - stopDist);
               enemy.pos.x += (dxPlayer / distToPlayer) * moveDist;
               enemy.pos.z += (dzPlayer / distToPlayer) * moveDist;
+              clampEnemyPosition(enemy);
+            } else if (tsenStandoff && distToPlayer > 0.05) {
+              // Circle laterally at standoff distance instead of swarming in
+              const orbitSign = (i % 2 === 0) ? 1 : -1;
+              const tangentX = (-dzPlayer / distToPlayer) * orbitSign;
+              const tangentZ = (dxPlayer / distToPlayer) * orbitSign;
+              enemy.pos.x += tangentX * effSpeed * 0.55 * dt;
+              enemy.pos.z += tangentZ * effSpeed * 0.55 * dt;
               clampEnemyPosition(enemy);
             }
           }
@@ -3428,6 +3542,80 @@ export function createEnemies(ctx) {
       if (enemy.state === 'wander') enemy.provoked = false;
       activeChasers += Number(enemy.state === 'chase' || enemy.state === 'notice') - Number(wasChasing);
       activeAttackers += Number(enemy.state === 'windup' || enemy.state === 'attack') - Number(wasAttacking);
+      activeTsenChasers += Number(isTsenKind(enemy) && isTsenChasingState(enemy.state)) - Number(wasTsenChasing);
+      activeTsenChargers += Number(isTsenChargingNow(enemy)) - Number(wasTsenCharging);
+
+      // --- Enemy-Enemy & Enemy-Player Soft Collision Separation
+      if (
+        enemy.hp > 0 &&
+        enemy.state !== 'liberated' &&
+        enemy.state !== 'calmed' &&
+        !enemy.stationary &&
+        !enemy.disguised
+      ) {
+        let separated = false;
+        const sepDistMin = 1.35;
+        for (let j = 0; j < activeEnemies.length; j++) {
+          const other = activeEnemies[j];
+          if (
+            other === enemy ||
+            other.hp <= 0 ||
+            other.zone !== currentZone ||
+            other.state === 'liberated' ||
+            other.state === 'calmed' ||
+            other.stationary ||
+            other.disguised
+          ) {
+            continue;
+          }
+          const sdx = enemy.pos.x - other.pos.x;
+          const sdz = enemy.pos.z - other.pos.z;
+          const sDist = Math.hypot(sdx, sdz);
+          if (sDist < sepDistMin) {
+            const overlap = sepDistMin - sDist;
+            let nx = 0;
+            let nz = 0;
+            if (sDist > 1e-4) {
+              nx = sdx / sDist;
+              nz = sdz / sDist;
+            } else {
+              const fallbackAng = (enemy.animPhase || 0) + i * 1.618;
+              nx = Math.cos(fallbackAng);
+              nz = Math.sin(fallbackAng);
+            }
+            const push = overlap * Math.min(1, dt * 6.0) * 0.55;
+            enemy.pos.x += nx * push;
+            enemy.pos.z += nz * push;
+            if (!other.chargeData && (other.dashTimer || 0) <= 0) {
+              other.pos.x -= nx * push * 0.45;
+              other.pos.z -= nz * push * 0.45;
+            }
+            separated = true;
+          }
+        }
+
+        if (playerPos && !enemy.chargeData && (enemy.dashTimer || 0) <= 0) {
+          const minBodyDist = 0.85;
+          const pdx = enemy.pos.x - playerPos.x;
+          const pdz = enemy.pos.z - playerPos.z;
+          const pDist = Math.hypot(pdx, pdz);
+          if (pDist < minBodyDist) {
+            if (pDist > 1e-4) {
+              enemy.pos.x = playerPos.x + (pdx / pDist) * minBodyDist;
+              enemy.pos.z = playerPos.z + (pdz / pDist) * minBodyDist;
+            } else {
+              const pushAng = enemy.heading || 0;
+              enemy.pos.x = playerPos.x + Math.sin(pushAng) * minBodyDist;
+              enemy.pos.z = playerPos.z + Math.cos(pushAng) * minBodyDist;
+            }
+            separated = true;
+          }
+        }
+
+        if (separated) {
+          clampEnemyPosition(enemy);
+        }
+      }
 
       // --- Contact Damage Check
       // Applies when player or AI companion touches body (except during charge attack where charge damage takes priority)
@@ -3792,6 +3980,12 @@ export function createEnemies(ctx) {
       return id;
     },
     damage: damageEnemy,
+    damageEnemy(idOrEnemy, baseAmount, typeOrOpts = {}, maybeOpts = {}) {
+      return api.damage(idOrEnemy, baseAmount, typeOrOpts, maybeOpts);
+    },
+    hurtEnemy(idOrEnemy, baseAmount, typeOrOpts = {}, maybeOpts = {}) {
+      return api.damage(idOrEnemy, baseAmount, typeOrOpts, maybeOpts);
+    },
     applyStatus,
     queryCircle,
     queryCone,
@@ -3806,7 +4000,8 @@ export function createEnemies(ctx) {
         type: opts.type || 'magic',
         source: opts.source || 'debug',
         crit: Boolean(opts.crit),
-        knockback: opts.knockback ?? 0,
+        knockback: opts.knockback ?? 0.42,
+        noKnockback: Boolean(opts.noKnockback),
         from: playerPos,
         status: opts.status || null,
       });

@@ -119,16 +119,22 @@ import CH4_NPCS from './npcs/ch4.js';
 import CH5_NPCS from './npcs/ch5.js';
 
 // Auto-discover chapter NPC modules (`src/data/npcs/*.js`)
-const chapterNpcModules =
-  typeof import.meta.glob === 'function'
-    ? import.meta.glob('./npcs/*.js', { eager: true })
-    : {
-        ch1: { CH1_NPCS },
-        ch2: { CH2_NPCS },
-        ch3: { CH3_NPCS },
-        ch4: { CH4_NPCS },
-        ch5: { CH5_NPCS },
-      };
+const fallbackNpcModules = {
+  ch1: { CH1_NPCS },
+  ch2: { CH2_NPCS },
+  ch3: { CH3_NPCS },
+  ch4: { CH4_NPCS },
+  ch5: { CH5_NPCS },
+};
+let chapterNpcModules = fallbackNpcModules;
+try {
+  chapterNpcModules = {
+    ...fallbackNpcModules,
+    ...(import.meta.glob('./npcs/*.js', { eager: true }) || {}),
+  };
+} catch {
+  chapterNpcModules = fallbackNpcModules;
+}
 for (const mod of Object.values(chapterNpcModules)) {
   if (!mod || typeof mod !== 'object') continue;
   for (const val of Object.values(mod)) {
