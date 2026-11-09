@@ -623,11 +623,19 @@ export function createCameraRig(ctx) {
   });
 
   function snapCameraToPlayer() {
-    yaw = frontCamActive
-      ? wrapAngle((state.player.heading || 0) + Math.PI)
-      : (state.player.heading || 0);
-    const pPos = state.player.position;
     const isStupa = (state.zone === 'stupa');
+    const isMural25D = !isStupa && (state.muralProtoMode === 'optionA' || state.muralProtoMode === 'optionB');
+    if (isMural25D) {
+      yaw = Math.PI * 0.5;
+      pitch = 0.34;
+      distance = 10.2;
+      targetDistance = 10.2;
+    } else {
+      yaw = frontCamActive
+        ? wrapAngle((state.player.heading || 0) + Math.PI)
+        : (state.player.heading || 0);
+    }
+    const pPos = state.player.position;
     const lookHeight = 1.45;
     smoothedStupaLookOffset.set(0, 0, 0);
     desiredLook.set(pPos.x, pPos.y + lookHeight, pPos.z);
@@ -796,16 +804,33 @@ export function createCameraRig(ctx) {
     }
 
     // 3. Optional side-angle framing during prostration so full-body bow + stupa are visible
-    let activeYaw = yaw;
-    let activePitch = pitch;
-    let activeDist = distance;
+    const isStupa = (state.zone === 'stupa');
+    const isMural25D = !isStupa && (state.muralProtoMode === 'optionA' || state.muralProtoMode === 'optionB');
+    const targetFov = isMural25D ? 40 : 55;
+    if (typeof camera.fov === 'number' && Math.abs(camera.fov - targetFov) > 0.05) {
+      camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 8);
+      camera.updateProjectionMatrix?.();
+    } else if (typeof camera.fov === 'number' && camera.fov !== targetFov) {
+      camera.fov = targetFov;
+      camera.updateProjectionMatrix?.();
+    }
+
+    if (isMural25D) {
+      yaw = lerpAngle(yaw, Math.PI * 0.5, Math.min(1, dt * 8));
+      pitch = 0.34;
+      targetDistance = 10.2;
+    }
+
+    let activeYaw = isMural25D ? Math.PI * 0.5 : yaw;
+    let activePitch = isMural25D ? 0.34 : pitch;
+    let activeDist = isMural25D ? 10.2 : distance;
     // Lower lookHeight smoothly when zoomed in close or in frontCam mode so we frame the face/chest!
     const closeFactor = Math.max(0, Math.min(1, (3.8 - distance) / 1.8));
     let lookHeight = frontCamActive
       ? (distance < 1.85 ? 1.38 : 1.24)
       : (1.45 - 0.12 * closeFactor);
 
-    if (state.player.action === 'prostrate' && !frontCamActive) {
+    if (state.player.action === 'prostrate' && !frontCamActive && !isMural25D) {
       const sideYaw = state.player.heading + 1.08;
       activeYaw = lerpAngle(yaw, sideYaw, 0.65);
       activePitch = Math.max(0.14, Math.min(0.42, pitch * 0.7 + 0.08));
@@ -815,7 +840,6 @@ export function createCameraRig(ctx) {
       lookHeight = 0.82;
     }
 
-    const isStupa = (state.zone === 'stupa');
     const mapDef = !isStupa ? ctx.world?.getMap(state.zone) : null;
     const pPos = state.player.position;
     desiredLook.set(pPos.x, pPos.y + lookHeight, pPos.z);

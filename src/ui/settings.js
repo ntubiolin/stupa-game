@@ -1,5 +1,7 @@
 import '../i18n/settings.js';
+import '../i18n/muralPrototype.js';
 import { DIFFICULTIES, getDifficulty, resolveDifficulty } from '../data/combatSettings.js';
+import { MURAL_PROTO_MODES, normalizeMuralProtoMode } from './muralPrototype.js';
 
 const CAMERA_MODES = ['smart', 'off', 'on'];
 const VOICE_STYLES = ['natural', 'instrumental'];
@@ -59,6 +61,41 @@ export function createSettingsUi(ctx) {
       <h3 id="settings-mode-heading" class="settings-backup__title" data-i18n="mirror.chapter.mode.title"></h3>
       <p class="settings-note" data-i18n="mirror.chapter.mode.note"></p>
       <div id="settings-mode-mount" class="settings-mode__actions"></div>
+    </section>
+
+    <section id="settings-mural-proto" class="settings-group settings-mural-proto" aria-labelledby="settings-mural-proto-heading">
+      <h3 id="settings-mural-proto-heading" class="settings-backup__title" data-i18n="settings.muralProto.title"></h3>
+      <p class="settings-note" data-i18n="settings.muralProto.desc"></p>
+
+      <div id="mural-proto-locked-box" class="settings-mural-proto__locked">
+        <div class="settings-mural-proto__pass-row">
+          <input
+            type="text"
+            id="input-mural-passcode"
+            class="settings-mural-proto__input"
+            data-mural-passcode
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button type="button" id="btn-mural-unlock" class="settings-backup__btn" style="flex:0 0 auto" data-mural-unlock data-i18n="settings.muralProto.unlockBtn"></button>
+        </div>
+        <p id="mural-proto-pass-status" class="settings-backup__status is-hidden" aria-live="polite"></p>
+      </div>
+
+      <div id="mural-proto-unlocked-box" class="settings-mural-proto__unlocked is-hidden">
+        <div class="settings-mural-proto__badge" data-i18n="settings.muralProto.unlockedBadge"></div>
+        <div class="difficulty-options" style="margin-top:10px">
+          ${MURAL_PROTO_MODES.map((id) => `<label>
+            <input type="radio" name="muralProtoMode" value="${id}" aria-describedby="mural-proto-hint">
+            <span data-i18n="settings.muralProto.mode.${id}"></span>
+          </label>`).join('')}
+        </div>
+        <p id="mural-proto-hint" class="settings-hint" aria-live="polite"></p>
+        <div class="settings-mural-proto__try-actions">
+          <button type="button" class="settings-mural-proto__try-btn" data-mural-try="optionA" data-i18n="settings.muralProto.tryA"></button>
+          <button type="button" class="settings-mural-proto__try-btn settings-mural-proto__try-btn--b" data-mural-try="optionB" data-i18n="settings.muralProto.tryB"></button>
+        </div>
+      </div>
     </section>
 
     <section id="settings-cloud" class="settings-group settings-cloud" aria-labelledby="settings-cloud-heading">
@@ -208,7 +245,22 @@ export function createSettingsUi(ctx) {
   const btnCloudSignOut = dialog.querySelector('[data-cloud-signout]');
   const cloudStatusEl = dialog.querySelector('#settings-cloud-status');
 
+  // Mural Prototype UI elements (#256)
+  const muralLockedBoxEl = dialog.querySelector('#mural-proto-locked-box');
+  const muralUnlockedBoxEl = dialog.querySelector('#mural-proto-unlocked-box');
+  const inputMuralPass = dialog.querySelector('[data-mural-passcode]');
+  const btnMuralUnlock = dialog.querySelector('[data-mural-unlock]');
+  const muralPassStatusEl = dialog.querySelector('#mural-proto-pass-status');
+  const muralHintEl = dialog.querySelector('#mural-proto-hint');
+
   let devFormOpen = false;
+
+  function showMuralPassStatus(text, isError = false) {
+    if (!muralPassStatusEl) return;
+    muralPassStatusEl.textContent = text;
+    muralPassStatusEl.classList.remove('is-hidden', 'is-error', 'is-ok');
+    muralPassStatusEl.classList.add(isError ? 'is-error' : 'is-ok');
+  }
 
   function showBackupStatus(text, isError = false) {
     if (!backupStatusEl) return;
@@ -242,11 +294,29 @@ export function createSettingsUi(ctx) {
     }
     if (inputDevEmail) inputDevEmail.placeholder = i18n.t('settings.cloud.devEmailPlaceholder');
     if (inputDevName) inputDevName.placeholder = i18n.t('settings.cloud.devNamePlaceholder');
+    if (inputMuralPass) inputMuralPass.placeholder = i18n.t('settings.muralProto.passPlaceholder');
 
     const savedSettings = ctx.save?.get?.('settings', {}) || {};
     const preset = getDifficulty(ctx);
     const camMode = normalizeCameraMode(savedSettings.cameraAutoFollow);
     const voiceStyle = normalizeVoiceStyle(savedSettings.mantraVoiceStyle);
+    const muralUnlocked = Boolean(
+      ctx.muralPrototype?.isUnlocked?.() ?? savedSettings.muralProtoUnlocked ?? state.muralProtoUnlocked
+    );
+    const muralMode = normalizeMuralProtoMode(
+      ctx.muralPrototype?.getMode?.() ?? savedSettings.muralProtoMode ?? state.muralProtoMode
+    );
+
+    if (muralLockedBoxEl && muralUnlockedBoxEl) {
+      muralLockedBoxEl.classList.toggle('is-hidden', muralUnlocked);
+      muralUnlockedBoxEl.classList.toggle('is-hidden', !muralUnlocked);
+    }
+    for (const input of dialog.querySelectorAll('input[name="muralProtoMode"]')) {
+      input.checked = input.value === muralMode;
+    }
+    if (muralHintEl) {
+      muralHintEl.textContent = i18n.t(`settings.muralProto.hint.${muralMode}`);
+    }
 
     for (const input of dialog.querySelectorAll('input[name="difficulty"]')) {
       input.checked = input.value === preset.id;
@@ -390,7 +460,20 @@ export function createSettingsUi(ctx) {
 
   dialog.addEventListener('change', event => {
     const { name, value } = event.target;
-    if (!['difficulty', 'cameraAutoFollow', 'mantraVoiceStyle'].includes(name)) return;
+    if (!['difficulty', 'cameraAutoFollow', 'mantraVoiceStyle', 'muralProtoMode'].includes(name)) return;
+    if (name === 'muralProtoMode') {
+      if (ctx.muralPrototype?.setMode) {
+        ctx.muralPrototype.setMode(value, { playUnfurl: value !== 'off' });
+      } else {
+        const settings = ctx.save.get('settings', {});
+        const norm = normalizeMuralProtoMode(value);
+        state.muralProtoMode = norm;
+        ctx.save.set('settings', { ...settings, muralProtoMode: norm });
+        ctx.save.flush();
+      }
+      render();
+      return;
+    }
     const settings = ctx.save.get('settings', {});
     const nextSettings = { ...settings };
 
@@ -408,6 +491,50 @@ export function createSettingsUi(ctx) {
     ctx.bus?.emit?.('settings:changed', nextSettings);
     render();
   });
+
+  // Mural Prototype passcode unlock & 1-click Try Now handlers (#256)
+  function submitMuralUnlock() {
+    const raw = inputMuralPass?.value || '';
+    const ok = ctx.muralPrototype?.unlockWithPasscode
+      ? ctx.muralPrototype.unlockWithPasscode(raw)
+      : raw.trim().toLowerCase() === 'amitabha';
+    if (ok) {
+      if (!ctx.muralPrototype && ctx.save) {
+        const cur = ctx.save.get('settings', {});
+        state.muralProtoUnlocked = true;
+        state.muralProtoMode = 'optionA';
+        ctx.save.set('settings', { ...cur, muralProtoUnlocked: true, muralProtoMode: 'optionA' });
+        ctx.save.flush();
+      }
+      if (muralPassStatusEl) muralPassStatusEl.classList.add('is-hidden');
+      render();
+    } else {
+      showMuralPassStatus(i18n.t('settings.muralProto.wrongPass'), true);
+    }
+  }
+
+  if (btnMuralUnlock) {
+    btnMuralUnlock.addEventListener('click', submitMuralUnlock);
+  }
+  if (inputMuralPass) {
+    inputMuralPass.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        submitMuralUnlock();
+      }
+    });
+  }
+  for (const tryBtn of dialog.querySelectorAll('[data-mural-try]')) {
+    tryBtn.addEventListener('click', () => {
+      const targetMode = tryBtn.dataset.muralTry;
+      if (ctx.muralPrototype?.launchDemo) {
+        ctx.muralPrototype.launchDemo(targetMode);
+      } else {
+        close();
+      }
+    });
+  }
+  ctx.bus?.on?.('muralProto:changed', () => render());
 
   // Cloud Save button handlers
   if (btnGoogleSignIn) {
