@@ -59,9 +59,13 @@ function getSeaOfCloudsTexture() {
       pg.addColorStop(0.55, isWarmCrest ? 'rgba(254, 215, 170, 0.24)' : 'rgba(226, 232, 240, 0.22)');
       pg.addColorStop(1.0, 'rgba(255, 255, 255, 0.0)');
       c.fillStyle = pg;
-      c.beginPath();
-      c.arc(px, py, pr, 0, Math.PI * 2);
-      c.fill();
+      if (typeof c.beginPath === 'function' && typeof c.arc === 'function' && typeof c.fill === 'function') {
+        c.beginPath();
+        c.arc(px, py, pr, 0, Math.PI * 2);
+        c.fill();
+      } else {
+        c.fillRect(px - pr, py - pr, pr * 2, pr * 2);
+      }
     }
   }
   const tex = new THREE.CanvasTexture(canvas);
