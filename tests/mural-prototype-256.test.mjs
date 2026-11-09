@@ -3,7 +3,12 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { createBus } from '../src/core/events.js';
 import { i18n } from '../src/i18n.js';
-import { createMuralPrototype } from '../src/ui/muralPrototype.js';
+import {
+  MURAL_PROTO_MODES,
+  MURAL_PROTO_PASSCODE,
+  normalizeMuralProtoMode,
+  createMuralPrototype,
+} from '../src/ui/muralPrototype.js';
 import { createCameraRig } from '../src/player/cameraRig.js';
 import { CONFIG } from '../src/config.js';
 
@@ -99,12 +104,45 @@ function createMockCtx() {
   return ctx;
 }
 
-test('Issue #256: amitabha passcode unlocks 2.5D mural prototype and persists to settings', async () => {
+test('Issue #256 & #269: amitabha passcode unlocks 2.5D mural prototype without leaking passcode in UI strings', async () => {
   const ctx = createMockCtx();
   const proto = createMuralPrototype(ctx);
 
+  assert.equal(MURAL_PROTO_PASSCODE, 'amitabha');
+  assert.deepEqual(MURAL_PROTO_MODES, ['off', 'optionA']);
   assert.equal(proto.isUnlocked(), false);
   assert.equal(proto.getMode(), 'off');
+
+  // Verify no UI string in zh-Hant or en leaks the secret passcode 'amitabha'
+  const checkedKeys = [
+    'settings.muralProto.title',
+    'settings.muralProto.desc',
+    'settings.muralProto.passLabel',
+    'settings.muralProto.passPlaceholder',
+    'settings.muralProto.unlockBtn',
+    'settings.muralProto.unlockedBadge',
+    'settings.muralProto.wrongPass',
+    'settings.muralProto.unlockToast',
+    'settings.muralProto.mode.optionA',
+    'settings.muralProto.tryA',
+  ];
+  for (const lang of ['zh-Hant', 'en']) {
+    i18n.setLang(lang);
+    for (const key of checkedKeys) {
+      const val = i18n.t(key);
+      assert.equal(
+        val.toLowerCase().includes('amitabha'),
+        false,
+        `i18n key "${key}" (${lang}) must not leak passcode "amitabha": "${val}"`
+      );
+      assert.equal(
+        val.includes('阿彌陀佛'),
+        false,
+        `i18n key "${key}" (${lang}) must not leak "阿彌陀佛": "${val}"`
+      );
+    }
+  }
+  i18n.setLang('zh-Hant');
 
   assert.equal(proto.unlockWithPasscode('wrongpass'), false);
   assert.equal(proto.isUnlocked(), false);
@@ -118,7 +156,7 @@ test('Issue #256: amitabha passcode unlocks 2.5D mural prototype and persists to
   assert.equal(ctx.getSavedStore().settings.muralProtoMode, 'optionA');
 });
 
-test('Issue #256: Option A & cameraRig lock into 2.5D HD-2D side-scroll diorama view and align enemy depth', async () => {
+test('Issue #256 & #269: 2.5D mode & cameraRig lock into 2.5D HD-2D side-scroll diorama view and align enemy depth', async () => {
   const ctx = createMockCtx();
   const proto = createMuralPrototype(ctx);
   const camRig = createCameraRig(ctx);
@@ -142,54 +180,26 @@ test('Issue #256: Option A & cameraRig lock into 2.5D HD-2D side-scroll diorama 
   assert.ok(ctx.camera.fov < 55, 'Camera FOV should narrow toward 40 deg HD-2D diorama perspective');
 });
 
-test('Issue #256: Option B Thangka Turn-Based combat supports Shield Break, Mudra Chain, Butter Lamp MP, and Victory', async () => {
+test('Issue #269: Option B is normalized to Option A and proximity does not trigger turn-based encounter', async () => {
   const ctx = createMockCtx();
+  // Simulate legacy saved setting with optionB
+  ctx.save.set('settings', { muralProtoUnlocked: true, muralProtoMode: 'optionB' });
   const proto = createMuralPrototype(ctx);
+
+  assert.equal(normalizeMuralProtoMode('optionB'), 'optionA');
+  assert.equal(proto.getMode(), 'optionA');
+  assert.equal(ctx.state.muralProtoMode, 'optionA');
+
   await proto.launchDemo('optionB');
+  assert.equal(proto.getMode(), 'optionA');
+  assert.equal(ctx.state.muralProtoMode, 'optionA');
 
   const worldEnemy = ctx.enemies.getActiveEnemies()[0];
-  // Move enemy within 4.5m of player (2000, 0, 28) to trigger proximity encounter
+  // Move enemy within 4.5m of player (2000, 0, 28) — should NOT trigger turn-based battle
   worldEnemy.pos.x = 2000;
   worldEnemy.pos.z = 25;
   proto.update(0.1);
 
   const bState = proto.getBattleState();
-  assert.equal(bState.active, true, 'Walking within 4.5m of enemy in Option B should start Thangka Turn-Based Battle');
-  assert.equal(bState.enemies.length, 2);
-
-  // 1. Cast OM (嗡字護體印): records OM, +1 BP, reduces target shield from 3 -> 2
-  proto.executeCommand('om');
-  assert.equal(bState.mudras.om, true);
-  assert.equal(bState.enemies[0].shield, 2);
-
-  // 2. Cast HUM (吽字普巴印): records HUM, breaks 2 shields -> target shield reaches 0 (BROKEN!)
-  proto.executeCommand('hum');
-  assert.equal(bState.mudras.hum, true);
-  // Note: enemy 0 was broken during player action, then skipped its attack and restored shield at end of turn
-  assert.equal(bState.mudras.hum, true);
-
-  // 3. Cast AH (阿字蓮華印): records AH, now OM + AH + HUM are all lit!
-  proto.executeCommand('ah');
-  assert.equal(bState.mudras.om, true);
-  assert.equal(bState.mudras.ah, true);
-  assert.equal(bState.mudras.hum, true);
-
-  // 4. Cast Lamp (供燈回魔): restores MP & +1 BP
-  const mpBefore = ctx.state.player.mp;
-  proto.executeCommand('lamp');
-  assert.ok(ctx.state.player.mp >= mpBefore);
-
-  // 5. Cast Ultimate (嗡阿吽・三字明降魔印) until all enemies are purified
-  proto.executeCommand('ult');
-  // Finish off any remaining HP
-  bState.enemies.forEach((e) => { e.hp = 10; });
-  const res = proto.executeCommand('om');
-  if (!res.victory) {
-    bState.TargetIndex = 1;
-    proto.executeCommand('om');
-  }
-
-  assert.equal(bState.enemies.every((e) => e.hp === 0), true, 'All mural enemies should be purified');
-  assert.equal(ctx.getDamagedEnemyRecord()?.id, worldEnemy.id, 'Engaged 3D world enemy should be liberated on victory');
-  assert.ok(ctx.getExpAdded() >= 35, 'Victory should grant EXP');
+  assert.equal(bState.active, false, 'Approaching enemy in 2.5D mode should stay in real-time scroll action without triggering turn-based battle');
 });

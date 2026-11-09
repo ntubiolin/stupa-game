@@ -1,7 +1,9 @@
 import '../i18n/settings.js';
 import '../i18n/muralPrototype.js';
 import { DIFFICULTIES, getDifficulty, resolveDifficulty } from '../data/combatSettings.js';
-import { MURAL_PROTO_MODES, normalizeMuralProtoMode } from './muralPrototype.js';
+import { MURAL_PROTO_MODES, MURAL_PROTO_PASSCODE, normalizeMuralProtoMode } from './muralPrototype.js';
+
+export { MURAL_PROTO_MODES, MURAL_PROTO_PASSCODE, normalizeMuralProtoMode };
 
 const CAMERA_MODES = ['smart', 'off', 'on'];
 const VOICE_STYLES = ['natural', 'instrumental'];
@@ -93,7 +95,6 @@ export function createSettingsUi(ctx) {
         <p id="mural-proto-hint" class="settings-hint" aria-live="polite"></p>
         <div class="settings-mural-proto__try-actions">
           <button type="button" class="settings-mural-proto__try-btn" data-mural-try="optionA" data-i18n="settings.muralProto.tryA"></button>
-          <button type="button" class="settings-mural-proto__try-btn settings-mural-proto__try-btn--b" data-mural-try="optionB" data-i18n="settings.muralProto.tryB"></button>
         </div>
       </div>
     </section>
@@ -497,7 +498,7 @@ export function createSettingsUi(ctx) {
     const raw = inputMuralPass?.value || '';
     const ok = ctx.muralPrototype?.unlockWithPasscode
       ? ctx.muralPrototype.unlockWithPasscode(raw)
-      : raw.trim().toLowerCase() === 'amitabha';
+      : raw.trim().toLowerCase() === MURAL_PROTO_PASSCODE;
     if (ok) {
       if (!ctx.muralPrototype && ctx.save) {
         const cur = ctx.save.get('settings', {});
