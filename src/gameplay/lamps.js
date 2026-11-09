@@ -470,7 +470,7 @@ export function createLamps(ctx) {
       }
 
       // All bowls on this station are already lit -> Refill ghee offering (+MP without modal)
-      st.quickCooldownUntil = now + 2.0;
+      st.quickCooldownUntil = now + 0.6;
       for (let i = 0; i < st.lamps.length; i++) {
         const entry = st.lamps[i];
         entry.lit = true;
@@ -539,8 +539,10 @@ export function createLamps(ctx) {
           source: 'lamp',
         });
 
-        bus.emit('lamp:litByPlayer', { stationIdx: sIdx, lampIdx });
-        ctx.lampOfferingUi?.open?.({ stationIdx: sIdx, lampIdx, tab: 'offer', fromStationLight: true });
+        bus.emit('lamp:litByPlayer', { stationIdx: sIdx, lampIdx, quick: false });
+        if (!ctx.lampOfferingUi?.isOpen?.()) {
+          ctx.lampOfferingUi?.open?.({ stationIdx: sIdx, lampIdx, tab: 'offer', fromStationLight: true });
+        }
 
         if (!station.findNextUnlit()) {
           bus.emit('toast', { key: 'toast.allLit' });

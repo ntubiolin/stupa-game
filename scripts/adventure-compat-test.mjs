@@ -192,6 +192,76 @@ async function verifyPharpingNpcDialogues(page) {
   return checked;
 }
 
+async function verifyStupaQuickLamp(page) {
+  const prep = await page.evaluate(() => {
+    const { state, lamps, vitals, community, interaction, mural, dialogue, lampOfferingUi } = window.__stupa;
+    mural?.closeScroll?.();
+    dialogue?.close?.();
+    lampOfferingUi?.close?.();
+    const st = lamps.stations()[0];
+    // Ensure at least one bowl is unlit for deterministic testing
+    const unlit = st.findNextUnlit() || (() => {
+      const last = st.lamps[st.lamps.length - 1];
+      last.lit = false;
+      last.flame.visible = false;
+      last.glow.visible = false;
+      return last;
+    })();
+    st.quickCooldownUntil = 0;
+    state.player.position.set(st.worldPos.x, 0, st.worldPos.z + 0.8);
+    state.player.velocity.set(0, 0, 0);
+    state.player.action = 'idle';
+    vitals.set({ mp: Math.max(10, vitals.stats().maxMp - 30) });
+    interaction?.update?.();
+    const secPrompt = document.getElementById('interaction-prompt-secondary');
+    return {
+      beforeLit: st.countLit(),
+      unlitIdx: unlit.idx,
+      beforeMp: vitals.stats().mp,
+      beforeRosterCount: community.getLamps().length,
+      secPromptVisible: Boolean(secPrompt && !secPrompt.classList.contains('is-hidden')),
+    };
+  });
+  assert.equal(prep.secPromptVisible, true, '#interaction-prompt-secondary ([F] Quick Light) is visible near lamp station');
+
+  await page.keyboard.press('KeyF');
+
+  await page.waitForFunction(
+    (expectedLit) => window.__stupa.lamps.stations()[0].countLit() === expectedLit,
+    prep.beforeLit + 1,
+    polling
+  );
+
+  const after = await page.evaluate((unlitIdx) => {
+    const { state, lamps, vitals, community, lampOfferingUi } = window.__stupa;
+    const st = lamps.stations()[0];
+    const bowl = st.lamps[unlitIdx];
+    const modalEl = document.getElementById('lamp-offering-modal');
+    return {
+      afterLit: st.countLit(),
+      bowlLit: bowl.lit,
+      flameVisible: bowl.flame.visible,
+      glowVisible: bowl.glow.visible,
+      afterMp: vitals.stats().mp,
+      modalOpen: lampOfferingUi.isOpen(),
+      modalHiddenClass: Boolean(modalEl && modalEl.classList.contains('is-hidden')),
+      uiOpen: state.uiOpen,
+      afterRosterCount: community.getLamps().length,
+    };
+  }, prep.unlitIdx);
+
+  assert.equal(after.afterLit, prep.beforeLit + 1, '3D station lit lamp count increased by 1');
+  assert.equal(after.bowlLit, true, '3D butter lamp bowl is lit');
+  assert.equal(after.flameVisible, true, '3D flame mesh is visible on the lamp table');
+  assert.equal(after.glowVisible, true, '3D glow sprite is visible on the lamp table');
+  assert(after.afterMp >= prep.beforeMp + 15, 'Quick lamp lighting restored MP');
+  assert.equal(after.modalOpen, false, 'lampOfferingUi.isOpen() remains false after quick lighting');
+  assert.equal(after.modalHiddenClass, true, '#lamp-offering-modal remains .is-hidden');
+  assert.equal(after.uiOpen, false, 'state.uiOpen remains false');
+  assert.equal(after.afterRosterCount, prep.beforeRosterCount, 'Community prayer roster count did not increase');
+  return after;
+}
+
 async function historicalAdventure() {
   // Returning campaign profile with earned waypoints and quest-reward entries.
   // Exercise the normal waypoint and Codex readers against that saved profile.
@@ -216,6 +286,7 @@ async function historicalAdventure() {
   await startAdventure(page);
   const mapCount = await page.evaluate(() => window.__stupa.zones.list().length);
   assert(mapCount >= 9, 'the Adventure map catalog remains available');
+  report.quickLamp = await verifyStupaQuickLamp(page);
   const gear = await equipWeapon(page, 'bronzeVajra');
   for (const id of chapterMaps) {
     console.log(`Traveling to ${id}`);

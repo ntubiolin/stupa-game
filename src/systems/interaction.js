@@ -214,8 +214,13 @@ export function createInteraction(ctx) {
       return;
     }
 
-    // Also allow pressing the specific key ('feed' or 'interact') if a matching target is in range
-    if (input.pressed('feed') && bestByAction.feed) {
+    // Also allow pressing the specific key ('feed' or 'interact') if a matching target is in range.
+    // In the Stupa hub zone, pressing 'chant' (KeyR) near a lamp station also triggers quick-lighting ('lampQuick').
+    const quickLampChant =
+      bestByAction.feed?.kind === 'lampQuick' &&
+      (state.zone || 'stupa') === 'stupa' &&
+      input.pressed('chant');
+    if ((input.pressed('feed') || quickLampChant) && bestByAction.feed) {
       triggerInteract(bestByAction.feed);
     } else if (input.pressed('interact') && bestByAction.interact) {
       triggerInteract(bestByAction.interact);
