@@ -1729,22 +1729,109 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
   }
 }
 
-/* Zone transition fade overlay */
+/* Zone transition fade overlay (SEASON × Firewatch Map Loading Art) */
 #zone-fade {
   position: fixed;
   inset: 0;
   width: 100vw;
   height: 100vh;
-  background: #000;
+  background: #0d0814;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.4s ease-in-out;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 48px 24px;
+  transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1);
   z-index: 1000;
 }
 
 #zone-fade.is-active {
   opacity: 1;
-  pointer-events: auto;
+  pointer-events: none;
+}
+
+.zone-fade__bg {
+  position: absolute;
+  inset: -4%;
+  background-position: center center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transform: scale(1.06);
+  filter: saturate(1.12) contrast(1.04);
+  transition: opacity 0.35s ease, transform 1.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#zone-fade.has-art .zone-fade__bg {
+  opacity: 0.92;
+}
+
+#zone-fade.has-art.is-active .zone-fade__bg {
+  transform: scale(1.0);
+}
+
+.zone-fade__vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(14, 9, 20, 0.48) 0%,
+      rgba(36, 18, 16, 0.14) 42%,
+      rgba(28, 14, 18, 0.72) 78%,
+      rgba(10, 6, 14, 0.94) 100%
+    ),
+    radial-gradient(
+      circle at 50% 45%,
+      rgba(255, 166, 77, 0.12) 0%,
+      rgba(14, 8, 18, 0.65) 100%
+    );
+  pointer-events: none;
+}
+
+.zone-fade__caption {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  max-width: 620px;
+  padding: 16px 32px;
+  border-radius: 20px;
+  background: rgba(18, 11, 22, 0.68);
+  border: 1px solid rgba(244, 198, 118, 0.38);
+  box-shadow: 0 16px 42px rgba(6, 3, 12, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transform: translateY(10px);
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#zone-fade.is-active .zone-fade__caption {
+  transform: translateY(0);
+}
+
+.zone-fade__lotus {
+  font-size: 1.35rem;
+  color: #f6c465;
+  margin-bottom: 4px;
+  text-shadow: 0 0 14px rgba(245, 166, 58, 0.65);
+}
+
+.zone-fade__title {
+  font-family: var(--font-serif);
+  font-size: clamp(1.35rem, 2.8vw, 1.85rem);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #fff6e5;
+  text-shadow: 0 3px 16px rgba(0, 0, 0, 0.75);
+}
+
+.zone-fade__sub {
+  margin-top: 4px;
+  font-size: 0.86rem;
+  letter-spacing: 0.04em;
+  color: rgba(252, 224, 178, 0.84);
 }
 
 /* ==========================================================================
