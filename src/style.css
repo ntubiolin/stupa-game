@@ -7296,3 +7296,55 @@ body[data-zone-aesthetic="japanese"] .glass-panel {
   padding-top: 20px;
 }
 
+/* Quick-Travel Bar inside World Map Modal (`M` key) for Japan Kūkai Edition */
+.kukai-quick-travel-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(120, 28, 36, 0.36) 0%, rgba(28, 16, 22, 0.72) 100%);
+  border: 1px solid rgba(244, 201, 117, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 236, 198, 0.16);
+}
+
+.kukai-quick-travel-bar__label {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #fde68a;
+  letter-spacing: 0.02em;
+}
+
+.kukai-quick-travel-bar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.kukai-quick-travel-btn {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(251, 191, 36, 0.55);
+  background: linear-gradient(180deg, rgba(185, 28, 28, 0.82) 0%, rgba(127, 29, 29, 0.92) 100%);
+  color: #fff7ed;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.kukai-quick-travel-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.12);
+}
+
+.kukai-quick-travel-btn--return {
+  background: rgba(30, 41, 59, 0.78);
+  border-color: rgba(226, 232, 240, 0.35);
+  color: #e2e8f0;
+}
+
+

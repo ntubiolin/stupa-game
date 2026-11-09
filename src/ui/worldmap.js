@@ -21,7 +21,7 @@ export const WORLD_ROUTE_NODES = [
     levelKey: 'worldNode.stupa.level',
     descKey: 'worldNode.stupa.desc',
     labelZh: '博達哈大佛塔 Lv.1',
-    connectsTo: ['grove', 'wild', 'pharping'],
+    connectsTo: ['grove', 'wild', 'pharping', 'toji'],
   },
   {
     id: 'grove',
@@ -118,17 +118,21 @@ export const WORLD_ROUTE_NODES = [
     chapter: 0,
     nx: 0.56,
     ny: 0.14,
+    alwaysUnlocked: true,
+    freeTeleport: true,
     nameKey: 'worldNode.toji.name',
     levelKey: 'worldNode.toji.level',
     descKey: 'worldNode.toji.desc',
     labelZh: '京都東寺・教王護國寺',
-    connectsTo: ['koyasan'],
+    connectsTo: ['stupa', 'koyasan'],
   },
   {
     id: 'koyasan',
     chapter: 0,
     nx: 0.36,
     ny: 0.12,
+    alwaysUnlocked: true,
+    freeTeleport: true,
     nameKey: 'worldNode.koyasan.name',
     levelKey: 'worldNode.koyasan.level',
     descKey: 'worldNode.koyasan.desc',
@@ -793,6 +797,22 @@ export function createWorldMap(ctx) {
         </header>
 
         <div class="worldmap-modal__body">
+          <!-- Quick-Travel Banner for Eastern Shingon (Japan Kūkai Edition: Tō-ji & Kōyasan) -->
+          <div class="kukai-quick-travel-bar">
+            <span class="kukai-quick-travel-bar__label">🇯🇵 東方真言密教支線（空海大師篇）：</span>
+            <div class="kukai-quick-travel-bar__actions">
+              <button type="button" class="kukai-quick-travel-btn" data-quick-tp="toji">
+                🏯 前往：京都東寺（五重塔・金堂・講堂）
+              </button>
+              <button type="button" class="kukai-quick-travel-btn" data-quick-tp="koyasan">
+                ⛰️ 前往：高野山（壇上伽藍・金剛峯寺・奧之院）
+              </button>
+              <button type="button" class="kukai-quick-travel-btn kukai-quick-travel-btn--return" data-quick-tp="stupa">
+                ☸ 返回博達哈佛塔
+              </button>
+            </div>
+          </div>
+
           <!-- TAB 1: Current Zone Map & Legend -->
           <section class="worldmap-view" data-view="map">
             <div class="zone-map-layout">
@@ -878,6 +898,14 @@ export function createWorldMap(ctx) {
       const tabBtn = e.target.closest('[data-tab]');
       if (tabBtn) {
         switchTab(tabBtn.getAttribute('data-tab'));
+        return;
+      }
+      const quickTpBtn = e.target.closest('[data-quick-tp]');
+      if (quickTpBtn) {
+        const targetZone = quickTpBtn.getAttribute('data-quick-tp');
+        if (targetZone) {
+          handleTeleportToNode(targetZone);
+        }
       }
     });
   }
@@ -992,8 +1020,8 @@ export function createWorldMap(ctx) {
         const mx = ((n1x + n2x) * 0.5 + (isMostlyVertical ? -14 : 0)).toFixed(1);
         const my = ((n1y + n2y) * 0.5 + (isMostlyVertical ? 0 : -16)).toFixed(1);
         const bothUnlocked =
-          (Boolean(ctx.waypoints?.isUnlocked?.(n.id)) || n.id === 'stupa') &&
-          (Boolean(ctx.waypoints?.isUnlocked?.(target.id)) || target.id === 'stupa');
+          (Boolean(ctx.waypoints?.isUnlocked?.(n.id)) || n.id === 'stupa' || Boolean(n.alwaysUnlocked)) &&
+          (Boolean(ctx.waypoints?.isUnlocked?.(target.id)) || target.id === 'stupa' || Boolean(target.alwaysUnlocked));
         pathsHtml.push(
           `<path d="M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}" class="route-edge ${bothUnlocked ? 'is-unlocked' : ''}" />`,
         );
@@ -1005,7 +1033,7 @@ export function createWorldMap(ctx) {
     const curZone = state.zone || 'stupa';
     worldNodesLayerEl.innerHTML = nodes
       .map((n) => {
-        const isUnl = Boolean(ctx.waypoints?.isUnlocked?.(n.id)) || n.id === 'stupa';
+        const isUnl = Boolean(ctx.waypoints?.isUnlocked?.(n.id)) || n.id === 'stupa' || Boolean(n.alwaysUnlocked);
         const isCur = curZone === n.id;
         const isSel = selectedWorldNodeId === n.id;
         const hasMap = Boolean(MAPS[n.id]);
@@ -1031,19 +1059,21 @@ export function createWorldMap(ctx) {
       btn.addEventListener('click', () => {
         const nodeId = btn.getAttribute('data-node-id');
         selectedWorldNodeId = nodeId;
-        const isUnl = Boolean(ctx.waypoints?.isUnlocked?.(nodeId)) || nodeId === 'stupa';
+        const nodeObj = nodeById[nodeId];
+        const isUnl = Boolean(ctx.waypoints?.isUnlocked?.(nodeId)) || nodeId === 'stupa' || Boolean(nodeObj?.alwaysUnlocked);
         const hasMap = Boolean(MAPS[nodeId]);
+        const allowTp = canPlayerTeleportNow() || Boolean(nodeObj?.freeTeleport);
 
         if (isUnl && !hasMap) {
           bus.emit('toast', { text: i18n.t('prologue.toast.pharpingComingSoon') });
           renderWorldRouteTab();
           return;
         }
-        if (canPlayerTeleportNow() && isUnl && hasMap) {
+        if (allowTp && isUnl && hasMap) {
           handleTeleportToNode(nodeId);
           return;
         }
-        if (!canPlayerTeleportNow() && isUnl && hasMap && nodeId !== (state.zone || 'stupa')) {
+        if (!allowTp && isUnl && hasMap && nodeId !== (state.zone || 'stupa')) {
           bus.emit('toast', { text: i18n.t('toast.waypointNeedStand') });
         }
         renderWorldRouteTab();
@@ -1055,10 +1085,10 @@ export function createWorldMap(ctx) {
 
   function renderWorldNodeDetail(node) {
     if (!worldDetailEl || !node) return;
-    const isUnl = Boolean(ctx.waypoints?.isUnlocked?.(node.id)) || node.id === 'stupa';
+    const isUnl = Boolean(ctx.waypoints?.isUnlocked?.(node.id)) || node.id === 'stupa' || Boolean(node.alwaysUnlocked);
     const isCur = (state.zone || 'stupa') === node.id;
     const hasMap = Boolean(MAPS[node.id]);
-    const canTp = canPlayerTeleportNow();
+    const canTp = canPlayerTeleportNow() || Boolean(node.freeTeleport);
 
     let statusText = i18n.t('mapModal.world.status.locked');
     if (isCur) statusText = i18n.t('mapModal.world.status.current');
@@ -1108,7 +1138,9 @@ export function createWorldMap(ctx) {
       return false;
     }
     close();
-    if (ctx.waypoints?.teleportTo) {
+    if ((mapId === 'toji' || mapId === 'koyasan') && ctx.zones?.teleport) {
+      ctx.zones.teleport(mapId, { spawn: 'default' });
+    } else if (ctx.waypoints?.teleportTo) {
       ctx.waypoints.teleportTo(mapId);
     } else if (ctx.zones?.teleport) {
       ctx.zones.teleport(mapId, 'waypoint');
