@@ -319,6 +319,10 @@ export function createHud(ctx) {
           <kbd id="prompt-key" class="prompt-pill__key">E</kbd>
           <span id="prompt-label" class="prompt-pill__label"></span>
         </button>
+        <button id="interaction-prompt-secondary" type="button" class="prompt-pill prompt-pill--secondary glass-panel is-hidden">
+          <kbd id="prompt-secondary-key" class="prompt-pill__key">F</kbd>
+          <span id="prompt-secondary-label" class="prompt-pill__label"></span>
+        </button>
       </div>
 
       <!-- Bottom-Right: Mobile / On-Screen Action Buttons -->
@@ -664,6 +668,9 @@ export function createHud(ctx) {
   const promptBtn = root.querySelector('#interaction-prompt');
   const promptKey = root.querySelector('#prompt-key');
   const promptLabel = root.querySelector('#prompt-label');
+  const promptSecondaryBtn = root.querySelector('#interaction-prompt-secondary');
+  const promptSecondaryKey = root.querySelector('#prompt-secondary-key');
+  const promptSecondaryLabel = root.querySelector('#prompt-secondary-label');
 
   const btnMobileChant = root.querySelector('#btn-chant') || root.querySelector('#btn-mobile-chant') || root.querySelector('[data-action="chant"]');
   // Ensure both #btn-chant and legacy #btn-mobile-chant resolve to the chant action button
@@ -810,6 +817,9 @@ export function createHud(ctx) {
     displayedStats.koraPct = -1;
     if (currentPrompt) {
       promptLabel.textContent = resolvePromptLabel(currentPrompt);
+      if (currentPrompt.secondary && promptSecondaryLabel) {
+        promptSecondaryLabel.textContent = resolvePromptLabel(currentPrompt.secondary);
+      }
     }
 
     // Re-localize active toasts
@@ -898,10 +908,18 @@ export function createHud(ctx) {
     currentPrompt = payload;
     if (!payload) {
       promptBtn.classList.add('is-hidden');
+      promptSecondaryBtn?.classList.add('is-hidden');
     } else {
       promptKey.textContent = payload.keyHint || 'E';
       promptLabel.textContent = resolvePromptLabel(payload);
       promptBtn.classList.remove('is-hidden');
+      if (payload.secondary && promptSecondaryBtn) {
+        promptSecondaryKey.textContent = payload.secondary.keyHint || 'F';
+        promptSecondaryLabel.textContent = resolvePromptLabel(payload.secondary);
+        promptSecondaryBtn.classList.remove('is-hidden');
+      } else {
+        promptSecondaryBtn?.classList.add('is-hidden');
+      }
     }
   });
 
@@ -918,6 +936,22 @@ export function createHud(ctx) {
     if (performance.now() - lastPromptPointerDownTime < 400) return;
     if (currentPrompt && ctx.input) {
       ctx.input.trigger(currentPrompt.action || 'interact');
+    }
+  });
+
+  let lastSecPromptPointerDownTime = 0;
+  promptSecondaryBtn?.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    lastSecPromptPointerDownTime = performance.now();
+    if (currentPrompt?.secondary && ctx.input) {
+      ctx.input.trigger(currentPrompt.secondary.action || 'feed');
+    }
+  });
+  promptSecondaryBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (performance.now() - lastSecPromptPointerDownTime < 400) return;
+    if (currentPrompt?.secondary && ctx.input) {
+      ctx.input.trigger(currentPrompt.secondary.action || 'feed');
     }
   });
 
@@ -1892,8 +1926,9 @@ export function createHud(ctx) {
 
     // 3. Highlight mobile interact / feed buttons when a matching target is in range
     const target = state.interactionTarget;
-    const canInteract = Boolean(target && target.action === 'interact');
-    const canFeed = Boolean(target && target.action === 'feed');
+    const targetsByAction = state.interactionTargetsByAction;
+    const canInteract = Boolean((target && target.action === 'interact') || targetsByAction?.interact);
+    const canFeed = Boolean((target && target.action === 'feed') || targetsByAction?.feed);
     if (canInteract !== lastInteractAvailable) {
       lastInteractAvailable = canInteract;
       btnMobileInteract.classList.toggle('is-ready', canInteract);

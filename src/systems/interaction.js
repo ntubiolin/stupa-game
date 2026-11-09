@@ -15,6 +15,8 @@ export function createInteraction(ctx) {
   let lastEmittedId = null;
   let lastEmittedLabel = null;
   let lastEmittedParamsSig = null;
+  let lastEmittedSecId = null;
+  let lastEmittedSecLabel = null;
 
   function getKindPenalty(item) {
     // Lower score is better: NPC and gate have priority over normal props, which have priority over ground loot,
@@ -59,7 +61,7 @@ export function createInteraction(ctx) {
     return getKindPenalty(item) + (dist / Math.max(0.5, radius)) - align * 0.28;
   }
 
-  function emitPromptIfChanged(target) {
+  function emitPromptIfChanged(target, secondaryTarget = null) {
     const nextId = target ? target.id : null;
     const customLabel =
       target && typeof target.getLabel === 'function' ? target.getLabel() : null;
@@ -68,10 +70,22 @@ export function createInteraction(ctx) {
       : null;
     const nextParams = target ? target.labelParams || target.promptParams : undefined;
     const nextParamsSig = nextParams ? JSON.stringify(nextParams) : '';
+
+    const secId = secondaryTarget ? secondaryTarget.id : null;
+    const secCustomLabel =
+      secondaryTarget && typeof secondaryTarget.getLabel === 'function'
+        ? secondaryTarget.getLabel()
+        : null;
+    const secLabel = secondaryTarget
+      ? secCustomLabel || secondaryTarget.labelKey || secondaryTarget.promptKey
+      : null;
+
     if (
       nextId === lastEmittedId &&
       nextLabel === lastEmittedLabel &&
-      nextParamsSig === lastEmittedParamsSig
+      nextParamsSig === lastEmittedParamsSig &&
+      secId === lastEmittedSecId &&
+      secLabel === lastEmittedSecLabel
     ) {
       return;
     }
@@ -79,11 +93,17 @@ export function createInteraction(ctx) {
     lastEmittedId = nextId;
     lastEmittedLabel = nextLabel;
     lastEmittedParamsSig = nextParamsSig;
+    lastEmittedSecId = secId;
+    lastEmittedSecLabel = secLabel;
 
     if (!target) {
       bus.emit('prompt', null);
     } else {
       const act = typeof target.action === 'string' ? target.action : 'interact';
+      const secAct =
+        secondaryTarget && typeof secondaryTarget.action === 'string'
+          ? secondaryTarget.action
+          : 'feed';
       bus.emit('prompt', {
         id: target.id,
         action: act,
@@ -93,6 +113,23 @@ export function createInteraction(ctx) {
         getLabel:
           typeof target.getLabel === 'function' ? () => target.getLabel() : null,
         keyHint: ACTION_KEY_HINT[act] || 'E',
+        secondary: secondaryTarget
+          ? {
+              id: secondaryTarget.id,
+              action: secAct,
+              labelKey:
+                secondaryTarget.labelKey ||
+                secondaryTarget.promptKey ||
+                'prompt.interact',
+              params: secondaryTarget.labelParams || secondaryTarget.promptParams,
+              text: secCustomLabel,
+              getLabel:
+                typeof secondaryTarget.getLabel === 'function'
+                  ? () => secondaryTarget.getLabel()
+                  : null,
+              keyHint: ACTION_KEY_HINT[secAct] || 'F',
+            }
+          : null,
       });
     }
   }
@@ -106,7 +143,8 @@ export function createInteraction(ctx) {
     ) {
       currentTarget = null;
       state.interactionTarget = null;
-      emitPromptIfChanged(null);
+      state.interactionTargetsByAction = null;
+      emitPromptIfChanged(null, null);
       return;
     }
 
@@ -140,9 +178,17 @@ export function createInteraction(ctx) {
       }
     }
 
+    const secondary =
+      best && best.action === 'interact' && bestByAction.feed
+        ? bestByAction.feed
+        : best && best.action === 'feed' && bestByAction.interact
+          ? bestByAction.interact
+          : null;
+
     currentTarget = best;
     state.interactionTarget = best;
-    emitPromptIfChanged(best);
+    state.interactionTargetsByAction = bestByAction;
+    emitPromptIfChanged(best, secondary);
 
     const input = ctx.input;
     if (!input) return;
