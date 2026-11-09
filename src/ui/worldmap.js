@@ -6,6 +6,7 @@ import { CODEX_CATEGORIES } from '../data/codex.js';
 import { CHAPTER_MURALS, getChapterMural } from '../data/murals.js';
 import { MuralScrollCanvas } from './mural/scroll.js';
 import { resolveWaypointCoords } from '../gameplay/waypoints.js';
+import { isJapanModeEnabled } from './settings.js';
 
 /**
  * World route nodes across all chapters (Hand-drawn / Parchment Himalayan Trail).
@@ -118,6 +119,7 @@ export const WORLD_ROUTE_NODES = [
     chapter: 0,
     nx: 0.56,
     ny: 0.14,
+    japanOnly: true,
     alwaysUnlocked: true,
     freeTeleport: true,
     nameKey: 'worldNode.toji.name',
@@ -131,6 +133,7 @@ export const WORLD_ROUTE_NODES = [
     chapter: 0,
     nx: 0.36,
     ny: 0.12,
+    japanOnly: true,
     alwaysUnlocked: true,
     freeTeleport: true,
     nameKey: 'worldNode.koyasan.name',
@@ -797,8 +800,8 @@ export function createWorldMap(ctx) {
         </header>
 
         <div class="worldmap-modal__body">
-          <!-- Quick-Travel Banner for Eastern Shingon (Japan Kūkai Edition: Tō-ji & Kōyasan) -->
-          <div class="kukai-quick-travel-bar">
+          <!-- Quick-Travel Banner for Eastern Shingon (Japan Kūkai Edition: Tō-ji & Kōyasan, shown when Japan Mode is enabled in Settings) -->
+          <div class="kukai-quick-travel-bar is-hidden">
             <span class="kukai-quick-travel-bar__label">🇯🇵 東方真言密教支線（空海大師篇）：</span>
             <div class="kukai-quick-travel-bar__actions">
               <button type="button" class="kukai-quick-travel-btn" data-quick-tp="toji">
@@ -973,8 +976,18 @@ export function createWorldMap(ctx) {
     }
   }
 
+  function syncJapanModeUi() {
+    if (!overlayEl) return;
+    const kukaiBar = overlayEl.querySelector('.kukai-quick-travel-bar');
+    if (kukaiBar) {
+      kukaiBar.classList.toggle('is-hidden', !isJapanModeEnabled(ctx));
+    }
+  }
+
   function getVisibleWorldNodes() {
+    const jpEnabled = isJapanModeEnabled(ctx);
     return WORLD_ROUTE_NODES.filter((n) => {
+      if (n.japanOnly && !jpEnabled) return false;
       if (!n.debugOnly) return true;
       return (
         Boolean(ctx.debug?.enabled) ||
@@ -1419,6 +1432,7 @@ export function createWorldMap(ctx) {
     }
 
     refreshStaticLabels();
+    syncJapanModeUi();
     overlayEl.classList.remove('is-hidden');
     switchTab(tab);
     bus.emit('worldmap:opened', { tab: activeTab, waypointMode: waypointTeleportMode });
@@ -1467,6 +1481,11 @@ export function createWorldMap(ctx) {
   });
 
   bus.on('waypoint:changed', () => {
+    if (isOpen && activeTab === 'world') renderWorldRouteTab();
+  });
+
+  bus.on('settings:changed', () => {
+    syncJapanModeUi();
     if (isOpen && activeTab === 'world') renderWorldRouteTab();
   });
 

@@ -26,6 +26,14 @@ const zh = {
   'settings.mantraVoiceStyle.naturalHint': '去除電子合成諧波，保留清朗自然的人聲真言與寺院空間殘響。',
   'settings.mantraVoiceStyle.instrumentalHint': '關閉人聲取樣，改以純淨頌缽、泛音銅鐘與合唱共鳴演繹真言。',
 
+  'settings.japanMode': '🇯🇵 日本模式（空海大師篇）',
+  'settings.japanMode.off': '關閉（預設）',
+  'settings.japanMode.on': '開啟',
+  'settings.japanMode.offHint': '預設隱藏日本空海大師支線地圖（京都東寺、高野山），維持純粹的尼泊爾與雪域藏傳巡禮世界輿圖。',
+  'settings.japanMode.onHint': '已開啟日本模式！於「聖境巡禮圖（按 M）」顯示東方真言密教支線快捷傳送列，並於「世界輿圖」解鎖「京都東寺」與「高野山・金剛峯寺」。',
+  'settings.japanMode.tryToji': '🏯 立即前往：京都東寺',
+  'settings.japanMode.tryKoyasan': '⛰️ 立即前往：高野山',
+
   'settings.backup.title': '遊戲進度備份與還原',
   'settings.backup.desc': '遊戲會自動儲存於瀏覽器（stupa.save.v2）。您可隨時下載 .json 備份檔保存至電腦，或匯入備份檔還原完整進度（包含等級、功德、背包、任務、法相與敘事章節）。',
   'settings.backup.summary': '目前紀錄：Lv {level} · 功德 {points} · 轉繞 {kora} 圈 · 儲存於 {time}',
@@ -99,6 +107,14 @@ const en = {
   'settings.mantraVoiceStyle.instrumental': 'Singing Bowl Only',
   'settings.mantraVoiceStyle.naturalHint': 'Pure, natural human mantra vocal sample with warm temple reverb and clear diction.',
   'settings.mantraVoiceStyle.instrumentalHint': 'Replaces vocal samples with pure Tibetan singing bowls and harmonic overtone chimes.',
+
+  'settings.japanMode': '🇯🇵 Japan Mode (Kūkai Shingon Edition)',
+  'settings.japanMode.off': 'Off (Default)',
+  'settings.japanMode.on': 'On',
+  'settings.japanMode.offHint': 'Hides the Japanese Kūkai Shingon expansion maps (Kyoto Tō-ji & Mount Kōya) by default, keeping the Himalayan pilgrimage world map pure.',
+  'settings.japanMode.onHint': 'Japan Mode enabled! Displays the Eastern Shingon quick-travel bar and unlocks Kyoto Tō-ji and Mount Kōya on the World Map (press M).',
+  'settings.japanMode.tryToji': '🏯 Visit Now: Kyoto Tō-ji',
+  'settings.japanMode.tryKoyasan': '⛰️ Visit Now: Mount Kōya',
 
   'settings.backup.title': 'Save Progress Backup & Restore',
   'settings.backup.desc': 'Progress is auto-saved in your browser (stupa.save.v2). Download a .json backup file anytime to safekeep your pilgrimage, or import a backup file to restore your level, merit, inventory, quests, appearance, and story progress.',
