@@ -1,9 +1,11 @@
 import '../i18n/muralPrototype.js';
 
-export const MURAL_PROTO_MODES = ['off', 'optionA', 'optionB'];
+export const MURAL_PROTO_MODES = ['off', 'optionA'];
 export const MURAL_PASSCODE = 'amitabha';
+export const MURAL_PROTO_PASSCODE = MURAL_PASSCODE;
 
 export function normalizeMuralProtoMode(val) {
+  if (val === 'optionB') return 'optionA';
   return MURAL_PROTO_MODES.includes(val) ? val : 'off';
 }
 
@@ -82,9 +84,7 @@ export function createMuralPrototype(ctx) {
         <span class="mural-proto-bar__tag" data-i18n="muralProto.bar.label"></span>
         <button type="button" class="mural-proto-bar__btn" data-mural-mode="off" data-i18n="muralProto.bar.off"></button>
         <button type="button" class="mural-proto-bar__btn" data-mural-mode="optionA" data-i18n="muralProto.bar.optionA"></button>
-        <button type="button" class="mural-proto-bar__btn" data-mural-mode="optionB" data-i18n="muralProto.bar.optionB"></button>
-        <button type="button" class="mural-proto-bar__btn mural-proto-bar__btn--action" data-mural-teleport data-i18n="muralProto.bar.teleport"></button>
-        <button type="button" class="mural-proto-bar__btn mural-proto-bar__btn--battle" data-mural-start-battle data-i18n="muralProto.bar.startBattle"></button>
+        <button type="button" class="mural-proto-bar__btn mural-proto-bar__btn--action" data-mural-teleport data-mural-tp data-i18n="muralProto.bar.teleport"></button>
       </div>
       <div class="mural-proto-bar__sub is-hidden"></div>
     `;
@@ -97,15 +97,8 @@ export function createMuralPrototype(ctx) {
         setMode(modeBtn.dataset.muralMode, { playUnfurl: modeBtn.dataset.muralMode !== 'off' });
         return;
       }
-      if (ev.target.closest('[data-mural-teleport]')) {
+      if (ev.target.closest('[data-mural-teleport], [data-mural-tp]')) {
         teleportToMuralDemo();
-        return;
-      }
-      if (ev.target.closest('[data-mural-start-battle]')) {
-        if (mode !== 'optionB') {
-          setMode('optionB', { playUnfurl: false });
-        }
-        startTurnBattle();
       }
     });
 
@@ -851,18 +844,12 @@ export function createMuralPrototype(ctx) {
           if (!pos) continue;
           const dist = Math.hypot(pos.x - pPos.x, pos.z - pPos.z);
 
-          // Option A & B: gently pull nearby enemies into the 2.5D side-scroll belt (same X plane)
+          // 2.5D Mural Scroll Mode: gently pull nearby enemies into the 2.5D side-scroll belt (same X plane)
           if (dist < 18) {
             pos.x += (pPos.x - pos.x) * Math.min(1, dt * 3.5);
             if (e.group?.position) {
               e.group.position.x = pos.x;
             }
-          }
-
-          // Option B: touching/approaching an enemy within 4.5m unfurls the Thangka Turn-Based Battle!
-          if (mode === 'optionB' && battleCooldown <= 0 && dist <= 4.5) {
-            startTurnBattle(e);
-            break;
           }
         }
       }
