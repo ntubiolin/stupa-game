@@ -146,6 +146,35 @@ function createTenmaArenaMandalaTexture() {
   return tex;
 }
 
+/**
+ * Procedural soft radial gradient texture (`CanvasTexture`) for the Kyirong Gorge
+ * Cloud-Inversion Sea of Mist and *Firewatch* alpenglow horizon mist.
+ * Returns `null` in headless Node environments where `document` is unavailable.
+ */
+function createCloudInversionTexture() {
+  if (typeof document === 'undefined' || typeof document.createElement !== 'function') {
+    return null;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const c2d = canvas.getContext?.('2d');
+  if (!c2d) return null;
+
+  c2d.clearRect(0, 0, 256, 256);
+  const grad = c2d.createRadialGradient(128, 128, 10, 128, 128, 124);
+  grad.addColorStop(0.0, 'rgba(255, 244, 232, 0.88)');
+  grad.addColorStop(0.38, 'rgba(254, 226, 210, 0.62)');
+  grad.addColorStop(0.72, 'rgba(224, 236, 255, 0.26)');
+  grad.addColorStop(1.0, 'rgba(224, 236, 255, 0.0)');
+  c2d.fillStyle = grad;
+  c2d.fillRect(0, 0, 256, 256);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
+}
+
 // 12 Tenma Altars along the switchback mountain trail and side valleys
 // (3 each of 'hail', 'avalanche', 'fog', 'lightning')
 const TENMA_ALTAR_DEFS = [
@@ -313,12 +342,13 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
 
   const posAttr = terrainGeo.attributes.position;
   const colorArr = new Float32Array(posAttr.count * 3);
-  const cForest = new THREE.Color(0x2f4f38); // Kyirong conifer valley moss
-  const cStreamBank = new THREE.Color(0x3b5249); // Damp pebble & moss bank
-  const cTrail = new THREE.Color(0x6e685f);  // Switchback stone path
-  const cSlate = new THREE.Color(0x566370);  // Mountain slate rock
-  const cSnow = new THREE.Color(0xe6f0fa);   // High alpine snow
-  const cGlacier = new THREE.Color(0x8fd0f5); // East/west glacier ice
+  const cForest = new THREE.Color(0x416e4e);     // Sun-warmed Kyirong conifer valley moss
+  const cStreamBank = new THREE.Color(0x527364); // Warm pebble & sunlit moss bank
+  const cTrail = new THREE.Color(0x948272);      // Golden-ochre switchback stone path
+  const cSlate = new THREE.Color(0x6e7b8b);      // Twilight-lit mountain slate rock
+  const cSnow = new THREE.Color(0xf6f8fc);       // Crisp high alpine snow
+  const cGlacier = new THREE.Color(0xa5e1fa);    // Luminous east/west glacier ice
+  const cAlpenglow = new THREE.Color(0xff9e6d);  // Firewatch coral-amber alpenglow kiss on high crests
   const tmpColor = new THREE.Color();
 
   for (let i = 0; i < posAttr.count; i++) {
@@ -331,6 +361,13 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
     const snowBlend = smoothstep(25, -38, lz);
     tmpColor.copy(cForest).lerp(cSlate, smoothstep(55, 5, lz));
     tmpColor.lerp(cSnow, snowBlend);
+
+    // Warm Firewatch alpenglow kiss across upper snow pass & western/southern sunlit ridges
+    const alpenglowFactor =
+      smoothstep(18, -55, lz) * (0.22 + 0.16 * smoothstep(-32, 32, -lx));
+    if (alpenglowFactor > 0.01) {
+      tmpColor.lerp(cAlpenglow, alpenglowFactor);
+    }
 
     // Damp river pebble tint along the Kyirong stream bed
     if (lz > 58 && lz < 75) {
@@ -352,7 +389,7 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
     // Glacier tint on northern and upper valley flanks
     if (lz < 5 && Math.abs(lx) > 22) {
       const gMix = smoothstep(22, 42, Math.abs(lx)) * smoothstep(5, -45, lz);
-      tmpColor.lerp(cGlacier, gMix * 0.75);
+      tmpColor.lerp(cGlacier, gMix * 0.72);
     }
 
     colorArr[i * 3] = tmpColor.r;
@@ -369,7 +406,9 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
       map: terrainDetailTex,
       bumpMap: terrainDetailTex,
       bumpScale: 0.07,
-      roughness: 0.86,
+      emissive: new THREE.Color(0x2e231d),
+      emissiveIntensity: 0.25,
+      roughness: 0.84,
       metalness: 0.05,
     })
   );
@@ -377,8 +416,24 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   terrainMesh.receiveShadow = true;
   root.add(terrainMesh);
 
+  // Shared 5-color Lungta prayer flag geometry, materials & animation registry
+  const animatedFlags = [];
+  const flagPlaneGeo = trackGeo(new THREE.PlaneGeometry(0.44, 0.34));
+  const lungtaMats = LUNGTA_COLORS.map((hex) =>
+    trackMat(
+      new THREE.MeshStandardMaterial({
+        color: hex,
+        emissive: hex,
+        emissiveIntensity: 0.32,
+        roughness: 0.58,
+        side: THREE.DoubleSide,
+      })
+    )
+  );
+
   // ==========================================================================
-  // 2. Southern Kyirong Valley: Stream, Bridge, Waypoint, Trail & Conifer Forest
+  // 2. Southern Kyirong Valley: Stream, Prayer-Flag Suspension Bridge,
+  //    Cloud-Inversion Sea of Mist, Waypoint, Trail & Conifer Forest
   // ==========================================================================
   const streamGeo = trackGeo(new THREE.PlaneGeometry(90, 4.2, 24, 2));
   streamGeo.rotateX(-Math.PI / 2);
@@ -393,12 +448,12 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   const streamMat = trackMat(
     new THREE.MeshStandardMaterial({
       color: 0x38bdf8,
-      emissive: 0x0c4a6e,
-      emissiveIntensity: 0.35,
-      roughness: 0.2,
-      metalness: 0.3,
+      emissive: 0x0e7490,
+      emissiveIntensity: 0.42,
+      roughness: 0.18,
+      metalness: 0.32,
       transparent: true,
-      opacity: 0.82,
+      opacity: 0.85,
     })
   );
   const streamMesh = new THREE.Mesh(streamGeo, streamMat);
@@ -432,46 +487,85 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   foamInst.instanceMatrix.needsUpdate = true;
   root.add(foamInst);
 
-  // Wooden footbridge over the Kyirong stream at (0, 67) with stone abutments & rope rails
+  // Real-World Kyirong Gorge Prayer-Flag Suspension Bridge at (0, 67)
+  // with stone towers, catenary suspension cables & fluttering 5-color Lungta flags
   const woodMat = trackMat(
-    new THREE.MeshStandardMaterial({ color: 0x6b4423, roughness: 0.85, flatShading: true })
+    new THREE.MeshStandardMaterial({
+      color: 0x7c4f2b,
+      emissive: 0x261408,
+      emissiveIntensity: 0.2,
+      roughness: 0.82,
+      flatShading: true,
+    })
   );
   const bridgeStoneMat = trackMat(
-    new THREE.MeshStandardMaterial({ color: 0x52606d, roughness: 0.88, flatShading: true })
+    new THREE.MeshStandardMaterial({
+      color: 0x64748b,
+      emissive: 0x1e293b,
+      emissiveIntensity: 0.18,
+      roughness: 0.86,
+      flatShading: true,
+    })
   );
   const bridgeRopeMat = trackMat(
-    new THREE.MeshStandardMaterial({ color: 0xb49264, roughness: 0.92, flatShading: true })
+    new THREE.MeshStandardMaterial({
+      color: 0xc8a472,
+      emissive: 0x3b2814,
+      emissiveIntensity: 0.18,
+      roughness: 0.88,
+      flatShading: true,
+    })
   );
   const brassCapMat = trackMat(
     new THREE.MeshStandardMaterial({
-      color: 0xd97706,
-      emissive: 0x78350f,
-      emissiveIntensity: 0.25,
-      roughness: 0.45,
-      metalness: 0.4,
+      color: 0xf59e0b,
+      emissive: 0x92400e,
+      emissiveIntensity: 0.36,
+      roughness: 0.38,
+      metalness: 0.48,
       flatShading: true,
     })
   );
   const bridgeGroup = new THREE.Group();
+  bridgeGroup.name = 'KyirongSuspensionBridge';
   const bridgeY = mangyulHeightFn(ORIGIN_X, 67) + 0.28;
   bridgeGroup.position.set(0, bridgeY, 67);
   const deck = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(3.8, 0.22, 6.2)), woodMat);
   bridgeGroup.add(deck);
 
-  // Stone bridge abutments at north & south banks
+  // Stone bridge abutments & twin suspension pylon towers at north & south banks
   const abutmentGeo = trackGeo(new THREE.BoxGeometry(4.3, 0.65, 0.85));
+  const pylonPillarGeo = trackGeo(new THREE.BoxGeometry(0.46, 3.1, 0.46));
+  const pylonCrossbeamGeo = trackGeo(new THREE.BoxGeometry(4.45, 0.28, 0.38));
   for (const az of [-3.05, 3.05]) {
     const abutment = new THREE.Mesh(abutmentGeo, bridgeStoneMat);
     abutment.position.set(0, -0.18, az);
     bridgeGroup.add(abutment);
+
+    // Portal crossbeam & twin stone/timber suspension pylons
+    const crossbeam = new THREE.Mesh(pylonCrossbeamGeo, woodMat);
+    crossbeam.position.set(0, 2.86, az);
+    bridgeGroup.add(crossbeam);
+    for (const px of [-1.85, 1.85]) {
+      const pylon = new THREE.Mesh(pylonPillarGeo, bridgeStoneMat);
+      pylon.position.set(px, 1.45, az);
+      const pylonCap = new THREE.Mesh(
+        trackGeo(new THREE.OctahedronGeometry(0.22, 0)),
+        brassCapMat
+      );
+      pylonCap.position.set(px, 3.14, az);
+      bridgeGroup.add(pylon, pylonCap);
+    }
   }
 
-  // Timber side curbs & twin rope handrails
+  // Timber side curbs, twin rope handrails, overhead catenary suspension cables & Lungta flags
   const curbBeamGeo = trackGeo(new THREE.BoxGeometry(0.18, 0.18, 6.2));
   const railRopeGeo = trackGeo(new THREE.CylinderGeometry(0.04, 0.04, 5.3, 6));
   railRopeGeo.rotateX(Math.PI / 2);
   const postGeo = trackGeo(new THREE.CylinderGeometry(0.12, 0.14, 1.3, 6));
   const postCapGeo = trackGeo(new THREE.OctahedronGeometry(0.15, 0));
+  const suspenderRopeGeo = trackGeo(new THREE.CylinderGeometry(0.02, 0.02, 1.0, 5));
+
   for (const px of [-1.75, 1.75]) {
     const curbBeam = new THREE.Mesh(curbBeamGeo, woodMat);
     curbBeam.position.set(px, 0.16, 0);
@@ -487,14 +581,154 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
       cap.position.set(px, 1.32, pz);
       bridgeGroup.add(post, cap);
     }
+
+    // Overhead sagging catenary suspension cable spanning between the north & south pylons
+    const catenaryCurve = new THREE.QuadraticBezierCurve3(
+      new THREE.Vector3(px, 2.82, -3.05),
+      new THREE.Vector3(px, 1.48, 0),
+      new THREE.Vector3(px, 2.82, 3.05)
+    );
+    const catenaryGeo = trackGeo(new THREE.TubeGeometry(catenaryCurve, 16, 0.036, 6, false));
+    const catenaryMesh = new THREE.Mesh(catenaryGeo, bridgeRopeMat);
+    bridgeGroup.add(catenaryMesh);
+
+    // Anchor backstay cables sloping into the north & south gorge banks
+    for (const dirZ of [-1, 1]) {
+      const backstayCurve = new THREE.QuadraticBezierCurve3(
+        new THREE.Vector3(px, 2.82, dirZ * 3.05),
+        new THREE.Vector3(px * 1.08, 1.45, dirZ * 4.35),
+        new THREE.Vector3(px * 1.15, 0.15, dirZ * 5.65)
+      );
+      const backstayGeo = trackGeo(new THREE.TubeGeometry(backstayCurve, 8, 0.028, 5, false));
+      bridgeGroup.add(new THREE.Mesh(backstayGeo, bridgeRopeMat));
+    }
+
+    // Vertical suspender ropes & 10 fluttering 5-color Lungta prayer flags along each catenary cable
+    for (let s = 1; s <= 9; s++) {
+      const u = s / 10;
+      const pt = catenaryCurve.getPoint(u);
+      if (s % 2 === 1) {
+        const suspH = Math.max(0.4, pt.y - 1.02);
+        const susp = new THREE.Mesh(suspenderRopeGeo, bridgeRopeMat);
+        susp.scale.set(1, suspH, 1);
+        susp.position.set(px, 1.02 + suspH * 0.5, pt.z);
+        bridgeGroup.add(susp);
+      }
+      const bFlag = new THREE.Mesh(flagPlaneGeo, lungtaMats[(s + (px > 0 ? 2 : 0)) % 5]);
+      bFlag.position.set(pt.x, pt.y - 0.16, pt.z);
+      bFlag.rotation.y = Math.PI / 2;
+      bridgeGroup.add(bFlag);
+      animatedFlags.push({
+        mesh: bFlag,
+        baseRotZ: 0,
+        phase: s * 0.65 + (px > 0 ? 1.4 : 0),
+      });
+    }
   }
   root.add(bridgeGroup);
+
+  // High Gorge-Spanning Prayer-Flag Catenary Lines across the Southern Kyirong Crossing (z ~ 46..70)
+  const gorgeFlagSpans = [
+    { x1: -15.5, y1: 6.2, z1: 69.5, x2: 15.5, y2: 6.4, z2: 65.0, sag: 1.55, flags: 12 },
+    { x1: -17.0, y1: 7.4, z1: 61.5, x2: 16.5, y2: 7.1, z2: 63.5, sag: 1.75, flags: 12 },
+    { x1: -18.5, y1: 8.6, z1: 53.0, x2: 18.0, y2: 8.2, z2: 55.5, sag: 1.85, flags: 14 },
+    { x1: -19.5, y1: 9.8, z1: 45.5, x2: 19.5, y2: 9.5, z2: 47.0, sag: 1.95, flags: 14 },
+  ];
+  const gorgeSpanGroup = new THREE.Group();
+  gorgeSpanGroup.name = 'KyirongGorgePrayerFlagCatenaries';
+  root.add(gorgeSpanGroup);
+
+  for (let sIdx = 0; sIdx < gorgeFlagSpans.length; sIdx++) {
+    const sp = gorgeFlagSpans[sIdx];
+    const pStart = new THREE.Vector3(
+      sp.x1,
+      mangyulHeightFn(ORIGIN_X + sp.x1, sp.z1) + sp.y1,
+      sp.z1
+    );
+    const pEnd = new THREE.Vector3(
+      sp.x2,
+      mangyulHeightFn(ORIGIN_X + sp.x2, sp.z2) + sp.y2,
+      sp.z2
+    );
+    const pMid = new THREE.Vector3(
+      (pStart.x + pEnd.x) * 0.5,
+      (pStart.y + pEnd.y) * 0.5 - sp.sag,
+      (pStart.z + pEnd.z) * 0.5
+    );
+    const spanCurve = new THREE.QuadraticBezierCurve3(pStart, pMid, pEnd);
+    const spanRopeGeo = trackGeo(new THREE.TubeGeometry(spanCurve, 18, 0.024, 5, false));
+    gorgeSpanGroup.add(new THREE.Mesh(spanRopeGeo, bridgeRopeMat));
+
+    const yaw = Math.atan2(pEnd.z - pStart.z, pEnd.x - pStart.x);
+    for (let f = 1; f <= sp.flags; f++) {
+      const u = f / (sp.flags + 1);
+      const pt = spanCurve.getPoint(u);
+      const fm = new THREE.Mesh(flagPlaneGeo, lungtaMats[(sIdx + f) % 5]);
+      fm.position.set(pt.x, pt.y - 0.18, pt.z);
+      fm.rotation.y = -yaw;
+      gorgeSpanGroup.add(fm);
+      animatedFlags.push({ mesh: fm, baseRotZ: 0, phase: sIdx * 1.3 + f * 0.55 });
+    }
+  }
+
+  // Multi-Layered Cloud-Inversion Sea of Mist hovering in the Kyirong Canyon Transition Zone (z ~ 10..55)
+  const cloudInversionTex = trackTex(createCloudInversionTexture());
+  const cloudSeaGroup = new THREE.Group();
+  cloudSeaGroup.name = 'KyirongCloudInversionSea';
+  root.add(cloudSeaGroup);
+
+  const cloudSeaLayers = [];
+  const cloudPlaneGeo = trackGeo(new THREE.PlaneGeometry(1, 1));
+  cloudPlaneGeo.rotateX(-Math.PI / 2);
+  const cloudRingGeo = trackGeo(new THREE.RingGeometry(0.18, 0.52, 32));
+  cloudRingGeo.rotateX(-Math.PI / 2);
+
+  const cloudLayerDefs = [
+    { x: 0, y: 2.35, z: 52, sx: 68, sz: 28, color: 0xffdfca, opacity: 0.30, speed: 0.32, isRing: false },
+    { x: -6, y: 3.15, z: 42, sx: 74, sz: 32, color: 0xfde2e4, opacity: 0.28, speed: -0.26, isRing: false },
+    { x: 5, y: 3.95, z: 32, sx: 78, sz: 34, color: 0xffe4c4, opacity: 0.28, speed: 0.24, isRing: true },
+    { x: -4, y: 4.75, z: 24, sx: 82, sz: 34, color: 0xe0f2fe, opacity: 0.26, speed: -0.28, isRing: false },
+    { x: 4, y: 5.55, z: 16, sx: 80, sz: 30, color: 0xffd8be, opacity: 0.25, speed: 0.22, isRing: true },
+    { x: 0, y: 6.25, z: 11, sx: 72, sz: 26, color: 0xfce7f3, opacity: 0.22, speed: -0.20, isRing: false },
+  ];
+  for (let i = 0; i < cloudLayerDefs.length; i++) {
+    const cd = cloudLayerDefs[i];
+    const cMat = trackMat(
+      new THREE.MeshBasicMaterial({
+        color: cd.color,
+        map: cloudInversionTex,
+        transparent: true,
+        opacity: cd.opacity,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      })
+    );
+    const cMesh = new THREE.Mesh(cd.isRing ? cloudRingGeo : cloudPlaneGeo, cMat);
+    cMesh.position.set(cd.x, cd.y, cd.z);
+    cMesh.scale.set(cd.sx, 1, cd.sz);
+    cloudSeaGroup.add(cMesh);
+    cloudSeaLayers.push({
+      mesh: cMesh,
+      mat: cMat,
+      baseX: cd.x,
+      baseY: cd.y,
+      baseOpacity: cd.opacity,
+      speed: cd.speed,
+      phase: i * 1.15,
+    });
+  }
 
   // Weathered Flagstone Stepping Slabs & Switchback Retaining Curbs / Cairns (InstancedMesh, 0 colliders)
   const FLAGSTONE_COUNT = 84;
   const flagstoneGeo = trackGeo(new THREE.CylinderGeometry(0.85, 0.95, 0.1, 7));
   const flagstoneMat = trackMat(
-    new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.9, flatShading: true })
+    new THREE.MeshStandardMaterial({
+      color: 0x788696,
+      emissive: 0x1e293b,
+      emissiveIntensity: 0.16,
+      roughness: 0.88,
+      flatShading: true,
+    })
   );
   const flagstoneInst = trackInst(
     new THREE.InstancedMesh(flagstoneGeo, flagstoneMat, FLAGSTONE_COUNT)
@@ -575,18 +809,37 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   root.add(wpGroup);
 
   // InstancedMesh Conifer Pines in Southern Valley & Lower Trail (72 trees = 3 draw calls)
+  // Warmed & brightened with subtle dusk emissive fill so woodland is vibrant at 17:16
   const PINE_COUNT = 72;
   const trunkGeo = trackGeo(new THREE.CylinderGeometry(0.18, 0.28, 1.8, 6));
   const foliageGeo1 = trackGeo(new THREE.ConeGeometry(1.35, 2.8, 7));
   const foliageGeo2 = trackGeo(new THREE.ConeGeometry(0.95, 2.2, 7));
   const trunkMat = trackMat(
-    new THREE.MeshStandardMaterial({ color: 0x4a321f, roughness: 0.9, flatShading: true })
+    new THREE.MeshStandardMaterial({
+      color: 0x68472c,
+      emissive: 0x29170b,
+      emissiveIntensity: 0.24,
+      roughness: 0.88,
+      flatShading: true,
+    })
   );
   const foliageMat = trackMat(
-    new THREE.MeshStandardMaterial({ color: 0x1e462c, roughness: 0.82, flatShading: true })
+    new THREE.MeshStandardMaterial({
+      color: 0x2d6640,
+      emissive: 0x163320,
+      emissiveIntensity: 0.26,
+      roughness: 0.78,
+      flatShading: true,
+    })
   );
   const snowFoliageMat = trackMat(
-    new THREE.MeshStandardMaterial({ color: 0x4b7265, roughness: 0.75, flatShading: true })
+    new THREE.MeshStandardMaterial({
+      color: 0x679887,
+      emissive: 0x2d4a43,
+      emissiveIntensity: 0.28,
+      roughness: 0.72,
+      flatShading: true,
+    })
   );
 
   const trunkInst = trackInst(new THREE.InstancedMesh(trunkGeo, trunkMat, PINE_COUNT));
@@ -640,7 +893,13 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   const JUNIPER_COUNT = 56;
   const juniperGeo = trackGeo(new THREE.DodecahedronGeometry(0.68, 1));
   const juniperMat = trackMat(
-    new THREE.MeshStandardMaterial({ color: 0x285442, roughness: 0.85, flatShading: true })
+    new THREE.MeshStandardMaterial({
+      color: 0x366e56,
+      emissive: 0x163024,
+      emissiveIntensity: 0.22,
+      roughness: 0.82,
+      flatShading: true,
+    })
   );
   const juniperInst = trackInst(new THREE.InstancedMesh(juniperGeo, juniperMat, JUNIPER_COUNT));
   for (let i = 0; i < JUNIPER_COUNT; i++) {
@@ -663,7 +922,13 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   const FERN_COUNT = 60;
   const fernGeo = trackGeo(new THREE.ConeGeometry(0.55, 0.62, 5));
   const fernMat = trackMat(
-    new THREE.MeshStandardMaterial({ color: 0x2d6a4f, roughness: 0.8, flatShading: true })
+    new THREE.MeshStandardMaterial({
+      color: 0x3b8462,
+      emissive: 0x173828,
+      emissiveIntensity: 0.22,
+      roughness: 0.78,
+      flatShading: true,
+    })
   );
   const fernInst = trackInst(new THREE.InstancedMesh(fernGeo, fernMat, FERN_COUNT));
   for (let i = 0; i < FERN_COUNT; i++) {
@@ -692,22 +957,28 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
 
   const tentClothMat = trackMat(
     new THREE.MeshStandardMaterial({
-      color: 0xe2d5be,
-      roughness: 0.85,
+      color: 0xf4e7ce,
+      emissive: 0x5c3a1d,
+      emissiveIntensity: 0.28,
+      roughness: 0.8,
       flatShading: true,
     })
   );
   const tentTrimMat = trackMat(
     new THREE.MeshStandardMaterial({
-      color: 0x991b1b,
-      roughness: 0.75,
+      color: 0xb91c1c,
+      emissive: 0x450a0a,
+      emissiveIntensity: 0.26,
+      roughness: 0.72,
       flatShading: true,
     })
   );
   const yakSkirtMat = trackMat(
     new THREE.MeshStandardMaterial({
-      color: 0x292524,
-      roughness: 0.92,
+      color: 0x3b332e,
+      emissive: 0x1c1613,
+      emissiveIntensity: 0.2,
+      roughness: 0.9,
       flatShading: true,
     })
   );
@@ -759,10 +1030,22 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
 
   // Two pack horses at the Envoy Camp
   const horseMat = trackMat(
-    new THREE.MeshStandardMaterial({ color: 0x5c3a21, roughness: 0.85, flatShading: true })
+    new THREE.MeshStandardMaterial({
+      color: 0x6e472b,
+      emissive: 0x26160a,
+      emissiveIntensity: 0.22,
+      roughness: 0.82,
+      flatShading: true,
+    })
   );
   const saddleMat = trackMat(
-    new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.75, flatShading: true })
+    new THREE.MeshStandardMaterial({
+      color: 0xd97706,
+      emissive: 0x5c2804,
+      emissiveIntensity: 0.24,
+      roughness: 0.72,
+      flatShading: true,
+    })
   );
   const horseBodyGeo = trackGeo(new THREE.BoxGeometry(0.65, 0.62, 1.35));
   const horseNeckGeo = trackGeo(new THREE.BoxGeometry(0.28, 0.55, 0.35));
@@ -987,6 +1270,128 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   root.add(snowdriftInst);
 
   // ==========================================================================
+  // 4b. Dramatic *Firewatch* Coral-Crimson Alpenglow ("日照金山") Horizon Peaks
+  //     Contrasting cool teal-indigo shadowed faces with sunlit coral/amber crests
+  // ==========================================================================
+  const alpenglowPeaksGroup = new THREE.Group();
+  alpenglowPeaksGroup.name = 'FirewatchAlpenglowPeaks';
+  root.add(alpenglowPeaksGroup);
+
+  const mtnShadowIndigoMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      color: 0x1e3a5f,
+      emissive: 0x0f253e,
+      emissiveIntensity: 0.28,
+      roughness: 0.86,
+      flatShading: true,
+    })
+  );
+  const mtnTwilightRoseMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      color: 0xd99b8c,
+      emissive: 0x6b2737,
+      emissiveIntensity: 0.34,
+      roughness: 0.62,
+      flatShading: true,
+    })
+  );
+  const mtnCoralAlpenglowMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      color: 0xff6b4a,
+      emissive: 0xff451a,
+      emissiveIntensity: 0.66,
+      roughness: 0.38,
+      metalness: 0.12,
+      flatShading: true,
+    })
+  );
+  const mtnGoldenSummitMat = trackMat(
+    new THREE.MeshStandardMaterial({
+      color: 0xffb36b,
+      emissive: 0xff9436,
+      emissiveIntensity: 0.74,
+      roughness: 0.28,
+      metalness: 0.18,
+      flatShading: true,
+    })
+  );
+
+  const alpenglowPeakBaseGeo = trackGeo(new THREE.ConeGeometry(1, 1, 6));
+  const alpenglowPeakMidGeo = trackGeo(new THREE.ConeGeometry(1, 1, 5));
+  const alpenglowPeakHornGeo = trackGeo(new THREE.ConeGeometry(1, 1, 4));
+
+  const alpenglowPeakDefs = [
+    // Towering Gungthang / Himalayan northern & northwestern horizon range
+    { x: 0, z: -146, r: 44, h: 98, rotY: 0.35, goldHorn: true },
+    { x: -54, z: -138, r: 38, h: 88, rotY: -0.42, goldHorn: true },
+    { x: 54, z: -138, r: 36, h: 84, rotY: 0.52, goldHorn: false },
+    { x: -96, z: -116, r: 34, h: 78, rotY: 0.18, goldHorn: true },
+    { x: 96, z: -116, r: 32, h: 74, rotY: -0.28, goldHorn: false },
+    { x: -118, z: -64, r: 30, h: 72, rotY: 0.64, goldHorn: true },
+    { x: 118, z: -64, r: 29, h: 68, rotY: -0.58, goldHorn: false },
+    { x: -116, z: -8, r: 28, h: 64, rotY: 0.24, goldHorn: true },
+    { x: 116, z: -8, r: 27, h: 62, rotY: -0.34, goldHorn: false },
+  ];
+
+  for (let i = 0; i < alpenglowPeakDefs.length; i++) {
+    const pk = alpenglowPeakDefs[i];
+    const pkGroup = new THREE.Group();
+    pkGroup.position.set(pk.x, -2, pk.z);
+
+    // 1. Cool teal-indigo shadowed lower massif
+    const baseCone = new THREE.Mesh(alpenglowPeakBaseGeo, mtnShadowIndigoMat);
+    baseCone.scale.set(pk.r, pk.h * 0.68, pk.r * 0.88);
+    baseCone.position.y = pk.h * 0.34;
+    baseCone.rotation.y = pk.rotY;
+    pkGroup.add(baseCone);
+
+    // 2. Twilight lavender-rose mid snow face (offset slightly toward sunlit west/south-west)
+    const midCone = new THREE.Mesh(alpenglowPeakMidGeo, mtnTwilightRoseMat);
+    midCone.scale.set(pk.r * 0.66, pk.h * 0.52, pk.r * 0.58);
+    midCone.position.set(-pk.r * 0.04, pk.h * 0.54, pk.r * 0.04);
+    midCone.rotation.y = pk.rotY + 0.3;
+    pkGroup.add(midCone);
+
+    // 3. Vibrant Firewatch coral-crimson sunlit upper crest
+    const coralCrest = new THREE.Mesh(alpenglowPeakMidGeo, mtnCoralAlpenglowMat);
+    coralCrest.scale.set(pk.r * 0.42, pk.h * 0.36, pk.r * 0.38);
+    coralCrest.position.set(-pk.r * 0.06, pk.h * 0.74, pk.r * 0.05);
+    coralCrest.rotation.y = pk.rotY + 0.55;
+    pkGroup.add(coralCrest);
+
+    // 4. Dazzling golden-amber alpenglow horn summit ("日照金山")
+    const summitHorn = new THREE.Mesh(
+      alpenglowPeakHornGeo,
+      pk.goldHorn ? mtnGoldenSummitMat : mtnCoralAlpenglowMat
+    );
+    summitHorn.scale.set(pk.r * 0.24, pk.h * 0.24, pk.r * 0.22);
+    summitHorn.position.set(-pk.r * 0.05, pk.h * 0.90, pk.r * 0.04);
+    summitHorn.rotation.y = pk.rotY + 0.8;
+    pkGroup.add(summitHorn);
+
+    alpenglowPeaksGroup.add(pkGroup);
+  }
+
+  // Radiant Firewatch Coral-Gold Alpenglow Horizon Halo behind the main northern Gungthang peak
+  const alpenglowHaloMat = trackMat(
+    new THREE.MeshBasicMaterial({
+      color: 0xff8a5b,
+      map: cloudInversionTex,
+      transparent: true,
+      opacity: 0.38,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    })
+  );
+  const alpenglowHaloMesh = new THREE.Mesh(
+    trackGeo(new THREE.PlaneGeometry(165, 92)),
+    alpenglowHaloMat
+  );
+  alpenglowHaloMesh.position.set(0, 56, -152);
+  alpenglowPeaksGroup.add(alpenglowHaloMesh);
+
+  // ==========================================================================
   // 5. Pass Latse (山口拉則) + Boss Arena at (3000, -65), r = 18
   // ==========================================================================
   const passY = mangyulHeightFn(ORIGIN_X, -65);
@@ -1145,20 +1550,6 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   cairnCenter.add(spirePole, spireCrown, spireTurquoiseRing);
 
   // Prayer flag arrays radiating from the Latse cairn
-  const animatedFlags = [];
-  const flagPlaneGeo = trackGeo(new THREE.PlaneGeometry(0.44, 0.34));
-  const lungtaMats = LUNGTA_COLORS.map((hex) =>
-    trackMat(
-      new THREE.MeshStandardMaterial({
-        color: hex,
-        emissive: hex,
-        emissiveIntensity: 0.28,
-        roughness: 0.6,
-        side: THREE.DoubleSide,
-      })
-    )
-  );
-
   for (let strand = 0; strand < 6; strand++) {
     const ang = (strand / 6) * Math.PI * 2;
     const strandGroup = new THREE.Group();
@@ -1199,6 +1590,131 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
     fm.position.set(fx, fy, 0);
     hungPassFlagsGroup.add(fm);
     animatedFlags.push({ mesh: fm, baseRotZ: 0, phase: f * 0.55 });
+  }
+
+  // ==========================================================================
+  // 5b. *SEASON*-Style Visual Wind Streamlines & Diagonal Alpenglow Sunbeams
+  // ==========================================================================
+  const windStreamlinesGroup = new THREE.Group();
+  windStreamlinesGroup.name = 'SeasonWindStreamlines';
+  root.add(windStreamlinesGroup);
+
+  const windRibbonCyanMat = trackMat(
+    new THREE.MeshBasicMaterial({
+      color: 0xa5f3fc,
+      transparent: true,
+      opacity: 0.28,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    })
+  );
+  const windRibbonGoldMat = trackMat(
+    new THREE.MeshBasicMaterial({
+      color: 0xfed7aa,
+      transparent: true,
+      opacity: 0.25,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    })
+  );
+
+  // Swirling Torus wind-wave arcs around the Pass Latse cairn & boss arena (z = -65)
+  const windStreamlineRibbons = [];
+  const passWindArcDefs = [
+    { r: 5.2, tube: 0.045, arc: Math.PI * 1.15, y: passY + 2.4, z: -71.5, speed: 0.85, tiltX: 0.12, tiltZ: -0.08, gold: false },
+    { r: 7.8, tube: 0.05, arc: Math.PI * 0.95, y: passY + 3.8, z: -71.5, speed: -0.72, tiltX: -0.14, tiltZ: 0.10, gold: true },
+    { r: 11.4, tube: 0.055, arc: Math.PI * 0.82, y: passY + 2.1, z: -65.0, speed: 0.64, tiltX: 0.08, tiltZ: 0.06, gold: false },
+    { r: 14.8, tube: 0.06, arc: Math.PI * 0.76, y: passY + 3.4, z: -65.0, speed: -0.58, tiltX: -0.09, tiltZ: -0.07, gold: true },
+    { r: 17.2, tube: 0.05, arc: Math.PI * 0.68, y: passY + 4.8, z: -65.0, speed: 0.52, tiltX: 0.11, tiltZ: -0.09, gold: false },
+  ];
+
+  for (let i = 0; i < passWindArcDefs.length; i++) {
+    const wd = passWindArcDefs[i];
+    const arcGeo = trackGeo(new THREE.TorusGeometry(wd.r, wd.tube, 6, 28, wd.arc));
+    arcGeo.rotateX(Math.PI / 2);
+    const arcMesh = new THREE.Mesh(
+      arcGeo,
+      wd.gold ? windRibbonGoldMat : windRibbonCyanMat
+    );
+    arcMesh.position.set(0, wd.y, wd.z);
+    arcMesh.rotation.set(wd.tiltX, i * 1.2, wd.tiltZ);
+    windStreamlinesGroup.add(arcMesh);
+    windStreamlineRibbons.push({
+      mesh: arcMesh,
+      baseY: wd.y,
+      speed: wd.speed,
+      phase: i * 1.3,
+    });
+  }
+
+  // Sweeping S-curve TubeGeometry wind streamlines gliding along the canyon ridge & Kyirong gorge
+  const canyonWindHeights = [-36, -12, 14, 38, 62];
+  for (let i = 0; i < canyonWindHeights.length; i++) {
+    const wz = canyonWindHeights[i];
+    const wy = mangyulHeightFn(ORIGIN_X, wz) + 3.2 + (i % 2) * 1.4;
+    const dir = i % 2 === 0 ? 1 : -1;
+    const windCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-18 * dir, wy - 0.6, wz - 6),
+      new THREE.Vector3(-6 * dir, wy + 0.8, wz - 2),
+      new THREE.Vector3(6 * dir, wy - 0.4, wz + 2),
+      new THREE.Vector3(18 * dir, wy + 0.9, wz + 6),
+    ]);
+    const windTubeGeo = trackGeo(new THREE.TubeGeometry(windCurve, 20, 0.048, 5, false));
+    const windTubeMesh = new THREE.Mesh(
+      windTubeGeo,
+      i % 2 === 0 ? windRibbonGoldMat : windRibbonCyanMat
+    );
+    windStreamlinesGroup.add(windTubeMesh);
+    windStreamlineRibbons.push({
+      mesh: windTubeMesh,
+      baseY: 0,
+      speed: 0,
+      phase: i * 0.95,
+      isCanyonWave: true,
+    });
+  }
+
+  // Diagonal Golden-Coral Sunbeam Shafts piercing the mountain pass & canyon at 17:16 dusk
+  const sunbeamsGroup = new THREE.Group();
+  sunbeamsGroup.name = 'FirewatchDiagonalSunbeams';
+  root.add(sunbeamsGroup);
+
+  const sunbeamShaftGeo = trackGeo(new THREE.CylinderGeometry(1.1, 3.6, 36, 12, 1, true));
+  const sunbeamShafts = [];
+  const sunbeamDefs = [
+    { x: -10, y: passY + 13, z: -68, rotZ: -0.58, rotX: 0.18, scaleX: 1.3, scaleZ: 1.3, color: 0xffb36b, opacity: 0.14 },
+    { x: 6, y: passY + 14, z: -60, rotZ: -0.56, rotX: 0.16, scaleX: 1.15, scaleZ: 1.15, color: 0xff8a5b, opacity: 0.12 },
+    { x: -8, y: 19, z: -26, rotZ: -0.60, rotX: 0.15, scaleX: 1.25, scaleZ: 1.25, color: 0xffb36b, opacity: 0.13 },
+    { x: 4, y: 16, z: 6, rotZ: -0.58, rotX: 0.14, scaleX: 1.35, scaleZ: 1.35, color: 0xff9e6d, opacity: 0.13 },
+    { x: -6, y: 14, z: 32, rotZ: -0.55, rotX: 0.16, scaleX: 1.4, scaleZ: 1.4, color: 0xffb36b, opacity: 0.14 },
+    { x: 6, y: 12, z: 54, rotZ: -0.54, rotX: 0.15, scaleX: 1.25, scaleZ: 1.25, color: 0xffc078, opacity: 0.13 },
+  ];
+
+  for (let i = 0; i < sunbeamDefs.length; i++) {
+    const sb = sunbeamDefs[i];
+    const sbMat = trackMat(
+      new THREE.MeshBasicMaterial({
+        color: sb.color,
+        transparent: true,
+        opacity: sb.opacity,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      })
+    );
+    const sbMesh = new THREE.Mesh(sunbeamShaftGeo, sbMat);
+    sbMesh.position.set(sb.x, sb.y, sb.z);
+    sbMesh.rotation.set(sb.rotX, 0, sb.rotZ);
+    sbMesh.scale.set(sb.scaleX, 1, sb.scaleZ);
+    sunbeamsGroup.add(sbMesh);
+    sunbeamShafts.push({
+      mesh: sbMesh,
+      mat: sbMat,
+      baseOpacity: sb.opacity,
+      phase: i * 1.1,
+    });
   }
 
   // ==========================================================================
@@ -1970,6 +2486,34 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
     flameOuter.scale.set(1, flicker, 1);
     flameInner.scale.set(1, 1.05 + (1 - flicker), 1);
     fireGlowDiscMat.opacity = 0.22 + (flicker - 0.85) * 0.35;
+
+    // 4b. Kyirong Cloud-Inversion Sea of Mist drift, SEASON wind streamlines & diagonal sunbeams
+    for (let i = 0; i < cloudSeaLayers.length; i++) {
+      const cl = cloudSeaLayers[i];
+      cl.mesh.position.x = cl.baseX + Math.sin(elapsed * cl.speed + cl.phase) * 3.8;
+      cl.mesh.position.y = cl.baseY + Math.cos(elapsed * 0.45 + cl.phase) * 0.16;
+      cl.mat.opacity = cl.baseOpacity + Math.sin(elapsed * 0.7 + cl.phase) * 0.04;
+    }
+
+    const windWaveBoost = 1.0 + northFactor * 0.65;
+    for (let i = 0; i < windStreamlineRibbons.length; i++) {
+      const wr = windStreamlineRibbons[i];
+      if (wr.isCanyonWave) {
+        wr.mesh.position.x = Math.sin(elapsed * 1.1 + wr.phase) * 1.25;
+        wr.mesh.position.y = Math.cos(elapsed * 1.6 + wr.phase) * 0.32;
+      } else {
+        wr.mesh.rotation.y += dt * wr.speed * windWaveBoost;
+        wr.mesh.position.y = wr.baseY + Math.sin(elapsed * 1.8 + wr.phase) * 0.24;
+      }
+    }
+    windRibbonCyanMat.opacity = 0.22 + Math.sin(elapsed * 2.1) * 0.06 + northFactor * 0.08;
+    windRibbonGoldMat.opacity = 0.20 + Math.cos(elapsed * 1.7) * 0.05 + northFactor * 0.06;
+
+    for (let i = 0; i < sunbeamShafts.length; i++) {
+      const sb = sunbeamShafts[i];
+      sb.mat.opacity = sb.baseOpacity + Math.sin(elapsed * 1.4 + sb.phase) * 0.025;
+    }
+    alpenglowHaloMat.opacity = 0.34 + Math.sin(elapsed * 1.1) * 0.05;
 
     // 5. Altar Oath Stone rotation & UI interaction prompt
     for (let i = 0; i < altars.length; i++) {
