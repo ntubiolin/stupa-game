@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { i18n } from '../src/i18n.js';
 import { createDialogue } from '../src/ui/dialogue.js';
-import { getNpcDef } from '../src/data/npcs.js';
+import { NPCS, getNpcDef } from '../src/data/npcs.js';
 
 function installDomStub() {
   const elementsById = new Map();
@@ -179,4 +179,71 @@ test('createDialogue registers Ch2-Ch5 chapter dialogues and Pharping NPC defini
     assert.ok(def, `Expected NPC definition for '${npcId}' to be registered`);
     assert.equal(def.map, 'pharping');
   }
+});
+
+test('every NPC in NPCS across stupa and ch1-ch5 maps has all dialogue IDs registered out-of-the-box in createDialogue', () => {
+  const { elementsById } = installDomStub();
+  const ctx = {
+    state: { uiOpen: false, zone: 'stupa' },
+    bus: { emit() {} },
+    i18n,
+    quests: {
+      hasFlag: () => false,
+      setFlag() {},
+      start() {},
+      completeStep() {},
+      isActive: () => false,
+      isDone: () => false,
+      isAtStep: () => false,
+    },
+    codex: { unlock() {} },
+    inventory: { addTurquoise() {} },
+    vitals: { addExp() {} },
+    zones: { teleport() {} },
+  };
+
+  const dialogue = createDialogue(ctx);
+  const speakerEl = elementsById.get('dialogue-speaker');
+  const textEl = elementsById.get('dialogue-text');
+
+  const mapsCovered = new Set();
+  const checkedDialogueIds = new Set();
+
+  for (const npc of NPCS) {
+    mapsCovered.add(npc.map);
+    const raw = npc.dialogue ?? npc.dialogueId;
+    const dlgIds =
+      typeof raw === 'string'
+        ? [raw]
+        : Array.isArray(raw)
+          ? raw.map((branch) => branch?.id).filter(Boolean)
+          : [];
+
+    assert.ok(dlgIds.length > 0, `NPC '${npc.id}' (${npc.map}) should reference at least one dialogue ID`);
+
+    for (const dlgId of dlgIds) {
+      checkedDialogueIds.add(dlgId);
+      const opened = dialogue.open(dlgId, {
+        npcId: npc.id,
+        speaker: npc.nameKey,
+        look: npc.look === 'monk' ? 'lama' : (npc.look || 'lama'),
+      });
+      assert.equal(
+        opened,
+        true,
+        `Expected dialogue.open('${dlgId}') for NPC '${npc.id}' (${npc.map}) to return true`
+      );
+      assert.equal(dialogue.isOpen(), true);
+      dialogue.skip();
+      assert.ok(speakerEl.textContent.length > 0, `Speaker for '${dlgId}' (${npc.id}) should be non-empty`);
+      assert.ok(textEl.innerHTML.length > 0, `Text for '${dlgId}' (${npc.id}) should be non-empty`);
+      dialogue.close();
+      assert.equal(dialogue.isOpen(), false);
+    }
+  }
+
+  for (const expectedMap of ['stupa', 'pharping', 'mangyul', 'yarlung', 'samye', 'chimphu']) {
+    assert.equal(mapsCovered.has(expectedMap), true, `Expected NPCS to cover map '${expectedMap}'`);
+  }
+  assert.ok(checkedDialogueIds.size >= 40, `Expected at least 40 NPC dialogue branches verified, got ${checkedDialogueIds.size}`);
 });

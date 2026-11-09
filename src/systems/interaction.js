@@ -227,5 +227,6 @@ export function createInteraction(ctx) {
     getCurrentTarget() { return currentTarget; },
   };
   ctx.interaction = api;
+  ctx.debug?.register?.('interaction', api);
   return api;
 }
