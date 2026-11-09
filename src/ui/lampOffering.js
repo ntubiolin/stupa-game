@@ -921,8 +921,9 @@ export function createLampOfferingUi(ctx) {
     }
   });
 
-  // Listen to station lighting events from `lamps.js`
-  bus.on('lamp:litByPlayer', ({ stationIdx = 0, lampIdx = 0 } = {}) => {
+  // Listen to station lighting events from `lamps.js` (ignore quick-lighting via [F])
+  bus.on('lamp:litByPlayer', ({ stationIdx = 0, lampIdx = 0, quick = false } = {}) => {
+    if (quick) return;
     open({ stationIdx, lampIdx, tab: 'offer', fromStationLight: true });
   });
 
@@ -987,6 +988,7 @@ export function createLampOfferingUi(ctx) {
     toggle: (opts) => api.toggle(opts),
     isOpen: () => api.isOpen(),
   });
+  ctx.debug?.register('lampOfferingUi', api);
 
   return api;
 }
