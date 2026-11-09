@@ -558,6 +558,16 @@ export function createHud(ctx) {
                   <span class="debug-chapter-btn__title">第五章・青朴聖地與伏藏界</span>
                   <span class="debug-chapter-btn__desc">益西措嘉・無盡伏藏秘境・終章圓滿</span>
                 </button>
+                <button type="button" class="debug-chapter-btn" data-skip-chapter="toji">
+                  <span class="debug-chapter-btn__tag">🇯🇵 空海大師篇 · 京都</span>
+                  <span class="debug-chapter-btn__title">京都東寺・教王護國寺</span>
+                  <span class="debug-chapter-btn__desc">五重塔・金堂藥師三尊・講堂二十一尊立體曼荼羅</span>
+                </button>
+                <button type="button" class="debug-chapter-btn" data-skip-chapter="koyasan">
+                  <span class="debug-chapter-btn__tag">🇯🇵 空海大師篇 · 高野山</span>
+                  <span class="debug-chapter-btn__title">高野山・金剛峯寺</span>
+                  <span class="debug-chapter-btn__desc">壇上伽藍根本大塔・蟠龍庭・奧之院萬燈籠堂</span>
+                </button>
               </div>
             </section>
 
@@ -1152,6 +1162,12 @@ export function createHud(ctx) {
       if (target === 'stupa') {
         await ctx.zones?.teleport?.('stupa', { spawn: 'south' });
         showToast({ text: '☸ 已傳送回博達哈大佛塔', kind: 'info' });
+      } else if (target === 'toji') {
+        await ctx.zones?.teleport?.('toji', { spawn: 'gojunoto' });
+        showToast({ text: '🏯 已傳送至京都東寺・教王護國寺', kind: 'info' });
+      } else if (target === 'koyasan') {
+        await ctx.zones?.teleport?.('koyasan', { spawn: 'garan' });
+        showToast({ text: '⛰️ 已傳送至高野山・金剛峯寺', kind: 'info' });
       } else if (target) {
         await ctx.quests?.skipTo?.(target);
         showToast({ text: `☸ 已跳關至 ${target.toUpperCase()}`, kind: 'info' });
