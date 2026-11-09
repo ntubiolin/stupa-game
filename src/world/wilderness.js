@@ -82,6 +82,73 @@ function createSeededRng(seed = 12345) {
   };
 }
 
+let _wildSunbeamTex = null;
+function getWildSunbeamTexture() {
+  if (_wildSunbeamTex) return _wildSunbeamTex;
+  if (typeof document === 'undefined' || typeof document.createElement !== 'function') {
+    return null;
+  }
+  const canvas = document.createElement('canvas');
+  if (!canvas || typeof canvas.getContext !== 'function') return null;
+  canvas.width = 128;
+  canvas.height = 256;
+  const g = canvas.getContext('2d');
+  if (!g) return null;
+
+  g.clearRect(0, 0, 128, 256);
+  // Soft vertical + horizontal gaussian-like sunbeam shaft gradient
+  for (let y = 0; y < 256; y++) {
+    const v = y / 255;
+    // Fade smoothly at top sky origin and bottom ground contact
+    const vAlpha = Math.sin(v * Math.PI) * (1.0 - v * 0.35);
+    const rowGrad = g.createLinearGradient(0, y, 128, y);
+    rowGrad.addColorStop(0.0, 'rgba(255, 224, 150, 0.0)');
+    rowGrad.addColorStop(0.25, `rgba(255, 214, 130, ${(vAlpha * 0.45).toFixed(4)})`);
+    rowGrad.addColorStop(0.5, `rgba(255, 240, 190, ${(vAlpha * 0.92).toFixed(4)})`);
+    rowGrad.addColorStop(0.75, `rgba(255, 214, 130, ${(vAlpha * 0.45).toFixed(4)})`);
+    rowGrad.addColorStop(1.0, 'rgba(255, 224, 150, 0.0)');
+    g.fillStyle = rowGrad;
+    g.fillRect(0, y, 128, 1);
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  _wildSunbeamTex = tex;
+  return tex;
+}
+
+/**
+ * Attach a hemisphere-friendly SEASON x Firewatch shader grade to a StandardMaterial
+ * so terrain and crag boulders retain warm amber highlights and lavender-indigo shadow lift at dusk.
+ * Preserves `#include <color_fragment>` so downstream cinematicArt hooks chain cleanly.
+ */
+function applySteppeSunsetGrade(material, {
+  shadowFloor = [0.17, 0.14, 0.16],
+  warmTint = [1.06, 1.02, 0.95],
+  cacheTag = 'wild-sunset-grade',
+} = {}) {
+  if (!material) return;
+  const prevCompile = material.onBeforeCompile;
+  const prevKey = material.customProgramCacheKey ? material.customProgramCacheKey() : '';
+  const [sr, sg, sb] = shadowFloor;
+  const [wr, wg, wb] = warmTint;
+  material.onBeforeCompile = function (shader, renderer) {
+    if (typeof prevCompile === 'function') {
+      prevCompile.call(this, shader, renderer);
+    }
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <color_fragment>',
+      /* glsl */ `
+      #include <color_fragment>
+      diffuseColor.rgb = max(diffuseColor.rgb, vec3(${sr.toFixed(3)}, ${sg.toFixed(3)}, ${sb.toFixed(3)}));
+      diffuseColor.rgb *= vec3(${wr.toFixed(3)}, ${wg.toFixed(3)}, ${wb.toFixed(3)});
+      `,
+    );
+  };
+  material.customProgramCacheKey = () => `${prevKey}|${cacheTag}`;
+  material.needsUpdate = true;
+}
+
 export function createWilderness(ctx) {
   const { scene, state, config, colliders, bus } = ctx;
   const W = config.WILD;
@@ -95,17 +162,24 @@ export function createWilderness(ctx) {
   const getHeight = (x, z) => computeWildernessHeight(x, z, W);
 
   // ---------------------------------------------------------------- 1. Materials
-  const plasterMat = new THREE.MeshStandardMaterial({ color: 0xede6d8, roughness: 0.90 });
-  const maroonMat = new THREE.MeshStandardMaterial({ color: 0x7c1e19, roughness: 0.72 });
-  const woodMat = new THREE.MeshStandardMaterial({ color: 0x3d2417, roughness: 0.80 });
-  const tileMat = new THREE.MeshStandardMaterial({ color: 0x48413b, roughness: 0.76 });
-  const goldMat = new THREE.MeshStandardMaterial({ color: 0xf5bf42, roughness: 0.28, metalness: 0.84 });
-  const slateMat = new THREE.MeshStandardMaterial({ color: 0x5e5a54, roughness: 0.86, metalness: 0.05 });
+  const plasterMat = new THREE.MeshStandardMaterial({ color: 0xf2eadc, roughness: 0.88, emissive: 0x261d14, emissiveIntensity: 0.12 });
+  const maroonMat = new THREE.MeshStandardMaterial({ color: 0x85221c, roughness: 0.70, emissive: 0x240907, emissiveIntensity: 0.12 });
+  const woodMat = new THREE.MeshStandardMaterial({ color: 0x452819, roughness: 0.80 });
+  const tileMat = new THREE.MeshStandardMaterial({ color: 0x524942, roughness: 0.76 });
+  const goldMat = new THREE.MeshStandardMaterial({ color: 0xf7c648, roughness: 0.26, metalness: 0.84, emissive: 0x4a3008, emissiveIntensity: 0.20 });
+  const slateMat = new THREE.MeshStandardMaterial({ color: 0x6b6468, roughness: 0.84, metalness: 0.05, emissive: 0x1d1822, emissiveIntensity: 0.12 });
   const rockMat = new THREE.MeshStandardMaterial({
-    color: 0x6e6962,
+    color: 0x8a7e76,
     vertexColors: true,
-    roughness: 0.90,
+    roughness: 0.88,
     metalness: 0.05,
+    emissive: 0x241d29,
+    emissiveIntensity: 0.16,
+  });
+  applySteppeSunsetGrade(rockMat, {
+    shadowFloor: [0.20, 0.17, 0.21],
+    warmTint: [1.05, 1.01, 0.97],
+    cacheTag: 'wild-rock-sunset',
   });
 
   // Helper for the gentle S-curve of the pilgrimage path from South Gate (z=60) to Boss Arena (z=-48)
@@ -120,13 +194,14 @@ export function createWilderness(ctx) {
   const vertexCount = posAttr.count;
   const colorAttr = new Float32Array(vertexCount * 3);
 
-  // Palette colors for alpine steppe
-  const grassCol = new THREE.Color(0x82845c);  // dry alpine ochre-green
-  const scrubCol = new THREE.Color(0x9a8856);  // steppe straw/gravel
-  const slateCol = new THREE.Color(0x625e58);  // exposed mountain slate
-  const snowCol = new THREE.Color(0xdee5ee);   // perimeter frost/snow dusting
-  const trailCol = new THREE.Color(0xa6987e);  // worn pilgrimage flagstone earth
-  const arenaCol = new THREE.Color(0x8899a8);  // frost-rimmed glacial stone arena
+  // SEASON x Firewatch palette colors for Kathmandu-Helambu Highland Steppe
+  const grassCol = new THREE.Color(0xb89648);  // warm golden-ochre alpine meadow
+  const scrubCol = new THREE.Color(0x9e8244);  // sunlit amber steppe tussock
+  const screeCol = new THREE.Color(0xa86b4c);  // Firewatch terracotta scree & warm earth
+  const slateCol = new THREE.Color(0x756d78);  // lavender-slate mountain shadow stone
+  const snowCol = new THREE.Color(0xf0e9f2);   // alpenglow-kissed perimeter frost/snow
+  const trailCol = new THREE.Color(0xc4ae88);  // warm sunlit sandstone pilgrimage trail
+  const arenaCol = new THREE.Color(0x96a8ba);  // frost-rimmed glacial stone arena
 
   for (let i = 0; i < vertexCount; i++) {
     const lx = posAttr.getX(i);
@@ -140,31 +215,45 @@ export function createWilderness(ctx) {
     const c = new THREE.Color();
     const noise = Math.sin(wx * 0.12) * Math.cos(wz * 0.14) * 0.5 + 0.5;
     const micro = Math.sin(wx * 0.37 - wz * 0.31) * 0.5 + 0.5;
+    const strata = Math.sin(y * 2.8 + wx * 0.07 - wz * 0.06) * 0.5 + 0.5;
 
     if (y > 7.5) {
-      c.lerpColors(slateCol, snowCol, Math.min(1, (y - 7.5) / 8));
-    } else if (y > 3.0) {
-      c.lerpColors(scrubCol, slateCol, Math.min(1, (y - 3.0) / 4.5));
-    } else {
-      c.lerpColors(grassCol, scrubCol, noise * 0.78 + micro * 0.22);
-      if (r < 10) {
-        // Subtle worn Kora plaza tone around central Chorten
-        c.lerp(trailCol, 0.42 * (1 - r / 10));
+      c.lerpColors(slateCol, snowCol, Math.min(1, (y - 7.5) / 7.5));
+      if (strata > 0.55) {
+        c.lerp(screeCol, 0.18 * (strata - 0.55));
       }
-      // Subtle worn pilgrimage path corridor from South Gate to Northern Boss Arena
-      if (lz >= -30 && lz <= 60) {
+    } else if (y > 2.8) {
+      const slopeT = Math.min(1, (y - 2.8) / 4.7);
+      c.lerpColors(scrubCol, screeCol, Math.min(1, slopeT * 1.35));
+      c.lerp(slateCol, slopeT * 0.62 + (1 - strata) * 0.16);
+    } else {
+      c.lerpColors(grassCol, scrubCol, noise * 0.72 + micro * 0.28);
+      if (micro > 0.64) {
+        // Painterly terracotta scree & warm amber patches across the steppe
+        c.lerp(screeCol, (micro - 0.64) * 0.55);
+      }
+      if (noise < 0.28) {
+        // Subtle lavender-slate shadow dips in hollows
+        c.lerp(slateCol, (0.28 - noise) * 0.42);
+      }
+      if (r < 10.5) {
+        // Warm sunlit Kora plaza tone around central Chorten
+        c.lerp(trailCol, 0.56 * (1 - r / 10.5));
+      }
+      // Sunlit amber pilgrimage path corridor from South Gate to Northern Boss Arena
+      if (lz >= -32 && lz <= 60) {
         const dPath = Math.abs(lx - getPathCenterX(lz));
-        if (dPath < 3.0) {
-          c.lerp(trailCol, (1 - dPath / 3.0) * 0.38);
+        if (dPath < 3.4) {
+          c.lerp(trailCol, (1 - dPath / 3.4) * 0.52);
         }
       }
       // Frost-rimmed glacial stone tone inside & around the Northern Migoi Boss Arena
       const dArena = Math.hypot(lx, lz + 48);
       if (dArena < MIGOI_ARENA_RADIUS + 4) {
         const arenaT = 1 - dArena / (MIGOI_ARENA_RADIUS + 4);
-        c.lerp(arenaCol, 0.45 * arenaT);
+        c.lerp(arenaCol, 0.48 * arenaT);
         if (Math.abs(dArena - (MIGOI_ARENA_RADIUS - 0.5)) < 2.2) {
-          c.lerp(snowCol, 0.35);
+          c.lerp(snowCol, 0.38);
         }
       }
     }
@@ -180,20 +269,120 @@ export function createWilderness(ctx) {
   const detailTex = createGroundDetailTexture(4109);
   const terrainMat = new THREE.MeshStandardMaterial({
     vertexColors: true,
-    roughness: 0.94,
+    roughness: 0.92,
     metalness: 0.02,
+    emissive: 0x2c2014,
+    emissiveIntensity: 0.18,
     ...(detailTex ? { map: detailTex, bumpMap: detailTex, bumpScale: 0.06 } : {}),
+  });
+  applySteppeSunsetGrade(terrainMat, {
+    shadowFloor: [0.19, 0.15, 0.16],
+    warmTint: [1.08, 1.03, 0.94],
+    cacheTag: 'wild-terrain-sunset',
   });
   const terrainMesh = new THREE.Mesh(terrainGeo, terrainMat);
   terrainMesh.position.set(origin.x, 0, origin.z);
   terrainMesh.receiveShadow = true;
   group.add(terrainMesh);
 
-  // ---------------------------------------------------------------- 3. Distant Himalayan Mountain Peaks Ring
+  // ---------------------------------------------------------------- 3. 4-Layer Firewatch Mountain Silhouettes, Alpenglow & Valley Mist Ring
   const mCfg = W.mountains || { count: 24, innerRadius: 125, outerRadius: 180, minHeight: 38, maxHeight: 75 };
   const mountainGeos = [];
   const mPeaks = mCfg.count;
 
+  // Helper to re-grade a peak geometry with Firewatch sienna foothills or Himalayan coral-gold Alpenglow + violet-indigo shadows
+  const tintMountainLayer = (geo, peakH, layerType, angleAroundOrigin) => {
+    const pos = geo.attributes.position;
+    const norm = geo.attributes.normal;
+    const col = geo.attributes.color;
+    if (!pos || !col) return geo;
+
+    // Sunset light comes from west-southwest
+    const sunDirX = -0.68;
+    const sunDirZ = 0.52;
+
+    for (let v = 0; v < pos.count; v++) {
+      const vx = pos.getX(v);
+      const vy = pos.getY(v);
+      const vz = pos.getZ(v);
+      const nx = norm ? norm.getX(v) : 0;
+      const ny = norm ? norm.getY(v) : 0.5;
+      const nz = norm ? norm.getZ(v) : 0;
+      const u = THREE.MathUtils.clamp((vy + peakH * 0.5) / peakH, 0, 1);
+      const sunDot = THREE.MathUtils.clamp(nx * sunDirX + nz * sunDirZ + ny * 0.35, -1, 1) * 0.5 + 0.5;
+
+      let r = col.getX(v);
+      let g = col.getY(v);
+      let b = col.getZ(v);
+
+      if (layerType === 'foothill') {
+        // Layer 1: Warm Firewatch burnt-sienna / amber foothills with deep plum-indigo base
+        const baseR = 0.31;
+        const baseG = 0.23;
+        const baseB = 0.32;
+        const crestR = THREE.MathUtils.lerp(0.68, 0.84, sunDot);
+        const crestG = THREE.MathUtils.lerp(0.41, 0.56, sunDot);
+        const crestB = THREE.MathUtils.lerp(0.32, 0.38, sunDot);
+        const ridgeT = Math.pow(u, 0.85);
+        r = THREE.MathUtils.lerp(baseR, crestR, ridgeT);
+        g = THREE.MathUtils.lerp(baseG, crestG, ridgeT);
+        b = THREE.MathUtils.lerp(baseB, crestB, ridgeT);
+      } else {
+        // Layers 2 & 3: Himalayan peaks with coral-gold Alpenglow snow faces & deep violet-indigo shadowed flanks
+        const isFar = layerType === 'far';
+        const snowStart = isFar ? 0.36 : 0.44;
+        if (u >= snowStart) {
+          const snowT = THREE.MathUtils.clamp((u - snowStart) / (1 - snowStart), 0, 1);
+          const alpenMix = THREE.MathUtils.clamp(sunDot * 0.75 + snowT * 0.35, 0, 1);
+          // Shadowed violet-blue snow -> sunlit coral-gold Alpenglow
+          r = THREE.MathUtils.lerp(0.58, 1.00, alpenMix);
+          g = THREE.MathUtils.lerp(0.54, 0.82, alpenMix);
+          b = THREE.MathUtils.lerp(0.74, 0.66, alpenMix);
+        } else {
+          // Deep violet-indigo flanks with warm sienna scree transition
+          const flankT = u / snowStart;
+          const shadowR = isFar ? 0.25 : 0.23;
+          const shadowG = isFar ? 0.20 : 0.19;
+          const shadowB = isFar ? 0.38 : 0.34;
+          const screeR = THREE.MathUtils.lerp(0.46, 0.72, sunDot);
+          const screeG = THREE.MathUtils.lerp(0.36, 0.50, sunDot);
+          const screeB = THREE.MathUtils.lerp(0.48, 0.46, sunDot);
+          r = THREE.MathUtils.lerp(shadowR, screeR, Math.pow(flankT, 1.15));
+          g = THREE.MathUtils.lerp(shadowG, screeG, Math.pow(flankT, 1.15));
+          b = THREE.MathUtils.lerp(shadowB, screeB, Math.pow(flankT, 1.15));
+        }
+        // Subtle atmospheric perspective haze on far layer
+        if (isFar) {
+          const hazeMix = 0.22 + 0.12 * Math.sin(angleAroundOrigin);
+          r = THREE.MathUtils.lerp(r, 0.78, hazeMix);
+          g = THREE.MathUtils.lerp(g, 0.62, hazeMix);
+          b = THREE.MathUtils.lerp(b, 0.68, hazeMix);
+        }
+      }
+
+      col.setXYZ(v, r, g, b);
+    }
+    col.needsUpdate = true;
+    return geo;
+  };
+
+  // Layer 1: Foreground/Midground connected Firewatch warm sienna/amber foothills ring (r = 92..118m)
+  const foothillCount = 28;
+  for (let i = 0; i < foothillCount; i++) {
+    const a = (i / foothillCount) * Math.PI * 2;
+    const dist = 92 + ((i * 29) % 14) * 1.85;
+    const fx = origin.x + Math.cos(a) * dist;
+    const fz = origin.z + Math.sin(a) * dist;
+    const fH = 16 + ((i * 41) % 15) * 1.05;
+    const fR = 17 + ((i * 19) % 9) * 1.15;
+    const foothill = buildHimalayanPeakGeometry(fR, fH, i + 301, 0.88, 8, 4);
+    foothill.rotateY((i * 1.3) % (Math.PI * 2));
+    tintMountainLayer(foothill, fH, 'foothill', a);
+    foothill.translate(fx, fH * 0.5 - 2.5, fz);
+    mountainGeos.push(foothill);
+  }
+
+  // Layer 2 & 3: Main Himalayan peaks & flanking spurs (r = 125..180m) + Far Alpenglow giants (r = 188..232m)
   for (let i = 0; i < mPeaks; i++) {
     const a = (i / mPeaks) * Math.PI * 2;
     const dist = mCfg.innerRadius + ((i * 37) % 19) * 2.2;
@@ -202,9 +391,10 @@ export function createWilderness(ctx) {
     const peakH = mCfg.minHeight + ((i * 53) % 29) * 1.35;
     const peakR = 24 + ((i * 17) % 11) * 1.4;
 
-    // Primary faceted Himalayan peak
+    // Primary faceted Himalayan peak with Alpenglow
     const cone = buildHimalayanPeakGeometry(peakR, peakH, i, 0.44, 10, 5);
     cone.rotateY((i * 1.7) % (Math.PI * 2));
+    tintMountainLayer(cone, peakH, 'main', a);
     cone.translate(px, peakH * 0.5 - 2, pz);
     mountainGeos.push(cone);
 
@@ -215,12 +405,30 @@ export function createWilderness(ctx) {
     const spurR = peakR * 0.66;
     const spur = buildHimalayanPeakGeometry(spurR, spurH, i + 101, 0.52, 8, 4);
     spur.rotateY(((i + 5) * 2.1) % (Math.PI * 2));
+    tintMountainLayer(spur, spurH, 'main', spurAngle);
     spur.translate(
       origin.x + Math.cos(spurAngle) * spurDist,
       spurH * 0.5 - 2.5,
       origin.z + Math.sin(spurAngle) * spurDist
     );
     mountainGeos.push(spur);
+
+    // Outer Layer 3: Towering distant Himalayan Alpenglow horizon silhouette every second sector
+    if (i % 2 === 0) {
+      const farAngle = a + 0.11;
+      const farDist = 192 + ((i * 23) % 17) * 2.3;
+      const farH = 64 + ((i * 31) % 21) * 1.95;
+      const farR = 32 + ((i * 13) % 9) * 1.8;
+      const farPeak = buildHimalayanPeakGeometry(farR, farH, i + 501, 0.36, 9, 4);
+      farPeak.rotateY((i * 2.4) % (Math.PI * 2));
+      tintMountainLayer(farPeak, farH, 'far', farAngle);
+      farPeak.translate(
+        origin.x + Math.cos(farAngle) * farDist,
+        farH * 0.5 - 4.0,
+        origin.z + Math.sin(farAngle) * farDist
+      );
+      mountainGeos.push(farPeak);
+    }
   }
 
   if (mountainGeos.length) {
@@ -229,10 +437,56 @@ export function createWilderness(ctx) {
       vertexColors: true,
       roughness: 0.90,
       metalness: 0.03,
+      emissive: 0x261a2b,
+      emissiveIntensity: 0.22,
     });
     const mMesh = new THREE.Mesh(mMeshGeo, mMat);
+    mMesh.name = 'WildernessMountainSilhouettes';
     group.add(mMesh);
   }
+
+  // Layer 4: Soft Valley Mist Ring hovering around the outer foothill base (r = 85..135m) & Northern Chasm / Migoi Boss Arena (z = -48)
+  const mistGroup = new THREE.Group();
+  mistGroup.name = 'WildernessValleyMist';
+  const foothillMistGeo = new THREE.RingGeometry(85, 135, 64);
+  foothillMistGeo.rotateX(-Math.PI / 2);
+  const foothillMistMat = new THREE.MeshBasicMaterial({
+    color: 0xd9b3a6,
+    transparent: true,
+    opacity: 0.22,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const foothillMistMesh = new THREE.Mesh(foothillMistGeo, foothillMistMat);
+  foothillMistMesh.position.set(origin.x, 2.35, origin.z);
+  mistGroup.add(foothillMistMesh);
+
+  const upperMistVeilGeo = new THREE.CylinderGeometry(118, 96, 6.5, 48, 1, true);
+  const upperMistVeilMat = new THREE.MeshBasicMaterial({
+    color: 0xc8a4b8,
+    transparent: true,
+    opacity: 0.16,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const upperMistVeilMesh = new THREE.Mesh(upperMistVeilGeo, upperMistVeilMat);
+  upperMistVeilMesh.position.set(origin.x, 5.2, origin.z);
+  mistGroup.add(upperMistVeilMesh);
+
+  // Northern Cliff / Migoi Boss Arena chasm mist ring at (origin.x, origin.z - 48)
+  const chasmMistGeo = new THREE.RingGeometry(MIGOI_ARENA_RADIUS + 0.8, MIGOI_ARENA_RADIUS + 18.0, 48);
+  chasmMistGeo.rotateX(-Math.PI / 2);
+  const chasmMistMat = new THREE.MeshBasicMaterial({
+    color: 0xc9d6e8,
+    transparent: true,
+    opacity: 0.22,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const chasmMistMesh = new THREE.Mesh(chasmMistGeo, chasmMistMat);
+  chasmMistMesh.position.set(origin.x, getHeight(origin.x, origin.z - 48) + 0.42, origin.z - 48);
+  mistGroup.add(chasmMistMesh);
+  group.add(mistGroup);
 
   // ---------------------------------------------------------------- 4. Return Mountain Gate (返回佛塔山門)
   const gateX = W.wildGate.x;
@@ -532,7 +786,7 @@ export function createWilderness(ctx) {
   const rng = createSeededRng(7789);
   const placedBoulders = [];
 
-  // Helper to shade a rock geometry with stratified earthy base, slate middle & frost/lichen crest
+  // Helper to shade a rock geometry with SEASON x Firewatch warm ochre strata, lavender-slate shadows & alpenglow frost crest
   const applyCragVertexColors = (geo, tint = 1.0, frostBoost = 0.0) => {
     geo.computeVertexNormals();
     const pos = geo.attributes.position;
@@ -542,22 +796,26 @@ export function createWilderness(ctx) {
       const vx = pos.getX(v);
       const vy = pos.getY(v);
       const vz = pos.getZ(v);
+      const nx = norm.getX(v);
       const ny = norm.getY(v);
-      const strata = Math.sin(vy * 8.5 + vx * 2.1 - vz * 1.7) * 0.045;
-      let r = (0.76 + strata) * tint;
-      let g = (0.75 + strata) * tint;
-      let b = (0.73 + strata) * tint;
+      const nz = norm.getZ(v);
+      const strata = Math.sin(vy * 8.5 + vx * 2.1 - vz * 1.7) * 0.055;
+      const sunExpose = THREE.MathUtils.clamp((-nx * 0.65 + nz * 0.45 + ny * 0.35) * 0.5 + 0.5, 0, 1);
+      // Blend lavender-slate shadow side with warm golden-sienna sunlit face
+      let r = (THREE.MathUtils.lerp(0.62, 0.88, sunExpose) + strata) * tint;
+      let g = (THREE.MathUtils.lerp(0.56, 0.78, sunExpose) + strata) * tint;
+      let b = (THREE.MathUtils.lerp(0.66, 0.70, sunExpose) + strata) * tint;
       if (vy < -0.20) {
         const bt = Math.min(1, (-0.20 - vy) / 0.65);
-        r = THREE.MathUtils.lerp(r, 0.45 * tint, bt);
-        g = THREE.MathUtils.lerp(g, 0.44 * tint, bt);
-        b = THREE.MathUtils.lerp(b, 0.39 * tint, bt);
+        r = THREE.MathUtils.lerp(r, 0.52 * tint, bt);
+        g = THREE.MathUtils.lerp(g, 0.45 * tint, bt);
+        b = THREE.MathUtils.lerp(b, 0.42 * tint, bt);
       }
       if (ny > 0.42 - frostBoost * 0.25) {
         const ct = Math.min(1, (ny - (0.42 - frostBoost * 0.25)) / 0.48);
-        r = THREE.MathUtils.lerp(r, 0.94 + frostBoost * 0.04, ct * (0.76 + frostBoost * 0.2));
-        g = THREE.MathUtils.lerp(g, 0.96 + frostBoost * 0.03, ct * (0.76 + frostBoost * 0.2));
-        b = THREE.MathUtils.lerp(b, 0.98 + frostBoost * 0.02, ct * (0.76 + frostBoost * 0.2));
+        r = THREE.MathUtils.lerp(r, 0.98 + frostBoost * 0.02, ct * (0.78 + frostBoost * 0.2));
+        g = THREE.MathUtils.lerp(g, 0.93 + frostBoost * 0.04, ct * (0.78 + frostBoost * 0.2));
+        b = THREE.MathUtils.lerp(b, 0.92 + frostBoost * 0.06, ct * (0.78 + frostBoost * 0.2));
       }
       cols[v * 3 + 0] = r;
       cols[v * 3 + 1] = g;
@@ -925,7 +1183,8 @@ export function createWilderness(ctx) {
     group.add(flagstoneInstanced);
   }
 
-  // ---------------------------------------------------------------- 7d. Highland Alpine Foliage (InstancedMesh, 2 draw calls, 0 colliders)
+  // ---------------------------------------------------------------- 7d. Highland Alpine Foliage (InstancedMesh, 320 Golden Tussocks + Rhododendron Scrub, 0 colliders)
+  const tussockWindUniform = { value: 0 };
   {
     const folRng = createSeededRng(5513);
 
@@ -934,11 +1193,11 @@ export function createWilderness(ctx) {
       const lz = wz - origin.z;
       if (Math.hypot(wx - gateX, wz - gateZ) < 8.5) return false;
       if (Math.hypot(wx - chortenX, wz - chortenZ) < 6.2) return false;
-      if (lz >= -30 && lz <= 60 && Math.abs(lx - getPathCenterX(lz)) < 2.3) return false;
+      if (lz >= -30 && lz <= 60 && Math.abs(lx - getPathCenterX(lz)) < 2.2) return false;
       if (Math.hypot(wx - arenaX, wz - arenaZ) < MIGOI_ARENA_RADIUS - 0.4) return false;
       if (Math.hypot(wx - (origin.x + 8.8), wz - (origin.z - 12.4)) < 3.4) return false;
       for (let m = 0; m < maniList.length; m++) {
-        if (Math.hypot(wx - maniList[m].x, wz - maniList[m].z) < 4.5) return false;
+        if (Math.hypot(wx - maniList[m].x, wz - maniList[m].z) < 4.2) return false;
       }
       for (let b = 0; b < placedBoulders.length; b++) {
         if (Math.hypot(wx - placedBoulders[b].x, wz - placedBoulders[b].z) < placedBoulders[b].r + 0.8) return false;
@@ -946,21 +1205,21 @@ export function createWilderness(ctx) {
       return true;
     };
 
-    // 1. Alpine tussock grass & shrub clumps (~220 instances, 1 draw call)
+    // 1. Swaying Golden-Amber Alpine Tussock Grass & Wildflower Tufts (320 instances, 1 draw call)
     const bladeGeos = [];
-    const bladeCount = 6;
+    const bladeCount = 7;
     for (let b = 0; b < bladeCount; b++) {
       const ba = (b / bladeCount) * Math.PI * 2 + (b % 2) * 0.25;
-      const bH = 0.46 + (b % 3) * 0.09;
-      const blade = new THREE.ConeGeometry(0.11, bH, 4, 1);
+      const bH = 0.50 + (b % 3) * 0.11;
+      const blade = new THREE.ConeGeometry(0.115, bH, 4, 2);
       blade.translate(0, bH * 0.5, 0);
-      blade.rotateX(0.32 + (b % 2) * 0.14);
+      blade.rotateX(0.30 + (b % 2) * 0.15);
       blade.rotateY(ba);
-      blade.translate(Math.cos(ba) * 0.10, 0, Math.sin(ba) * 0.10);
+      blade.translate(Math.cos(ba) * 0.11, 0, Math.sin(ba) * 0.11);
       bladeGeos.push(blade);
     }
-    const cushion = new THREE.SphereGeometry(0.20, 6, 5);
-    cushion.scale(1.25, 0.55, 1.25);
+    const cushion = new THREE.SphereGeometry(0.21, 6, 5);
+    cushion.scale(1.28, 0.56, 1.28);
     cushion.translate(0, 0.09, 0);
     bladeGeos.push(cushion);
 
@@ -969,20 +1228,48 @@ export function createWilderness(ctx) {
     const tPos = tussockGeo.attributes.position;
     const tCols = new Float32Array(tPos.count * 3);
     for (let v = 0; v < tPos.count; v++) {
-      const u = THREE.MathUtils.clamp(tPos.getY(v) / 0.55, 0, 1);
-      // Root-to-tip gradient: dark olive-earth base -> golden-ochre & sage tips
-      tCols[v * 3 + 0] = THREE.MathUtils.lerp(0.36, 0.86, u);
-      tCols[v * 3 + 1] = THREE.MathUtils.lerp(0.39, 0.84, u);
-      tCols[v * 3 + 2] = THREE.MathUtils.lerp(0.24, 0.56, u);
+      const u = THREE.MathUtils.clamp(tPos.getY(v) / 0.58, 0, 1);
+      // Root-to-tip gradient: warm sienna-olive earth base -> luminous golden-amber & sunlit ochre tips
+      tCols[v * 3 + 0] = THREE.MathUtils.lerp(0.46, 0.96, u);
+      tCols[v * 3 + 1] = THREE.MathUtils.lerp(0.39, 0.82, u);
+      tCols[v * 3 + 2] = THREE.MathUtils.lerp(0.22, 0.44, u);
     }
     tussockGeo.setAttribute('color', new THREE.BufferAttribute(tCols, 3));
 
     const tussocks = [];
     let tAttempts = 0;
-    while (tussocks.length < 220 && tAttempts < 1200) {
+    // First seed 96 golden tussock clumps bordering the S-curve pilgrimage path & around the 3 Mani stone cairns
+    while (tussocks.length < 96 && tAttempts < 600) {
+      tAttempts++;
+      let wx;
+      let wz;
+      if (tussocks.length < 64) {
+        const lz = -28 + folRng() * 84;
+        const side = folRng() > 0.5 ? 1 : -1;
+        const lx = getPathCenterX(lz) + side * (2.5 + folRng() * 3.8);
+        wx = origin.x + lx;
+        wz = origin.z + lz;
+      } else {
+        const ms = maniList[tussocks.length % Math.max(1, maniList.length)] || { x: origin.x, z: origin.z };
+        const ma = folRng() * Math.PI * 2;
+        const mr = 4.6 + folRng() * 4.5;
+        wx = ms.x + Math.cos(ma) * mr;
+        wz = ms.z + Math.sin(ma) * mr;
+      }
+      if (!isClearForFoliage(wx, wz)) continue;
+      tussocks.push({
+        x: wx,
+        y: getHeight(wx, wz),
+        z: wz,
+        s: 0.78 + folRng() * 0.82,
+        ry: folRng() * Math.PI * 2,
+      });
+    }
+    // Fill remaining up to 320 clumps across the Highland Steppe
+    while (tussocks.length < 320 && tAttempts < 2200) {
       tAttempts++;
       const a = folRng() * Math.PI * 2;
-      const rad = 5.5 + folRng() * 64;
+      const rad = 5.5 + folRng() * 65;
       const wx = origin.x + Math.cos(a) * rad;
       const wz = origin.z + Math.sin(a) * rad;
       if (!isClearForFoliage(wx, wz)) continue;
@@ -990,7 +1277,7 @@ export function createWilderness(ctx) {
         x: wx,
         y: getHeight(wx, wz),
         z: wz,
-        s: 0.72 + folRng() * 0.78,
+        s: 0.72 + folRng() * 0.84,
         ry: folRng() * Math.PI * 2,
       });
     }
@@ -998,10 +1285,31 @@ export function createWilderness(ctx) {
     const tussockMat = new THREE.MeshStandardMaterial({
       color: 0xffffff,
       vertexColors: true,
-      roughness: 0.92,
+      roughness: 0.88,
       metalness: 0.02,
+      emissive: 0x38280e,
+      emissiveIntensity: 0.22,
     });
+    tussockMat.onBeforeCompile = function (shader) {
+      shader.uniforms.uWindTime = tussockWindUniform;
+      shader.vertexShader =
+        `uniform float uWindTime;\n` +
+        shader.vertexShader.replace(
+          '#include <begin_vertex>',
+          /* glsl */ `
+          #include <begin_vertex>
+          float tipWeight = clamp(position.y / 0.56, 0.0, 1.0);
+          float worldPhase = (instanceMatrix[3][0] * 0.19) + (instanceMatrix[3][2] * 0.15);
+          float gust = sin(uWindTime * 2.1 + worldPhase) * 0.085 + cos(uWindTime * 1.3 - worldPhase * 0.7) * 0.04;
+          transformed.x += gust * tipWeight * tipWeight;
+          transformed.z += gust * 0.55 * tipWeight * tipWeight;
+          `,
+        );
+    };
+    tussockMat.customProgramCacheKey = () => 'wild-tussock-sway-v1';
+
     const tussockInstanced = new THREE.InstancedMesh(tussockGeo, tussockMat, tussocks.length);
+    tussockInstanced.name = 'WildernessTussockGrass';
     tussockInstanced.receiveShadow = true;
 
     const dummy = new THREE.Object3D();
@@ -1010,16 +1318,16 @@ export function createWilderness(ctx) {
       const p = tussocks[i];
       dummy.position.set(p.x, p.y - 0.02, p.z);
       dummy.rotation.set(0, p.ry, 0);
-      dummy.scale.set(p.s, p.s * (0.85 + folRng() * 0.35), p.s);
+      dummy.scale.set(p.s, p.s * (0.85 + folRng() * 0.38), p.s);
       dummy.updateMatrix();
       tussockInstanced.setMatrixAt(i, dummy.matrix);
 
-      const frostMix = p.z < -18 || p.y > 4.5 ? 0.28 : 0.0;
-      const warm = 0.85 + folRng() * 0.30;
+      const frostMix = p.z < -20 || p.y > 4.8 ? 0.24 : 0.0;
+      const warm = 0.90 + folRng() * 0.28;
       tCol.setRGB(
-        THREE.MathUtils.lerp(warm, 0.92, frostMix),
+        THREE.MathUtils.lerp(warm * 1.05, 0.94, frostMix),
         THREE.MathUtils.lerp(warm * (0.94 + folRng() * 0.12), 0.95, frostMix),
-        THREE.MathUtils.lerp(warm * 0.82, 1.00, frostMix)
+        THREE.MathUtils.lerp(warm * 0.76, 1.00, frostMix)
       );
       tussockInstanced.setColorAt(i, tCol);
     }
@@ -1027,31 +1335,31 @@ export function createWilderness(ctx) {
     if (tussockInstanced.instanceColor) tussockInstanced.instanceColor.needsUpdate = true;
     group.add(tussockInstanced);
 
-    // 2. Highland Rhododendron, Himalayan Blue Poppy & Edelweiss flower clusters (~90 instances, 1 draw call)
+    // 2. Highland Rhododendron Scrub, Himalayan Blue Poppy & Edelweiss Flower Clusters (~110 instances, 1 draw call)
     const flowerParts = [];
-    for (let l = 0; l < 3; l++) {
-      const la = (l / 3) * Math.PI * 2;
-      const leaf = new THREE.ConeGeometry(0.14, 0.18, 4, 1);
-      leaf.rotateX(1.1);
+    for (let l = 0; l < 4; l++) {
+      const la = (l / 4) * Math.PI * 2;
+      const leaf = new THREE.ConeGeometry(0.16, 0.22, 5, 1);
+      leaf.rotateX(1.05);
       leaf.rotateY(la);
-      leaf.translate(Math.cos(la) * 0.10, 0.05, Math.sin(la) * 0.10);
+      leaf.translate(Math.cos(la) * 0.12, 0.06, Math.sin(la) * 0.12);
       const lCount = leaf.attributes.position.count;
       const lCols = new Float32Array(lCount * 3);
       for (let v = 0; v < lCount; v++) {
-        lCols[v * 3 + 0] = 0.34;
-        lCols[v * 3 + 1] = 0.48;
+        lCols[v * 3 + 0] = 0.36;
+        lCols[v * 3 + 1] = 0.50;
         lCols[v * 3 + 2] = 0.30;
       }
       leaf.setAttribute('color', new THREE.BufferAttribute(lCols, 3));
       flowerParts.push(leaf);
 
-      const bloom = new THREE.SphereGeometry(0.085, 6, 5);
-      bloom.scale(1.25, 0.72, 1.25);
-      bloom.translate(Math.cos(la + 0.5) * 0.09, 0.16 + (l % 2) * 0.05, Math.sin(la + 0.5) * 0.09);
+      const bloom = new THREE.SphereGeometry(0.095, 6, 5);
+      bloom.scale(1.28, 0.76, 1.28);
+      bloom.translate(Math.cos(la + 0.45) * 0.10, 0.18 + (l % 2) * 0.06, Math.sin(la + 0.45) * 0.10);
       const bCount = bloom.attributes.position.count;
       const bCols = new Float32Array(bCount * 3);
       for (let v = 0; v < bCount; v++) {
-        bCols[v * 3 + 0] = 0.98;
+        bCols[v * 3 + 0] = 0.99;
         bCols[v * 3 + 1] = 0.98;
         bCols[v * 3 + 2] = 0.98;
       }
@@ -1064,10 +1372,10 @@ export function createWilderness(ctx) {
 
     const flowers = [];
     let fAttempts = 0;
-    while (flowers.length < 90 && fAttempts < 600) {
+    while (flowers.length < 110 && fAttempts < 800) {
       fAttempts++;
       const a = folRng() * Math.PI * 2;
-      const rad = 6.0 + folRng() * 56;
+      const rad = 5.8 + folRng() * 58;
       const wx = origin.x + Math.cos(a) * rad;
       const wz = origin.z + Math.sin(a) * rad;
       if (!isClearForFoliage(wx, wz)) continue;
@@ -1075,26 +1383,29 @@ export function createWilderness(ctx) {
         x: wx,
         y: getHeight(wx, wz),
         z: wz,
-        s: 0.80 + folRng() * 0.65,
+        s: 0.85 + folRng() * 0.72,
         ry: folRng() * Math.PI * 2,
         paletteIdx: Math.floor(folRng() * 4),
       });
     }
 
     const flowerPalette = [
-      new THREE.Color(0xf4effa), // silvery-white alpine edelweiss
-      new THREE.Color(0xe6658c), // highland rhododendron rose-pink
-      new THREE.Color(0x66a3f2), // Himalayan blue poppy
-      new THREE.Color(0xf5cf56), // golden alpine cinquefoil
+      new THREE.Color(0xfaf4ff), // silvery-white alpine edelweiss
+      new THREE.Color(0xf06292), // highland rhododendron crimson-rose
+      new THREE.Color(0x64b5f6), // Himalayan blue poppy
+      new THREE.Color(0xffd54f), // golden alpine cinquefoil
     ];
 
     const flowerMat = new THREE.MeshStandardMaterial({
       color: 0xffffff,
       vertexColors: true,
-      roughness: 0.84,
+      roughness: 0.80,
       metalness: 0.02,
+      emissive: 0x2e1c24,
+      emissiveIntensity: 0.18,
     });
     const flowerInstanced = new THREE.InstancedMesh(flowerGeo, flowerMat, flowers.length);
+    flowerInstanced.name = 'WildernessRhododendronScrub';
     flowerInstanced.receiveShadow = true;
 
     for (let i = 0; i < flowers.length; i++) {
@@ -1195,6 +1506,101 @@ export function createWilderness(ctx) {
     group.add(flagsMesh);
   }
 
+  // ---------------------------------------------------------------- 8b. Diagonal Firewatch Sunset Sunbeams (8 God Rays, 0 PointLights)
+  const sunbeamsGroup = new THREE.Group();
+  sunbeamsGroup.name = 'WildernessSunsetSunbeams';
+  const sunbeamTex = getWildSunbeamTexture();
+  const sunbeamGeo = new THREE.PlaneGeometry(1, 1);
+  const sunbeams = [];
+  const sunbeamSpecs = [
+    // 1. Central Tibetan Chorten golden-hour shaft
+    { lx: -2.2, lz: 0.5, y: 11.5, w: 9.5, h: 26.0, rotY: 0.28, rotZ: -0.44, opacity: 0.18, color: 0xffcf78 },
+    // 2. Southwest Mani Stone Cairn shaft
+    { lx: (maniList[0]?.x ?? (origin.x - 18)) - origin.x - 1.5, lz: (maniList[0]?.z ?? 18) - origin.z, y: 10.5, w: 7.6, h: 23.0, rotY: 0.35, rotZ: -0.42, opacity: 0.15, color: 0xffc66e },
+    // 3. Southeast Mani Stone Cairn shaft
+    { lx: (maniList[1]?.x ?? (origin.x + 18)) - origin.x - 1.5, lz: (maniList[1]?.z ?? 18) - origin.z, y: 10.5, w: 7.6, h: 23.0, rotY: -0.22, rotZ: -0.42, opacity: 0.15, color: 0xffc66e },
+    // 4. Northern Mani Stone Cairn shaft
+    { lx: (maniList[2]?.x ?? (origin.x - 15)) - origin.x - 1.5, lz: (maniList[2]?.z ?? -16) - origin.z, y: 10.8, w: 8.0, h: 24.0, rotY: 0.18, rotZ: -0.45, opacity: 0.16, color: 0xffd68a },
+    // 5. South Return Gate pilgrimage entry shaft
+    { lx: -1.8, lz: 52.0, y: 10.2, w: 8.4, h: 22.5, rotY: 0.15, rotZ: -0.40, opacity: 0.15, color: 0xffc266 },
+    // 6. Mid-South S-Curve Pilgrimage Trail shaft
+    { lx: 1.4, lz: 28.0, y: 10.6, w: 8.2, h: 23.5, rotY: -0.25, rotZ: -0.43, opacity: 0.14, color: 0xffce75 },
+    // 7. Ancient Pilgrim's Map Tilted Cairn shaft
+    { lx: 7.2, lz: -12.5, y: 10.4, w: 7.4, h: 22.0, rotY: 0.32, rotZ: -0.44, opacity: 0.15, color: 0xffd482 },
+    // 8. Northern Boss Arena Gateway threshold shaft
+    { lx: -2.0, lz: -33.5, y: 11.2, w: 9.0, h: 25.0, rotY: 0.12, rotZ: -0.46, opacity: 0.14, color: 0xffe2a8 },
+  ];
+
+  for (let i = 0; i < sunbeamSpecs.length; i++) {
+    const sb = sunbeamSpecs[i];
+    const sbMat = new THREE.MeshBasicMaterial({
+      ...(sunbeamTex ? { map: sunbeamTex } : {}),
+      color: sb.color,
+      transparent: true,
+      opacity: sb.opacity,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      toneMapped: false,
+    });
+    const sbMesh = new THREE.Mesh(sunbeamGeo, sbMat);
+    sbMesh.position.set(origin.x + sb.lx, sb.y, origin.z + sb.lz);
+    sbMesh.rotation.set(0.12, sb.rotY, sb.rotZ);
+    sbMesh.scale.set(sb.w, sb.h, 1);
+    sunbeamsGroup.add(sbMesh);
+    sunbeams.push({ mesh: sbMesh, mat: sbMat, baseOpacity: sb.opacity, phase: i * 1.17 });
+  }
+  group.add(sunbeamsGroup);
+
+  // ---------------------------------------------------------------- 8c. Floating SEASON Golden Wind & Memory Motes (THREE.Points)
+  const moteCount = 140;
+  const moteRng = createSeededRng(9127);
+  const moteGeo = new THREE.BufferGeometry();
+  const motePos = new Float32Array(moteCount * 3);
+  const moteColors = new Float32Array(moteCount * 3);
+  const moteBaseY = new Float32Array(moteCount);
+  const moteGold = new THREE.Color(0xffd875);
+  const moteAmber = new THREE.Color(0xffa94d);
+  const moteTurquoise = new THREE.Color(0x64f5d2);
+  const tmpMoteCol = new THREE.Color();
+
+  for (let i = 0; i < moteCount; i++) {
+    const a = moteRng() * Math.PI * 2;
+    const rad = 3.0 + moteRng() * 62.0;
+    const mx = origin.x + Math.cos(a) * rad;
+    const mz = origin.z + Math.sin(a) * rad;
+    const my = getHeight(mx, mz) + 0.45 + moteRng() * 4.2;
+    motePos[i * 3 + 0] = mx;
+    motePos[i * 3 + 1] = my;
+    motePos[i * 3 + 2] = mz;
+    moteBaseY[i] = my;
+
+    const pick = moteRng();
+    if (pick > 0.82) {
+      tmpMoteCol.copy(moteTurquoise);
+    } else {
+      tmpMoteCol.lerpColors(moteGold, moteAmber, pick);
+    }
+    moteColors[i * 3 + 0] = tmpMoteCol.r;
+    moteColors[i * 3 + 1] = tmpMoteCol.g;
+    moteColors[i * 3 + 2] = tmpMoteCol.b;
+  }
+  moteGeo.setAttribute('position', new THREE.BufferAttribute(motePos, 3));
+  moteGeo.setAttribute('color', new THREE.BufferAttribute(moteColors, 3));
+
+  const moteMat = new THREE.PointsMaterial({
+    size: 0.24,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.74,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const motePoints = new THREE.Points(moteGeo, moteMat);
+  motePoints.name = 'WildernessMemoryMotes';
+  group.add(motePoints);
+
   // ---------------------------------------------------------------- API & exports
   const spawnPoint = new THREE.Vector3(W.wildGate.spawnPos.x, getHeight(W.wildGate.spawnPos.x, W.wildGate.spawnPos.z), W.wildGate.spawnPos.z);
   const gatePosition = new THREE.Vector3(W.wildGate.x, getHeight(W.wildGate.x, W.wildGate.z), W.wildGate.z);
@@ -1259,6 +1665,7 @@ export function createWilderness(ctx) {
     return { x: fx, y: getHeight(fx, fz), z: fz };
   }
 
+  let steppeClock = 0;
   const api = {
     group,
     getHeight,
@@ -1273,9 +1680,33 @@ export function createWilderness(ctx) {
         return;
       }
 
-      if (typeof state.elapsed === 'number') {
-        bossRuneMat.opacity = 0.30 + 0.12 * Math.sin(state.elapsed * 2.1);
+      const safeDt = Number.isFinite(dt) ? dt : 0.016;
+      steppeClock += safeDt;
+      const elapsed = typeof state.elapsed === 'number' ? state.elapsed : steppeClock;
+
+      // Update swaying golden tussock grass shader uniform
+      tussockWindUniform.value = elapsed;
+
+      // Animate boss rune opacity & chasm/foothill mist breathing
+      bossRuneMat.opacity = 0.30 + 0.12 * Math.sin(elapsed * 2.1);
+      foothillMistMat.opacity = 0.20 + 0.04 * Math.sin(elapsed * 0.85);
+      chasmMistMat.opacity = 0.21 + 0.05 * Math.cos(elapsed * 1.15);
+
+      // Gently shimmer the 8 Firewatch sunset sunbeam shafts
+      for (let i = 0; i < sunbeams.length; i++) {
+        const sb = sunbeams[i];
+        sb.mat.opacity = sb.baseOpacity + 0.035 * Math.sin(elapsed * 1.35 + sb.phase);
       }
+
+      // Drift floating SEASON golden wind & memory motes across the steppe
+      const mArr = moteGeo.attributes.position.array;
+      for (let i = 0; i < moteCount; i++) {
+        const idx = i * 3;
+        mArr[idx + 0] += Math.cos(elapsed * 0.65 + i * 0.7) * safeDt * 0.24;
+        mArr[idx + 1] = moteBaseY[i] + Math.sin(elapsed * 1.4 + i * 1.1) * 0.38;
+        mArr[idx + 2] += Math.sin(elapsed * 0.55 + i * 0.9) * safeDt * 0.18;
+      }
+      moteGeo.attributes.position.needsUpdate = true;
 
       let nearAnyMani = false;
       const pPos = state.player?.position;
@@ -1292,8 +1723,8 @@ export function createWilderness(ctx) {
           const pulseSpeed = isNear ? 4.2 : 1.8;
           const baseAlpha = isNear ? 0.52 : 0.22;
           const pulseAmp = isNear ? 0.28 : 0.10;
-          a.mat.opacity = baseAlpha + pulseAmp * Math.sin(state.elapsed * pulseSpeed + i * 1.5);
-          const s = 1.0 + (isNear ? 0.05 : 0.02) * Math.sin(state.elapsed * pulseSpeed);
+          a.mat.opacity = baseAlpha + pulseAmp * Math.sin(elapsed * pulseSpeed + i * 1.5);
+          const s = 1.0 + (isNear ? 0.05 : 0.02) * Math.sin(elapsed * pulseSpeed);
           a.mesh.scale.set(s, s, s);
         }
       }
