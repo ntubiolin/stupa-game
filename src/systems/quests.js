@@ -157,6 +157,19 @@ export function createQuests(ctx) {
     return { group: grp, core, ring };
   }
 
+  function collectQuestNode(node) {
+    if (!node || node.collected) return false;
+    node.collected = true;
+    node.group.visible = false;
+    bus.emit('sfx', { name: 'pickup' });
+    bus.emit('toast', {
+      key: 'quest.toast.itemPicked',
+      params: { name: { key: node.labelKey } },
+    });
+    bus.emit('quest:item', { item: node.item, count: 1, nodeId: node.id });
+    return true;
+  }
+
   function registerQuestCollectibles(questDef) {
     if (!questDef || !Array.isArray(questDef.steps)) return;
     for (const step of questDef.steps) {
@@ -210,15 +223,7 @@ export function createQuests(ctx) {
             );
           },
           onInteract() {
-            if (node.collected) return;
-            node.collected = true;
-            node.group.visible = false;
-            bus.emit('sfx', { name: 'pickup' });
-            bus.emit('toast', {
-              key: 'quest.toast.itemPicked',
-              params: { name: { key: node.labelKey } },
-            });
-            bus.emit('quest:item', { item: node.item, count: 1, nodeId: node.id });
+            collectQuestNode(node);
           },
         });
 
@@ -1769,7 +1774,7 @@ export function createQuests(ctx) {
       });
     }
 
-    // Animate & toggle collectible quest items
+    // Animate & toggle collectible quest items (with proximity auto-pickup within 2.0m)
     for (let i = 0; i < collectibleNodes.length; i++) {
       const node = collectibleNodes[i];
       const shouldShow =
@@ -1778,6 +1783,13 @@ export function createQuests(ctx) {
         isCollectStepActiveForItem(node.item);
       node.group.visible = shouldShow;
       if (shouldShow) {
+        if (state.mode === 'play' && !state.uiOpen) {
+          const dist = Math.hypot(px - node.x, pz - node.z);
+          if (dist <= 2.0) {
+            collectQuestNode(node);
+            continue;
+          }
+        }
         const groundY = ctx.world?.getHeight(node.x, node.z, node.map) ?? 0;
         node.group.position.y = groundY;
         node.core.position.y = 0.56 + Math.sin(t * 3.0 + i) * 0.10;

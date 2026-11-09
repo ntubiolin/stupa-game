@@ -14,6 +14,9 @@ const MAX_GROUND_ITEMS = 40;
 const LABEL_SHOW_DIST = 4.0;
 const TURQUOISE_MAGNET_DIST = 4.5;
 const TURQUOISE_PICKUP_DIST = 1.25;
+const GEAR_MAGNET_DIST = 2.8;
+const GEAR_FULL_TOAST_DIST = 1.5;
+const GEAR_FULL_TOAST_COOLDOWN = 4.0;
 const GEAR_INTERACT_RADIUS = 2.2;
 
 const RARITY_COLORS = {
@@ -500,10 +503,41 @@ export function createGroundLoot(ctx) {
     return { x: sx, y: sy };
   }
 
+  let fullToastCooldown = 0;
+
+  function hasBagSpace() {
+    if (typeof ctx.inventory?.isFull === 'function') {
+      return !ctx.inventory.isFull();
+    }
+    if (typeof ctx.items?.isFull === 'function') {
+      return !ctx.items.isFull();
+    }
+    if (typeof ctx.inventory?.getBagSlots === 'function') {
+      return ctx.inventory.getBagSlots().some((slot) => slot === null);
+    }
+    if (
+      state.inventory &&
+      typeof state.inventory.bagCount === 'number' &&
+      typeof state.inventory.bagCapacity === 'number'
+    ) {
+      return state.inventory.bagCount < state.inventory.bagCapacity;
+    }
+    if (typeof ctx.inventory?.getBag === 'function') {
+      return ctx.inventory.getBag().length < (state.inventory?.bagCapacity ?? 30);
+    }
+    if (typeof ctx.items?.getBag === 'function') {
+      return ctx.items.getBag().length < (ctx.items?.maxBag ?? 24);
+    }
+    return true;
+  }
+
   function update(dt) {
     const ppos = state.player.position;
     const currentZone = state.zone || 'stupa';
     const altHeld = isAltHeld();
+    if (fullToastCooldown > 0) {
+      fullToastCooldown = Math.max(0, fullToastCooldown - dt);
+    }
 
     for (let i = groundItems.length - 1; i >= 0; i--) {
       const g = groundItems[i];
@@ -535,7 +569,7 @@ export function createGroundLoot(ctx) {
         g.modelGroup.rotation.y += dt * 1.1;
       }
 
-      // Auto-pickup for turquoise currency
+      // Auto-pickup for turquoise currency and equipment/item drops
       if (g.item.kind === 'turquoise' && g.zone === currentZone && g.age >= 0.25) {
         const dx = ppos.x - g.wrapper.position.x;
         const dz = ppos.z - g.wrapper.position.z;
@@ -551,6 +585,50 @@ export function createGroundLoot(ctx) {
             ? ctx.world.getHeight(g.endPos.x, g.endPos.z)
             : g.endPos.y;
           g.wrapper.position.copy(g.endPos);
+        }
+      } else if (
+        g.item.kind !== 'turquoise' &&
+        g.zone === currentZone &&
+        !state.uiOpen &&
+        g.age >= 0.45
+      ) {
+        const dx = ppos.x - g.wrapper.position.x;
+        const dz = ppos.z - g.wrapper.position.z;
+        const dist = Math.hypot(dx, dz);
+        const bagHasSpace = hasBagSpace();
+
+        if (bagHasSpace) {
+          if (dist <= TURQUOISE_PICKUP_DIST) {
+            if (pickupEntry(g)) {
+              continue;
+            }
+            g.lastFullToastAt = g.age;
+            fullToastCooldown = GEAR_FULL_TOAST_COOLDOWN;
+          } else if (dist <= GEAR_MAGNET_DIST) {
+            const pull = Math.min(1, dt * 9.5);
+            g.endPos.x += dx * pull;
+            g.endPos.z += dz * pull;
+            g.endPos.y = ctx.world
+              ? ctx.world.getHeight(g.endPos.x, g.endPos.z)
+              : g.endPos.y;
+            g.wrapper.position.x = g.endPos.x;
+            g.wrapper.position.z = g.endPos.z;
+            if (g.landed) {
+              g.wrapper.position.y = g.endPos.y;
+            }
+          }
+        } else if (dist <= GEAR_FULL_TOAST_DIST) {
+          if (
+            fullToastCooldown <= 0 &&
+            g.age - (g.lastFullToastAt ?? -999) >= GEAR_FULL_TOAST_COOLDOWN
+          ) {
+            g.lastFullToastAt = g.age;
+            fullToastCooldown = GEAR_FULL_TOAST_COOLDOWN;
+            bus.emit('toast', {
+              key: 'toast.inventoryFull',
+              kind: 'warning',
+            });
+          }
         }
       }
 
