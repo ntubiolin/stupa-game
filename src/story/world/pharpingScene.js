@@ -548,9 +548,20 @@ export async function createPharpingScene(ctx) {
   const valley = makeValleyDetails(group, getHeight);
   const monsters = makeMonsters(group, getHeight);
   const caveTable = { type: 'circle', x: 2020, z: -44.5, r: 0.84, zone: 'pharping' };
+  const practitionerCollider = { type: 'circle', x: 2021.8, z: -44.2, r: 0.48, zone: 'pharping' };
   const trailRock = { type: 'circle', x: 2028, z: -28, r: 0.58, zone: 'pharping' };
-  const colliders = [...base.colliders, caveTable, trailRock, ...debris.map((item) => item.collider)];
+  const colliders = [...base.colliders, caveTable, practitionerCollider, trailRock, ...debris.map((item) => item.collider)];
   ctx.colliders.push(...colliders);
+  const practitionerInteractable = {
+    id: 'story:pharping:practitioner',
+    zone: 'pharping',
+    x: 2021.8,
+    z: -44.2,
+    radius: 3.5,
+    action: 'interact',
+    labelKey: 'mirror.chapter.pharping.practitioner.action',
+    lookAt: { x: 2021.8, y: getHeight(2021.8, -44.2) + 1.0, z: -44.2 },
+  };
 
   const well = { x: 1970, z: 53 };
   let checkpoint = -1;
@@ -624,6 +635,7 @@ export async function createPharpingScene(ctx) {
   restore('spring1');
   return {
     group, getHeight, restore, update,
+    practitioner: practitionerInteractable,
     getTarget(checkpointId) {
       const target = Object.hasOwn(approaches, checkpointId) ? approaches[checkpointId] : null;
       if (!target) return null;

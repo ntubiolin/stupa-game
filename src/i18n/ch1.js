@@ -80,7 +80,23 @@ export const CH1_I18N = {
     'npc.pharpingVillager': '帕平村民',
     'npc.pharpingVillager1': '帕平農夫・索南',
     'npc.pharpingVillager2': '帕平織女・卓瑪',
+    'npc.pharpingPractitioner': '揚列雪護洞修行者',
     'npc.guruVision.pharping': '蓮花生大士（淨相）',
+    'dlg.ch1.practitioner.intro.1':
+      '「吉祥如意，遠來的行者。此處正是[[codex:yangleshoCave|揚列雪洞]]，烏仗那的蓮花生大士正在岩洞深處入定，修持大樂蓮師與普巴金剛法門以調伏籠罩[[codex:pharping|帕平]]的三年大旱。」',
+    'dlg.ch1.practitioner.intro.2':
+      '「村中長老正在北側古井旁焦急等待援手。若你能先與帕平村長老交談，並前往山谷三處被旱魅封堵的泉眼疏通活水，再回到洞中點亮七盞供燈，必能感得蓮師淨相顯現。」',
+    'dlg.ch1.practitioner.droughtActive.1':
+      '「帕平谷地的三處泉眼分別位於西南、東南與正南方。請先度脫盤踞泉邊的旱魅並疏通石槽，再回村向長老報平安吧。」',
+    'dlg.ch1.practitioner.reportElder.1':
+      '「三處泉眼已重新滲出活水！請先回北側村落向帕平村長老回報，再來揚列雪洞點燃七盞酥油供燈。」',
+    'dlg.ch1.practitioner.lampsHint.1':
+      '「蓮花生大士正在洞中甚深禪定。請走入[[codex:yangleshoCave|揚列雪洞]]，點亮岩壁上的七處酥油燈龕並護持燈火不滅，大士的智慧淨相便會於壇城前顯現。」',
+    'dlg.ch1.practitioner.visionManifested.1':
+      '「頂禮蓮花生大士！七盞智慧明燈已齊明，大士的淨相正於洞中壇城前等你領受法教。」',
+    'dlg.ch1.practitioner.afterRain.1':
+      '「普巴金剛之慈悲威光已破除旱障，看這漫天甘霖滋潤帕平山谷！隨喜你的廣大功德。」',
+    'dlg.ch1.practitioner.choice.ok': '「感恩修行者指引。」',
     'npc.messenger': '印度行者',
 
     // Quests
@@ -377,7 +393,23 @@ export const CH1_I18N = {
     'npc.pharpingVillager': 'Pharping Villager',
     'npc.pharpingVillager1': 'Pharping Farmer Sonam',
     'npc.pharpingVillager2': 'Pharping Weaver Dolma',
+    'npc.pharpingPractitioner': 'Yangleshö Cave Practitioner',
     'npc.guruVision.pharping': 'Guru Rinpoche (Pure Vision)',
+    'dlg.ch1.practitioner.intro.1':
+      '"Tashi Delek, traveler from afar. This is [[codex:yangleshoCave|Yangleshö Cave]], where the Lotus-Born Master of Oddiyana meditates on Yangdak Heruka and Vajrakīlaya to subdue the three-year drought gripping [[codex:pharping|Pharping]]."',
+    'dlg.ch1.practitioner.intro.2':
+      '"The Village Elder waits anxiously by the dry well to the north. Speak with the Elder, clear the three springs choked by Drought Sprites across the valley, and return here to light the seven butter lamps so Guru Rinpoche\'s Pure Vision may manifest."',
+    'dlg.ch1.practitioner.droughtActive.1':
+      '"The three parched springs lie to the southwest, east, and south of the village. Liberate the Drought Sprites and clear the stone basins first, then report back to the Village Elder."',
+    'dlg.ch1.practitioner.reportElder.1':
+      '"Living water seeps into the three basins once more! Report the good news to the Village Elder in the northern village, then return to Yangleshö Cave to light the seven butter lamps."',
+    'dlg.ch1.practitioner.lampsHint.1':
+      '"Guru Rinpoche abides in deep samadhi within. Step into [[codex:yangleshoCave|Yangleshö Cave]] and light all seven butter lamp niches along the rock walls so his Pure Vision may manifest before the shrine."',
+    'dlg.ch1.practitioner.visionManifested.1':
+      '"Homage to Guru Rinpoche! All seven lamps of wisdom shine bright, and the Master\'s Pure Vision awaits you before the cave shrine."',
+    'dlg.ch1.practitioner.afterRain.1':
+      '"The wrathful compassion of Vajrakīlaya has shattered the drought obstacles, and blessed rain nourishes Pharping Valley once more! I rejoice in your merit."',
+    'dlg.ch1.practitioner.choice.ok': '"Thank you for your guidance."',
     'npc.messenger': 'Indian Messenger',
 
     // Quests
