@@ -329,6 +329,17 @@ export function createHud(ctx) {
             <span>⋯</span>
           </button>
         </div>
+
+        <!-- Japanese Yamato-e Vertical Calligraphy Scroll Badge (和風縦書き地名巻物・朱印) -->
+        <div id="japan-emaki-scroll" class="japan-emaki-scroll is-hidden" aria-hidden="true">
+          <div class="japan-emaki-scroll__rod japan-emaki-scroll__rod--top"></div>
+          <div class="japan-emaki-scroll__paper">
+            <span id="japan-emaki-seal" class="japan-emaki-scroll__seal">空海</span>
+            <span id="japan-emaki-title" class="japan-emaki-scroll__title">平安京・東寺</span>
+            <span id="japan-emaki-sub" class="japan-emaki-scroll__sub">春・不二櫻花吹雪</span>
+          </div>
+          <div class="japan-emaki-scroll__rod japan-emaki-scroll__rod--bottom"></div>
+        </div>
       </aside>
 
       <!-- Bottom-Center: Context Interaction Prompt Pill -->
@@ -1954,6 +1965,45 @@ export function createHud(ctx) {
       for (const sBtn of seasonBtns) {
         const s = sBtn.getAttribute('data-season');
         sBtn.classList.toggle('is-active', s === curSeason);
+      }
+    }
+
+    // 2b. Japanese Emaki Scroll Badge (`#japan-emaki-scroll`) for `toji` & `koyasan`
+    const curLang = i18n.getLang ? i18n.getLang() : 'zh-Hant';
+    const emakiKey = `${curZone}:${curSeason}:${curLang}`;
+    if (emakiKey !== root._lastEmakiKey) {
+      root._lastEmakiKey = emakiKey;
+      const emakiScroll = root.querySelector('#japan-emaki-scroll');
+      const emakiSeal = root.querySelector('#japan-emaki-seal');
+      const emakiTitle = root.querySelector('#japan-emaki-title');
+      const emakiSub = root.querySelector('#japan-emaki-sub');
+      const isJp = curZone === 'toji' || curZone === 'koyasan';
+      if (emakiScroll) {
+        emakiScroll.classList.toggle('is-hidden', !isJp);
+        if (isJp && emakiSeal && emakiTitle && emakiSub) {
+          const isEn = curLang === 'en';
+          if (curZone === 'toji') {
+            emakiSeal.textContent = '空海';
+            emakiTitle.textContent = isEn ? 'Kyoto · Tō-ji' : '平安京・東寺';
+            const seasonVerse = {
+              spring: isEn ? 'Fuji-zakura Petals' : '春・不二櫻花吹雪',
+              summer: isEn ? 'Lotus Pond & Green Maple' : '夏・瓢箪池青楓',
+              autumn: isEn ? 'Crimson Momiji Brocade' : '秋・五重塔錦紅葉',
+              winter: isEn ? 'Sacred Pagoda in Snow' : '冬・九條雪見伽藍',
+            };
+            emakiSub.textContent = seasonVerse[curSeason] || seasonVerse.spring;
+          } else {
+            emakiSeal.textContent = '遍照';
+            emakiTitle.textContent = isEn ? 'Mt. Kōya · Kongōbu-ji' : '高野山・金剛峯';
+            const seasonVerse = {
+              spring: isEn ? 'Mountain Cherry Mist' : '春・八葉蓮華山櫻',
+              summer: isEn ? 'Ancient Cedar Sanctuary' : '夏・奧之院千本杉',
+              autumn: isEn ? 'Jabara-michi Crimson' : '秋・蛇腹路紅楓',
+              winter: isEn ? 'Snowy Mandala Basin' : '冬・密嚴淨土雪嶺',
+            };
+            emakiSub.textContent = seasonVerse[curSeason] || seasonVerse.spring;
+          }
+        }
       }
     }
 

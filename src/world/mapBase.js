@@ -440,7 +440,98 @@ export function buildHimalayanPeakGeometry(peakR, peakH, seedIdx = 0, snowLine =
 }
 
 /**
- * Add a distant multi-layered ring of faceted Himalayan mountain peaks around `origin`.
+ * Create a soft, rounded Japanese Yamato-e / Sansui mountain ridge geometry
+ * (`京都東山三十六峰・高野山八葉蓮華・青緑山水`) with rolling domed crests, folded cedar
+ * valleys, and layered jade-celadon to distant indigo-violet vertex shading.
+ */
+export function buildJapaneseRidgeGeometry(
+  peakR,
+  peakH,
+  seedIdx = 0,
+  radialSegs = 14,
+  heightSegs = 6
+) {
+  const geo = new THREE.ConeGeometry(peakR, peakH, radialSegs, heightSegs);
+  const cPos = geo.attributes.position;
+  const phase1 = seedIdx * 1.37;
+  const phase2 = seedIdx * 2.41;
+
+  for (let v = 0; v < cPos.count; v++) {
+    const vx = cPos.getX(v);
+    const vy = cPos.getY(v);
+    const vz = cPos.getZ(v);
+    const u = THREE.MathUtils.clamp((vy + peakH * 0.5) / peakH, 0, 1);
+
+    if (u >= 0.98) {
+      // Soft rounded Higashiyama / Kōyasan dome crest instead of a sharp cone tip
+      cPos.setXYZ(
+        v,
+        vx + Math.cos(phase1) * peakR * 0.05,
+        vy - peakH * 0.14,
+        vz + Math.sin(phase2) * peakR * 0.05
+      );
+    } else {
+      const theta = Math.atan2(vz, vx);
+      const fold3 = Math.cos(3 * theta + phase1);
+      const fold2 = Math.sin(2 * theta - phase2);
+      // Broaden upper shoulders into a gentle dome silhouette (`東山連峰`)
+      const domeBulge = 1.0 + Math.sin(u * Math.PI) * 0.42 + u * 0.22;
+      const radialScale =
+        domeBulge * (1.0 + (fold3 * 0.12 + fold2 * 0.09) * Math.sin(u * Math.PI * 0.85));
+      // Stretch tangentially so neighbouring hills interlock into continuous mountain ridges
+      const ridgeStretchX = 1.28;
+      const ridgeStretchZ = 0.86;
+      const ySoft = vy - Math.pow(u, 2.2) * peakH * 0.12 + fold3 * peakH * 0.025 * u * (1 - u);
+      cPos.setXYZ(
+        v,
+        vx * radialScale * ridgeStretchX,
+        ySoft,
+        vz * radialScale * ridgeStretchZ
+      );
+    }
+  }
+
+  geo.computeVertexNormals();
+  const cNorm = geo.attributes.normal;
+  const cCols = new Float32Array(cPos.count * 3);
+
+  for (let v = 0; v < cPos.count; v++) {
+    const vx = cPos.getX(v);
+    const vy = cPos.getY(v);
+    const vz = cPos.getZ(v);
+    const ny = cNorm.getY(v);
+    const u = THREE.MathUtils.clamp((vy + peakH * 0.5) / (peakH * 0.88), 0, 1);
+    const theta = Math.atan2(vz, vx);
+    const fold = Math.cos(3 * theta + phase1) * 0.5 + 0.5;
+    const warmAccent = Math.sin(2 * theta - phase2 + seedIdx) * 0.5 + 0.5;
+
+    // Yamato-e Sansui (`青緑山水`) 3-band gradation:
+    //   Base: deep cedar pine (`千歳緑`, rgb(0.14, 0.25, 0.20))
+    //   Mid-slope: lush bamboo jade with subtle sakura/maple brocade (`山藍・錦木`, rgb(0.22, 0.36, 0.30))
+    //   Summit ridge: misty Ukiyo-e celadon-indigo (`遠山霞藍`, rgb(0.38, 0.49, 0.56))
+    let r = THREE.MathUtils.lerp(0.14, 0.36, u);
+    let g = THREE.MathUtils.lerp(0.25, 0.48, u);
+    let b = THREE.MathUtils.lerp(0.20, 0.54, u);
+
+    // Subtle sunlit ridge warmth (`金碧山水`) on upward/sun-facing folds
+    const sunRim = THREE.MathUtils.clamp(fold * 0.45 + Math.max(0, ny) * 0.35, 0, 1);
+    r += sunRim * (0.06 + warmAccent * 0.05);
+    g += sunRim * 0.05;
+    b += sunRim * 0.03;
+
+    cCols[v * 3 + 0] = THREE.MathUtils.clamp(r, 0.10, 0.85);
+    cCols[v * 3 + 1] = THREE.MathUtils.clamp(g, 0.16, 0.88);
+    cCols[v * 3 + 2] = THREE.MathUtils.clamp(b, 0.16, 0.90);
+  }
+
+  geo.setAttribute('color', new THREE.BufferAttribute(cCols, 3));
+  return geo;
+}
+
+/**
+ * Add a distant multi-layered ring of mountain peaks around `origin`.
+ * Supports `style: 'himalayan'` (default faceted snow peaks) and `style: 'japanese'`
+ * (soft rounded Yamato-e / Higashiyama & Kōyasan mountain ridges with floating mist bands).
  */
 export function addRimMountains(ctxOrGroup, groupOrOpts, maybeOpts = {}) {
   let group = groupOrOpts;
@@ -456,10 +547,12 @@ export function addRimMountains(ctxOrGroup, groupOrOpts, maybeOpts = {}) {
     count = 24,
     heightRange = [38, 75],
     snowLine = 0.44,
+    style = 'himalayan',
   } = opts || {};
   const mountainGeos = [];
   const minH = heightRange[0] ?? 38;
   const maxH = heightRange[1] ?? 75;
+  const isJapanese = style === 'japanese';
 
   for (let i = 0; i < count; i++) {
     const a = (i / count) * Math.PI * 2;
@@ -467,38 +560,118 @@ export function addRimMountains(ctxOrGroup, groupOrOpts, maybeOpts = {}) {
     const px = origin.x + Math.cos(a) * dist;
     const pz = origin.z + Math.sin(a) * dist;
     const peakH = minH + ((i * 53) % 29) * ((maxH - minH) / 28);
-    const peakR = 24 + ((i * 17) % 11) * 1.4;
+    const peakR = (isJapanese ? 30 : 24) + ((i * 17) % 11) * 1.4;
 
-    // Primary jagged Himalayan peak
-    const cone = buildHimalayanPeakGeometry(peakR, peakH, i, snowLine, 10, 5);
-    cone.rotateY((i * 1.7) % (Math.PI * 2));
-    cone.translate(px, peakH * 0.5 - 2, pz);
-    mountainGeos.push(cone);
+    if (isJapanese) {
+      // Primary soft rounded Japanese mountain ridge oriented tangentially to the basin rim
+      const ridge = buildJapaneseRidgeGeometry(peakR, peakH * 0.78, i, 14, 6);
+      ridge.rotateY(-a + Math.PI * 0.5 + ((i % 3) - 1) * 0.18);
+      ridge.translate(px, peakH * 0.36 - 3.0, pz);
+      mountainGeos.push(ridge);
 
-    // Secondary flanking spur / foothill ridge for layered depth
-    const spurAngle = a + (((i % 2 === 0) ? 1 : -1) * (0.075 + ((i * 13) % 7) * 0.008));
-    const spurDist = Math.max(innerR - 6, dist - 7 + ((i * 11) % 9));
-    const spurH = peakH * (0.54 + ((i * 19) % 11) * 0.015);
-    const spurR = peakR * 0.66;
-    const spur = buildHimalayanPeakGeometry(spurR, spurH, i + 101, Math.min(0.82, snowLine + 0.08), 8, 4);
-    spur.rotateY(((i + 5) * 2.1) % (Math.PI * 2));
-    spur.translate(
-      origin.x + Math.cos(spurAngle) * spurDist,
-      spurH * 0.5 - 2.5,
-      origin.z + Math.sin(spurAngle) * spurDist
-    );
-    mountainGeos.push(spur);
+      // Foreground overlapping foothill (`東山前山 / 高野山内八葉`)
+      const spurAngle = a + (((i % 2 === 0) ? 1 : -1) * 0.085);
+      const spurDist = Math.max(innerR - 10, dist - 12 + ((i * 11) % 7));
+      const spurH = peakH * 0.48;
+      const spurR = peakR * 0.78;
+      const spur = buildJapaneseRidgeGeometry(spurR, spurH, i + 101, 12, 5);
+      spur.rotateY(-spurAngle + Math.PI * 0.5);
+      spur.translate(
+        origin.x + Math.cos(spurAngle) * spurDist,
+        spurH * 0.38 - 3.2,
+        origin.z + Math.sin(spurAngle) * spurDist
+      );
+      mountainGeos.push(spur);
+    } else {
+      // Primary jagged Himalayan peak
+      const cone = buildHimalayanPeakGeometry(peakR, peakH, i, snowLine, 10, 5);
+      cone.rotateY((i * 1.7) % (Math.PI * 2));
+      cone.translate(px, peakH * 0.5 - 2, pz);
+      mountainGeos.push(cone);
+
+      // Secondary flanking spur / foothill ridge for layered depth
+      const spurAngle = a + (((i % 2 === 0) ? 1 : -1) * (0.075 + ((i * 13) % 7) * 0.008));
+      const spurDist = Math.max(innerR - 6, dist - 7 + ((i * 11) % 9));
+      const spurH = peakH * (0.54 + ((i * 19) % 11) * 0.015);
+      const spurR = peakR * 0.66;
+      const spur = buildHimalayanPeakGeometry(spurR, spurH, i + 101, Math.min(0.82, snowLine + 0.08), 8, 4);
+      spur.rotateY(((i + 5) * 2.1) % (Math.PI * 2));
+      spur.translate(
+        origin.x + Math.cos(spurAngle) * spurDist,
+        spurH * 0.5 - 2.5,
+        origin.z + Math.sin(spurAngle) * spurDist
+      );
+      mountainGeos.push(spur);
+    }
   }
 
   if (mountainGeos.length && group) {
     const mMeshGeo = mergeGeometries(mountainGeos, false);
     const mMat = new THREE.MeshStandardMaterial({
       vertexColors: true,
-      roughness: 0.90,
-      metalness: 0.03,
+      roughness: isJapanese ? 0.94 : 0.90,
+      metalness: 0.02,
+      ...(isJapanese
+        ? {
+            emissive: new THREE.Color(0x16262e),
+            emissiveIntensity: 0.18,
+          }
+        : {}),
     });
     const mMesh = new THREE.Mesh(mMeshGeo, mMat);
+    mMesh.name = isJapanese ? 'japaneseRimMountains' : 'himalayanRimMountains';
     group.add(mMesh);
+
+    // For Japanese maps, add floating Yamato-e horizontal mist & golden cloud ribbons (`大和繪霞・金雲`)
+    if (isJapanese) {
+      const kasumiGeos = [];
+      const kinunGeos = [];
+      const cloudCount = 16;
+      for (let c = 0; c < cloudCount; c++) {
+        const ca = (c / cloudCount) * Math.PI * 2 + (c % 2) * 0.14;
+        const cDist = innerR - 14 + (c % 3) * 8;
+        const cx = origin.x + Math.cos(ca) * cDist;
+        const cz = origin.z + Math.sin(ca) * cDist;
+        const cy = 9.5 + (c % 4) * 3.8;
+        const ribbonW = 28 + (c % 3) * 8;
+        const ribbonH = 2.4 + (c % 2) * 0.9;
+
+        const mistBand = new THREE.SphereGeometry(1, 10, 6);
+        mistBand.scale(ribbonW * 0.5, ribbonH * 0.5, 4.2);
+        mistBand.rotateY(-ca + Math.PI * 0.5);
+        mistBand.translate(cx, cy, cz);
+        if (c % 3 === 0) {
+          kinunGeos.push(mistBand);
+        } else {
+          kasumiGeos.push(mistBand);
+        }
+      }
+
+      if (kasumiGeos.length) {
+        const kasumiMat = new THREE.MeshBasicMaterial({
+          color: 0xfff5ee,
+          transparent: true,
+          opacity: 0.24,
+          depthWrite: false,
+        });
+        const kasumiMesh = new THREE.Mesh(mergeGeometries(kasumiGeos, false), kasumiMat);
+        kasumiMesh.name = 'yamatoKasumiMist';
+        group.add(kasumiMesh);
+      }
+      if (kinunGeos.length) {
+        const kinunMat = new THREE.MeshBasicMaterial({
+          color: 0xfde68a,
+          transparent: true,
+          opacity: 0.22,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        });
+        const kinunMesh = new THREE.Mesh(mergeGeometries(kinunGeos, false), kinunMat);
+        kinunMesh.name = 'yamatoKinunGoldClouds';
+        group.add(kinunMesh);
+      }
+    }
+
     return mMesh;
   }
   return null;

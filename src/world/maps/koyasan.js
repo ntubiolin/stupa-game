@@ -414,21 +414,23 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   group.add(terrainMesh);
 
   // Outer Eight-Petaled Lotus Rim (`外八葉蓮華峰`)
-  addRimMountains(ctx, group, {
+  const rimMountainMesh = addRimMountains(ctx, group, {
     origin,
     innerR: 122,
     outerR: 185,
     count: 16,
-    heightRange: [42, 74],
-    snowLine: 0.76,
+    heightRange: [40, 68],
+    style: 'japanese',
   });
 
   // Inner Eight Lotus-Petal Peaks (`内八葉蓮華峰`: 8 distinct forested lotus-petal summits encircling the basin)
   const lotusPetalGeos = [];
   const lotusPeakMat = new THREE.MeshStandardMaterial({
-    color: 0x354f39,
-    roughness: 0.90,
-    metalness: 0.03,
+    color: 0x284b3c,
+    emissive: 0x112521,
+    emissiveIntensity: 0.16,
+    roughness: 0.92,
+    metalness: 0.02,
   });
   disposables.push(lotusPeakMat);
   for (let i = 0; i < 8; i++) {
@@ -436,13 +438,13 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     const dist = 114 + (i % 2) * 6;
     const px = Math.cos(ang) * dist;
     const pz = Math.sin(ang) * dist;
-    const peakH = 30 + (i % 3) * 5;
-    const peakR = 22 + (i % 2) * 3;
-    const petalCone = new THREE.ConeGeometry(peakR, peakH, 9, 3);
-    petalCone.scale(1.25, 1.0, 0.88);
-    petalCone.rotateY(-ang + Math.PI / 2);
-    petalCone.translate(px, peakH * 0.5 - 2.0, pz);
-    lotusPetalGeos.push(petalCone);
+    const peakH = 26 + (i % 3) * 4;
+    const peakR = 26 + (i % 2) * 3;
+    const petalDome = new THREE.SphereGeometry(peakR, 12, 8, 0, TWO_PI, 0, Math.PI * 0.55);
+    petalDome.scale(1.32, peakH / peakR, 0.86);
+    petalDome.rotateY(-ang + Math.PI / 2);
+    petalDome.translate(px, -2.5, pz);
+    lotusPetalGeos.push(petalDome);
   }
   const eightPetalMesh = new THREE.Mesh(mergeAndDispose(lotusPetalGeos), lotusPeakMat);
   eightPetalMesh.receiveShadow = true;
@@ -2200,6 +2202,35 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   koyasanCherryInst.instanceMatrix.needsUpdate = true;
   root.add(koyasanMapleInst, koyasanCherryInst);
 
+  // Japanese Aesthetic Atmospheric Layer: Slanted Komorebi Sunbeam Shafts (`高野山木漏れ日・密嚴瑞光`)
+  const koyasanKomorebiMat = new THREE.MeshBasicMaterial({
+    color: 0xffedd5,
+    transparent: true,
+    opacity: 0.036,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const koyasanBeamGeos = [];
+  const koyasanBeamSpots = [
+    [-62, 16, 4, 4.4, 8.6, 30],   // Over Konpon Daitō (`根本大塔`)
+    [-34, 14, 4, 3.8, 7.2, 26],   // Over Danjō Garan Kondō (`金堂`)
+    [0, 14, -10, 4.2, 8.0, 26],   // Over Kongōbu-ji & Banryūtei (`金剛峯寺・蟠龍庭`)
+    [48, 14, 10, 3.2, 6.2, 26],   // Through Okunoin Cedar Avenue (`奥之院杉並木`)
+    [48, 15, -42, 3.6, 6.8, 28],  // Over Tōrōdō & Gobyō (`燈籠堂・御廟`)
+  ];
+  for (const [bx, by, bz, rTop, rBot, bHeight] of koyasanBeamSpots) {
+    const shaft = new THREE.CylinderGeometry(rTop, rBot, bHeight, 12, 1, true);
+    shaft.rotateZ(-0.32);
+    shaft.rotateX(0.16);
+    shaft.translate(bx, by, bz);
+    koyasanBeamGeos.push(shaft);
+  }
+  const koyasanKomorebiMesh = new THREE.Mesh(mergeAndDispose(koyasanBeamGeos), koyasanKomorebiMat);
+  koyasanKomorebiMesh.name = 'KoyasanKomorebiSunbeams';
+  root.add(koyasanKomorebiMesh);
+  disposables.push(koyasanKomorebiMesh.geometry, koyasanKomorebiMat);
+
   let appliedKoyasanSeason = null;
   function applyKoyasanSeason(season) {
     if (season === appliedKoyasanSeason) return;
@@ -2212,6 +2243,8 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
       koyasanMapleMat.emissive.setHex(0x1b4322);
       koyasanMapleMat.emissiveIntensity = 0.08;
       pineFoliageMat.color.setHex(0x2c5834);
+      lotusPeakMat.color.setHex(0x284b3c);
+      koyasanKomorebiMat.color.setHex(0xffe4e6);
     } else if (season === 'summer') {
       koyasanCherryMat.color.setHex(0x2e7d32);
       koyasanCherryMat.emissive.setHex(0x0d3b14);
@@ -2220,6 +2253,8 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
       koyasanMapleMat.emissive.setHex(0x0b3210);
       koyasanMapleMat.emissiveIntensity = 0.06;
       pineFoliageMat.color.setHex(0x234f2b);
+      lotusPeakMat.color.setHex(0x1e4635);
+      koyasanKomorebiMat.color.setHex(0xfef08a);
     } else if (season === 'autumn') {
       koyasanCherryMat.color.setHex(0xd97706);
       koyasanCherryMat.emissive.setHex(0x78350f);
@@ -2228,6 +2263,8 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
       koyasanMapleMat.emissive.setHex(0x991b1b);
       koyasanMapleMat.emissiveIntensity = 0.28;
       pineFoliageMat.color.setHex(0x2c5834);
+      lotusPeakMat.color.setHex(0x3a3d2e);
+      koyasanKomorebiMat.color.setHex(0xfdba74);
     } else if (season === 'winter') {
       koyasanCherryMat.color.setHex(0xe2e8f0);
       koyasanCherryMat.emissive.setHex(0x475569);
@@ -2236,6 +2273,11 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
       koyasanMapleMat.emissive.setHex(0x334155);
       koyasanMapleMat.emissiveIntensity = 0.14;
       pineFoliageMat.color.setHex(0x94a3b8);
+      lotusPeakMat.color.setHex(0x64748b);
+      koyasanKomorebiMat.color.setHex(0xe0f2fe);
+      if (rimMountainMesh?.material?.emissive) {
+        rimMountainMesh.material.emissive.setHex(0x334155);
+      }
     }
   }
 
