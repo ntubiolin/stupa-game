@@ -342,17 +342,20 @@ export function createQuests(ctx) {
   register(CH5_QUESTS);
 
   // Auto-discover chapter i18n (`src/i18n/*.js`) and chapter quests (`src/data/quests/*.js`)
-  if (typeof import.meta.glob === 'function') {
+  let chapterQuestModules = {};
+  try {
     import.meta.glob('../i18n/*.js', { eager: true });
-    const chapterQuestModules = import.meta.glob('../data/quests/*.js', { eager: true });
-    for (const mod of Object.values(chapterQuestModules)) {
-      if (!mod || typeof mod !== 'object') continue;
-      for (const val of Object.values(mod)) {
-        if (Array.isArray(val)) {
-          register(val);
-        } else if (val && typeof val === 'object' && typeof val.id === 'string' && Array.isArray(val.steps)) {
-          register([val]);
-        }
+    chapterQuestModules = import.meta.glob('../data/quests/*.js', { eager: true }) || {};
+  } catch {
+    chapterQuestModules = {};
+  }
+  for (const mod of Object.values(chapterQuestModules)) {
+    if (!mod || typeof mod !== 'object') continue;
+    for (const val of Object.values(mod)) {
+      if (Array.isArray(val)) {
+        register(val);
+      } else if (val && typeof val === 'object' && typeof val.id === 'string' && Array.isArray(val.steps)) {
+        register([val]);
       }
     }
   }
