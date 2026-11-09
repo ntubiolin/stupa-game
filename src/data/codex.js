@@ -184,16 +184,22 @@ export function registerCodexEntries(entries) {
 }
 
 // Auto-discover chapter codex entries (`src/data/codex/*.js`) with Node.js fallback
-const chapterCodexModules =
-  typeof import.meta.glob === 'function'
-    ? import.meta.glob('./codex/*.js', { eager: true })
-    : {
-        ch1: { CH1_CODEX_ENTRIES },
-        ch2: { CH2_CODEX_ENTRIES },
-        ch3: { CH3_CODEX_ENTRIES },
-        ch4: { CH4_CODEX_ENTRIES },
-        ch5: { CH5_CODEX },
-      };
+const fallbackCodexModules = {
+  ch1: { CH1_CODEX_ENTRIES },
+  ch2: { CH2_CODEX_ENTRIES },
+  ch3: { CH3_CODEX_ENTRIES },
+  ch4: { CH4_CODEX_ENTRIES },
+  ch5: { CH5_CODEX },
+};
+let chapterCodexModules = fallbackCodexModules;
+try {
+  chapterCodexModules = {
+    ...fallbackCodexModules,
+    ...(import.meta.glob('./codex/*.js', { eager: true }) || {}),
+  };
+} catch {
+  chapterCodexModules = fallbackCodexModules;
+}
 for (const mod of Object.values(chapterCodexModules)) {
   if (!mod || typeof mod !== 'object') continue;
   for (const val of Object.values(mod)) {
