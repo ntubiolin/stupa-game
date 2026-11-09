@@ -27,8 +27,10 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/world/maps/samye.js` | World | Chapter 4 map: Mount Hepo Ri, Samye 5-stage construction (1,008 InstancedMesh mini-stupas), day/night defense (lazy-loaded) |
 | `src/world/maps/chimphu.js` | World | Chapter 5 hub map: Chimphu hermitage caves, butter-lamp alcoves, Terma Realm portal (lazy-loaded) |
 | `src/world/maps/terma.js` | World | Chapter 5 endgame dungeon: seeded 3-floor procedural layout (Cave / Snow / Mandala themes) (lazy-loaded) |
+| `src/world/maps/toji.js` | World | Kūkai Epic map: Kyoto Tō-ji (`教王護國寺`, `origin = (7500, 0)`), Five-Story Pagoda (`五重塔`), Kondō (`金堂` Yakushi Triad), Kōdō (`講堂` 21-Deity 3D Mandala), Nandaimon & Hyōtan-ike pond (lazy-loaded) |
+| `src/world/maps/koyasan.js` | World | Kūkai Epic map: Mount Kōya (`高野山`, `origin = (8000, 0)`), Danjō Garan (`壇上伽藍` Konpon Daitō, Kondō, Miedō, Sanko-no-Matsu), Kongōbu-ji (`金剛峯寺` & Banryūtei rock garden), and Okunoin (`奧之院` Gobyōbashi, 1,000-year cedars, Gorintō stupas, Tōrōdō & Kōbō Daishi Gobyō) (lazy-loaded) |
 | `src/world/maps/sandbox.js` | World | debug sandbox arena with flat ground, scattered rocks, trial stone circle, Mani cairn (lazy-loaded) |
-| `src/data/maps.js`, `src/data/maps/*.js` | Data | data-driven map registry (`MAPS`: `stupa`, `grove`, `wild`, `pharping`, `mangyul`, `yarlung`, `samye`, `chimphu`, `terma`, `sandbox`) |
+| `src/data/maps.js`, `src/data/maps/*.js` | Data | data-driven map registry (`MAPS`: `stupa`, `grove`, `wild`, `pharping`, `mangyul`, `yarlung`, `samye`, `chimphu`, `terma`, `toji`, `koyasan`, `sandbox`) |
 | `src/data/npcs.js` | Data | data-driven NPC registry (`NPCS`) and 8 procedural look definitions (`NPC_LOOKS`) |
 | `src/data/itemBases.js`, `affixes.js`, `legendaries.js` | Data | 22 base equipment types across 8 slots, 16 affixes (T1–T4), 12 Terma legendary items (`powerId`) |
 | `src/data/eliteAffixes.js` | Data | 6 elite monster affixes (`molten`, `frozen`, `swift`, `armored`, `shielding`, `teleporter`) |
@@ -94,6 +96,8 @@ Subagents edit **only** files they own. If a contract change is needed, report i
   - `samye` (海波日山・桑耶): `type: 'combat'`, `origin = (5000, 0)`, level 23–30
   - `chimphu` (青朴修行地): `type: 'hub'`, `origin = (6000, 0)`, level 28–32
   - `terma` (伏藏秘境): `type: 'dungeon'`, `origin = (7000, 0)`, level 30–40+
+  - `toji` (京都東寺・教王護國寺): `type: 'hub'`, `origin = (7500, 0)`, level 1–40
+  - `koyasan` (高野山・金剛峯): `type: 'hub'`, `origin = (8000, 0)`, level 1–40
   - `sandbox` (測試場, debug only): `type: 'combat'`, `origin = (9000, 0)`
 - Layout numbers live in `src/config.js` (`CONFIG.STUPA`, `WALL`, `WORLD`, `LAMPS`, `WILD`, …) and `src/data/maps.js`. Never hardcode duplicates.
 
