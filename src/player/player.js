@@ -1904,6 +1904,7 @@ export function createPlayer(ctx) {
       return previewPose;
     },
   };
+  state.player.mesh = root;
   ctx.player = api;
   return api;
 }

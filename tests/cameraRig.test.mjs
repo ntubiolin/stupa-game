@@ -17,12 +17,14 @@ function harness({ zone = 'wild', radius = 35, settings = {}, stateMode, save = 
   const events = [];
   const writes = [];
   let savedSettings = { musicVolume: 0.4, ...settings };
+  const playerMesh = { visible: true };
   const ctx = {
     THREE,
     camera: new THREE.PerspectiveCamera(),
+    player: { mesh: playerMesh },
     state: {
       mode: 'play', zone, elapsed: 10, cameraAutoFollow: stateMode,
-      player: { position: new THREE.Vector3(radius, 0, 0), heading: 0, isMoving: true },
+      player: { position: new THREE.Vector3(radius, 0, 0), heading: 0, isMoving: true, mesh: playerMesh },
     },
     config: { WORLD: { stupaColliderRadius: 20, buildingsInnerRadius: 48 }, WILD: { origin: { x: 0, z: 0 }, walkRadius: 100 } },
     input: { move: { x: 0, y: 1 }, look: { dx: 0, dy: 0 }, zoom: 0, lastLookTime: -1e9, pressed: () => false },
@@ -378,3 +380,61 @@ test('front camera can follow in off mode but smart combat still holds yaw', () 
   advance();
   assert.equal(rig.getYaw(), lockedYaw);
 });
+
+test('zooming out up to 18m elevates camera into a tactical overhead vantage', () => {
+  const { ctx, rig, advance } = harness({ zone: 'wild', radius: 35 });
+  ctx.state.player.isMoving = false;
+  rig.setDistance(7.5);
+  advance(1);
+  const yAt75 = ctx.camera.position.y;
+
+  // Scroll out via input.zoom past 14m up to the new 18m max
+  ctx.input.zoom = 1500;
+  advance(2);
+  ctx.input.zoom = 0;
+  advance(1);
+
+  assert.ok(Math.abs(rig.getDistance() - 18) < 1e-6);
+  assert.ok(ctx.camera.position.y > yAt75 + 4.5, `expected tactical elevation > ${yAt75 + 4.5}, got ${ctx.camera.position.y}`);
+  assert.equal(ctx.player.mesh.visible, true);
+});
+
+test('standing near stupa wall facing outward lifts camera above head, hides close player mesh, and responds to zoom', () => {
+  const { ctx, rig, advance } = harness({ zone: 'stupa', radius: 20.3 });
+  ctx.state.player.isMoving = false;
+
+  // Place player at (x = 0, z = 20.3) facing outward (+Z, heading = Math.PI) so camera is compressed against stupa wall
+  ctx.state.player.position.set(0, 0, 20.3);
+  ctx.state.player.heading = Math.PI;
+  ctx.bus.emit('zone:change');
+  advance(0.5);
+
+  const yDefault = ctx.camera.position.y;
+  assert.ok(yDefault > 2.2, `expected over-the-shoulder vantage y > 2.2, got ${yDefault}`);
+  assert.equal(ctx.player.mesh.visible, false);
+  assert.equal(ctx.state.player.mesh.visible, false);
+
+  // Also verify at (x = 0, z = -20.3) with yaw = 0 (facing outward -Z)
+  ctx.state.player.position.set(0, 0, -20.3);
+  ctx.state.player.heading = 0;
+  ctx.bus.emit('zone:change');
+  advance(0.5);
+  assert.ok(ctx.camera.position.y > 2.2);
+  assert.equal(ctx.player.mesh.visible, false);
+
+  // Scrolling out while backed against the stupa wall raises overhead vantage height further
+  ctx.input.zoom = 800;
+  advance(1.5);
+  ctx.input.zoom = 0;
+  assert.ok(ctx.camera.position.y > yDefault + 1.0, `expected zoom-out near stupa to raise camera height above ${yDefault + 1.0}, got ${ctx.camera.position.y}`);
+
+  // Moving to open plaza space restores normal visibility
+  rig.setDistance(6.8);
+  ctx.state.player.position.set(0, 0, 30);
+  ctx.state.player.heading = 0;
+  ctx.bus.emit('zone:change');
+  advance(0.5);
+  assert.equal(ctx.player.mesh.visible, true);
+  assert.equal(ctx.state.player.mesh.visible, true);
+});
+
