@@ -897,10 +897,28 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   lowerRoofSlope.translate(0, 9.35, 0);
   dtRoof.push(lowerRoofSlope);
 
-  // Vermilion under-eave rafters & upturned corner eaves
+  // Vermilion under-eave rafters & crisp white-painted rafter tips (`二軒繁垂木・木口白塗`)
   const lowerRafterRim = new THREE.BoxGeometry(15.2, 0.26, 15.2);
   lowerRafterRim.translate(0, 8.05, 0);
   dtVerm.push(lowerRafterRim);
+
+  const lowerWhiteTips = new THREE.BoxGeometry(15.5, 0.12, 15.5);
+  lowerWhiteTips.translate(0, 8.20, 0);
+  dtWhite.push(lowerWhiteTips);
+
+  // Front Octagonal-Base Bronze Lantern (`大塔前銅燈籠`) standing at the south approach (`z = +9.6`)
+  const daitoLanternBase = new THREE.CylinderGeometry(0.42, 0.56, 0.45, 8);
+  daitoLanternBase.translate(0, 0.225, 9.6);
+  dtStone.push(daitoLanternBase);
+  const daitoLanternPost = new THREE.CylinderGeometry(0.12, 0.15, 1.55, 8);
+  daitoLanternPost.translate(0, 1.22, 9.6);
+  dtGold.push(daitoLanternPost);
+  const daitoLanternChamber = new THREE.CylinderGeometry(0.32, 0.28, 0.48, 6);
+  daitoLanternChamber.translate(0, 2.20, 9.6);
+  dtGold.push(daitoLanternChamber);
+  const daitoLanternRoof = new THREE.ConeGeometry(0.58, 0.36, 6);
+  daitoLanternRoof.translate(0, 2.62, 9.6);
+  dtRoof.push(daitoLanternRoof);
 
   // 4. White Dome-Like Plaster Collar (`龜腹 / Kamebara`, y = 9.8..11.9m) — signature Tahōtō transition!
   const kamebaraBase = new THREE.CylinderGeometry(4.4, 5.2, 1.15, 24);
@@ -936,7 +954,11 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   upperBracketRing.translate(0, 14.65, 0);
   dtVerm.push(upperBracketRing);
 
-  // 6. Upper Pyramidal Roof (`上層宝形屋根`, y = 14.8..17.6m)
+  // 6. Upper Pyramidal Roof (`上層宝形屋根`, y = 14.8..17.6m) with white-painted rafter tips (`木口白塗`)
+  const upperWhiteTips = new THREE.BoxGeometry(11.4, 0.12, 11.4);
+  upperWhiteTips.translate(0, 14.82, 0);
+  dtWhite.push(upperWhiteTips);
+
   const upperRoofEave = new THREE.BoxGeometry(11.8, 0.38, 11.8);
   upperRoofEave.translate(0, 15.0, 0);
   dtRoof.push(upperRoofEave);
@@ -946,7 +968,7 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   upperPyramid.translate(0, 16.45, 0);
   dtRoof.push(upperPyramid);
 
-  // 4 golden corner wind bells (`風鐸`) on lower and upper roofs
+  // 4 golden corner wind bells (`風鐸`) on lower and upper roofs + 4 diagonal Sōrin wind chains (`風鎖`)
   for (const sx of [-1, 1]) {
     for (const sz of [-1, 1]) {
       const bell1 = new THREE.ConeGeometry(0.18, 0.42, 6);
@@ -955,6 +977,14 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
       const bell2 = new THREE.ConeGeometry(0.16, 0.38, 6);
       bell2.translate(sx * 5.6, 14.65, sz * 5.6);
       dtGold.push(bell2);
+
+      // Diagonal wind chain from Sōrin top (`y = 23.8`) to upper roof corner (`(±5.6, 15.1, ±5.6)`)
+      const chainLen = 11.8;
+      const chain = new THREE.CylinderGeometry(0.03, 0.03, chainLen, 6);
+      chain.rotateZ(sx * 0.52);
+      chain.rotateX(-sz * 0.52);
+      chain.translate(sx * 2.8, 19.4, sz * 2.8);
+      dtGold.push(chain);
     }
   }
 
@@ -2096,6 +2126,95 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   siddhamOuterTorus.rotation.x = Math.PI / 2;
   siddhamMandalaGroup.add(siddhamOuterTorus);
 
+  // ---------------------------------------------------------------- 6H. Seasonal Mountain Maples (`高野山蛇腹路紅葉`) & Mountain Cherries (`山櫻`)
+  const koyasanMapleMat = new THREE.MeshStandardMaterial({
+    color: 0xdc2626,
+    emissive: 0x7f1d1d,
+    emissiveIntensity: 0.20,
+    roughness: 0.78,
+  });
+  const koyasanCherryMat = new THREE.MeshStandardMaterial({
+    color: 0xf9a8d4,
+    emissive: 0x831843,
+    emissiveIntensity: 0.16,
+    roughness: 0.74,
+  });
+  const koyasanCrownGeo = new THREE.DodecahedronGeometry(1.35, 1);
+  disposables.push(koyasanMapleMat, koyasanCherryMat, koyasanCrownGeo);
+
+  const koyasanMapleSpots = [
+    [-74, 18], [-74, -8], [-22, 18], [-22, -8], [-16, 22], [16, 22],
+    [-16, -24], [16, -24], [24, 16], [28, 34], [-28, 36], [18, 48],
+  ];
+  const koyasanCherrySpots = [
+    [-64, 24], [-36, 24], [-58, -14], [-32, -12], [-14, 34], [14, 34],
+    [-12, -32], [12, -32],
+  ];
+  const koyasanMapleInst = new THREE.InstancedMesh(
+    koyasanCrownGeo,
+    koyasanMapleMat,
+    koyasanMapleSpots.length
+  );
+  const koyasanCherryInst = new THREE.InstancedMesh(
+    koyasanCrownGeo,
+    koyasanCherryMat,
+    koyasanCherrySpots.length
+  );
+  koyasanMapleSpots.forEach(([mx, mz], idx) => {
+    dummy.position.set(mx, getHeight(mx, mz) + 3.2, mz);
+    dummy.scale.set(1.35, 0.95, 1.35);
+    dummy.updateMatrix();
+    koyasanMapleInst.setMatrixAt(idx, dummy.matrix);
+  });
+  koyasanCherrySpots.forEach(([cx, cz], idx) => {
+    dummy.position.set(cx, getHeight(cx, cz) + 3.3, cz);
+    dummy.scale.set(1.4, 0.98, 1.4);
+    dummy.updateMatrix();
+    koyasanCherryInst.setMatrixAt(idx, dummy.matrix);
+  });
+  koyasanMapleInst.instanceMatrix.needsUpdate = true;
+  koyasanCherryInst.instanceMatrix.needsUpdate = true;
+  root.add(koyasanMapleInst, koyasanCherryInst);
+
+  let appliedKoyasanSeason = null;
+  function applyKoyasanSeason(season) {
+    if (season === appliedKoyasanSeason) return;
+    appliedKoyasanSeason = season;
+    if (season === 'spring') {
+      koyasanCherryMat.color.setHex(0xf9a8d4);
+      koyasanCherryMat.emissive.setHex(0x831843);
+      koyasanCherryMat.emissiveIntensity = 0.20;
+      koyasanMapleMat.color.setHex(0x4d9c46);
+      koyasanMapleMat.emissive.setHex(0x1b4322);
+      koyasanMapleMat.emissiveIntensity = 0.08;
+      pineFoliageMat.color.setHex(0x2c5834);
+    } else if (season === 'summer') {
+      koyasanCherryMat.color.setHex(0x2e7d32);
+      koyasanCherryMat.emissive.setHex(0x0d3b14);
+      koyasanCherryMat.emissiveIntensity = 0.06;
+      koyasanMapleMat.color.setHex(0x256d29);
+      koyasanMapleMat.emissive.setHex(0x0b3210);
+      koyasanMapleMat.emissiveIntensity = 0.06;
+      pineFoliageMat.color.setHex(0x234f2b);
+    } else if (season === 'autumn') {
+      koyasanCherryMat.color.setHex(0xd97706);
+      koyasanCherryMat.emissive.setHex(0x78350f);
+      koyasanCherryMat.emissiveIntensity = 0.16;
+      koyasanMapleMat.color.setHex(0xdc2626);
+      koyasanMapleMat.emissive.setHex(0x991b1b);
+      koyasanMapleMat.emissiveIntensity = 0.28;
+      pineFoliageMat.color.setHex(0x2c5834);
+    } else if (season === 'winter') {
+      koyasanCherryMat.color.setHex(0xe2e8f0);
+      koyasanCherryMat.emissive.setHex(0x475569);
+      koyasanCherryMat.emissiveIntensity = 0.14;
+      koyasanMapleMat.color.setHex(0xcbd5e1);
+      koyasanMapleMat.emissive.setHex(0x334155);
+      koyasanMapleMat.emissiveIntensity = 0.14;
+      pineFoliageMat.color.setHex(0x94a3b8);
+    }
+  }
+
   // ---------------------------------------------------------------- 7. Register 6 Sacred Precinct Interactables
   const landmarkDefs = [
     {
@@ -2228,6 +2347,7 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   // ---------------------------------------------------------------- 9. Per-Frame Animation Update
   function update(dt) {
     const elapsed = state.elapsed || 0;
+    applyKoyasanSeason(state?.time?.season || 'spring');
 
     // Slowly rotate the golden Siddhaṃ mandala above Kōbō Daishi Gobyō
     siddhamMandalaGroup.rotation.y = elapsed * 0.45;

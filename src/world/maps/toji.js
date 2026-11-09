@@ -888,7 +888,27 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
       });
     }
 
-    // 5.3 Ground Story Outer Columns, Open Portals & Protective Lower Skirt Roof (`裳階 / Mokoshi`)
+    // 5.3 Ground Story Outer Columns, Open Portals, Stone Tamagaki Fence (`石玉垣`) & Dark-Timber `桟唐戸・連子窓`
+    // Square carved stone fence (`石玉垣`, `13.6m × 13.6m`) around the ground podium (open at the 4 cardinal stairs)
+    for (const side of [-1, 1]) {
+      for (const segOff of [-4.2, 4.2]) {
+        const fenceNS = new THREE.BoxGeometry(4.4, 0.72, 0.22);
+        fenceNS.translate(pagodaX + segOff, 0.36, pagodaZ + side * 6.8);
+        gStone.push(fenceNS);
+        const fenceEW = new THREE.BoxGeometry(0.22, 0.72, 4.4);
+        fenceEW.translate(pagodaX + side * 6.8, 0.36, pagodaZ + segOff);
+        gStone.push(fenceEW);
+      }
+      for (const postOff of [-6.8, -2.0, 2.0, 6.8]) {
+        const postNS = new THREE.BoxGeometry(0.28, 0.96, 0.28);
+        postNS.translate(pagodaX + postOff, 0.48, pagodaZ + side * 6.8);
+        gStone.push(postNS);
+        const postEW = new THREE.BoxGeometry(0.28, 0.96, 0.28);
+        postEW.translate(pagodaX + side * 6.8, 0.48, pagodaZ + postOff);
+        gStone.push(postEW);
+      }
+    }
+
     const groundWallW = 7.8;
     const halfW = groundWallW * 0.5;
     // 12 outer columns on the ground story
@@ -905,22 +925,30 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
         }
       }
     }
-    // White plaster corner wall panels (`白漆喰壁`), leaving the central 2.7m portal on all 4 sides open!
+    // Dark weathered timber corner bays (`黒茶色桟唐戸・連子窓`) + white inter-bracket frieze (`白漆喰小壁`), leaving central 2.7m portal open!
     for (const side of [-1, 1]) {
       for (const corner of [-2.6, 2.6]) {
-        const panelNS = new THREE.BoxGeometry(2.4, 3.8, 0.28);
-        panelNS.translate(pagodaX + corner, 3.4, pagodaZ + side * halfW);
-        gPlaster.push(panelNS);
+        const panelNS = new THREE.BoxGeometry(2.4, 3.5, 0.28);
+        panelNS.translate(pagodaX + corner, 3.25, pagodaZ + side * halfW);
+        gDarkWood.push(panelNS);
 
-        const panelEW = new THREE.BoxGeometry(0.28, 3.8, 2.4);
-        panelEW.translate(pagodaX + side * halfW, 3.4, pagodaZ + corner);
-        gPlaster.push(panelEW);
+        const latticeNS = new THREE.BoxGeometry(1.5, 1.6, 0.34);
+        latticeNS.translate(pagodaX + corner, 3.45, pagodaZ + side * halfW);
+        gGreenLattice.push(latticeNS);
+
+        const panelEW = new THREE.BoxGeometry(0.28, 3.5, 2.4);
+        panelEW.translate(pagodaX + side * halfW, 3.25, pagodaZ + corner);
+        gDarkWood.push(panelEW);
+
+        const latticeEW = new THREE.BoxGeometry(0.34, 1.6, 1.5);
+        latticeEW.translate(pagodaX + side * halfW, 3.45, pagodaZ + corner);
+        gGreenLattice.push(latticeEW);
       }
     }
-    // Lower skirt roof (`裳階 / Mokoshi`) at `y = 4.2m`
-    const mokoshiRoof = new THREE.BoxGeometry(11.4, 0.36, 11.4);
-    mokoshiRoof.translate(pagodaX, 4.25, pagodaZ);
-    gRoofTile.push(mokoshiRoof);
+    // Ground-story white plaster inter-bracket soffit frieze (`初層白漆喰小壁`)
+    const groundKokabe = new THREE.BoxGeometry(groundWallW + 0.16, 0.46, groundWallW + 0.16);
+    groundKokabe.translate(pagodaX, 5.35, pagodaZ);
+    gPlaster.push(groundKokabe);
 
     // 5.4 Five Progressively Tapering Stories (`初層` to `五層`, `y = 1.4m..26.0m`)
     const tierBaseYs = [1.4, 6.4, 11.2, 15.8, 20.2];
@@ -936,12 +964,16 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
       const roofY = y0 + h;
 
       if (t > 0) {
-        // Upper story core shaft (`白漆喰壁` + `古色檜木柱樑`)
-        const coreBox = new THREE.BoxGeometry(coreW, h - 0.35, coreW);
-        coreBox.translate(pagodaX, y0 + (h - 0.35) * 0.5, pagodaZ);
-        gPlaster.push(coreBox);
+        // Upper story core shaft: dark weathered timber (`黒茶色の素木造 3間軸部`) + white inter-bracket frieze (`白漆喰小壁`) at top
+        const coreBox = new THREE.BoxGeometry(coreW, h - 0.45, coreW);
+        coreBox.translate(pagodaX, y0 + (h - 0.45) * 0.5, pagodaZ);
+        gDarkWood.push(coreBox);
 
-        // Corner & bay timber pilasters + central lattice doors (`桟唐戸`)
+        const kokabeFrieze = new THREE.BoxGeometry(coreW + 0.14, 0.44, coreW + 0.14);
+        kokabeFrieze.translate(pagodaX, roofY - 0.24, pagodaZ);
+        gPlaster.push(kokabeFrieze);
+
+        // Corner & bay timber pilasters + horizontal tie beams (`頭貫・長押`)
         const hw = coreW * 0.5 + 0.05;
         for (const pOff of [-hw, -hw * 0.35, hw * 0.35, hw]) {
           for (const s of [-1, 1]) {
@@ -950,50 +982,86 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
             gDarkWood.push(p1);
           }
         }
-        // Wooden balcony railing (`高欄 / 縁`) around each upper story
-        const railDeck = new THREE.BoxGeometry(coreW + 1.3, 0.16, coreW + 1.3);
+        // Overhanging 3-rail wooden balcony (`組高欄 / 縁`) with rails crossing past the corners
+        const railDeck = new THREE.BoxGeometry(coreW + 1.4, 0.16, coreW + 1.4);
         railDeck.translate(pagodaX, y0 + 0.12, pagodaZ);
         gDarkWood.push(railDeck);
 
-        const railTop = new THREE.BoxGeometry(coreW + 1.5, 0.12, coreW + 1.5);
-        railTop.translate(pagodaX, y0 + 0.58, pagodaZ);
-        gVermilion.push(railTop);
+        for (const rH of [0.34, 0.52, 0.72]) {
+          const railBar = new THREE.BoxGeometry(coreW + 1.85, 0.08, coreW + 1.85);
+          railBar.translate(pagodaX, y0 + rH, pagodaZ);
+          gVermilion.push(railBar);
+        }
       }
 
-      // Multi-stepped bracket complex (`斗栱 / 組物`) under each roof
-      const kumimono = new THREE.BoxGeometry(coreW + 1.1, 0.52, coreW + 1.1);
+      // Multi-stepped bracket complex (`三手先斗栱 / 組物`) under each roof
+      const kumimono = new THREE.BoxGeometry(coreW + 1.2, 0.52, coreW + 1.2);
       kumimono.translate(pagodaX, roofY - 0.22, pagodaZ);
-      gVermilion.push(kumimono);
+      gDarkWood.push(kumimono);
+
+      // White-painted double-tier rafter tips ring (`二軒繁垂木・木口白塗`) under each roof eave
+      const whiteRafterRing = new THREE.BoxGeometry(roofW - 0.25, 0.12, roofW - 0.25);
+      whiteRafterRing.translate(pagodaX, roofY + 0.02, pagodaZ);
+      gPlaster.push(whiteRafterRing);
 
       // Sweeping dark-tiled pagoda roof (`本瓦葺`) + pyramidal slope cap + upturned corner eaves (`軒反り`)
       const eaveSlab = new THREE.BoxGeometry(roofW, 0.34, roofW);
-      eaveSlab.translate(pagodaX, roofY + 0.18, pagodaZ);
+      eaveSlab.translate(pagodaX, roofY + 0.20, pagodaZ);
       gRoofTile.push(eaveSlab);
 
-      const roofSlope = new THREE.ConeGeometry(roofW * 0.68, 1.35, 4);
+      const roofSlope = new THREE.ConeGeometry(roofW * 0.68, 1.38, 4);
       roofSlope.rotateY(Math.PI / 4);
-      roofSlope.translate(pagodaX, roofY + 0.92, pagodaZ);
+      roofSlope.translate(pagodaX, roofY + 0.94, pagodaZ);
       gRoofTile.push(roofSlope);
 
-      // 4 upturned corner eaves & hanging bronze wind bells (`風鐸`) at all 20 corners
+      // 4 upturned corner eaves, stepped diagonal hip ridges (`隅棟`), `鬼瓦`, & hanging bronze wind bells (`風鐸`)
       const cornerR = roofW * 0.5;
       for (const cx of [-1, 1]) {
         for (const cz of [-1, 1]) {
-          const eaveTip = new THREE.BoxGeometry(0.85, 0.22, 0.85);
-          eaveTip.rotateZ(-cx * 0.22);
-          eaveTip.rotateX(cz * 0.22);
-          eaveTip.translate(pagodaX + cx * cornerR, roofY + 0.36, pagodaZ + cz * cornerR);
+          const eaveTip = new THREE.BoxGeometry(0.92, 0.24, 0.92);
+          eaveTip.rotateZ(-cx * 0.24);
+          eaveTip.rotateX(cz * 0.24);
+          eaveTip.translate(pagodaX + cx * cornerR, roofY + 0.40, pagodaZ + cz * cornerR);
           gRoofTile.push(eaveTip);
 
+          // Stepped diagonal hip ridge (`隅棟`) & demon-tile finial (`鬼瓦`)
+          const hipRidge = new THREE.BoxGeometry(0.28, 0.26, roofW * 0.36);
+          hipRidge.rotateY(cx * cz > 0 ? Math.PI / 4 : -Math.PI / 4);
+          hipRidge.translate(
+            pagodaX + cx * cornerR * 0.68,
+            roofY + 0.72,
+            pagodaZ + cz * cornerR * 0.68
+          );
+          gRoofTile.push(hipRidge);
+
+          const onigawara = new THREE.BoxGeometry(0.36, 0.42, 0.36);
+          onigawara.translate(
+            pagodaX + cx * (cornerR + 0.12),
+            roofY + 0.58,
+            pagodaZ + cz * (cornerR + 0.12)
+          );
+          gRoofTile.push(onigawara);
+
           // Hanging bronze wind bell (`風鐸`)
-          const bell = new THREE.ConeGeometry(0.14, 0.42, 6);
+          const bell = new THREE.ConeGeometry(0.15, 0.46, 6);
           bell.translate(
             pagodaX + cx * (cornerR - 0.15),
-            roofY - 0.14,
+            roofY - 0.16,
             pagodaZ + cz * (cornerR - 0.15)
           );
           gBronze.push(bell);
         }
+      }
+    }
+
+    // 4 Continuous Vertical Corner Wind-Bell Chains (`隅鎖・風鐸鎖`) linking all 5 roof corners
+    for (const cx of [-1, 1]) {
+      for (const cz of [-1, 1]) {
+        const cornerChain = new THREE.CylinderGeometry(0.03, 0.03, 19.6, 6);
+        cornerChain.rotateZ(cx * 0.11);
+        cornerChain.rotateX(-cz * 0.11);
+        cornerChain.translate(pagodaX + cx * 5.3, 15.6, pagodaZ + cz * 5.3);
+        gBronze.push(cornerChain);
       }
     }
 
@@ -1069,25 +1137,39 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
 
     const floorY = 1.5;
 
-    // 6.2 Exterior Columns, Walls, Double Roof (`重層入母屋造`), and Front `軒唐破風` Karahafu Gable
+    // 6.2 Exterior Columns, Walls, Double Roof (`重層入母屋造`), and Front `切り上げ` Stepped Central Eave
     // Back wall (`z = kondoZ - 7.2`) and East/West side walls (`x = ±12.2`)
     const backWall = new THREE.BoxGeometry(24.4, 5.4, 0.45);
     backWall.translate(kondoX, floorY + 2.7, kondoZ - 7.2);
-    gPlaster.push(backWall);
+    gDarkWood.push(backWall);
 
     for (const side of [-1, 1]) {
       const sideWall = new THREE.BoxGeometry(0.45, 5.4, 14.4);
       sideWall.translate(kondoX + side * 12.2, floorY + 2.7, kondoZ);
-      gPlaster.push(sideWall);
+      gDarkWood.push(sideWall);
 
-      // Front side walls (`|x| = 4.6..12.2`), leaving central 9.2m sanctum portal wide open!
-      const frontSideWall = new THREE.BoxGeometry(7.6, 5.4, 0.42);
-      frontSideWall.translate(kondoX + side * 8.4, floorY + 2.7, kondoZ + 7.2);
-      gPlaster.push(frontSideWall);
+      // Front side walls (`|x| = 4.6..12.2`): dark unpainted timber lower wall + white plaster upper frieze, leaving central 9.2m portal open!
+      const frontSideWall = new THREE.BoxGeometry(7.6, 4.8, 0.42);
+      frontSideWall.translate(kondoX + side * 8.4, floorY + 2.4, kondoZ + 7.2);
+      gDarkWood.push(frontSideWall);
+
+      const frontSideFrieze = new THREE.BoxGeometry(7.6, 0.65, 0.44);
+      frontSideFrieze.translate(kondoX + side * 8.4, floorY + 5.1, kondoZ + 7.2);
+      gPlaster.push(frontSideFrieze);
 
       const frontLattice = new THREE.BoxGeometry(4.6, 2.2, 0.48);
       frontLattice.translate(kondoX + side * 8.4, floorY + 3.0, kondoZ + 7.2);
       gGreenLattice.push(frontLattice);
+    }
+
+    // Five-colored Buddhist curtain (`五色幕 Goshikimaku`) hanging across the front eaves
+    const goshikiBuckets = [gGreenLattice, gGold, gVermilion, gPlaster, gIndigo];
+    for (let sIdx = 0; sIdx < 15; sIdx++) {
+      const stripeX = kondoX - 10.5 + sIdx * 1.5;
+      if (Math.abs(stripeX - kondoX) < 3.6) continue; // Keep central Yakushi vista clear
+      const stripe = new THREE.BoxGeometry(1.42, 0.92, 0.08);
+      stripe.translate(stripeX, floorY + 4.95, kondoZ + 7.45);
+      goshikiBuckets[sIdx % 5].push(stripe);
     }
 
     // Perimeter heavy dark-timber columns (`7 bays × 5 bays`)
@@ -1103,23 +1185,24 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
     // Lower Roof (`下層屋根`, `29.6m × 19.6m`) at `y = floorY + 5.6`
     const lowerBracket = new THREE.BoxGeometry(25.6, 0.55, 15.6);
     lowerBracket.translate(kondoX, floorY + 5.55, kondoZ);
-    gVermilion.push(lowerBracket);
+    gDarkWood.push(lowerBracket);
 
     const lowerRoof = new THREE.BoxGeometry(29.6, 0.58, 19.6);
     lowerRoof.translate(kondoX, floorY + 6.1, kondoZ);
     gRoofTile.push(lowerRoof);
 
-    // Iconic Curved Karahafu Gable (`軒唐破風`) projecting over the central front entrance of the lower roof!
-    const karahafuArch = new THREE.CylinderGeometry(2.8, 3.2, 3.6, 12, 1, false, -Math.PI * 0.5, Math.PI);
-    karahafuArch.rotateZ(Math.PI / 2);
-    karahafuArch.rotateY(Math.PI / 2);
-    karahafuArch.scale(1.25, 0.48, 1.0);
-    karahafuArch.translate(kondoX, floorY + 6.45, kondoZ + 9.2);
-    gRoofTile.push(karahafuArch);
+    // Authentic Tō-ji Kondō Stepped Elevated Central Eave (`前面中央切り上げ本瓦葺`) over the central entrance!
+    const kiriageFrieze = new THREE.BoxGeometry(9.6, 0.68, 0.42);
+    kiriageFrieze.translate(kondoX, floorY + 6.45, kondoZ + 8.85);
+    gPlaster.push(kiriageFrieze);
 
-    const karahafuGoldOrnament = new THREE.BoxGeometry(0.55, 0.55, 0.25);
-    karahafuGoldOrnament.translate(kondoX, floorY + 7.15, kondoZ + 10.6);
-    gGold.push(karahafuGoldOrnament);
+    const kiriageRoof = new THREE.BoxGeometry(10.6, 0.48, 3.2);
+    kiriageRoof.translate(kondoX, floorY + 6.88, kondoZ + 8.95);
+    gRoofTile.push(kiriageRoof);
+
+    const kiriageGoldOrnament = new THREE.BoxGeometry(0.55, 0.45, 0.25);
+    kiriageGoldOrnament.translate(kondoX, floorY + 7.12, kondoZ + 10.55);
+    gGold.push(kiriageGoldOrnament);
 
     // Upper Clerestory Core (`上層白漆喰壁`, `21.2m × 12.2m`)
     const upperCore = new THREE.BoxGeometry(21.2, 3.4, 12.2);
@@ -1281,12 +1364,41 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
       gGreenLattice.push(frontLattice);
     }
 
-    // Vermilion pillars (`丹塗円柱`) along front and back
+    // Vermilion pillars (`丹塗円柱`) & horizontal tie-beams (`朱塗長押・頭貫`) along front, sides, and back
     for (const px of [-13.2, -9.2, -5.6, 5.6, 9.2, 13.2]) {
       for (const pz of [-6.8, 6.8]) {
         const col = new THREE.CylinderGeometry(0.32, 0.35, 5.4, 10);
         col.translate(kodoX + px, kodoFloorY + 2.7, kodoZ + pz);
         gVermilion.push(col);
+      }
+    }
+    for (const beamY of [0.35, 3.85, 5.15]) {
+      const backBeam = new THREE.BoxGeometry(26.6, 0.22, 0.48);
+      backBeam.translate(kodoX, kodoFloorY + beamY, kodoZ - 6.8);
+      gVermilion.push(backBeam);
+
+      for (const side of [-1, 1]) {
+        const sideBeam = new THREE.BoxGeometry(0.48, 0.22, 13.8);
+        sideBeam.translate(kodoX + side * 13.2, kodoFloorY + beamY, kodoZ);
+        gVermilion.push(sideBeam);
+
+        const frontCornerBeam = new THREE.BoxGeometry(4.9, 0.22, 0.48);
+        frontCornerBeam.translate(kodoX + side * 10.8, kodoFloorY + beamY, kodoZ + 6.8);
+        gVermilion.push(frontCornerBeam);
+      }
+    }
+
+    // Courtyard red-cloth benches (`緋毛氈の床几`) south of Kōdō
+    for (const bx of [-9.5, 9.5]) {
+      const benchTop = new THREE.BoxGeometry(3.2, 0.14, 1.15);
+      benchTop.translate(kodoX + bx, 0.52, kodoZ + 12.2);
+      gVermilion.push(benchTop);
+      for (const lx of [-1.3, 1.3]) {
+        for (const lz of [-0.42, 0.42]) {
+          const leg = new THREE.BoxGeometry(0.14, 0.46, 0.14);
+          leg.translate(kodoX + bx + lx, 0.23, kodoZ + 12.2 + lz);
+          gDarkWood.push(leg);
+        }
       }
     }
 
@@ -1312,6 +1424,14 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
       const shibi = new THREE.BoxGeometry(0.52, 1.05, 0.60);
       shibi.translate(kodoX + side * 9.0, kodoFloorY + 10.35, kodoZ);
       gGold.push(shibi);
+
+      // `稚児棟` (Chigomune) secondary hip-ridge horns on the East/West gables
+      for (const cz of [-1, 1]) {
+        const chigomune = new THREE.BoxGeometry(3.2, 0.28, 0.32);
+        chigomune.rotateY(side * cz * 0.42);
+        chigomune.translate(kodoX + side * 12.4, kodoFloorY + 7.25, kodoZ + cz * 5.2);
+        gRoofTile.push(chigomune);
+      }
     }
 
     // 7.3 Grand Sumeru Altar (`須彌壇`, `18m × 6.5m`) & Kūkai's 21-Deity 3D Mandala (`二十一尊立體曼荼羅`)
@@ -1508,6 +1628,30 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
       gStone.push(rock);
     }
 
+    // 3D Lotus Pads (`蓮の葉`) & Seed Pods (`蓮の花托`) floating on Hyōtan-ike Pond (from reference photo Angle 2)
+    for (let lp = 0; lp < 28; lp++) {
+      const lobeZ = lp < 16 ? -11.0 : -22.0;
+      const lobeX = lp < 16 ? 36.0 : 35.0;
+      const rad = 1.4 + ((lp * 1.73) % 4.8);
+      const ang = lp * 2.39996;
+      const lx = lobeX + Math.cos(ang) * rad;
+      const lz = lobeZ + Math.sin(ang) * rad;
+      const padR = 0.32 + (lp % 4) * 0.08;
+      const pad = new THREE.CylinderGeometry(padR, padR * 0.9, 0.03, 10);
+      pad.translate(lx, 0.02 + (lp % 3) * 0.04, lz);
+      gGreenLattice.push(pad);
+
+      if (lp % 3 === 0) {
+        const stem = new THREE.CylinderGeometry(0.02, 0.025, 0.36, 5);
+        stem.translate(lx, 0.20, lz);
+        gDarkWood.push(stem);
+        const pod = new THREE.ConeGeometry(0.11, 0.16, 7);
+        pod.rotateX(Math.PI);
+        pod.translate(lx, 0.38, lz);
+        gDarkWood.push(pod);
+      }
+    }
+
     // Traditional Stone Lanterns (`石燈籠`) around the Pond, Pagoda, Kondō, and Kōdō
     const lanternCoords = [
       [30.5, -13.5, 1.05],
@@ -1598,6 +1742,20 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
       r: 0.55 * s,
     });
   }
+  // Wooden crutch poles (`添え木・支柱`) supporting the heavy weeping branches of Fuji-zakura (`不二櫻`) at `(24, 6)`
+  for (const [px, pz, h] of [
+    [22.4, 7.1, 3.1],
+    [25.6, 7.2, 3.2],
+    [25.8, 4.7, 3.0],
+    [22.5, 4.8, 2.9],
+  ]) {
+    const pole = new THREE.CylinderGeometry(0.06, 0.07, h, 6);
+    pole.translate(px, h * 0.5, pz);
+    trunkGeos.push(pole);
+    const crossbar = new THREE.BoxGeometry(0.42, 0.08, 0.12);
+    crossbar.translate(px, h, pz);
+    trunkGeos.push(crossbar);
+  }
   if (trunkGeos.length) {
     const trunkGeoMerged = mergeAndDispose(trunkGeos);
     disposables.push(trunkGeoMerged);
@@ -1606,7 +1764,7 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
     root.add(trunkMesh);
   }
 
-  // InstancedMesh 1: Weeping Cherry Blossom Canopies (`不二櫻`, 5 clusters per tree)
+  // InstancedMesh 1: Weeping Cherry Blossom Canopies (`不二櫻`, 9 clusters per tree including cascading weeping strands)
   const blossomGeo = new THREE.DodecahedronGeometry(1.15, 1);
   const blossomMat = new THREE.MeshStandardMaterial({
     color: 0xf9a8d4,
@@ -1623,6 +1781,10 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
     [1.1, 2.5, -0.7, 0.95, 0.75, 0.95],
     [0.8, 2.4, 1.0, 0.88, 0.72, 0.88],
     [-0.9, 2.3, -0.9, 0.88, 0.72, 0.88],
+    [-1.35, 1.75, 1.05, 0.45, 0.95, 0.45],
+    [1.35, 1.72, 0.95, 0.45, 0.95, 0.45],
+    [1.25, 1.68, -1.05, 0.45, 0.95, 0.45],
+    [-1.25, 1.70, -1.0, 0.45, 0.95, 0.45],
   ];
   const cherryInstanced = new THREE.InstancedMesh(
     blossomGeo,
@@ -1645,7 +1807,7 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
   cherryInstanced.instanceMatrix.needsUpdate = true;
   root.add(cherryInstanced);
 
-  // InstancedMesh 2: Crimson Japanese Maple Canopies (`紅葉`, 4 clusters per tree)
+  // InstancedMesh 2: Crimson Japanese Maple Canopies (`紅葉`, 5 clusters per tree)
   const mapleGeo = new THREE.DodecahedronGeometry(1.1, 1);
   const mapleMat = new THREE.MeshStandardMaterial({
     color: 0xdc2626,
@@ -1657,10 +1819,11 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
   disposables.push(mapleGeo, mapleMat);
 
   const mapleOffsets = [
-    [0, 3.1, 0, 1.3, 0.78, 1.3],
-    [-0.95, 2.5, 0.65, 0.92, 0.68, 0.92],
-    [0.95, 2.6, -0.65, 0.92, 0.68, 0.92],
-    [0.5, 2.3, 0.85, 0.85, 0.65, 0.85],
+    [0, 3.1, 0, 1.35, 0.78, 1.35],
+    [-0.95, 2.5, 0.65, 0.95, 0.68, 0.95],
+    [0.95, 2.6, -0.65, 0.95, 0.68, 0.95],
+    [0.5, 2.3, 0.85, 0.88, 0.65, 0.88],
+    [-0.65, 2.2, -0.8, 0.85, 0.62, 0.85],
   ];
   const mapleInstanced = new THREE.InstancedMesh(
     mapleGeo,
@@ -1681,6 +1844,74 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
   }
   mapleInstanced.instanceMatrix.needsUpdate = true;
   root.add(mapleInstanced);
+
+  // InstancedMesh 3: Four-Season Drifting Petals / Maple Leaves / Snowflakes (`四季落櫻・楓紅・飛雪`)
+  const PARTICLE_COUNT = 160;
+  const particleGeo = new THREE.PlaneGeometry(0.18, 0.14);
+  const particleMat = new THREE.MeshBasicMaterial({
+    color: 0xfbcfe8,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.88,
+  });
+  disposables.push(particleGeo, particleMat);
+  const seasonalParticles = new THREE.InstancedMesh(particleGeo, particleMat, PARTICLE_COUNT);
+  seasonalParticles.name = 'TojiSeasonalParticlesInstanced';
+  const particleSeeds = Array.from({ length: PARTICLE_COUNT }, (_, i) => ({
+    x: ((i * 37.3) % 96) - 36,
+    y: (i * 1.47) % 14,
+    z: ((i * 53.7) % 110) - 48,
+    phase: i * 0.618,
+    speed: 0.75 + (i % 7) * 0.14,
+  }));
+  root.add(seasonalParticles);
+
+  let appliedSeason = null;
+  function applySeasonalPalette(season) {
+    if (season === appliedSeason) return;
+    appliedSeason = season;
+    if (season === 'spring') {
+      // Full weeping Fuji-zakura cherry blossoms + fresh spring green maples
+      blossomMat.color.setHex(0xf9a8d4);
+      blossomMat.emissive.setHex(0x831843);
+      blossomMat.emissiveIntensity = 0.22;
+      mapleMat.color.setHex(0x4d9c46);
+      mapleMat.emissive.setHex(0x1b4322);
+      mapleMat.emissiveIntensity = 0.10;
+      particleMat.color.setHex(0xfbcfe8);
+      particleMat.opacity = 0.88;
+    } else if (season === 'summer') {
+      // Lush deep emerald summer canopies
+      blossomMat.color.setHex(0x2e7d32);
+      blossomMat.emissive.setHex(0x0d3b14);
+      blossomMat.emissiveIntensity = 0.08;
+      mapleMat.color.setHex(0x256d29);
+      mapleMat.emissive.setHex(0x0b3210);
+      mapleMat.emissiveIntensity = 0.08;
+      particleMat.color.setHex(0xd9f99d);
+      particleMat.opacity = 0.55;
+    } else if (season === 'autumn') {
+      // Blazing Kyoto Momiji crimson/gold maples & warm amber cherry leaves
+      blossomMat.color.setHex(0xd97706);
+      blossomMat.emissive.setHex(0x78350f);
+      blossomMat.emissiveIntensity = 0.18;
+      mapleMat.color.setHex(0xdc2626);
+      mapleMat.emissive.setHex(0x991b1b);
+      mapleMat.emissiveIntensity = 0.30;
+      particleMat.color.setHex(0xef4444);
+      particleMat.opacity = 0.92;
+    } else if (season === 'winter') {
+      // Frost-covered silver-white branches & falling snow
+      blossomMat.color.setHex(0xe2e8f0);
+      blossomMat.emissive.setHex(0x475569);
+      blossomMat.emissiveIntensity = 0.16;
+      mapleMat.color.setHex(0xcbd5e1);
+      mapleMat.emissive.setHex(0x334155);
+      mapleMat.emissiveIntensity = 0.14;
+      particleMat.color.setHex(0xf8fafc);
+      particleMat.opacity = 0.90;
+    }
+  }
 
   // ---------------------------------------------------------------- 11. Landmark Interactables & Veneration Triggers
   const landmarkDefs = [
@@ -1825,6 +2056,23 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
       pagodaJewelHalo.scale.setScalar(jewelPulse);
       pagodaJewelHalo.rotation.y = elapsed * 0.5;
       garudaFlameMat.emissiveIntensity = 1.15 + Math.sin(elapsed * 4.2) * 0.22;
+
+      // Four-Season Dynamic Foliage & Drifting Sakura / Maple / Snow Particles
+      const curSeason = state?.time?.season || 'spring';
+      applySeasonalPalette(curSeason);
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const p = particleSeeds[i];
+        const py = 14.0 - (((elapsed * p.speed + p.y) % 13.8 + 13.8) % 13.8);
+        const swayX = Math.sin(elapsed * 1.15 + p.phase) * 1.35;
+        const swayZ = Math.cos(elapsed * 0.92 + p.phase) * 1.15;
+        dummy.position.set(p.x + swayX, py, p.z + swayZ);
+        dummy.rotation.set(elapsed * 1.6 + p.phase, elapsed * 1.2 + p.phase, elapsed * 0.9);
+        const sc = curSeason === 'summer' ? 0.55 : 1.0;
+        dummy.scale.setScalar(sc);
+        dummy.updateMatrix();
+        seasonalParticles.setMatrixAt(i, dummy.matrix);
+      }
+      seasonalParticles.instanceMatrix.needsUpdate = true;
 
       const pPos = state?.player?.position;
       if (pPos && !state?.uiOpen && ctx?.input?.pressed?.('interact')) {

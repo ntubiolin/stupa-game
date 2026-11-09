@@ -292,6 +292,91 @@ export function createSky(ctx) {
     },
   };
 
+  // ---------------------------------------------------------------- Seasonal Solar Trajectory & Color Profiles
+  const VALID_SEASONS = ['spring', 'summer', 'autumn', 'winter'];
+  if (!state.time.season || !VALID_SEASONS.includes(state.time.season)) {
+    state.time.season = config.TIME?.defaultSeason || 'spring';
+  }
+
+  const SEASON_PROFILES = {
+    spring: {
+      id: 'spring',
+      // Vernal equinox: balanced high sun arc, warm cherry-blossom gold daylight
+      elevationScale: 0.88,
+      elevationBias: 0.02,
+      southSlope: 0.34,
+      southOffset: 0.20,
+      minSunHeight: 6.0,
+      sunIntensityMult: 1.0,
+      zenithTint: new THREE.Color(0x4b83d4),
+      horizonTint: new THREE.Color(0xfce7f3),
+      sunTint: new THREE.Color(0xfff4d6),
+      tintWeight: 0.14,
+      fogScale: 0.96,
+    },
+    summer: {
+      id: 'summer',
+      // Summer solstice: high zenith sun, short compact shadows, longer daylight
+      elevationScale: 1.12,
+      elevationBias: 0.11,
+      southSlope: 0.14,
+      southOffset: 0.06,
+      minSunHeight: 8.5,
+      sunIntensityMult: 1.12,
+      zenithTint: new THREE.Color(0x165db0),
+      horizonTint: new THREE.Color(0xdbeafe),
+      sunTint: new THREE.Color(0xfffbeb),
+      tintWeight: 0.16,
+      fogScale: 0.84,
+    },
+    autumn: {
+      id: 'autumn',
+      // Autumnal equinox -> late autumn: lower southern sun arc, warm amber-gold light, long dramatic temple shadows
+      elevationScale: 0.64,
+      elevationBias: -0.03,
+      southSlope: 0.50,
+      southOffset: 0.44,
+      minSunHeight: 4.6,
+      sunIntensityMult: 0.98,
+      zenithTint: new THREE.Color(0x3a68b2),
+      horizonTint: new THREE.Color(0xfed7aa),
+      sunTint: new THREE.Color(0xffd285),
+      tintWeight: 0.28,
+      fogScale: 1.05,
+    },
+    winter: {
+      id: 'winter',
+      // Winter solstice: low southern sun trajectory, extra-long crisp shadows, pale silver-blue sky
+      elevationScale: 0.46,
+      elevationBias: -0.08,
+      southSlope: 0.64,
+      southOffset: 0.60,
+      minSunHeight: 3.6,
+      sunIntensityMult: 0.88,
+      zenithTint: new THREE.Color(0x476899),
+      horizonTint: new THREE.Color(0xe2e8f0),
+      sunTint: new THREE.Color(0xf1f5f9),
+      tintWeight: 0.24,
+      fogScale: 1.16,
+    },
+  };
+
+  function setSeason(nextSeason, { silent = false } = {}) {
+    const norm = String(nextSeason || '').trim().toLowerCase();
+    if (!VALID_SEASONS.includes(norm)) return false;
+    const prev = state.time.season;
+    state.time.season = norm;
+    updateSkyState(0);
+    if (prev !== norm && !silent) {
+      ctx.bus?.emit?.('season:change', { season: norm, previous: prev });
+    }
+    return true;
+  }
+
+  function getSeason() {
+    return state.time.season || 'spring';
+  }
+
   const smoothstep = (edge0, edge1, x) => {
     const t = THREE.MathUtils.clamp((x - edge0) / (edge1 - edge0), 0, 1);
     return t * t * (3 - 2 * t);
@@ -457,11 +542,15 @@ export function createSky(ctx) {
     const sinPhi = Math.sin(phi);
     const cosPhi = Math.cos(phi);
 
-    // Sun moves East (+X) -> South-High (+Y, +Z) -> West (-X) -> Nadir (-Y)
+    const seasonKey = VALID_SEASONS.includes(state.time.season) ? state.time.season : 'spring';
+    const seasonProf = SEASON_PROFILES[seasonKey] || SEASON_PROFILES.spring;
+
+    // Sun moves East (+X) -> South-High (+Y, +Z) -> West (-X) -> Nadir (-Y),
+    // with solar declination (altitude & southern arc) modulated by the active season.
     state.time.sunDir.set(
       cosPhi,
-      sinPhi * 0.88,
-      sinPhi * 0.34 + 0.20
+      sinPhi * seasonProf.elevationScale + seasonProf.elevationBias,
+      sinPhi * seasonProf.southSlope + seasonProf.southOffset
     ).normalize();
 
     const sunY = state.time.sunDir.y;
@@ -501,8 +590,19 @@ export function createSky(ctx) {
     uniforms.uGroundColor.value.lerpColors(pA.ground, pB.ground, blend);
     uniforms.uSunColor.value.lerpColors(pA.sun, pB.sun, blend);
 
+    // Apply subtle seasonal sky & sun color temperature shift during daytime
+    const dayTintWeight = (1.0 - nightFactor) * seasonProf.tintWeight;
+    if (dayTintWeight > 0.001) {
+      uniforms.uZenithColor.value.lerp(seasonProf.zenithTint, dayTintWeight * 0.75);
+      uniforms.uHorizonColor.value.lerp(seasonProf.horizonTint, dayTintWeight);
+      uniforms.uSunColor.value.lerp(seasonProf.sunTint, dayTintWeight);
+    }
+
     hemiLight.color.lerpColors(pA.hemiSky, pB.hemiSky, blend);
     hemiLight.groundColor.lerpColors(pA.hemiGround, pB.hemiGround, blend);
+    if (dayTintWeight > 0.001) {
+      hemiLight.color.lerp(seasonProf.horizonTint, dayTintWeight * 0.55);
+    }
     hemiLight.intensity = THREE.MathUtils.lerp(0.65, 0.42, nightFactor);
 
     // Fog color & density per map (map.sky or map.atmosphere overrides default)
@@ -510,10 +610,16 @@ export function createSky(ctx) {
     const skyCfg = mapDef?.sky || mapDef?.atmosphere;
     if (skyCfg?.fogColor != null) {
       scene.fog.color.set(skyCfg.fogColor);
+      if (dayTintWeight > 0.001) {
+        scene.fog.color.lerp(seasonProf.horizonTint, dayTintWeight * 0.35);
+      }
     } else {
       scene.fog.color.lerpColors(pA.fog, pB.fog, blend);
+      if (dayTintWeight > 0.001) {
+        scene.fog.color.lerp(seasonProf.horizonTint, dayTintWeight * 0.45);
+      }
     }
-    scene.fog.density = skyCfg?.fogDensity ?? 0.0022;
+    scene.fog.density = (skyCfg?.fogDensity ?? 0.0022) * seasonProf.fogScale;
 
     // Evaluate cave interior profile (Terma subterranean dungeon or chapter caves)
     const caveProfile = computeCaveProfile();
@@ -592,13 +698,13 @@ export function createSky(ctx) {
       hemiLight.position.set(centerX, 50, centerZ);
 
       const dayStrength = smoothstep(-0.04, 0.25, sunY);
-      sunLight.intensity = dayStrength * 1.65;
+      sunLight.intensity = dayStrength * 1.65 * seasonProf.sunIntensityMult;
       sunLight.color.copy(uniforms.uSunColor.value);
       sunLight.target.position.set(centerX, 0, centerZ);
       const sunDist = 75;
       sunLight.position.set(
         centerX + state.time.sunDir.x * sunDist,
-        Math.max(6, state.time.sunDir.y * sunDist),
+        Math.max(seasonProf.minSunHeight, state.time.sunDir.y * sunDist),
         centerZ + state.time.sunDir.z * sunDist
       );
 
@@ -689,6 +795,8 @@ export function createSky(ctx) {
     getTimeOverride() {
       return timeOverride;
     },
+    setSeason,
+    getSeason,
   };
   ctx.sky = api;
   ctx.debug?.register?.('sky', api);

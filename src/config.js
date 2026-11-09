@@ -66,6 +66,7 @@ export const CONFIG = {
   TIME: {
     dayLengthSec: 240,     // full 24h cycle
     start: 0.30,           // 0 = midnight, 0.25 = sunrise, 0.5 = noon, 0.75 = sunset
+    defaultSeason: 'spring', // 'spring' | 'summer' | 'autumn' | 'winter'
   },
 
   RENDER: {
