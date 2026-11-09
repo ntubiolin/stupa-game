@@ -1,6 +1,16 @@
 import * as THREE from 'three';
 import { MAPS } from '../data/maps.js';
 
+export const MAP_LOADING_ART = {
+  wild: 'maps/wild.jpg',
+  pharping: 'maps/pharping.jpg',
+  mangyul: 'maps/mangyul.jpg',
+  yarlung: 'maps/yarlung.jpg',
+  samye: 'maps/samye.jpg',
+  chimphu: 'maps/samye.jpg',
+  terma: 'maps/samye.jpg',
+};
+
 /**
  * Zones system — manages data-driven map registry (`MAPS`), lazy loading (`load()`),
  * gate interactables, fade-to-black transitions, teleport API, and `ctx.world` helpers.
@@ -227,6 +237,76 @@ export function createZones(ctx) {
     ui.appendChild(fadeEl);
   }
 
+  let fadeBgEl = null;
+  let fadeTitleEl = null;
+  let fadeSubEl = null;
+  let fadeOutTimer = null;
+
+  if (fadeEl && typeof document !== 'undefined') {
+    if (!fadeEl.querySelector('.zone-fade__bg')) {
+      fadeEl.innerHTML = `
+        <div class="zone-fade__bg"></div>
+        <div class="zone-fade__vignette"></div>
+        <div class="zone-fade__caption">
+          <div class="zone-fade__lotus" aria-hidden="true">☸</div>
+          <div class="zone-fade__title"></div>
+          <div class="zone-fade__sub"></div>
+        </div>
+      `;
+    }
+    fadeBgEl = fadeEl.querySelector('.zone-fade__bg');
+    fadeTitleEl = fadeEl.querySelector('.zone-fade__title');
+    fadeSubEl = fadeEl.querySelector('.zone-fade__sub');
+  }
+
+  function prepareFadeOverlay(to) {
+    if (!fadeEl) return;
+    const targetMap = MAPS[to];
+    const artUrl = MAP_LOADING_ART[to] || null;
+    if (fadeBgEl) {
+      if (artUrl) {
+        fadeBgEl.style.backgroundImage = `url("${artUrl}")`;
+        fadeEl.classList.add('has-art');
+      } else {
+        fadeBgEl.style.backgroundImage = '';
+        fadeEl.classList.remove('has-art');
+      }
+    }
+    const t = (key, params) => (ctx.i18n?.t ? ctx.i18n.t(key, params) : key);
+    if (fadeTitleEl) {
+      fadeTitleEl.textContent = targetMap?.nameKey ? t(targetMap.nameKey) : to;
+    }
+    if (fadeSubEl) {
+      const subKey = targetMap?.chapterIntro?.locationKey || targetMap?.enterToastKey || '';
+      const subText = subKey ? t(subKey) : '';
+      const lvl =
+        Array.isArray(targetMap?.level) && targetMap.level[1] > 1
+          ? `Lv.${targetMap.level[0]}–${targetMap.level[1]}`
+          : '';
+      fadeSubEl.textContent = [lvl, subText].filter(Boolean).join(' · ');
+    }
+    fadeEl.dataset.zone = to;
+  }
+
+  function showFadeOverlay(to) {
+    if (!fadeEl) return;
+    prepareFadeOverlay(to);
+    if (fadeOutTimer) {
+      clearTimeout(fadeOutTimer);
+      fadeOutTimer = null;
+    }
+    fadeEl.classList.add('is-active');
+  }
+
+  function scheduleFadeOut(holdMs = 620) {
+    if (!fadeEl) return;
+    if (fadeOutTimer) clearTimeout(fadeOutTimer);
+    fadeOutTimer = setTimeout(() => {
+      fadeEl.classList.remove('is-active');
+      fadeOutTimer = null;
+    }, holdMs);
+  }
+
   // ---------------------------------------------------------------- Switch Logic
   function resolveSpawn(mapDef, options = {}) {
     const spawns = mapDef.spawns || {};
@@ -287,9 +367,7 @@ export function createZones(ctx) {
     if (isTransitioning || (state.zone || 'stupa') === to) return;
     isTransitioning = true;
 
-    if (fadeEl) {
-      fadeEl.classList.add('is-active');
-    }
+    showFadeOverlay(to);
 
     const loadPromise = ensureMapLoaded(to);
     const delayPromise = new Promise((resolve) => setTimeout(resolve, 400));
@@ -299,9 +377,7 @@ export function createZones(ctx) {
         viaTeleport: false,
         spawn: spawnId || (targetMap.spawns?.['from-stupa'] ? 'from-stupa' : 'north'),
       });
-      if (fadeEl) {
-        fadeEl.classList.remove('is-active');
-      }
+      scheduleFadeOut(250);
       setTimeout(() => {
         isTransitioning = false;
       }, 400);
@@ -318,28 +394,25 @@ export function createZones(ctx) {
       : { ...optionsOrSpawn };
 
     const alreadyLoaded = Boolean(mapInstances[to]);
+    const shouldShowFade = Boolean(fadeEl && !options.skipFade && (state.zone || 'stupa') !== to);
 
     if (!alreadyLoaded) {
-      if (fadeEl && !options.skipFade) {
-        fadeEl.classList.add('is-active');
+      if (shouldShowFade) {
+        showFadeOverlay(to);
       }
       return ensureMapLoaded(to).then(() => {
         applyZoneSwitchSync(to, { viaTeleport: true, ...options });
-        if (fadeEl && !options.skipFade) {
-          requestAnimationFrame(() => {
-            fadeEl.classList.remove('is-active');
-          });
+        if (shouldShowFade) {
+          scheduleFadeOut(620);
         }
         return true;
       });
     }
 
-    if (fadeEl && !options.skipFade && (state.zone || 'stupa') !== to) {
-      fadeEl.classList.add('is-active');
+    if (shouldShowFade) {
+      showFadeOverlay(to);
       void fadeEl.offsetWidth;
-      requestAnimationFrame(() => {
-        fadeEl.classList.remove('is-active');
-      });
+      scheduleFadeOut(620);
     }
 
     applyZoneSwitchSync(to, { viaTeleport: true, ...options });
