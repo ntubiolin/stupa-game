@@ -365,7 +365,7 @@ export function createBoss(ctx, def) {
       const distArena = Math.hypot(dxArena, dzArena);
       const maxR = locked
         ? Math.max(1.5, arena.r - bossState.radius - 0.3)
-        : Math.max(1.5, arena.r - bossState.radius + 0.5);
+        : Math.max(1.5, (arena.leashR || (arena.r + 6)) - bossState.radius - 0.5);
       if (distArena > maxR && distArena > 0.001) {
         nx = arena.x + (dxArena / distArena) * maxR;
         nz = arena.z + (dzArena / distArena) * maxR;
