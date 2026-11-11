@@ -88,7 +88,7 @@ function reachablePositions(map, colliders) {
 test('Japan route nodes and reciprocal gates follow all six chapters', () => {
   assert.deepEqual(JAPAN_MAP_IDS, mapIds);
   assert.equal(isJapanMap('stupa'), false);
-  assert.deepEqual(WORLD_ROUTE_NODES.filter(node => node.japanOnly).map(node => node.id), mapIds);
+  assert.deepEqual(WORLD_ROUTE_NODES.filter(node => node.japanOnly && !node.japanSide).map(node => node.id), mapIds);
   for (const [index, { mapId, origin }] of JAPAN_CHAPTERS.entries()) {
     const map = MAPS[mapId];
     assert.deepEqual(map.origin, origin);

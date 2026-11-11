@@ -68,6 +68,12 @@ export const KII_MAP = makePilgrimageMap('kii', {
   gateIn: [0, 58], gateOut: [0, -53], load: () => load('createKiiMap'),
 });
 
+for (const [id, x] of [['kappaCreek', -25], ['tenguForest', 0], ['oniPass', 25]]) {
+  KII_MAP.gates.push({ id: `side-${id}`, ...KII_MAP.origin, x: KII_MAP.origin.x + x, z: KII_MAP.origin.z - 42,
+    radius: 3.3, to: id, toGate: 'from-kii', labelKey: `prompt.japanYokai.enter.${id}` });
+  KII_MAP.spawns[`from-${id}`] = { x: KII_MAP.origin.x + x, z: KII_MAP.origin.z - 37, heading: Math.PI };
+}
+
 export const KONGOBUJI_MAP = makePilgrimageMap('kongobuji', {
   walkRadius: 69, fogColor: 0xd4c6ac, fogDensity: 0.004, minimapColor: '#a89b79',
   gateIn: [0, 48], gateOut: [31, -36], load: () => load('createKongobujiMap'),

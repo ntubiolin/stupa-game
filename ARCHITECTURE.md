@@ -54,6 +54,7 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/gameplay/targeting.js` | Gameplay | soft auto-aim target selection within forward cone & golden ground target reticle |
 | `src/gameplay/allies.js` | Gameplay | 3 oath-bound Dharma Protectors (`tenma`, `whiteYak`, `pehar`) 3D procedural models, AI, and summons |
 | `src/gameplay/enemies.js`, `src/gameplay/enemyModels/*.js` | Gameplay | enemy models, AI state machine, elite packs & affixes, telegraphs, status effects (`root`/`stun`/`slow`/`vuln`), liberation VFX |
+| `src/data/maps/japanYokai.js`, `src/world/maps/japanYokai.js`, `src/data/enemies/japanYokai.js` | Gameplay | optional Japan combat branches (Kappa Creek, Tengu Cedar Forest, Red Oni Pass), zero-PointLight scenery, spawn tables and three procedural yōkai |
 | `src/gameplay/bosses/index.js`, `bossBase.js`, `patterns.js`, `<boss>.js` | Gameplay | multi-phase Boss framework, arena barriers, telegraphed patterns, and 6 Bosses (`migoiKing`, `droughtLord`, `tenmaStorm`, `yarlhaShampo`, `pehar`, `termaGuardian`) |
 | `src/gameplay/dungeon.js` | Gameplay | Terma procedural 3-floor dungeon generator (`mulberry32` PRNG), tier selector (Tier 1–10), floor gates, Terma crystals, Vault Room reliquary & Floor 3 Terma Chest |
 | `src/gameplay/termaCaves.js` | Gameplay | Ch1–Ch5 Terma Cave grottoes, cave guardian ambush trials, interactive Terma Caskets, Shogser scrolls, Mendrup pills, Tertön's Compass & Grand Empowerment |
@@ -109,6 +110,9 @@ Subagents edit **only** files they own. If a contract change is needed, report i
   - `kii` (紀伊杉林・高野山參道): `type: 'hub'`, `origin = (10500, 0)`
   - `kongobuji` (金剛峯寺・蟠龍庭): `type: 'hub'`, `origin = (11000, 0)`
   - `okunoin` (高野山・奧之院): `type: 'hub'`, `origin = (11500, 0)`
+  - `kappaCreek` (河童溪谷): `type: 'combat'`, `origin = (12000, 0)`, level 8–14
+  - `tenguForest` (天狗杉林): `type: 'combat'`, `origin = (12500, 0)`, level 14–22
+  - `oniPass` (赤鬼山道): `type: 'combat'`, `origin = (13000, 0)`, level 22–30
   - `sandbox` (測試場, debug only): `type: 'combat'`, `origin = (9000, 0)`
 - Layout numbers live in `src/config.js` (`CONFIG.STUPA`, `WALL`, `WORLD`, `LAMPS`, `WILD`, …) and `src/data/maps.js`. Never hardcode duplicates.
 

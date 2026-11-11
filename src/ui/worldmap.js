@@ -2,7 +2,7 @@ import '../i18n/codex.js';
 import '../i18n/murals.js';
 import { i18n } from '../i18n.js';
 import { MAPS } from '../data/maps.js';
-import { JAPAN_MAP_IDS, isJapanMap } from '../data/japan.js';
+import { JAPAN_MAP_IDS, JAPAN_SIDE_MAP_IDS, isJapanMap } from '../data/japan.js';
 import { CODEX_CATEGORIES } from '../data/codex.js';
 import { CHAPTER_MURALS, getChapterMural } from '../data/murals.js';
 import { MuralScrollCanvas } from './mural/scroll.js';
@@ -127,6 +127,12 @@ export const WORLD_ROUTE_NODES = [
     nameKey: MAPS[id].nameKey,
     descKey: `worldNode.${id}.desc`,
     connectsTo: [JAPAN_MAP_IDS[index + 1]].filter(Boolean),
+  })),
+  ...JAPAN_SIDE_MAP_IDS.map((id, index) => ({
+    id, chapter: 2, nx: [0.57, 0.78, 0.9][index], ny: [0.62, 0.57, 0.67][index],
+    japanOnly: true, japanSide: true, freeTeleport: true,
+    nameKey: MAPS[id].nameKey, levelKey: `worldNode.${id}.level`, descKey: `worldNode.${id}.desc`,
+    connectsTo: ['kii'],
   })),
   {
     id: 'sandbox',
@@ -1008,13 +1014,14 @@ export function createWorldMap(ctx) {
 
   function isWorldNodeUnlocked(node) {
     if (node.japanOnly) {
+      if (node.japanSide) return ctx.japanCampaign?.isChapterUnlocked?.('kii') !== false;
       return node.id === 'qinglong' || ctx.japanCampaign?.isChapterUnlocked?.(node.id) !== false;
     }
     return node.id === 'stupa' || Boolean(ctx.waypoints?.isUnlocked?.(node.id));
   }
 
   function worldNodeLevel(node) {
-    return node.japanOnly
+    return node.japanSide ? i18n.t(node.levelKey) : node.japanOnly
       ? i18n.t('worldNode.japan.chapter', { number: node.chapter })
       : i18n.t(node.levelKey);
   }
@@ -1184,7 +1191,8 @@ export function createWorldMap(ctx) {
     const japan = isJapanMap(mapId);
     const returnToHub = mapId === 'stupa' && isJapanMap(state.zone);
     if (japan && !isJapanModeEnabled(ctx)) return false;
-    if (japan && !quickVisit && !isWorldNodeUnlocked({ id: mapId, japanOnly: true })) return false;
+    const routeNode = WORLD_ROUTE_NODES.find(node => node.id === mapId) || { id: mapId, japanOnly: japan };
+    if (japan && !quickVisit && !isWorldNodeUnlocked(routeNode)) return false;
     close();
     if ((japan || returnToHub) && ctx.zones?.teleport) {
       const legacySpawn = { toji: 'gojunoto', koyasan: 'garan' }[mapId];

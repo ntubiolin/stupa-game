@@ -219,6 +219,7 @@ import TERMA_MAP from './maps/terma.js';
 import TOJI_MAP from './maps/toji.js';
 import KOYASAN_MAP from './maps/koyasan.js';
 import * as japanPilgrimageMaps from './maps/japanPilgrimage.js';
+import * as japanYokaiMaps from './maps/japanYokai.js';
 
 // Auto-discover chapter map definitions (`src/data/maps/*.js`) and chapter i18n (`src/i18n/*.js`)
 const fallbackMapModules = {
@@ -232,6 +233,7 @@ const fallbackMapModules = {
   toji: { TOJI_MAP },
   koyasan: { KOYASAN_MAP },
   japanPilgrimage: japanPilgrimageMaps,
+  japanYokai: japanYokaiMaps,
 };
 let chapterMapModules = fallbackMapModules;
 try {

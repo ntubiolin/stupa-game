@@ -1,0 +1,38 @@
+import { i18n } from '../i18n.js';
+
+i18n.register({
+  'zh-Hant': {
+    'map.kappaCreek': '河童溪谷', 'map.kappaCreek.subtitle': '踏石越過水霧瀰漫的妖怪溪流',
+    'map.tenguForest': '天狗杉林', 'map.tenguForest.subtitle': '穿越朱紅鳥居與疾風盤旋的古杉林',
+    'map.oniPass': '赤鬼山道', 'map.oniPass.subtitle': '攀上巨岩與赤焰交錯的險峻山口',
+    'enemy.kappa': '河童', 'enemy.tengu': '鴉天狗', 'enemy.akaOni': '赤鬼',
+    'prompt.japanYokai.enter.kappaCreek': '進入河童溪谷', 'prompt.japanYokai.enter.tenguForest': '進入天狗杉林',
+    'prompt.japanYokai.enter.oniPass': '進入赤鬼山道', 'prompt.japanYokai.returnKii': '返回紀伊參道',
+    'toast.japanYokai.kappaCreek': '進入河童溪谷', 'toast.japanYokai.tenguForest': '進入天狗杉林', 'toast.japanYokai.oniPass': '進入赤鬼山道',
+    'worldNode.kappaCreek.desc': '沿溪流踏石而行，避開河童擲出的水珠。',
+    'worldNode.tenguForest.desc': '在古杉與鳥居之間迎戰乘風俯衝的鴉天狗。',
+    'worldNode.oniPass.desc': '登上火山岩山道，閃避赤鬼的重棒與震地攻擊。',
+    'worldNode.kappaCreek.level': '支線 Lv.8–14', 'worldNode.tenguForest.level': '支線 Lv.14–22', 'worldNode.oniPass.level': '支線 Lv.22–30',
+    'worldNode.japan.short.kappaCreek': '河童溪谷', 'worldNode.japan.short.tenguForest': '天狗杉林', 'worldNode.japan.short.oniPass': '赤鬼山道',
+    'hud.japan.emaki.kappaCreek.name': '紀伊・河童溪谷', 'hud.japan.emaki.kappaCreek.verse': '水霧踏石・河童潛影',
+    'hud.japan.emaki.tenguForest.name': '紀伊・天狗杉林', 'hud.japan.emaki.tenguForest.verse': '朱鳥居・鴉羽疾風',
+    'hud.japan.emaki.oniPass.name': '紀伊・赤鬼山道', 'hud.japan.emaki.oniPass.verse': '赤岩震地・鬼棒雷鳴',
+  },
+  en: {
+    'map.kappaCreek': 'Kappa Creek', 'map.kappaCreek.subtitle': 'Stepping stones through a misty yōkai stream',
+    'map.tenguForest': 'Tengu Cedar Forest', 'map.tenguForest.subtitle': 'Ancient cedars, vermilion gates, and circling winds',
+    'map.oniPass': 'Red Oni Pass', 'map.oniPass.subtitle': 'A craggy ascent through boulders and ember-red stone',
+    'enemy.kappa': 'Kappa', 'enemy.tengu': 'Crow Tengu', 'enemy.akaOni': 'Red Oni',
+    'prompt.japanYokai.enter.kappaCreek': 'Enter Kappa Creek', 'prompt.japanYokai.enter.tenguForest': 'Enter Tengu Cedar Forest',
+    'prompt.japanYokai.enter.oniPass': 'Enter Red Oni Pass', 'prompt.japanYokai.returnKii': 'Return to the Kii trail',
+    'toast.japanYokai.kappaCreek': 'Entered Kappa Creek', 'toast.japanYokai.tenguForest': 'Entered Tengu Cedar Forest', 'toast.japanYokai.oniPass': 'Entered Red Oni Pass',
+    'worldNode.kappaCreek.desc': 'Cross the stream on stepping stones while kappa hurl water orbs.',
+    'worldNode.tenguForest.desc': 'Fight diving crow tengu among ancient cedars and torii gates.',
+    'worldNode.oniPass.desc': 'Climb the volcanic pass and dodge the red oni’s club and ground slam.',
+    'worldNode.kappaCreek.level': 'Side quest Lv.8–14', 'worldNode.tenguForest.level': 'Side quest Lv.14–22', 'worldNode.oniPass.level': 'Side quest Lv.22–30',
+    'worldNode.japan.short.kappaCreek': 'Kappa Creek', 'worldNode.japan.short.tenguForest': 'Tengu Forest', 'worldNode.japan.short.oniPass': 'Red Oni Pass',
+    'hud.japan.emaki.kappaCreek.name': 'Kii · Kappa Creek', 'hud.japan.emaki.kappaCreek.verse': 'Mist, Stepping Stones, Hidden Kappa',
+    'hud.japan.emaki.tenguForest.name': 'Kii · Tengu Cedar Forest', 'hud.japan.emaki.tenguForest.verse': 'Vermilion Gates, Crow-Wing Wind',
+    'hud.japan.emaki.oniPass.name': 'Kii · Red Oni Pass', 'hud.japan.emaki.oniPass.verse': 'Red Stone, Earthshaking Club',
+  },
+});
