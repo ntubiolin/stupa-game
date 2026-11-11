@@ -73,6 +73,8 @@ async function measureView(page, mapGroups) {
   const { textures, memory, ...metrics } = await page.evaluate(async ({ warmup, sample, mapGroups }) => {
     const { renderer, scene, state, camera, sky } = __stupa;
     const { info } = renderer;
+    const enemyGroup = scene.getObjectByName('Enemies');
+    let enemiesVisible = enemyGroup?.visible;
     const originalReset = info.reset;
     const gl = renderer.getContext();
     const timer = gl.getExtension('EXT_disjoint_timer_query_webgl2');
@@ -91,6 +93,7 @@ async function measureView(page, mapGroups) {
             warm++;
           } else {
             samples.push({ intervalMs: now - priorTime, render: { ...info.render } });
+            enemiesVisible ||= enemyGroup?.visible;
           }
           priorTime = now;
           originalReset();
@@ -159,7 +162,7 @@ async function measureView(page, mapGroups) {
       gpuSamples: disjoint ? [] : gpuSamples,
       gpuTimingStatus: !timer ? 'unavailable' : disjoint ? 'disjoint' : gpuSamples.length === sample ? 'complete' : 'incomplete',
       state: { mode: state.mode, zone: state.zone, uiOpen: state.uiOpen, time: state.time.t,
-        season: sky.getSeason(), nightFactor: state.time.nightFactor,
+        season: sky.getSeason(), nightFactor: state.time.nightFactor, enemiesVisible,
         visibleMaps: Object.entries(mapGroups)
           .filter(([, name]) => scene.getObjectByName(name)?.visible).map(([map]) => map) },
       camera: { position: camera.position.toArray(), rotation: camera.quaternion.toArray(),
@@ -337,6 +340,7 @@ export async function runQualityCapture({
           assert.equal(metrics.state.zone, map);
           assert.equal(metrics.state.uiOpen, false, `${name} ${view.id}: an overlay is open`);
           assert.deepEqual(metrics.state.visibleMaps, [map], `${name} ${view.id}: unexpected visible maps`);
+          assert.equal(metrics.state.enemiesVisible, false, `${name} ${view.id}: combat enemies were visible`);
           assert.equal(metrics.state.season, season);
           assert(Math.abs(metrics.state.time - view.time) < 1e-8);
           assert(metrics.state.nightFactor >= (view.time >= 0.8 ? 0.9 : 0) &&
