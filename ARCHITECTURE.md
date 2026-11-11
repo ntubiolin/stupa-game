@@ -376,6 +376,10 @@ Asset budgets and reference provenance are in `docs/japan-temple-art.md`.
 The focused Kondō reference adds `toji_materials.py` (offline PBR/UV authoring)
 and `toji_yakushi.py` (principal image plus normal/AO baking). High-resolution
 sculpt sources stay in the offline authoring pipeline.
+`temple_materials.py` extends that pipeline to Kōdō, the pagoda and Daitō
+with 256px PBR/128px normal maps. The shared sculptor retains separate
+Dainichi crown/hand forms and 512px UV1 principal-image bakes; its Yakushi
+default and the established Kondō GLB remain unchanged.
 `tojiCourtyard.js` modifies existing materials within the forecourt, with
 short-range contact shading and day/night-aware reflected light. Its two 256px
 textures are disposed with the map and registered in `material.userData.extraTextures`
@@ -386,8 +390,10 @@ the Kondō tiles. Daitō owns one additional 256px gravel tile with the same
 memory accounting. Low-spec rendering skips architectural normal maps on the
 three GLBs while retaining the sculpted figures' UV1 maps. No new light,
 post-processing pass or ctx API is added.
-The matched-camera capture harness and budgets are documented in
-`docs/toji-quality-reference.md`.
+The shared actual-render capture harness (`scripts/lib/quality-browser-capture.mjs`)
+serves the Kondō and Japan/Tibet expansion entry points. Matched-camera evidence,
+budgets and rebuild steps are documented in `docs/toji-quality-reference.md`
+and `docs/temple-quality-expansion.md`.
 Garden helper textures are generated once per scene; the raked surface uses a
 single plane. Vegetation shares whole-tree geometry, 128px alpha-tested foliage
 and 64×128px bark. Cedars use 52m spatial chunks with a 68m LOD transition and

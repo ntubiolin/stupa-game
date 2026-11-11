@@ -5,11 +5,11 @@ import { readFileSync } from 'node:fs';
 // Budgets count one geometry pass; renderer shadow passes are additional.
 const budgets = {
   // Focused quality reference: one baked hero, 512px maximum textures. Other
-  // landmarks retain their previous budgets. See docs/toji-quality-reference.md.
+  // expanded landmarks use bounded 256px PBR and at most one 512px hero bake.
   toji_kondo: { triangles: 78000, primitives: 21, bytes: 5000000 },
-  toji_kodo: { triangles: 65000, primitives: 16, bytes: 2300000 },
-  toji_gojunoto: { triangles: 65000, primitives: 14, bytes: 2200000 },
-  konpon_daito: { triangles: 26000, primitives: 12, bytes: 850000 },
+  toji_kodo: { triangles: 90000, primitives: 21, bytes: 4900000 },
+  toji_gojunoto: { triangles: 65000, primitives: 14, bytes: 3900000 },
+  konpon_daito: { triangles: 62000, primitives: 18, bytes: 3900000 },
 };
 for (const [name, budget] of Object.entries(budgets)) {
   test(`${name} is self-contained and stays within its game asset budget`, () => {
@@ -36,13 +36,18 @@ for (const [name, budget] of Object.entries(budgets)) {
   });
 }
 
-test('Kondō ships bounded PBR textures and the hero bake with matching UV sets', () => {
-  const buffer = readFileSync(new URL('../public/models/kukai/toji_kondo.glb', import.meta.url));
+for (const [name, heroName, cap] of [
+  ['toji_kondo', 'Toji_YakushiBakedGilt', 12],
+  ['toji_kodo', 'Kodo_DainichiBakedGilt', 9],
+  ['konpon_daito', 'Konpon_DainichiBakedGilt', 8.5],
+  ['toji_gojunoto', null, 6.5],
+]) test(`${name} ships bounded PBR textures and matching sculpture UV sets`, () => {
+  const buffer = readFileSync(new URL(`../public/models/kukai/${name}.glb`, import.meta.url));
   const jsonLength = buffer.readUInt32LE(12);
   const gltf = JSON.parse(buffer.toString('utf8', 20, 20 + jsonLength));
   const binaryStart = 20 + jsonLength + 8;
   let decodedBytes = 0;
-  assert(gltf.images.length >= 10 && gltf.images.length <= 20);
+  assert(gltf.images.length >= 10 && gltf.images.length <= (name === 'toji_kondo' ? 20 : 26));
   for (const image of gltf.images) {
     assert.equal(image.mimeType, 'image/png');
     const view = gltf.bufferViews[image.bufferView];
@@ -58,8 +63,16 @@ test('Kondō ships bounded PBR textures and the hero bake with matching UV sets'
       height = Math.max(1, Math.floor(height / 2));
     } while (true);
   }
-  assert(decodedBytes <= 12 * 1024 * 1024, `RGBA8+mips exceeds 12 MiB: ${decodedBytes}`);
-  const heroIndex = gltf.materials.findIndex(material => material.name.startsWith('Toji_YakushiBakedGilt'));
+  assert(decodedBytes <= cap * 1024 * 1024, `RGBA8+mips exceeds ${cap} MiB: ${decodedBytes}`);
+  assert(!gltf.nodes.some(node => /HighSource|SculptSource/.test(node.name || '')));
+  for (const material of gltf.materials.filter(m => m.name.endsWith('_TemplePBR'))) {
+    assert(material.pbrMetallicRoughness.baseColorTexture);
+    assert(material.pbrMetallicRoughness.metallicRoughnessTexture);
+    assert(!material.doubleSided, 'solid textured structure uses backface culling');
+    assert(!material.emissiveFactor?.some(value => value > 0));
+  }
+  if (!heroName) return;
+  const heroIndex = gltf.materials.findIndex(material => material.name.startsWith(heroName));
   assert(heroIndex >= 0, 'principal sculpture must retain its dedicated baked material');
   const hero = gltf.materials[heroIndex];
   assert.equal(hero.normalTexture?.texCoord, 1);

@@ -25,6 +25,86 @@ hero_spec.loader.exec_module(hero)
 surface_spec = importlib.util.spec_from_file_location('toji_materials', Path(__file__).with_name('toji_materials.py'))
 surfaces = importlib.util.module_from_spec(surface_spec)
 surface_spec.loader.exec_module(surfaces)
+temple_spec = importlib.util.spec_from_file_location('temple_materials', Path(__file__).with_name('temple_materials.py'))
+temple_surfaces = importlib.util.module_from_spec(temple_spec)
+temple_spec.loader.exec_module(temple_surfaces)
+
+
+def principal_sculptor(fallback):
+    def sculpture(collection, name, pos, scale, body_mat, halo_mat, **kwargs):
+        forms = {'Kodo_Dainichi': 'vajra', 'Konpon_Dainichi': 'taizo'}
+        if name in forms:
+            return hero.make_yakushi(base, collection, name, pos, scale, body_mat, form=forms[name])
+        return fallback(collection, name, pos, scale, body_mat, halo_mat, **kwargs)
+    return sculpture
+
+
+def open_daito_sanctum(scene, pal):
+    """Replace the solid display block with perimeter bays and an open door.
+
+    Exterior dimensions, podium and all movement policy remain unchanged.
+    The side doors retain the lattice motif; central door leaves are folded
+    into the jambs so the existing five images can be seen from the approach.
+    """
+    for obj in list(scene.objects):
+        if obj.name == 'Konpon_LowerCore' or obj.name.startswith(('Konpon_DoorFrame_', 'Konpon_DoorLattice_')):
+            bpy.data.objects.remove(obj, do_unlink=True)
+    for side in (-1, 1):
+        base.add_box(scene.collection, f'Konpon_PerimeterSide_{side}', (side*4.78,0,3.9), (.24,9.8,5), pal['plaster_white'])
+        base.add_box(scene.collection, f'Konpon_FrontWing_{side}', (side*3.65,-4.78,3.9), (2.3,.24,5), pal['plaster_white'])
+    base.add_box(scene.collection, 'Konpon_PerimeterBack', (0,4.78,3.9), (9.32,.24,5), pal['plaster_white'])
+    base.add_box(scene.collection, 'Konpon_DoorLintel', (0,-4.78,5.55), (5,.26,1.7), pal['plaster_white'])
+    # Real frame bars instead of filled dark rectangles across the entrance.
+    for x in (-2.45,-.80,.80,2.45):
+        base.add_box(scene.collection, f'Konpon_OpenJamb_{x}', (x,-4.94,3.12), (.11,.18,3.42), pal['hinoki_dark'])
+    for z in (1.48,4.78):
+        base.add_box(scene.collection, f'Konpon_DoorTransom_{z}', (0,-4.94,z), (5,.18,.12), pal['hinoki_dark'])
+    for x in (-1.62,1.62):
+        for i in range(10):
+            base.add_box(scene.collection, f'Konpon_LatticeU_{x}_{i}', (x-.68+i*.151,-4.96,3.14), (.032,.09,3.1), pal['hinoki_dark'])
+        for i in range(16):
+            base.add_box(scene.collection, f'Konpon_LatticeV_{x}_{i}', (x,-4.98,1.63+i*.20), (1.42,.09,.031), pal['hinoki_dark'])
+    for side in (-1,1):
+        # Folded central panels show thickness along the open doorway sides.
+        base.add_box(scene.collection, f'Konpon_FoldedDoor_{side}', (side*.77,-4.42,3.12), (.09,.98,3.18), pal['hinoki_warm'])
+    base.add_box(scene.collection, 'Konpon_InteriorFloor', (0,0,1.455), (9.3,9.3,.06), pal['hinoki_warm'])
+    # The old filled bracket slab poked through the curved roof on each axis.
+    slab=bpy.data.objects['Konpon_LowerTokyo']
+    slab.location.z=5.56
+    slab.scale.z=.62
+    for x in range(-4,5):
+        base.add_box(scene.collection, f'Konpon_CeilingJoist_{x}', (x,0,5.76), (.10,9.3,.12), pal['hinoki_dark'])
+    for y in range(-4,5):
+        base.add_box(scene.collection, f'Konpon_CeilingCross_{y}', (0,y,5.74), (9.3,.10,.12), pal['hinoki_dark'])
+
+
+def daito_roof_details(collection, pal):
+    """Low-segment tile rolls and an open upper railing, batched by material."""
+    for label, span, top, zbase, height, lift in [('Lower',16.4,8.4,5.8,2.55,.86),('Upper',12.4,1.2,12.1,3.65,1.02)]:
+        def point(u,v):
+            d=max(abs(u),abs(v));h=top*.5+(span-top)*.5*d
+            return (u*h,v*h,zbase+height*(1-d)**1.44+lift*abs(u*v)*d**1.5+.18)
+        for face in range(4):
+            for i in range(31):
+                u=-.96+1.92*i/30
+                start=max(.20,abs(u)+.015)
+                points=[]
+                for j in range(5):
+                    v=start+(1-start)*j/4
+                    x,y,z=point(u,v)
+                    for _ in range(face):x,y=-y,x
+                    points.append((x,y,z))
+                ribbon(collection,f'Konpon_{label}_TileRoll_{face}_{i}',points,.060,.060,pal['kawara_tile'],
+                       across=(math.cos(face*math.pi/2),math.sin(face*math.pi/2)))
+    bpy.data.objects.remove(bpy.data.objects['Konpon_UpperRailing'],do_unlink=True)
+    for i in range(32):
+        t=math.tau*i/32
+        base.add_cylinder(collection,f'Konpon_UpperBaluster_{i}',(3.79*math.cos(t),3.79*math.sin(t),10.27),.045,.045,.68,6,pal['vermilion'])
+    for z in (9.98,10.30,10.62):
+        for i in range(48):
+            a=math.tau*i/48;b=math.tau*(i+1)/48
+            base.add_segment_cylinder(collection,f'Konpon_UpperHandrail_{z}_{i}',
+                (3.79*math.cos(a),3.79*math.sin(a),z),(3.79*math.cos(b),3.79*math.sin(b),z),.055,.055,6,pal['vermilion'])
 
 
 def mesh_object(collection, name, vertices, faces, material, smooth=False):
@@ -36,13 +116,13 @@ def mesh_object(collection, name, vertices, faces, material, smooth=False):
     return obj
 
 
-def ribbon(collection, name, points, width, thickness, material):
+def ribbon(collection, name, points, width, thickness, material, across=(1,0)):
     """A closed square-section beam following a sampled eave; no curve tessellation."""
     vertices, faces = [], []
     for p in points:
         for dx, dz in [(-width/2, -thickness/2), (width/2, -thickness/2),
                        (width/2, thickness/2), (-width/2, thickness/2)]:
-            vertices.append((p[0] + dx, p[1], p[2] + dz))
+            vertices.append((p[0] + dx*across[0], p[1] + dx*across[1], p[2] + dz))
     for i in range(len(points) - 1):
         for k in range(4):
             a, b = 4*i+k, 4*i+(k+1)%4
@@ -179,11 +259,13 @@ def build_asset(asset, output, source):
     base.add_deity_statue=sculpt.make_sculptor(base)
     if asset=='kondo':
         base.add_deity_statue=hero.make_sculptor(base,base.add_deity_statue)
+    elif asset=='kodo':
+        base.add_deity_statue=principal_sculptor(base.add_deity_statue)
     gold=pal['gold_sacred'].node_tree.nodes.get('Principled BSDF')
     gold.inputs['Base Color'].default_value=(.68,.43,.13,1)
     gold.inputs['Metallic'].default_value=.52
     gold.inputs['Roughness'].default_value=.42
-    gold.inputs['Emission Strength'].default_value=0 if asset=='kondo' else .035
+    gold.inputs['Emission Strength'].default_value=0
     if asset=='kondo':
         base.build_toji_kondo_only(scene.collection,pal)
         for name in ['Kondo_FrontSteps','Kondo_LowerWhiteFrieze']:
@@ -198,6 +280,9 @@ def build_asset(asset, output, source):
     elif asset=='kodo':
         base.build_toji_kodo_only(scene.collection,pal)
         timber_details(scene.collection,pal,False)
+        # Wrathful aureoles keep their flame color while avoiding a white
+        # bloom veil across the neighbouring principal figure.
+        pal['flame_halo'].node_tree.nodes.get('Principled BSDF').inputs['Emission Strength'].default_value=.18
     elif asset=='gojunoto':
         # Runtime garden owns vegetation/seasons. Do not embed a second pond and
         # unculled tree set in the pagoda landmark.
@@ -206,8 +291,12 @@ def build_asset(asset, output, source):
         other_spec=importlib.util.spec_from_file_location('kukai_source',Path(__file__).with_name('build_kukai_landmarks.py'))
         other=importlib.util.module_from_spec(other_spec)
         other_spec.loader.exec_module(other)
-        other.add_deity_statue=sculpt.make_sculptor(base)
-        other.build_konpon_daito(scene.collection,other.create_palette())
+        other.add_deity_statue=principal_sculptor(sculpt.make_sculptor(base))
+        pal=other.create_palette()
+        other.build_konpon_daito(scene.collection,pal)
+        open_daito_sanctum(scene,pal)
+        daito_roof_details(scene.collection,pal)
+        pal['lantern_glow'].node_tree.nodes.get('Principled BSDF').inputs['Emission Strength'].default_value=.65
     else:
         raise ValueError(asset)
     if asset=='kondo':
@@ -218,6 +307,11 @@ def build_asset(asset, output, source):
                 if any(part in material.name for part in ('Timber','Granite','Kawara','Shikkui','YakushiHair')):
                     material.use_backface_culling=True
         hero.finish_bake(scene,ROOT/'artifacts/toji-quality/bakes')
+    else:
+        temple_surfaces.apply_materials(scene,pal,asset)
+        if asset in ('kodo','daito'):
+            hero.finish_bake(scene,ROOT/f'artifacts/temple-expansion/bakes/{asset}',
+                             'Kodo_Dainichi' if asset=='kodo' else 'Konpon_Dainichi')
     if source:
         source.mkdir(parents=True,exist_ok=True)
         bpy.ops.wm.save_as_mainfile(filepath=str(source/f'toji_{asset}.blend'))
@@ -225,7 +319,7 @@ def build_asset(asset, output, source):
     bpy.ops.object.select_all(action='SELECT')
     output.mkdir(parents=True,exist_ok=True)
     bpy.ops.export_scene.gltf(filepath=str(output/('konpon_daito.glb' if asset=='daito' else f'toji_{asset}.glb')),export_format='GLB',
-        use_selection=True,export_apply=True,export_yup=True,export_texcoords=(asset=='kondo'),
+        use_selection=True,export_apply=True,export_yup=True,export_texcoords=True,
         export_cameras=False,export_lights=False)
     print('EXPORTED',asset,'meshes',sum(o.type=='MESH' for o in scene.objects))
 
