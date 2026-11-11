@@ -155,6 +155,61 @@ test('Okunoin river crossing uses the elevated bridge and blocks movement throug
   assert.ok(pos.z >= 5.5 + CONFIG.PLAYER.radius - 1e-4, 'River bank prevents crossing away from the bridge');
 });
 
+test('Japanese temple foundations stop the player at their visible outer edge (#291)', async () => {
+  const cases = [
+    { map: 'toji', start: [0, 21], move: [0, -0.5], edge: ['z', 18.24 + CONFIG.PLAYER.radius], landmark: 'toji-kondo' },
+    { map: 'toji', start: [9, 18], move: [-0.5, 0], edge: ['x', 3.8 + CONFIG.PLAYER.radius] },
+    { map: 'toji', start: [0, -20], move: [0, -0.5], edge: ['z', -26.25 + CONFIG.PLAYER.radius], landmark: 'toji-kodo' },
+    { map: 'koyasan', start: [-34, 19], move: [0, -0.5], edge: ['z', 16.705 + CONFIG.PLAYER.radius], landmark: 'koyasan:kondo' },
+    { map: 'koyasan', start: [-50, -8], move: [0, -0.5], edge: ['z', -12.9 + CONFIG.PLAYER.radius] },
+    { map: 'koyasan', start: [-3.2, 15], move: [0, -0.5], edge: ['z', 12.7 + CONFIG.PLAYER.radius] },
+  ];
+
+  for (const sample of cases) {
+    const { ctx, instance } = await loadMap(sample.map);
+    const { x: ox, z: oz } = MAPS[sample.map].origin;
+    const player = createPlayer(ctx);
+    const [lx, lz] = sample.start;
+    ctx.state.player.position.set(ox + lx, instance.getHeight(ox + lx, oz + lz), oz + lz);
+    for (let i = 0; i < 40; i++) player.moveWithCollisions(...sample.move);
+
+    const [axis, localBoundary] = sample.edge;
+    const localPosition = ctx.state.player.position[axis] - (axis === 'z' ? oz : ox);
+    assert.ok(localPosition >= localBoundary - 1e-4,
+      `${sample.map} player entered the temple foundation at ${axis}=${localPosition}`);
+    if (sample.landmark) {
+      const landmark = ctx.interactables.find(target => target.id === sample.landmark);
+      assert.ok(landmark, `${sample.landmark} interactable exists`);
+      const target = landmark.getPosition();
+      assert.ok(ctx.state.player.position.distanceTo(target) <= landmark.radius,
+        `${sample.landmark} remains reachable outside its collision footprint`);
+    }
+  }
+});
+
+test('Pilgrimage temple steps stop the player before the rendered stonework (#291)', async () => {
+  const cases = [
+    { map: 'qinglong', start: [0, 6], hallZ: -6, depth: 13 },
+    { map: 'qinglong', start: [21, 22], hallZ: 11, depth: 12 },
+    { map: 'kongobuji', start: [0, -12], hallZ: -24, depth: 13 },
+    { map: 'okunoin', start: [0, -47], hallZ: -57, depth: 10 },
+  ];
+
+  for (const sample of cases) {
+    const { ctx, instance } = await loadMap(sample.map);
+    const { x: ox, z: oz } = MAPS[sample.map].origin;
+    const player = createPlayer(ctx);
+    const [lx, lz] = sample.start;
+    ctx.state.player.position.set(ox + lx, instance.getHeight(ox + lx, oz + lz), oz + lz);
+    for (let i = 0; i < 40; i++) player.moveWithCollisions(0, -0.5);
+
+    const stepEdge = sample.hallZ + sample.depth / 2 + 1.615;
+    const localZ = ctx.state.player.position.z - oz;
+    assert.ok(localZ >= stepEdge + CONFIG.PLAYER.radius - 1e-4,
+      `${sample.map} player entered the hall steps at z=${localZ}`);
+  }
+});
+
 test('Tō-ji landmark actions run through the selected interactable', async () => {
   const { ctx, instance } = await loadMap('toji');
   const kondo = ctx.interactables.find(target => target.id === 'toji-kondo');

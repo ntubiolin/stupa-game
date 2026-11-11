@@ -779,7 +779,8 @@ export function createMap(ctx) {
   const plankGeo = new THREE.BoxGeometry(0.42, 0.04, 3.66);
   for (let i = -9; i <= 9; i++) {
     const plank = new THREE.Mesh(plankGeo, darkWoodMat);
-    plank.position.set(i * 0.56, 0.15, 0);
+    // Keep the tread visually distinct without leaving feet visibly sunk into it.
+    plank.position.set(i * 0.56, 0.1205, 0);
     bridgeGroup.add(plank);
   }
 

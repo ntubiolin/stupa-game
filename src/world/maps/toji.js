@@ -1144,13 +1144,15 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
     ryusha.translate(pagodaX, sorinBaseY + 8.65, pagodaZ);
     gBronze.push(ryusha);
 
-    // Pagoda collider (`12.2m × 12.2m` stone platform perimeter)
+    // Keep the player outside the carved tamagaki fence.  The former 11.6 m
+    // collider ended inside the visible 13.6 m fence, so the avatar could
+    // visibly overlap the stonework before collision resolution kicked in.
     registerCollider({
       type: 'box',
       cx: ox + pagodaX,
       cz: oz + pagodaZ,
-      hx: 5.8,
-      hz: 5.8,
+      hx: 6.8,
+      hz: 6.8,
     });
   }
 
@@ -1349,13 +1351,22 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
       });
     }
 
-    // Kondō outer platform collider (leaving southern viewing steps approachable)
+    // Match the full 28.4 m × 18.4 m lower plinth footprint. Decorative steps
+    // remain visible in front, while the raised stone mass stays solid.
     registerCollider({
       type: 'box',
       cx: ox + kondoX,
       cz: oz + kondoZ,
-      hx: 13.0,
-      hz: 7.8,
+      hx: 14.2,
+      hz: 9.2,
+    });
+    // The five southern steps project beyond the plinth and are also solid.
+    registerCollider({
+      type: 'box',
+      cx: ox + kondoX,
+      cz: oz + kondoZ + 9.1,
+      hx: 3.8,
+      hz: 1.14,
     });
   }
 
@@ -1605,13 +1616,20 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
       });
     }
 
-    // Kōdō outer platform collider (leaving southern steps approachable)
+    // Match the full 29.4 m × 16.4 m raised platform footprint.
     registerCollider({
       type: 'box',
       cx: ox + kodoX,
       cz: oz + kodoZ,
-      hx: 14.0,
-      hz: 7.6,
+      hx: 14.7,
+      hz: 8.2,
+    });
+    registerCollider({
+      type: 'box',
+      cx: ox + kodoX,
+      cz: oz + kodoZ + 8.86,
+      hx: 4.2,
+      hz: 0.89,
     });
   }
 

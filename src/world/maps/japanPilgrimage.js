@@ -176,6 +176,9 @@ function hall(scene, x, z, width, depth, { tang = false, passage = false } = {})
     }
     part('box', 'lime', x, y + top / 2, z, width - 0.35, top - 0.8, depth - 0.55);
     block(x, z, width / 2 + 0.5, depth / 2 + 0.5);
+    // The three southern approach steps extend 1.115 m past the stone base.
+    // Keep their complete 5.2 m × 1.13 m footprint solid as well.
+    block(x, z + depth / 2 + 1.05, 2.6, 0.565);
   }
 
   for (const side of [-1, 1]) {
