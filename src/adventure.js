@@ -14,6 +14,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 
 import './style.css';
 import './ui/muralPrototype.css';
+import './ui/japanCampaign.css';
 import { CONFIG } from './config.js';
 import { createBus } from './core/events.js';
 import { createInput } from './core/input.js';
@@ -52,6 +53,7 @@ import { createVitals } from './systems/vitals.js';
 import { createSkills } from './systems/skills.js';
 import { createPowers } from './systems/powers.js';
 import { createQuests } from './systems/quests.js';
+import { createJapanCampaign } from './systems/japanCampaign.js';
 import { createCodex } from './systems/codex.js';
 import { createInteraction } from './systems/interaction.js';
 import { createMerit } from './systems/merit.js';
@@ -243,6 +245,7 @@ const muralPrototype = createMuralPrototype(ctx);
 createSettingsUi(ctx);
 createModeSwitch(ctx, 'adventure', document.getElementById('settings-mode-mount'));
 const dialogue = createDialogue(ctx);
+const japanCampaign = createJapanCampaign(ctx);
 const questUi = createQuestUi(ctx);
 const worldmap = createWorldMap(ctx);
 const minimap = createMinimap(ctx);
@@ -264,7 +267,7 @@ const modules = [
   coop, remotePilgrims,
   cameraRig,
   muralPrototype,
-  merit, interaction, audio, hud, lampOfferingUi, stupaBuilderUi, coopLobbyUi, skillbar, inventoryUi, appearanceUi, dialogue, questUi, minimap, credits,
+  merit, japanCampaign, interaction, audio, hud, lampOfferingUi, stupaBuilderUi, coopLobbyUi, skillbar, inventoryUi, appearanceUi, dialogue, questUi, minimap, credits,
 ];
 
 // ---------------------------------------------------------------- post-processing

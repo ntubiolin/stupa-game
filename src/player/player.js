@@ -12,7 +12,18 @@ import {
   resolveAppearanceColors,
 } from '../data/appearance.js';
 
+import { isJapanMap } from '../data/japan.js';
+import { i18n } from '../i18n.js';
+import { EN as COOP_EN, ZH_HANT as COOP_ZH } from '../i18n/coop.js';
+import { createJapanPilgrim } from './japanPilgrim.js';
+
 const TWO_PI = Math.PI * 2;
+const DEFAULT_PILGRIM_NAME_KEY = 'coop.pilgrimName.default';
+const DEFAULT_PILGRIM_NAMES = new Set([
+  DEFAULT_PILGRIM_NAME_KEY,
+  COOP_ZH[DEFAULT_PILGRIM_NAME_KEY],
+  COOP_EN[DEFAULT_PILGRIM_NAME_KEY],
+]);
 
 function wrapAngle(a) {
   a = (a + Math.PI) % TWO_PI;
@@ -247,7 +258,7 @@ export function createPlayer(ctx) {
     forearmPivot.add(hand);
 
     torsoPivot.add(pivot);
-    return { pivot, forearmPivot, hand };
+    return { pivot, sleeve, forearmPivot, hand };
   }
 
   const leftArm = makeArm(-1);
@@ -267,6 +278,22 @@ export function createPlayer(ctx) {
   }
   const leftLeg = makeLeg(-1);
   const rightLeg = makeLeg(1);
+
+  const japanParts = createJapanPilgrim(THREE, {
+    body, torso: torsoPivot, head: headGroup, leftArm, rightArm,
+  });
+  const himalayanParts = [
+    skirt, hem, torso, shawl, sash, neckGroup, chestGroup, backGroup,
+    hairGroup, hatGroup, leftArm.sleeve, rightArm.sleeve,
+  ];
+
+  function syncPilgrimModel() {
+    const japan = isJapanMap(state.zone) && !state.customizing;
+    for (const part of japanParts) part.visible = japan;
+    for (const part of himalayanParts) part.visible = !japan;
+    root.userData.pilgrimStyle = japan ? 'shingon' : 'himalayan';
+  }
+  syncPilgrimModel();
 
   // Subtle lotus-gold ground aura during prostrations & mantra chanting
   const auraGeo = new THREE.RingGeometry(0.32, 0.58, 28);
@@ -308,15 +335,15 @@ export function createPlayer(ctx) {
   let lastNameplateSig = '';
   function updateNameplate() {
     if (!nameplateCanvas || !nameplateTex) return;
-    const rawName =
-      appearance.name ||
-      ctx.coop?.getPilgrimName?.() ||
-      ctx.i18n?.t?.('coop.pilgrimName.default') ||
-      '雪域行者';
+    const rawName = appearance.name || ctx.coop?.getPilgrimName?.();
+    const useJapanDefault = isJapanMap(state.zone) && (!rawName || DEFAULT_PILGRIM_NAMES.has(rawName));
+    const name = useJapanDefault
+      ? i18n.t('appearance.name.japanDefault')
+      : rawName || i18n.t(DEFAULT_PILGRIM_NAME_KEY);
     const lvl = state.player?.level || 1;
     const show = Boolean(appearance.showNameplate) && state.mode === 'play' && !state.customizing;
     nameplateSprite.visible = show;
-    const sig = `${show}:${lvl}:${rawName}:${appearance.auraColor}`;
+    const sig = `${show}:${lvl}:${name}:${appearance.auraColor}`;
     if (sig === lastNameplateSig) return;
     lastNameplateSig = sig;
 
@@ -338,8 +365,7 @@ export function createPlayer(ctx) {
     g.textBaseline = 'middle';
     g.font = 'bold 21px "Noto Serif TC", "Outfit", system-ui, sans-serif';
     g.fillStyle = '#fef08a';
-    const text = `☸ [Lv.${lvl}] ${rawName}`;
-    g.fillText(text.slice(0, 22), w / 2, h / 2 + 1);
+    g.fillText(`☸ [Lv.${lvl}] ${name}`, w / 2, h / 2 + 1, w - 32);
     nameplateTex.needsUpdate = true;
   }
 
@@ -1137,6 +1163,7 @@ export function createPlayer(ctx) {
   });
 
   bus.on('zone:change', () => {
+    syncPilgrimModel();
     gesture = null;
     prostrateTime = -1;
     chantTimer = 0;
@@ -1572,6 +1599,8 @@ export function createPlayer(ctx) {
 
   // ---------------------------------------------------------------- update
   function update(dt) {
+    const pilgrimStyle = isJapanMap(state.zone) && !state.customizing ? 'shingon' : 'himalayan';
+    if (root.userData.pilgrimStyle !== pilgrimStyle) syncPilgrimModel();
     const input = ctx.input;
     updateBlink(dt);
     updateNameplate();
@@ -1672,7 +1701,8 @@ export function createPlayer(ctx) {
       chantTimer = 0;
       prostrateTime = 0;
       prostrateStartHeading = state.player.heading;
-      prostrateTargetHeading = Math.atan2(state.player.position.x, state.player.position.z);
+      prostrateTargetHeading = ctx.japanCampaign?.getProstrationHeading?.()
+        ?? Math.atan2(state.player.position.x, state.player.position.z);
       state.player.velocity.set(0, 0, 0);
       state.player.isMoving = false;
       state.player.action = 'prostrate';

@@ -13,6 +13,13 @@ import {
 } from '../src/systems/cloudSave.js';
 import { createCommunity } from '../src/systems/community.js';
 
+test('Japan-only pilgrimage progress is not overwritten as a fresh save (#285)', () => {
+  const save = (japanCampaign) => ({ version: 2, sections: { japanCampaign } });
+  assert.equal(isFreshSave(save({ version: 1, completedSteps: [] })), true);
+  assert.equal(isFreshSave(save({ version: 1, completedSteps: ['initiation'] })), false);
+  assert.equal(isFreshSave(save({ version: 1, completedSteps: null })), true);
+});
+
 function withMockEnv(t, initialStorage = {}) {
   const origStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
   const origFetch = Object.getOwnPropertyDescriptor(globalThis, 'fetch');
@@ -338,6 +345,14 @@ test('4. Two-tier throttling: 45s periodic sync and 3s milestone event debounce'
   await new Promise((r) => setTimeout(r, 10));
   assert.equal(postCalls.length, 3);
   assert.deepEqual(postCalls[2].saveData.sections.quests.done, ['prologue_1']);
+
+  ctx.save.set('japanCampaign', { version: 1, completedSteps: ['initiation'] });
+  ctx.save.flush();
+  bus.emit('japan:progress', { stepId: 'initiation', mapId: 'qinglong' });
+  cloud.update(MILESTONE_DEBOUNCE_SEC + 0.1);
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(postCalls.length, 4);
+  assert.deepEqual(postCalls[3].saveData.sections.japanCampaign.completedSteps, ['initiation']);
 });
 
 test('5. Divergent saves conflict detection and resolution via resolveConflict("cloud" | "local")', async (t) => {

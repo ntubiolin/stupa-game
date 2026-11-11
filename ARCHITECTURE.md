@@ -29,8 +29,12 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/world/maps/terma.js` | World | Chapter 5 endgame dungeon: seeded 3-floor procedural layout (Cave / Snow / Mandala themes) (lazy-loaded) |
 | `src/world/maps/toji.js` | World | Kūkai Epic map: Kyoto Tō-ji (`教王護國寺`, `origin = (7500, 0)`), Five-Story Pagoda (`五重塔`), Kondō (`金堂` Yakushi Triad), Kōdō (`講堂` 21-Deity 3D Mandala), Nandaimon & Hyōtan-ike pond (lazy-loaded) |
 | `src/world/maps/koyasan.js` | World | Kūkai Epic map: Mount Kōya (`高野山`, `origin = (8000, 0)`), Danjō Garan (`壇上伽藍` Konpon Daitō, Kondō, Miedō, Sanko-no-Matsu), Kongōbu-ji (`金剛峯寺` & Banryūtei rock garden), and Okunoin (`奧之院` Gobyōbashi, 1,000-year cedars, Gorintō stupas, Tōrōdō & Kōbō Daishi Gobyō) (lazy-loaded) |
+| `src/data/japan.js`, `src/data/maps/japanPilgrimage.js`, `src/world/maps/japanPilgrimage.js` | World | Six-stop Kūkai route contract and four additional lazy, instanced pilgrimage maps: Qinglong, Kii, Kongōbu-ji, Okunoin |
+| `src/world/japanArchitecture.js` | World | Japanese lantern waypoint model and unlock illumination, no PointLights |
+| `src/data/japanCampaign.js`, `src/systems/japanCampaign.js`, `src/gameplay/japanCampaignModels.js`, `src/ui/japanCampaign.js` | Gameplay | Thirty ordered Japan objectives, regional NPCs, local lamp, encounter markers and mobile tracker; isolated campaign save |
+| `src/data/japanSkills.js`, `src/player/japanPilgrim.js`, `src/gameplay/skills/japanSkillVisuals.js`, `src/gameplay/skills/kukaiCompanion.js` | Gameplay | Regional player outfit, seven Shingon ability forms, shared combat rules and temporary Kūkai follower |
 | `src/world/maps/sandbox.js` | World | debug sandbox arena with flat ground, scattered rocks, trial stone circle, Mani cairn (lazy-loaded) |
-| `src/data/maps.js`, `src/data/maps/*.js` | Data | data-driven map registry (`MAPS`: `stupa`, `grove`, `wild`, `pharping`, `mangyul`, `yarlung`, `samye`, `chimphu`, `terma`, `toji`, `koyasan`, `sandbox`) |
+| `src/data/maps.js`, `src/data/maps/*.js` | Data | data-driven map registry (`MAPS`: `stupa`, `grove`, `wild`, `pharping`, `mangyul`, `yarlung`, `samye`, `chimphu`, `terma`, `toji`, `koyasan`, `qinglong`, `kii`, `kongobuji`, `okunoin`, `sandbox`) |
 | `src/data/npcs.js` | Data | data-driven NPC registry (`NPCS`) and 8 procedural look definitions (`NPC_LOOKS`) |
 | `src/data/itemBases.js`, `affixes.js`, `legendaries.js` | Data | 22 base equipment types across 8 slots, 16 affixes (T1–T4), 12 Terma legendary items (`powerId`) |
 | `src/data/eliteAffixes.js` | Data | 6 elite monster affixes (`molten`, `frozen`, `swift`, `armored`, `shielding`, `teleporter`) |
@@ -98,6 +102,10 @@ Subagents edit **only** files they own. If a contract change is needed, report i
   - `terma` (伏藏秘境): `type: 'dungeon'`, `origin = (7000, 0)`, level 30–40+
   - `toji` (京都東寺・教王護國寺): `type: 'hub'`, `origin = (7500, 0)`, level 1–40
   - `koyasan` (高野山・金剛峯): `type: 'hub'`, `origin = (8000, 0)`, level 1–40
+  - `qinglong` (長安・青龍寺與歸帆海岸): `type: 'hub'`, `origin = (10000, 0)`
+  - `kii` (紀伊杉林・高野山參道): `type: 'hub'`, `origin = (10500, 0)`
+  - `kongobuji` (金剛峯寺・蟠龍庭): `type: 'hub'`, `origin = (11000, 0)`
+  - `okunoin` (高野山・奧之院): `type: 'hub'`, `origin = (11500, 0)`
   - `sandbox` (測試場, debug only): `type: 'combat'`, `origin = (9000, 0)`
 - Layout numbers live in `src/config.js` (`CONFIG.STUPA`, `WALL`, `WORLD`, `LAMPS`, `WILD`, …) and `src/data/maps.js`. Never hardcode duplicates.
 
@@ -329,6 +337,71 @@ Because maps, enemies, bosses, quests, dialogues, codex entries, and i18n dictio
 6. **Register Bilingual Strings (`src/i18n/chX.js`) & Verify**:
    - Call `i18n.register({ 'zh-Hant': { ... }, en: { ... } })`.
    - Run `npm run check:i18n`, `npm run check:links`, `node scripts/balance-report.mjs`, and `npm run build`.
+
+## Japanese pilgrimage (Epic #281, follow-up to #248)
+
+Japan is an opt-in Adventure expansion. `JAPAN_CHAPTERS`, `JAPAN_MAP_IDS` and
+`isJapanMap(id)` are the shared route/region contract. The playable order is
+Qinglong → Tō-ji → Kii → Kōya → Kongōbu-ji → Okunoin. This is a thematic
+pilgrimage through the Epic, not a strictly chronological reconstruction.
+Existing `toji` and `koyasan` IDs and their landmark architecture remain compatible.
+New scenes use shared geometry/instancing and add no PointLights.
+
+Settings starts the campaign at Qinglong. The Japan world route shows all six
+stops and enables chapter travel through `ctx.japanCampaign.isChapterUnlocked`.
+Forward gates marked `chapterRequired` enforce the same rule. Legacy Tō-ji/Kōya
+quick visits are still available, but cannot advance an out-of-order objective.
+Backward and return gates remain available. Box colliders use world-space
+`minX/maxX/minZ/maxZ`; Okunoin's river banks leave the elevated bridge walkable.
+
+`createJapanCampaign(ctx)` is constructed after dialogue and updates before
+interaction. Its public API is `update(dt)`, `getProgress()`, `getObjectives()`,
+`isChapterUnlocked(mapId)` and `getProstrationHeading()`. The debug API exposes
+`getProgress`, `getObjectives` and `isChapterUnlocked`, without a skip/complete command. Objectives
+use normal dialogue choices, interactions, ward retreat, walking, stationary
+Ajikan, ordered bridge checkpoints and an actual prostration. The dedicated
+tracker replaces Himalayan quest markers while the player is in Japan.
+
+The `japanCampaign` save section is `{version: 1, completedSteps: string[]}`.
+Only a valid ordered prefix is restored; future versions are read-only.
+Completion writes use `ctx.save.commitSection(section, data, {expected})` to
+compare the caller's loaded section with current storage. A stale writer gets
+`section-conflict` and reloads progress; unrelated save sections are preserved.
+Failed writes do not advance the objective. The personal lamp is a local,
+offline-capable campaign checkpoint and does not publish a community offering.
+After a successful write, `japan:progress` emits
+`{stepId, mapId, chapterComplete, complete}` and triggers debounced cloud sync.
+`japan:dialogueAccepted` is an internal dialogue event checked against the active
+dialogue, objective, zone and player proximity before committing.
+
+Japan player geometry mounts on the existing movement/prostration rig and exposes
+`ctx.player.mesh.userData.pilgrimStyle` (`shingon` / `himalayan`). Custom appearance
+is preserved. Skills retain canonical save IDs, ranks, enhancements and ultimate
+charge; Japanese availability is temporary and cooldowns are held separately in
+memory for each region. `ctx.skills.list()`, `getSkillState()` and `skill:cast`
+include the active `abilityId`:
+
+| Canonical slot ID | Japan ability ID |
+|---|---|
+| `humBolt` | `sankosho` |
+| `mantra` | `komyoShingon` |
+| `phurba` | `fudoSword` |
+| `vajraBell` | `gorinResonance` |
+| `lotusShield` | `ajikanWard` |
+| `protector` | `dogyoNinin` |
+| `vajraGuru` | `diamondRealm` |
+
+Dōgyō Ninin is the pilgrim accompanied by Kūkai. Its temporary follower heals
+and reduces damage, uses MP and a cooldown, and does not unlock Himalayan
+protectors. `ctx.activeSkills.getJapanCompanion()` returns its remaining duration
+and position, or null. `ctx.vitals.removeBuff(id)` removes its protection on
+expiry/exit. Regional VFX, shields and companions clean up on `zone:change`.
+
+`npm run test:japan` runs the real-browser desktop/mobile acceptance suite.
+Screenshots, scene budgets, objective coverage and errors are written under
+`artifacts/japan`; CI retains them in the `japan` browser job. The suite uses
+fixture placement for long commutes and real input for objectives, combat UI,
+travel, collision, bridge crossing and save/reload checks.
 
 ## Mirror narrative demo (Epic #68)
 

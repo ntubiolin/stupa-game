@@ -37,6 +37,7 @@ import {
 import { KOYASAN_MAP } from '../../data/maps/koyasan.js';
 import { i18n } from '../../i18n.js';
 import '../../i18n/koyasan.js';
+import { addJapanRouteGate } from '../japanArchitecture.js';
 
 const TWO_PI = Math.PI * 2;
 
@@ -355,6 +356,9 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     colliders.push({ ...col, zone: 'koyasan' });
     pushCollider(ctx, 'koyasan', col);
   }
+
+  addJapanRouteGate(root, 16, getHeight(16, 22), 22);
+  for (const x of [13.95, 18.05]) addCircleCollider(x, 22, 0.38);
 
   function registerInteractable(it) {
     interactables.push(it);

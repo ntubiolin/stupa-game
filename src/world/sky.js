@@ -1,3 +1,4 @@
+import { isJapanMap } from '../data/japan.js';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
@@ -603,7 +604,7 @@ export function createSky(ctx) {
     // Twilight factor peaks around sunrise/sunset (sunY near 0)
     const twilightFactor = Math.exp(-Math.pow((sunY - 0.02) / 0.19, 2));
 
-    const isJapanZone = state.zone === 'toji' || state.zone === 'koyasan';
+    const isJapanZone = isJapanMap(state.zone);
     uniforms.uJapanStyle.value = isJapanZone ? 1.0 : 0.0;
     if (typeof document !== 'undefined' && document.body) {
       const targetAesthetic = isJapanZone ? 'japanese' : 'default';
@@ -689,6 +690,9 @@ export function createSky(ctx) {
       if (dayTintWeight > 0.001) {
         scene.fog.color.lerp(uniforms.uHorizonColor.value, isJapanZone ? (1.0 - nightFactor) * 0.72 : dayTintWeight * 0.45);
       }
+    }
+    if (isJapanZone && skyCfg?.fogColor != null) {
+      scene.fog.color.lerp(tmpColA.setHex(skyCfg.fogColor), (1.0 - nightFactor) * 0.6);
     }
     scene.fog.density = (skyCfg?.fogDensity ?? 0.0020) * seasonProf.fogScale * (isJapanZone ? 1.12 : 1.0);
 

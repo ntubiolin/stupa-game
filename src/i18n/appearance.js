@@ -26,6 +26,7 @@ const ZH_HANT = {
   'appearance.name.placeholder': '輸入你的行者法號…',
   'appearance.name.randomBtn': '🎲 隨機法號',
   'appearance.name.showTag': '頭頂顯示法號名牌',
+  'appearance.name.japanDefault': '日本行者',
 
   // ---------------------------------------------------------------- Tabs
   'appearance.tab.face': '🙂 五官與髮型',
@@ -197,6 +198,7 @@ const EN = {
   'appearance.name.placeholder': 'Enter your Dharma name…',
   'appearance.name.randomBtn': '🎲 Random Name',
   'appearance.name.showTag': 'Show Nameplate Overhead',
+  'appearance.name.japanDefault': 'Shingon Pilgrim',
 
   // ---------------------------------------------------------------- Tabs
   'appearance.tab.face': '🙂 Face & Hair',

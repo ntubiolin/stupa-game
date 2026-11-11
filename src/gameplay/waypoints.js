@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import '../i18n/codex.js';
 import { i18n } from '../i18n.js';
 import { MAPS } from '../data/maps.js';
+import { JAPAN_MAP_IDS, isJapanMap } from '../data/japan.js';
+import { buildJapanWaypoint, setJapanWaypointUnlocked } from '../world/japanArchitecture.js';
 import { getDifficulty } from '../data/combatSettings.js';
 
 const RECALL_CHANNEL_DURATION = 3.0; // seconds
@@ -22,8 +24,7 @@ export const ALL_WAYPOINT_IDS = [
   'samye',
   'chimphu',
   'terma',
-  'toji',
-  'koyasan',
+  ...JAPAN_MAP_IDS,
   'chimpu',
   'zangdokPalri',
   'sandbox',
@@ -333,6 +334,10 @@ function buildWaypointMesh(unlocked = false) {
 function setWaypointMeshUnlocked(root, unlocked) {
   if (!root || !root.userData) return;
   root.userData.unlocked = unlocked;
+  if (root.userData.paper) {
+    setJapanWaypointUnlocked(root, unlocked);
+    return;
+  }
   const { glowRingMat, runeMat, capMat, flags } = root.userData;
   if (glowRingMat) {
     glowRingMat.color.setRGB(
@@ -523,7 +528,7 @@ export function createWaypoints(ctx) {
 
     const y = ctx.world?.getHeight?.(coords.x, coords.z, mapId) ?? 0;
     const isUnl = unlockedSet.has(mapId);
-    const mesh = buildWaypointMesh(isUnl);
+    const mesh = isJapanMap(mapId) ? buildJapanWaypoint(isUnl) : buildWaypointMesh(isUnl);
     mesh.position.set(coords.x, y, coords.z);
     mesh.visible = (state.zone || 'stupa') === mapId;
 

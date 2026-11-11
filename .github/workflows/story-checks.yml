@@ -27,7 +27,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [desktop, mobile, recovery, art, debug, media, journey, pharping, mangyul, yarlung, samye, chimphu, finale, modes, adventure]
+        suite: [desktop, mobile, recovery, art, debug, media, journey, pharping, mangyul, yarlung, samye, chimphu, finale, modes, adventure, japan]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -50,6 +50,7 @@ jobs:
             debug) node scripts/story-debug-browser-test.mjs ;;
             media) node scripts/story-media-browser-test.mjs && node scripts/losang-still-browser-test.mjs && node scripts/chapter-stills-browser-test.mjs ;;
             adventure) node scripts/adventure-compat-test.mjs ;;
+            japan) npm run test:japan ;;
             *) npm run test:browser ;;
           esac
         env:

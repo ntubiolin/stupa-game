@@ -11,6 +11,8 @@
  */
 import * as THREE from 'three';
 import { getDifficulty } from '../data/combatSettings.js';
+import { isJapanMap } from '../data/japan.js';
+import { makeKomyoMandala } from './skills/japanSkillVisuals.js';
 
 function createSyllableTexture(syllable) {
   const canvas = document.createElement('canvas');
@@ -140,6 +142,7 @@ export function createMantra(ctx) {
       innerRingMat,
       sprites,
       spriteMats,
+      komyo: null,
       active: false,
       t: 0,
       duration: M.duration ?? 0.5,
@@ -252,6 +255,18 @@ export function createMantra(ctx) {
     wave.origin.copy(state.player.position);
     wave.group.position.copy(wave.origin);
     wave.group.visible = true;
+    const japan = skillOpts?.abilityId === 'komyoShingon' || isJapanMap(state.zone);
+    if (japan && !wave.komyo) {
+      wave.komyo = makeKomyoMandala();
+      wave.group.add(wave.komyo);
+    }
+    if (wave.komyo) {
+      wave.komyo.visible = japan;
+      wave.komyo.scale.setScalar(wave.startR);
+    }
+    wave.outerRing.visible = !japan;
+    wave.innerRing.visible = !japan;
+    for (const sprite of wave.sprites) sprite.visible = !japan;
 
     bus.emit('player:chant', { duration: M.duration ?? 0.5 });
     bus.emit('sfx', { name: 'chant' });
@@ -298,10 +313,19 @@ export function createMantra(ctx) {
         rank,
         enh,
         damageMult,
+        abilityId: japan ? 'komyoShingon' : 'mantra',
         handledByMantra: true,
       });
     }
   }
+
+  bus.on('zone:change', ({ from, to } = {}) => {
+    if (!isJapanMap(from) && !isJapanMap(to)) return;
+    for (const wave of pool) {
+      wave.active = false;
+      wave.group.visible = false;
+    }
+  });
 
   // ---------------------------------------------------------------- Update
   function update(dt) {
@@ -364,6 +388,12 @@ export function createMantra(ctx) {
       const rotSpeed = M.rotationSpeed ?? (Math.PI * 0.75);
       wave.outerRing.rotation.y = u * rotSpeed;
       wave.innerRing.rotation.y = -u * rotSpeed * 0.5;
+
+      if (wave.komyo?.visible) {
+        wave.komyo.scale.set(r, 1, r);
+        wave.komyo.rotation.y = u * 0.55;
+        continue;
+      }
 
       // 6 syllable sprites
       const sy = M.spriteHeight ?? 0.85;

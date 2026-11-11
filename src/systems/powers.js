@@ -337,8 +337,8 @@ export function createPowers(ctx) {
   });
 
   // 9. retreatShield (青朴閉關法衣): when Lotus Shield ends, reduce remaining cooldown by 50%
-  bus?.on('shield:ended', ({ source } = {}) => {
-    if (source === 'lotusShield' && has('retreatShield')) {
+  bus?.on('shield:ended', ({ reason, source } = {}) => {
+    if (reason !== 'zoneChange' && (source === 'lotusShield' || source === 'ajikanWard') && has('retreatShield')) {
       const remaining = ctx.skills?.reduceCooldown?.('lotusShield', 0.5);
       bus?.emit('power:retreatShield', { remaining });
     }

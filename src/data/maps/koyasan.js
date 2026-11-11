@@ -7,13 +7,16 @@
  *   - East/Northeast Precinct: Okunoin (`奧之院`: Millennium Cedar Avenue, Gorintō Memorial Forest, Tamagawa & Gobyōbashi, Tōrōdō, Kōbō Daishi Gobyō)
  */
 import '../../i18n/koyasan.js';
+import { JAPAN_CHAPTERS } from '../japan.js';
+
+const { origin } = JAPAN_CHAPTERS[3];
 
 export const KOYASAN_MAP = {
   id: 'koyasan',
   type: 'hub',
   nameKey: 'map.koyasan',
   subtitleKey: 'map.koyasan.subtitle',
-  origin: { x: 8000, z: 0 },
+  origin,
   walkRadius: 115,
   level: [1, 40],
   combat: false,
@@ -49,9 +52,19 @@ export const KOYASAN_MAP = {
       x: 8000,
       z: 88,
       radius: 4.0,
-      to: 'toji',
+      to: 'kii',
       toGate: 'from-koyasan',
-      labelKey: 'prompt.koyasan.toToji',
+      labelKey: 'prompt.japan.travel.kii',
+    },
+    {
+      id: 'east',
+      x: origin.x + 16,
+      z: 22,
+      radius: 3.3,
+      to: 'kongobuji',
+      toGate: 'from-koyasan',
+      labelKey: 'prompt.japan.travel.kongobuji',
+      chapterRequired: true,
     },
     {
       id: 'west',
@@ -67,6 +80,8 @@ export const KOYASAN_MAP = {
   spawns: {
     default: { x: 8000, z: 78, heading: 0 },
     south: { x: 8000, z: 80, heading: 0 },
+    'from-kii': { x: origin.x, z: 80, heading: 0 },
+    'from-kongobuji': { x: origin.x + 16, z: 29, heading: 0 },
     'from-toji': { x: 8000, z: 80, heading: 0 },
     'from-stupa': { x: 7952, z: 72, heading: Math.PI * 0.5 },
     waypoint: { x: 8000, z: 70, heading: 0 },
