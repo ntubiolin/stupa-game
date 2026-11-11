@@ -83,6 +83,7 @@ export function createMonkeyFeedingGame(ctx, { onFeed, random = Math.random } = 
   let open = false;
   let rewarded = false;
   let feedbackKey = null;
+  let opener = null;
   let saved = save?.get?.(SAVE_SECTION, { bestScore: 0, plays: 0 }) || { bestScore: 0, plays: 0 };
   let root = null;
 
@@ -107,6 +108,8 @@ export function createMonkeyFeedingGame(ctx, { onFeed, random = Math.random } = 
     target = null;
     session = null;
     root?.classList.add('is-hidden');
+    if (opener?.isConnected !== false) opener?.focus?.();
+    opener = null;
     return true;
   }
 
@@ -164,6 +167,7 @@ export function createMonkeyFeedingGame(ctx, { onFeed, random = Math.random } = 
     if (!monkey || open || state.uiOpen) return false;
     if (!root) return onFeed?.(monkey) !== false;
     target = monkey;
+    opener = document.activeElement;
     saved = save?.get?.(SAVE_SECTION, { bestScore: 0, plays: 0 }) || { bestScore: 0, plays: 0 };
     session = null;
     rewarded = false;
@@ -184,16 +188,42 @@ export function createMonkeyFeedingGame(ctx, { onFeed, random = Math.random } = 
     else if (button.dataset.action === 'close') close();
   });
   root?.addEventListener('keydown', event => {
-    if (event.key === 'Escape') { event.preventDefault(); close(); return; }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+      return;
+    }
     const index = Number(event.key) - 1;
     if (session && index >= 0 && index < MONKEY_FRUITS.length) {
       event.preventDefault();
+      event.stopPropagation();
       choose(MONKEY_FRUITS[index].id);
+      return;
+    }
+    if (event.key === 'Tab') {
+      const controls = [...root.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+        .filter(control => !control.disabled && control.offsetParent !== null);
+      if (!controls.length) return;
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        event.stopPropagation();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        event.stopPropagation();
+        first.focus();
+      }
     }
   });
   root?.addEventListener('click', event => { if (event.target === root) close(); });
   bus?.on?.('zone:change', close);
-  bus?.on?.('save:imported', () => { saved = save?.get?.(SAVE_SECTION, saved) || saved; });
+  bus?.on?.('save:imported', () => {
+    close();
+    saved = save?.get?.(SAVE_SECTION, { bestScore: 0, plays: 0 }) || { bestScore: 0, plays: 0 };
+  });
   i18n?.onChange?.(() => { if (open) render(); });
 
   return {
