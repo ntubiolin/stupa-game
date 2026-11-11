@@ -1,0 +1,57 @@
+#japan-campaign-tracker {
+  min-width: 0;
+  pointer-events: none;
+  color: #f6ebd7;
+  border-color: rgba(232, 183, 117, 0.39);
+}
+
+#japan-campaign-tracker[hidden],
+#japan-campaign-tracker .japan-campaign-navigation[hidden],
+body:has(#japan-campaign-tracker:not([hidden])) #quest-tracker,
+body:has(#japan-campaign-tracker:not([hidden])) #quest-screen-marker,
+body:has(#japan-campaign-tracker:not([hidden])) #quest-edge-arrow {
+  display: none;
+}
+
+.japan-campaign-title {
+  display: block;
+  color: #ffddab;
+  font-size: 0.83rem;
+  line-height: 1.23;
+}
+
+.japan-campaign-detail {
+  margin-top: 4px;
+  font-size: 0.78rem;
+  line-height: 1.26;
+}
+
+.japan-campaign-navigation {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  color: #ffd48f;
+  font-variant-numeric: tabular-nums;
+}
+
+.japan-campaign-arrow {
+  display: inline-block;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+@media (max-width: 720px), (pointer: coarse) {
+  #japan-campaign-tracker {
+    top: 204px;
+    right: 8px;
+    width: min(188px, 48vw);
+    padding: 6px 8px;
+  }
+
+  .japan-campaign-title,
+  .japan-campaign-detail {
+    font-size: 0.72rem;
+  }
+}
