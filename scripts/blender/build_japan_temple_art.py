@@ -10,6 +10,7 @@ import math
 from pathlib import Path
 import sys
 import bpy
+import bmesh
 from mathutils import Vector
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -105,6 +106,48 @@ def daito_roof_details(collection, pal):
             a=math.tau*i/48;b=math.tau*(i+1)/48
             base.add_segment_cylinder(collection,f'Konpon_UpperHandrail_{z}_{i}',
                 (3.79*math.cos(a),3.79*math.sin(a),z),(3.79*math.cos(b),3.79*math.sin(b),z),.055,.055,6,pal['vermilion'])
+
+
+def fit_pagoda_roofs(scene):
+    """Keep the central roof table above the frieze and supporting brackets.
+
+    The legacy grid used its normalized square radius as the slope parameter,
+    even inside span_top. That sank the roof through the white frieze. Retain
+    the same mesh, silhouette, story positions and outer eave, but start the
+    slope at the physical inner span, where the hip ridges already start.
+    """
+    zbase=1.35
+    for story in range(5):
+        t=story/4;core=6.85-t*2.05;story_h=3.35-t*.36
+        height=1.78-t*.18;lift=.84-t*.12
+        roof_z=zbase+story_h*.76
+        inner=max(1.15,core-.45)*.5;outer=(12.6-t*3.10)*.5
+        obj=bpy.data.objects[f'Pagoda_Roof{story+1}']
+        for vertex in obj.data.vertices:
+            x,y,z=vertex.co
+            radius=max(abs(x),abs(y))
+            old_d=(-inner+math.sqrt(inner*inner+4*(outer-inner)*radius))/(2*(outer-inner))
+            old_half=inner+(outer-inner)*old_d
+            u=x/old_half;v=y/old_half
+            wave=math.cos((y if abs(u)>=abs(v) else x)*14)*.022*old_d
+            corner=lift*abs(u*v)*old_d**1.45
+            old_z=roof_z+height*max(0,1-old_d)**1.48+corner+wave
+            thickness=.10 if z>old_z else -.10
+            slope=max(0,min(1,(radius-inner)/(outer-inner)))
+            vertex.co.z=roof_z+height*(1-slope)**1.48+corner+wave+thickness
+        obj.data.update()
+        zbase+=story_h+height*.56
+
+
+def orient_tile_rolls(scene):
+    # Rolls are closed beams. Depending on the eave direction the ribbon
+    # sweep's local frame reverses orientation; normalize before single-sided
+    # export. The established Kondō pipeline does not enter this function.
+    for obj in scene.objects:
+        if obj.type=='MESH' and '_TileRoll_' in obj.name:
+            mesh=bmesh.new();mesh.from_mesh(obj.data)
+            bmesh.ops.recalc_face_normals(mesh,faces=mesh.faces)
+            mesh.to_mesh(obj.data);mesh.free();obj.data.update()
 
 
 def mesh_object(collection, name, vertices, faces, material, smooth=False):
@@ -287,6 +330,7 @@ def build_asset(asset, output, source):
         # Runtime garden owns vegetation/seasons. Do not embed a second pond and
         # unculled tree set in the pagoda landmark.
         base.build_toji_pagoda_masterpiece(scene.collection,pal)
+        fit_pagoda_roofs(scene)
     elif asset=='daito':
         other_spec=importlib.util.spec_from_file_location('kukai_source',Path(__file__).with_name('build_kukai_landmarks.py'))
         other=importlib.util.module_from_spec(other_spec)
@@ -308,6 +352,7 @@ def build_asset(asset, output, source):
                     material.use_backface_culling=True
         hero.finish_bake(scene,ROOT/'artifacts/toji-quality/bakes')
     else:
+        orient_tile_rolls(scene)
         temple_surfaces.apply_materials(scene,pal,asset)
         if asset in ('kodo','daito'):
             hero.finish_bake(scene,ROOT/f'artifacts/temple-expansion/bakes/{asset}',

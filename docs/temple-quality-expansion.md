@@ -32,6 +32,9 @@ central doorway, retaining the exterior footprint. The entrance has real
 frame/lattice bars, and the interior has a timber floor and ceiling coffers.
 Added tile rolls and open upper railings clarify the roof and tower silhouette;
 the lower bracket slab is fitted below the curved roof instead of piercing it.
+The pagoda roof slope now starts outside its central roof table, keeping the
+existing plaster friezes and brackets below the tiles. Roof-beam winding is
+normalized before single-sided export. Neither fix adds pagoda triangles.
 
 ## Runtime and mobile
 
@@ -64,8 +67,8 @@ geometry, primitives, download size, embedded PNG dimensions and decoded maps.
 masonry, layered rock, timber, roof seams, paving and woven cloth. Existing
 material colors still control chapter/weather grades. Pharping, Mangyul,
 Yarlung, Samye and Chimphu reuse existing meshes and instancing; no extra scene
-geometry or PointLight is added. Yarlung/Samye roof emission is restrained so
-surface detail remains visible.
+geometry or PointLight is added. Gilded roofs retain their existing emission
+settings and receive the new surface maps.
 
 Desktop uses 128px color/roughness tiles with bump shading; mobile/software
 rendering uses 64px tiles without bump. Every map owns its textures. Story
