@@ -12,7 +12,7 @@
     "check:links": "node scripts/check-links.mjs",
     "test": "node --test tests/*.test.mjs",
     "test:browser": "node scripts/story-browser-test.mjs",
-    "test:japan": "node scripts/japan-browser-test.mjs",
+    "test:japan": "node scripts/japan-browser-test.mjs && node scripts/japan-collision-browser-test.mjs",
     "test:combat-settings": "node scripts/combat-settings-test.mjs",
     "test:terma-caves": "node scripts/terma-caves-test.mjs",
     "test:cave-lighting": "node scripts/cave-lighting-test.mjs"
