@@ -24,7 +24,6 @@ import { loadJapanLandmarks } from '../japanLandmarkLoader.js';
 import {
   createHeightfieldTerrain,
   addRimMountains,
-  pushCollider,
   seededRandom,
 } from '../mapBase.js';
 import { TOJI_MAP } from '../../data/maps/toji.js';
@@ -34,6 +33,32 @@ import { addJapanRouteGate } from '../japanArchitecture.js';
 import { addJapanTrees } from '../japanVegetation.js';
 
 const TWO_PI = Math.PI * 2;
+
+// Ground-level collision for the shipped Blender landmarks. These footprints
+// intentionally follow podiums, stairs, fences, and benches rather than roof
+// eaves or the larger procedural fallback geometry.
+export const TOJI_LOADED_LANDMARK_COLLIDERS = Object.freeze([
+  // Gojū-no-tō podium, four cardinal stair stacks, and split tamagaki fence.
+  { landmark: 'gojunoto', type: 'box', cx: 36, cz: 18, hx: 6.5625, hz: 6.5625 },
+  { landmark: 'gojunoto', type: 'box', cx: 36, cz: 18 + 7.5537, hx: 1.575, hz: 1.4112 },
+  { landmark: 'gojunoto', type: 'box', cx: 36, cz: 18 - 7.5537, hx: 1.575, hz: 1.4112 },
+  { landmark: 'gojunoto', type: 'box', cx: 36 + 7.5537, cz: 18, hx: 1.4112, hz: 1.575 },
+  { landmark: 'gojunoto', type: 'box', cx: 36 - 7.5537, cz: 18, hx: 1.4112, hz: 1.575 },
+  ...[-1, 1].flatMap(side => [
+    { landmark: 'gojunoto', type: 'box', cx: 36 + side * 4.71975, cz: 18 - 7.77, hx: 3.14475, hz: 0.0945 },
+    { landmark: 'gojunoto', type: 'box', cx: 36 + side * 4.71975, cz: 18 + 7.77, hx: 3.14475, hz: 0.0945 },
+    { landmark: 'gojunoto', type: 'box', cx: 36 - 7.77, cz: 18 + side * 4.71975, hx: 0.0945, hz: 3.14475 },
+    { landmark: 'gojunoto', type: 'box', cx: 36 + 7.77, cz: 18 + side * 4.71975, hx: 0.0945, hz: 3.14475 },
+  ]),
+  // Kondō granite podium plus the replacement five-tread approach.
+  { landmark: 'kondo', type: 'box', cx: 0, cz: 8, hx: 11.375, hz: 7.375 },
+  { landmark: 'kondo', type: 'box', cx: 0, cz: 8 + 7.6625, hx: 3.03125, hz: 0.9125 },
+  // Kōdō podium cap and its three separated courtyard benches.
+  { landmark: 'kodo', type: 'box', cx: 0, cz: -36, hx: 12.4375, hz: 6.8125 },
+  ...[-5.25, 0.25, 5.75].map(cx => ({
+    landmark: 'kodo', type: 'box', cx, cz: -36 + 9.25, hx: 1.75, hz: 0.6875,
+  })),
+]);
 
 /**
  * Merge an array of BufferGeometries into a single BufferGeometry and dispose source parts.
@@ -417,6 +442,7 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
   const colliders = [];
   const interactables = [];
   const disposables = [];
+  const fallbackLandmarkColliders = [];
 
   function registerCollider(shape) {
     if (shape.type === 'box') {
@@ -425,7 +451,22 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
     }
     const col = { ...shape, zone: 'toji' };
     colliders.push(col);
-    pushCollider(ctx, 'toji', shape);
+    if (Array.isArray(ctx?.colliders)) ctx.colliders.push(col);
+    return col;
+  }
+
+  function removeCollider(collider) {
+    const localIndex = colliders.indexOf(collider);
+    if (localIndex >= 0) colliders.splice(localIndex, 1);
+    const worldIndex = ctx?.colliders?.indexOf?.(collider) ?? -1;
+    if (worldIndex >= 0) ctx.colliders.splice(worldIndex, 1);
+  }
+
+  function activateLoadedLandmarkColliders() {
+    for (const collider of fallbackLandmarkColliders.splice(0)) removeCollider(collider);
+    for (const { landmark: _landmark, cx, cz, hx, hz, ...shape } of TOJI_LOADED_LANDMARK_COLLIDERS) {
+      registerCollider({ ...shape, cx: ox + cx, cz: oz + cz, hx, hz });
+    }
   }
 
   function registerInteractable(item) {
@@ -1147,13 +1188,13 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
     // Keep the player outside the carved tamagaki fence.  The former 11.6 m
     // collider ended inside the visible 13.6 m fence, so the avatar could
     // visibly overlap the stonework before collision resolution kicked in.
-    registerCollider({
+    fallbackLandmarkColliders.push(registerCollider({
       type: 'box',
       cx: ox + pagodaX,
       cz: oz + pagodaZ,
       hx: 6.8,
       hz: 6.8,
-    });
+    }));
   }
 
   // ---------------------------------------------------------------- 6. Landmark 2: 東寺金堂 (Kondō — Main Golden Hall) at `local (0, 8)`
@@ -1353,21 +1394,21 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
 
     // Match the full 28.4 m × 18.4 m lower plinth footprint. Decorative steps
     // remain visible in front, while the raised stone mass stays solid.
-    registerCollider({
+    fallbackLandmarkColliders.push(registerCollider({
       type: 'box',
       cx: ox + kondoX,
       cz: oz + kondoZ,
       hx: 14.2,
       hz: 9.2,
-    });
+    }));
     // The five southern steps project beyond the plinth and are also solid.
-    registerCollider({
+    fallbackLandmarkColliders.push(registerCollider({
       type: 'box',
       cx: ox + kondoX,
       cz: oz + kondoZ + 9.1,
       hx: 3.8,
       hz: 1.14,
-    });
+    }));
   }
 
   // ---------------------------------------------------------------- 7. Landmark 3: 東寺講堂 (Kōdō — Lecture Hall) & 21-Deity 3D Mandala at `local (0, -36)`
@@ -1617,20 +1658,20 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
     }
 
     // Match the full 29.4 m × 16.4 m raised platform footprint.
-    registerCollider({
+    fallbackLandmarkColliders.push(registerCollider({
       type: 'box',
       cx: ox + kodoX,
       cz: oz + kodoZ,
       hx: 14.7,
       hz: 8.2,
-    });
-    registerCollider({
+    }));
+    fallbackLandmarkColliders.push(registerCollider({
       type: 'box',
       cx: ox + kodoX,
       cz: oz + kodoZ + 8.86,
       hx: 4.2,
       hz: 0.89,
-    });
+    }));
   }
 
   // ---------------------------------------------------------------- 8. Landmark 4: 瓢箪池庭園 (Hyōtan-ike Gourd Pond & Cherry/Maple Garden) at `local (36, -16)`
@@ -1792,6 +1833,7 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
         });
         appliedSeason = null;
         applySeasonalPalette(state?.time?.season || 'spring');
+        activateLoadedLandmarkColliders();
       },
     });
     disposables.push(landmarks);

@@ -31,7 +31,6 @@ import { loadJapanLandmarks } from '../japanLandmarkLoader.js';
 import {
   createHeightfieldTerrain,
   addRimMountains,
-  pushCollider,
   seededRandom,
 } from '../mapBase.js';
 import { KOYASAN_MAP } from '../../data/maps/koyasan.js';
@@ -40,6 +39,15 @@ import '../../i18n/koyasan.js';
 import { addJapanRouteGate } from '../japanArchitecture.js';
 import { addRakedGravel, createGraniteGeometry, createGraniteMaterial } from '../japanGardenArchitecture.js';
 import { addJapanTrees } from '../japanVegetation.js';
+
+export const KOYASAN_LOADED_DAITO_COLLIDERS = Object.freeze([
+  { type: 'box', cx: -62, cz: 6, hx: 7.35, hz: 7.35 },
+  { type: 'box', cx: -62, cz: 6 + 7.7, hx: 1.8, hz: 0.95 },
+  { type: 'box', cx: -62, cz: 6 - 7.7, hx: 1.8, hz: 0.95 },
+  { type: 'box', cx: -62 + 7.7, cz: 6, hx: 0.95, hz: 1.8 },
+  { type: 'box', cx: -62 - 7.7, cz: 6, hx: 0.95, hz: 1.8 },
+  { type: 'circle', x: -62, z: 6 + 10.2, r: 0.95 },
+]);
 
 const TWO_PI = Math.PI * 2;
 
@@ -268,6 +276,7 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   const colliders = [];
   const interactables = [];
   const disposables = [];
+  const fallbackDaitoColliders = [];
 
   const getHeight = (lx, lz) => koyasanHeight(lx, lz);
   const getHeightWorld = (wx, wz) => koyasanHeight(wx - ox, wz - oz);
@@ -280,8 +289,10 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
       minZ: oz + minLZ,
       maxZ: oz + maxLZ,
     };
-    colliders.push({ ...col, zone: 'koyasan' });
-    pushCollider(ctx, 'koyasan', col);
+    const collider = { ...col, zone: 'koyasan' };
+    colliders.push(collider);
+    if (Array.isArray(ctx.colliders)) ctx.colliders.push(collider);
+    return collider;
   }
 
   function addCircleCollider(lx, lz, r) {
@@ -291,8 +302,26 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
       z: oz + lz,
       r,
     };
-    colliders.push({ ...col, zone: 'koyasan' });
-    pushCollider(ctx, 'koyasan', col);
+    const collider = { ...col, zone: 'koyasan' };
+    colliders.push(collider);
+    if (Array.isArray(ctx.colliders)) ctx.colliders.push(collider);
+    return collider;
+  }
+
+  function removeCollider(collider) {
+    const localIndex = colliders.indexOf(collider);
+    if (localIndex >= 0) colliders.splice(localIndex, 1);
+    const worldIndex = ctx.colliders?.indexOf?.(collider) ?? -1;
+    if (worldIndex >= 0) ctx.colliders.splice(worldIndex, 1);
+  }
+
+  function activateLoadedDaitoColliders() {
+    for (const collider of fallbackDaitoColliders.splice(0)) removeCollider(collider);
+    for (const shape of KOYASAN_LOADED_DAITO_COLLIDERS) {
+      if (shape.type === 'circle') addCircleCollider(shape.x, shape.z, shape.r);
+      else addBoxCollider(shape.cx - shape.hx, shape.cx + shape.hx,
+        shape.cz - shape.hz, shape.cz + shape.hz);
+    }
   }
 
   addJapanRouteGate(root, 16, getHeight(16, 22), 22);
@@ -1064,16 +1093,19 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
       parent: daitoGroup,
       fallback: daitoFallbackGroup,
       specs: [{ url: '/models/kukai/konpon_daito.glb' }],
+      onReady: activateLoadedDaitoColliders,
     }));
   }
   // The collider follows the complete 14 m stone plinth rather than ending
   // inside it, preventing the player capsule from blending into its edge.
-  addBoxCollider(-62 - 7.0, -62 + 7.0, 6 - 7.0, 6 + 7.0);
+  fallbackDaitoColliders.push(addBoxCollider(-62 - 7.0, -62 + 7.0, 6 - 7.0, 6 + 7.0));
   // Four cardinal staircases project 2.31 m beyond the plinth.
-  addBoxCollider(-62 - 1.7, -62 + 1.7, 6 + 6.99, 6 + 9.31);
-  addBoxCollider(-62 - 1.7, -62 + 1.7, 6 - 9.31, 6 - 6.99);
-  addBoxCollider(-62 + 6.99, -62 + 9.31, 6 - 1.7, 6 + 1.7);
-  addBoxCollider(-62 - 9.31, -62 - 6.99, 6 - 1.7, 6 + 1.7);
+  fallbackDaitoColliders.push(
+    addBoxCollider(-62 - 1.7, -62 + 1.7, 6 + 6.99, 6 + 9.31),
+    addBoxCollider(-62 - 1.7, -62 + 1.7, 6 - 9.31, 6 - 6.99),
+    addBoxCollider(-62 + 6.99, -62 + 9.31, 6 - 1.7, 6 + 1.7),
+    addBoxCollider(-62 - 9.31, -62 - 6.99, 6 - 1.7, 6 + 1.7),
+  );
 
   // Rotating golden Mandala floor ring around Konpon Daitō
   const daitoMandalaRing = new THREE.Mesh(new THREE.RingGeometry(7.6, 8.3, 48), auraRingMat);
