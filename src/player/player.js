@@ -13,9 +13,17 @@ import {
 } from '../data/appearance.js';
 
 import { isJapanMap } from '../data/japan.js';
+import { i18n } from '../i18n.js';
+import { EN as COOP_EN, ZH_HANT as COOP_ZH } from '../i18n/coop.js';
 import { createJapanPilgrim } from './japanPilgrim.js';
 
 const TWO_PI = Math.PI * 2;
+const DEFAULT_PILGRIM_NAME_KEY = 'coop.pilgrimName.default';
+const DEFAULT_PILGRIM_NAMES = new Set([
+  DEFAULT_PILGRIM_NAME_KEY,
+  COOP_ZH[DEFAULT_PILGRIM_NAME_KEY],
+  COOP_EN[DEFAULT_PILGRIM_NAME_KEY],
+]);
 
 function wrapAngle(a) {
   a = (a + Math.PI) % TWO_PI;
@@ -327,15 +335,15 @@ export function createPlayer(ctx) {
   let lastNameplateSig = '';
   function updateNameplate() {
     if (!nameplateCanvas || !nameplateTex) return;
-    const rawName =
-      appearance.name ||
-      ctx.coop?.getPilgrimName?.() ||
-      ctx.i18n?.t?.('coop.pilgrimName.default') ||
-      '雪域行者';
+    const rawName = appearance.name || ctx.coop?.getPilgrimName?.();
+    const useJapanDefault = isJapanMap(state.zone) && (!rawName || DEFAULT_PILGRIM_NAMES.has(rawName));
+    const name = useJapanDefault
+      ? i18n.t('appearance.name.japanDefault')
+      : rawName || i18n.t(DEFAULT_PILGRIM_NAME_KEY);
     const lvl = state.player?.level || 1;
     const show = Boolean(appearance.showNameplate) && state.mode === 'play' && !state.customizing;
     nameplateSprite.visible = show;
-    const sig = `${show}:${lvl}:${rawName}:${appearance.auraColor}`;
+    const sig = `${show}:${lvl}:${name}:${appearance.auraColor}`;
     if (sig === lastNameplateSig) return;
     lastNameplateSig = sig;
 
@@ -357,8 +365,7 @@ export function createPlayer(ctx) {
     g.textBaseline = 'middle';
     g.font = 'bold 21px "Noto Serif TC", "Outfit", system-ui, sans-serif';
     g.fillStyle = '#fef08a';
-    const text = `☸ [Lv.${lvl}] ${rawName}`;
-    g.fillText(text.slice(0, 22), w / 2, h / 2 + 1);
+    g.fillText(`☸ [Lv.${lvl}] ${name}`, w / 2, h / 2 + 1, w - 32);
     nameplateTex.needsUpdate = true;
   }
 
