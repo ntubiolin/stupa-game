@@ -15,6 +15,7 @@
 // Strictly 0 PointLights.
 // ============================================================================
 import * as THREE from 'three';
+import { createTibetanSurfaces } from '../tibetanSurfaces.js';
 import {
   createHeightfieldTerrain,
   scatterRocks,
@@ -145,6 +146,7 @@ function getPharpingSunbeamTexture() {
 }
 
 export function createMap(ctx) {
+  const surfaces = createTibetanSurfaces(ctx);
   const mapDef = ctx.world?.getMap?.('pharping') || {
     id: 'pharping',
     origin: { x: 2000, z: 0 },
@@ -320,6 +322,7 @@ export function createMap(ctx) {
     color: 0x7a6855,
     roughness: 0.92,
   });
+  surfaces.apply(terraceWallMat, 'masonry');
   const terraceArcs = [
     { cx: -28, cz: 32, r: 22, start: -0.65, end: 0.55, segs: 14 },
     { cx: -32, cz: 18, r: 28, start: -0.55, end: 0.62, segs: 16 },
@@ -406,10 +409,15 @@ export function createMap(ctx) {
   group.add(villageGroup);
 
   const plinthMat = new THREE.MeshStandardMaterial({ color: 0x6e6256, roughness: 0.94 });
+  surfaces.apply(plinthMat, 'masonry');
   const wallMat = new THREE.MeshStandardMaterial({ color: 0xa86444, roughness: 0.88 });
+  surfaces.apply(wallMat, 'plaster');
   const upperWallMat = new THREE.MeshStandardMaterial({ color: 0xede4d3, roughness: 0.85 });
+  surfaces.apply(upperWallMat, 'plaster');
   const roofMat = new THREE.MeshStandardMaterial({ color: 0x5c3824, roughness: 0.82 });
+  surfaces.apply(roofMat, 'roof');
   const timberMat = new THREE.MeshStandardMaterial({ color: 0x3b2314, roughness: 0.88 });
+  surfaces.apply(timberMat, 'timber');
   const brassFinialMat = new THREE.MeshStandardMaterial({
     color: 0xd4a238,
     roughness: 0.32,
@@ -671,7 +679,9 @@ export function createMap(ctx) {
   ];
   const springs = [];
   const springStoneMat = new THREE.MeshStandardMaterial({ color: 0x7a6c5d, roughness: 0.88 });
+  surfaces.apply(springStoneMat, 'masonry');
   const mossySlabMat = new THREE.MeshStandardMaterial({ color: 0x5d6e54, roughness: 0.86 });
+  surfaces.apply(mossySlabMat, 'rock');
   const nagaCarvingMat = new THREE.MeshStandardMaterial({
     color: 0x8c7d6b,
     roughness: 0.78,
@@ -932,6 +942,7 @@ export function createMap(ctx) {
     roughness: 0.92,
     metalness: 0.06,
   });
+  surfaces.apply(cliffMat, 'rock');
   const innerVaultMat = new THREE.MeshStandardMaterial({
     color: 0x1e1814,
     roughness: 0.96,
@@ -940,11 +951,13 @@ export function createMap(ctx) {
     emissiveIntensity: 0.35,
     side: THREE.DoubleSide,
   });
+  surfaces.apply(innerVaultMat, 'rock');
   const caveFloorMat = new THREE.MeshStandardMaterial({
     color: 0x261f1a,
     roughness: 0.9,
     metalness: 0.08,
   });
+  surfaces.apply(caveFloorMat, 'paving');
 
   // 6a. Dark stone cavern floor & sacred mandala altar ring
   const caveFloor = new THREE.Mesh(new THREE.CircleGeometry(7.6, 28), caveFloorMat);
@@ -1155,22 +1168,26 @@ export function createMap(ctx) {
     emissiveIntensity: 0.46,
     side: THREE.DoubleSide,
   });
+  surfaces.apply(khatagMat, 'cloth');
   const retreatWhitewashMat = new THREE.MeshStandardMaterial({
     color: 0xf2eadc,
     roughness: 0.88,
     emissive: 0x261d14,
     emissiveIntensity: 0.16,
   });
+  surfaces.apply(retreatWhitewashMat, 'plaster');
   const retreatMaroonMat = new THREE.MeshStandardMaterial({
     color: 0x7c1f1a,
     roughness: 0.74,
     emissive: 0x240907,
     emissiveIntensity: 0.18,
   });
+  surfaces.apply(retreatMaroonMat, 'plaster');
   const fantsangBlackMat = new THREE.MeshStandardMaterial({
     color: 0x221b18,
     roughness: 0.86,
   });
+  surfaces.apply(fantsangBlackMat, 'timber');
 
   const khatagBandGeo = new THREE.BoxGeometry(0.95, 0.11, 0.05);
   const khatagTailGeo = new THREE.PlaneGeometry(0.24, 1.18);
@@ -1652,6 +1669,7 @@ export function createMap(ctx) {
     emissive: 0x241910,
     emissiveIntensity: 0.12,
   });
+  surfaces.apply(stepSlabMat, 'paving');
   const stairWaypoints = [];
   // Segment A: Valley trail (14, 12) -> Yangleshö Cave forecourt (20, -35)
   for (let s = 0; s < 24; s++) {
@@ -1763,6 +1781,7 @@ export function createMap(ctx) {
     emissiveIntensity: 0.22,
     side: THREE.DoubleSide,
   });
+  surfaces.apply(lungtaInstMat, 'cloth');
   const lungtaInst = new THREE.InstancedMesh(lungtaQuadGeo, lungtaInstMat, lungtaFlagTransforms.length);
   lungtaInst.name = 'PharpingPrayerFlagCanopy';
   const lungtaPalette = [
@@ -2233,6 +2252,7 @@ export function createMap(ctx) {
 
   return {
     group,
+    surfaceTextures: surfaces.textures,
     getHeight,
     update,
     springs,

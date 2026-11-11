@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { isTibetanSurfaceLowSpec } from '../../world/tibetanSurfaces.js';
 import { createMap } from '../../world/maps/samye.js';
 import { seededRandom } from '../../world/mapBase.js';
 import {
@@ -188,7 +189,7 @@ function makeNight(group) {
   };
 }
 
-function disposeGroup(group) {
+function disposeGroup(group, surfaceTextures) {
   const geometries = new Set();
   const materials = new Set();
   group.traverse(object => {
@@ -202,6 +203,7 @@ function disposeGroup(group) {
   });
   for (const geometry of geometries) geometry.dispose();
   for (const material of materials) material.dispose();
+  for (const texture of surfaceTextures) texture.dispose();
   group.removeFromParent();
   group.clear();
 }
@@ -331,8 +333,8 @@ function makeMonstersAndPehar(group, getHeight) {
 
 export async function createSamyeScene(ctx) {
   const colliders = [];
-  const { group, getHeight, setStage, structure, nightTorches } =
-    createMap({ colliders }, undefined, { presentationOnly: true });
+  const { group, getHeight, setStage, structure, nightTorches, surfaceTextures } =
+    createMap({ colliders, lowSpec: isTibetanSurfaceLowSpec(ctx) }, undefined, { presentationOnly: true });
   group.name = 'StorySamye';
   const worksite = makeWorksite(group, getHeight);
   const poseBuilders = addBuilders(group, getHeight, colliders);
@@ -415,7 +417,7 @@ export async function createSamyeScene(ctx) {
         const index = ctx.colliders.indexOf(collider);
         if (index >= 0) ctx.colliders.splice(index, 1);
       }
-      disposeGroup(group);
+      disposeGroup(group, surfaceTextures);
     },
   };
 }

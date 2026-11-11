@@ -20,6 +20,7 @@
  *   - Strictly ZERO PointLights (emissive materials & additive meshes only) and low draw calls (< 400).
  */
 import * as THREE from 'three';
+import { createTibetanSurfaces } from '../tibetanSurfaces.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {
   createHeightfieldTerrain,
@@ -635,6 +636,7 @@ function createPeharMandalaTexture() {
 }
 
 export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } = {}) {
+  const surfaces = createTibetanSurfaces(ctx);
   const { state, bus, i18n } = ctx;
   const origin = mapDef?.origin || { x: 5000, z: 0 };
   const ox = origin.x; // 5000
@@ -746,21 +748,25 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
     roughness: 0.78,
     metalness: 0.05,
   });
+  surfaces.apply(stoneWhiteMat, 'plaster');
   const carvedStoneMat = new THREE.MeshStandardMaterial({
     color: 0xd6cfc2,
     roughness: 0.84,
     metalness: 0.06,
   });
+  surfaces.apply(carvedStoneMat, 'paving');
   const darkSlateMat = new THREE.MeshStandardMaterial({
     color: 0x1e293b,
     roughness: 0.74,
     metalness: 0.16,
   });
+  surfaces.apply(darkSlateMat, 'rock');
   const tibetanRedMat = new THREE.MeshStandardMaterial({
     color: 0x8b1e24,
     roughness: 0.72,
     metalness: 0.08,
   });
+  surfaces.apply(tibetanRedMat, 'timber');
   const chineseJadeRoofMat = new THREE.MeshStandardMaterial({
     color: 0x0f766e,
     emissive: 0x115e59,
@@ -768,6 +774,7 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
     roughness: 0.42,
     metalness: 0.28,
   });
+  surfaces.apply(chineseJadeRoofMat, 'roof');
   const indianGoldRoofMat = new THREE.MeshStandardMaterial({
     color: 0xfbbf24,
     emissive: 0xd97706,
@@ -775,10 +782,12 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
     roughness: 0.24,
     metalness: 0.75,
   });
+  const tiledRoofMat = surfaces.apply(indianGoldRoofMat.clone(), 'roof');
   const woodTimberMat = new THREE.MeshStandardMaterial({
     color: 0x78350f,
     roughness: 0.85,
   });
+  surfaces.apply(woodTimberMat, 'timber');
   const foundationLineMat = new THREE.MeshBasicMaterial({
     color: 0xf59e0b,
     transparent: true,
@@ -975,6 +984,7 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
     emissiveIntensity: 0.12,
     roughness: 0.75,
   });
+  surfaces.apply(tentClothMat, 'cloth');
   const royalCanopy = new THREE.Mesh(new THREE.ConeGeometry(4.6, 2.6, 8), tentClothMat);
   royalCanopy.position.set(1.5, 3.2, -3.2);
   royalCanopy.castShadow = true;
@@ -1306,6 +1316,7 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
     roughness: 0.85,
     metalness: 0.06,
   });
+  surfaces.apply(fantsangFrameMat, 'timber');
   const warmWindowPaneMat = new THREE.MeshStandardMaterial({
     color: 0xffd27d,
     emissive: 0xffb347,
@@ -1461,7 +1472,7 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
   utseF3Body.castShadow = true;
   const utseF3Penma = new THREE.Mesh(new THREE.BoxGeometry(8.65, 0.55, 8.65), tibetanRedMat);
   utseF3Penma.position.y = 12.75;
-  const utseF3GoldRoof = new THREE.Mesh(new THREE.ConeGeometry(7.6, 2.8, 4), indianGoldRoofMat);
+  const utseF3GoldRoof = new THREE.Mesh(new THREE.ConeGeometry(7.6, 2.8, 4), tiledRoofMat);
   utseF3GoldRoof.rotation.y = Math.PI / 4;
   utseF3GoldRoof.position.y = 14.2;
   const utseFinial = new THREE.Mesh(new THREE.OctahedronGeometry(0.95, 0), indianGoldRoofMat);
@@ -1547,6 +1558,7 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
       roughness: 0.55,
       metalness: 0.12,
     });
+    surfaces.apply(sMat, 'plaster');
     const sg = new THREE.Group();
     sg.position.set(cs.lx, 1.1, cs.lz);
 
@@ -1661,7 +1673,7 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
     new THREE.MeshStandardMaterial({ color: 0xf59e0b, emissive: 0xd97706, emissiveIntensity: 0.45, roughness: 0.4 })
   );
   sunChapel.position.set(0, 1.6, -14.5);
-  const sunRoof = new THREE.Mesh(new THREE.ConeGeometry(2.55, 1.35, 12), indianGoldRoofMat);
+  const sunRoof = new THREE.Mesh(new THREE.ConeGeometry(2.55, 1.35, 12), tiledRoofMat);
   sunRoof.position.set(0, 3.85, -14.5);
 
   const moonChapel = new THREE.Mesh(
@@ -1764,6 +1776,7 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
     roughness: 0.86,
     metalness: 0.04,
   });
+  surfaces.apply(hepoCliffMat, 'rock');
   const HEPO_CLIFF_COUNT = 36;
   const hepoCliffsInst = new THREE.InstancedMesh(hepoCliffGeo, hepoCliffMat, HEPO_CLIFF_COUNT);
   hepoCliffsInst.castShadow = true;
@@ -2249,6 +2262,7 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
     vajraDanceAura.visible = false;
     return {
       group, getHeight: getHeightWorld, setStage,
+      surfaceTextures: surfaces.textures,
       structure: monasteryGroup,
       nightTorches: wallTorchesGroup,
     };
@@ -3116,6 +3130,7 @@ export function createMap(ctx, mapDef = SAMYE_MAP, { presentationOnly = false } 
     },
 
     dispose() {
+      for (const texture of surfaces.textures) texture.dispose();
       if (hudEl) hudEl.style.display = 'none';
       if (cutsceneEl) cutsceneEl.style.display = 'none';
       if (state.player) state.player.lockedMovement = false;
