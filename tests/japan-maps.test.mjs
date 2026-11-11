@@ -187,6 +187,29 @@ test('Japanese temple foundations stop the player at their visible outer edge (#
   }
 });
 
+test('Pilgrimage temple steps stop the player before the rendered stonework (#291)', async () => {
+  const cases = [
+    { map: 'qinglong', start: [0, 6], hallZ: -6, depth: 13 },
+    { map: 'qinglong', start: [21, 22], hallZ: 11, depth: 12 },
+    { map: 'kongobuji', start: [0, -12], hallZ: -24, depth: 13 },
+    { map: 'okunoin', start: [0, -47], hallZ: -57, depth: 10 },
+  ];
+
+  for (const sample of cases) {
+    const { ctx, instance } = await loadMap(sample.map);
+    const { x: ox, z: oz } = MAPS[sample.map].origin;
+    const player = createPlayer(ctx);
+    const [lx, lz] = sample.start;
+    ctx.state.player.position.set(ox + lx, instance.getHeight(ox + lx, oz + lz), oz + lz);
+    for (let i = 0; i < 40; i++) player.moveWithCollisions(0, -0.5);
+
+    const stepEdge = sample.hallZ + sample.depth / 2 + 1.615;
+    const localZ = ctx.state.player.position.z - oz;
+    assert.ok(localZ >= stepEdge + CONFIG.PLAYER.radius - 1e-4,
+      `${sample.map} player entered the hall steps at z=${localZ}`);
+  }
+});
+
 test('Tō-ji landmark actions run through the selected interactable', async () => {
   const { ctx, instance } = await loadMap('toji');
   const kondo = ctx.interactables.find(target => target.id === 'toji-kondo');
