@@ -177,3 +177,40 @@ test('Japanese waypoints signal unlock with a lantern and no PointLights', () =>
   assert.ok(marker.userData.paper.emissiveIntensity > initial);
   marker.traverse(object => assert.equal(Boolean(object.isPointLight), false));
 });
+
+test('Cedar avenues keep tree placements across the near and distant batches', async () => {
+  for (const id of ['qinglong', 'kii', 'koyasan', 'kongobuji', 'okunoin']) {
+    const { instance } = await loadMap(id);
+    let count = 0;
+    instance.group.traverse(lod => {
+      if (!lod.isLOD || !lod.name.endsWith(' cedars LOD')) return;
+      assert.equal(lod.levels.length, 2);
+      const [near, far] = lod.levels.map(level => level.object.children);
+      assert.equal(near.length, 2);
+      assert.equal(far.length, 2);
+      for (let i = 0; i < near.length; i++) {
+        assert.ok(near[i].isInstancedMesh && far[i].isInstancedMesh);
+        assert.deepEqual(near[i].instanceMatrix.array, far[i].instanceMatrix.array);
+        assert.ok(far[i].geometry.index.count < near[i].geometry.index.count * 0.5);
+        assert.equal(far[i].castShadow, false);
+      }
+      assert.ok(near[1].material.alphaTest > 0);
+      assert.equal(near[1].material.transparent, false);
+      count++;
+    });
+    assert.ok(count > 1, id + ' has spatially separate cedar batches');
+  }
+});
+
+test('Tō-ji and Mount Kōya switch cherry foliage through existing seasonal updates', async () => {
+  for (const [id, name] of [['toji', 'Tō-ji weeping cherries'], ['koyasan', 'Mount Kōya cherries']]) {
+    const { ctx, instance } = await loadMap(id);
+    const { material, instanceMatrix } = instance.group.getObjectByName(name + ' foliage');
+    for (const [season, texture] of [['spring', 'blossom'], ['summer', 'leaf'], ['winter', 'frost']]) {
+      ctx.state.time = { season };
+      instance.update(1 / 60);
+      assert.equal(material.map.name, 'Japan ' + texture + ' foliage');
+      assert.equal(instance.group.getObjectByName(name + ' foliage').instanceMatrix, instanceMatrix);
+    }
+  }
+});

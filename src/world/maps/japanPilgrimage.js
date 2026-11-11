@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createHeightfieldTerrain, pushCollider, seededRandom } from '../mapBase.js';
+import { addJapanTrees } from '../japanVegetation.js';
 import { QINGLONG_MAP, KII_MAP, KONGOBUJI_MAP, OKUNOIN_MAP } from '../../data/maps/japanPilgrimage.js';
 
 const TAU = Math.PI * 2;
@@ -25,14 +26,14 @@ function createPrecinct(ctx, map, { height, groundHeight = height, paint, seed }
 
   const shapes = {
     box: new THREE.BoxGeometry(),
-    cedar: new THREE.ConeGeometry(0.5, 1, 8),
+    cone: new THREE.ConeGeometry(0.5, 1, 8),
     column: new THREE.CylinderGeometry(0.39, 0.5, 1, 8),
     stone: new THREE.DodecahedronGeometry(0.6, 0),
     sphere: new THREE.IcosahedronGeometry(0.5, 1),
   };
   const materials = {
-    stone: 0x797870, moss: 0x5a6d40, path: 0x9c9684, lime: 0xe4d4b6, bark: 0x524238,
-    pine: 0x254b3f, youngPine: 0x39624b, leaf: 0x6c804c, rust: 0xae5041, rose: 0xcf7f83,
+    stone: 0x797870, moss: 0x5a6d40, path: 0x9c9684, lime: 0xe4d4b6,
+    leaf: 0x6c804c, rust: 0xae5041,
     darkWood: 0x49322c, wood: 0x956346, red: 0xa33b2e, gold: 0xcb9b44, jade: 0x448278,
     tile: 0x303743, tileEdge: 0x485462, sand: 0xddd6bc, rake: 0xb9ae96, basalt: 0x555d65,
     water: 0x497884, foam: 0xb5d3d1, sail: 0xe4d5ab,
@@ -40,6 +41,9 @@ function createPrecinct(ctx, map, { height, groundHeight = height, paint, seed }
   };
   const rng = seededRandom(seed);
   const batches = new Map();
+  const cedars = [];
+  const cherries = [];
+  const disposables = [];
   const colliders = [];
   const matrixDummy = new THREE.Object3D();
 
@@ -89,10 +93,16 @@ function createPrecinct(ctx, map, { height, groundHeight = height, paint, seed }
     for (const [shape, geometry] of Object.entries(shapes)) {
       if (![...batches.values()].some(batch => batch.shape === shape)) geometry.dispose();
     }
-    return { group, root, colliders, getHeight, update() {} };
+    addJapanTrees(root, cedars, { name: id + ' cedars', species: 'cedar', disposables });
+    if (cherries.length) {
+      const canopyMaterial = new THREE.MeshStandardMaterial({ color: 0xe89caa, roughness: 0.82 });
+      disposables.push(canopyMaterial);
+      addJapanTrees(root, cherries, { name: id + ' cherries', species: 'cherry', canopyMaterial, disposables });
+    }
+    return { group, root, colliders, disposables, getHeight, update() {} };
   }
 
-  return { part, circle, block, height, rng, finish };
+  return { part, circle, block, height, rng, cedars, cherries, finish };
 }
 
 function terrainPaint(colors, pathDistance) {
@@ -222,20 +232,20 @@ function lantern(scene, x, z, scale = 1, wood = false) {
         0.11 * scale, 0.59 * scale, 0.11 * scale);
     }
   }
-  part('cedar', shell, x, y + 1.68 * scale, z, 1.05 * scale, 0.39 * scale, 1.05 * scale, Math.PI / 4);
+  part('cone', shell, x, y + 1.68 * scale, z, 1.05 * scale, 0.39 * scale, 1.05 * scale, Math.PI / 4);
   part('sphere', shell, x, y + 1.91 * scale, z, 0.27 * scale, 0.25 * scale, 0.27 * scale);
   circle(x, z, 0.38 * scale);
 }
 
 function cedar(scene, x, z, height, radius, solid = true) {
-  const y = scene.height(x, z);
-  scene.part('column', 'bark', x, y + height * 0.45, z, radius, height * 0.9, radius);
-  for (let layer = 0; layer < 4; layer++) {
-    const crown = radius * (6.3 - layer);
-    const shift = (scene.rng() - 0.5) * radius;
-    scene.part('cedar', layer % 2 ? 'youngPine' : 'pine', x + shift, y + height * (0.57 + layer * 0.11), z,
-      crown, height * 0.32, crown * 0.91, scene.rng() * TAU, 0, 0.045);
-  }
+  const yaw = scene.rng() * TAU;
+  // Keep the copse layout and downstream scenery on their original random sequence.
+  for (let i = 0; i < 7; i++) scene.rng();
+  scene.cedars.push({
+    x, y: scene.height(x, z), z, yaw,
+    height: height / 20,
+    width: radius * 0.80,
+  });
   if (solid) scene.circle(x, z, radius * 0.55);
 }
 
@@ -309,13 +319,8 @@ export function createQinglongMap(ctx) {
   flagstones(scene, () => 0, -57, -35, 5.0);
   for (const x of [-12, 12]) {
     for (const z of [2, 32]) {
-      const y = height(x, z);
-      part('column', 'bark', x, y + 2.8, z, 0.75, 5.6, 0.75);
-      for (let crown = 0; crown < 7; crown++) {
-        const a = crown * TAU / 7;
-        part('sphere', crown % 3 ? 'rose' : 'rust', x + Math.cos(a) * 1.9, y + 4.4 + rng() * 2.7,
-          z + Math.sin(a) * 1.9, 4.6, 3.1, 4.1, a);
-      }
+      scene.cherries.push({ x, y: height(x, z), z, scale: 1.48 });
+      for (let crown = 0; crown < 7; crown++) rng();
       circle(x, z, 0.48);
     }
   }
