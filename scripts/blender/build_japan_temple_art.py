@@ -19,6 +19,12 @@ spec.loader.exec_module(base)
 sculpt_spec = importlib.util.spec_from_file_location('japan_sculpture', Path(__file__).with_name('japan_sculpture.py'))
 sculpt = importlib.util.module_from_spec(sculpt_spec)
 sculpt_spec.loader.exec_module(sculpt)
+hero_spec = importlib.util.spec_from_file_location('toji_yakushi', Path(__file__).with_name('toji_yakushi.py'))
+hero = importlib.util.module_from_spec(hero_spec)
+hero_spec.loader.exec_module(hero)
+surface_spec = importlib.util.spec_from_file_location('toji_materials', Path(__file__).with_name('toji_materials.py'))
+surfaces = importlib.util.module_from_spec(surface_spec)
+surface_spec.loader.exec_module(surfaces)
 
 
 def mesh_object(collection, name, vertices, faces, material, smooth=False):
@@ -160,15 +166,24 @@ def build_asset(asset, output, source):
     # preferences or reload factory settings while the MCP server is attached.
     for obj in list(bpy.context.scene.objects):
         bpy.data.objects.remove(obj, do_unlink=True)
+    # Rebuilding in the dedicated MCP scene must not reuse a prior recipe's
+    # cached material or accumulate suffixed mesh/image names. Remove only
+    # orphaned data; anything referenced by another scene remains intact.
+    for datablocks in (bpy.data.meshes,bpy.data.materials,bpy.data.images):
+        for item in list(datablocks):
+            if item.users==0:
+                datablocks.remove(item)
     scene=bpy.context.scene
     pal=base.create_toji_palette()
     base.build_detailed_irimoya_roof=roof
     base.add_deity_statue=sculpt.make_sculptor(base)
+    if asset=='kondo':
+        base.add_deity_statue=hero.make_sculptor(base,base.add_deity_statue)
     gold=pal['gold_sacred'].node_tree.nodes.get('Principled BSDF')
     gold.inputs['Base Color'].default_value=(.68,.43,.13,1)
     gold.inputs['Metallic'].default_value=.52
     gold.inputs['Roughness'].default_value=.42
-    gold.inputs['Emission Strength'].default_value=.035
+    gold.inputs['Emission Strength'].default_value=0 if asset=='kondo' else .035
     if asset=='kondo':
         base.build_toji_kondo_only(scene.collection,pal)
         for name in ['Kondo_FrontSteps','Kondo_LowerWhiteFrieze']:
@@ -195,6 +210,14 @@ def build_asset(asset, output, source):
         other.build_konpon_daito(scene.collection,other.create_palette())
     else:
         raise ValueError(asset)
+    if asset=='kondo':
+        surfaces.apply_materials(scene,pal)
+        for obj in scene.objects:
+            if obj.type!='MESH':continue
+            for material in obj.data.materials:
+                if any(part in material.name for part in ('Timber','Granite','Kawara','Shikkui','YakushiHair')):
+                    material.use_backface_culling=True
+        hero.finish_bake(scene,ROOT/'artifacts/toji-quality/bakes')
     if source:
         source.mkdir(parents=True,exist_ok=True)
         bpy.ops.wm.save_as_mainfile(filepath=str(source/f'toji_{asset}.blend'))
@@ -202,7 +225,7 @@ def build_asset(asset, output, source):
     bpy.ops.object.select_all(action='SELECT')
     output.mkdir(parents=True,exist_ok=True)
     bpy.ops.export_scene.gltf(filepath=str(output/('konpon_daito.glb' if asset=='daito' else f'toji_{asset}.glb')),export_format='GLB',
-        use_selection=True,export_apply=True,export_yup=True,export_texcoords=False,
+        use_selection=True,export_apply=True,export_yup=True,export_texcoords=(asset=='kondo'),
         export_cameras=False,export_lights=False)
     print('EXPORTED',asset,'meshes',sum(o.type=='MESH' for o in scene.objects))
 
