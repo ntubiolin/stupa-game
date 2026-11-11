@@ -52,7 +52,14 @@ async function completed(page) {
 }
 
 async function waitCompleted(page, id) {
-  await page.waitForFunction(({ key, id }) => JSON.parse(localStorage.getItem(key))?.sections?.japanCampaign?.completedSteps?.includes(id), { key: saveKey, id }, { timeout: 30000 });
+  await page.waitForFunction(({ key, id }) => JSON.parse(localStorage.getItem(key))?.sections?.japanCampaign?.completedSteps?.includes(id), { key: saveKey, id }, { timeout: 60000 });
+}
+
+// Software WebGL may render only a few frames per wall-clock second. Physics
+// uses capped dt, so input/settling checks must wait for actual simulation time.
+async function waitGameTime(page, seconds) {
+  const until = await page.evaluate(seconds => __stupa.state.elapsed + seconds, seconds);
+  await page.waitForFunction(until => __stupa.state.elapsed >= until, until, { timeout: 60000 });
 }
 
 async function travel(page, mapId, mobile = false) {
@@ -86,11 +93,11 @@ async function approach(page, step, { walk = false } = {}) {
     if (cameraRig.getAutoFollowMode() !== 'off') cameraRig.setAutoFollowMode('off');
     cameraRig.setYaw(0);
   }, { position: step.position, walk });
-  await page.waitForTimeout(650);
+  await waitGameTime(page, 0.65);
   if (walk) {
     await page.keyboard.down('w');
     try {
-      await page.waitForFunction(position => Math.hypot(__stupa.state.player.position.x - position.x, __stupa.state.player.position.z - position.z) < 2, step.position, { timeout: 10000 });
+      await page.waitForFunction(position => Math.hypot(__stupa.state.player.position.x - position.x, __stupa.state.player.position.z - position.z) < 2, step.position, { timeout: 60000 });
     } finally { await page.keyboard.up('w'); }
   }
 }
@@ -127,7 +134,7 @@ async function runObjective(page, step) {
     const retreat = step.id === 'wardFire' ? 'a' : 's';
     await page.keyboard.down(retreat);
     try {
-      await page.waitForFunction(position => Math.hypot(__stupa.state.player.position.x - position.x, __stupa.state.player.position.z - position.z) >= 6, step.position, { timeout: 6000 });
+      await page.waitForFunction(position => Math.hypot(__stupa.state.player.position.x - position.x, __stupa.state.player.position.z - position.z) >= 6, step.position, { timeout: 60000 });
     } finally { await page.keyboard.up(retreat); }
   }
   if (step.action === 'bow') await page.keyboard.press('q');
@@ -141,21 +148,21 @@ async function checkObstacles(page) {
   await travel(page, 'kongobuji');
   await approach(page, { position: { x: 11000, z: -15.5 } });
   await page.keyboard.down('w');
-  await page.waitForTimeout(1300);
-  await page.keyboard.up('w');
+  try { await waitGameTime(page, 1.3); }
+  finally { await page.keyboard.up('w'); }
   const wallZ = await page.evaluate(() => __stupa.state.player.position.z);
   assert(wallZ >= -17 && wallZ < -14, `hall wall must block walking: z=${wallZ}`);
   await travel(page, 'okunoin');
   await approach(page, { position: { x: 11508, z: 6.5 } });
   await page.keyboard.down('w');
-  await page.waitForTimeout(1300);
-  await page.keyboard.up('w');
+  try { await waitGameTime(page, 1.3); }
+  finally { await page.keyboard.up('w'); }
   const bankZ = await page.evaluate(() => __stupa.state.player.position.z);
   assert(bankZ >= 5.5 && bankZ < 8, `river bank must block walking: z=${bankZ}`);
   await approach(page, { position: { x: 11500, z: 8 } });
   await page.keyboard.down('w');
   try {
-    await page.waitForFunction(() => __stupa.state.player.position.z < -9, null, { timeout: 12000 });
+    await page.waitForFunction(() => __stupa.state.player.position.z < -9, null, { timeout: 60000 });
   } finally { await page.keyboard.up('w'); }
   report.scenarios.push({ name: 'building and river collision; bridge passage', wallZ, bankZ });
 }
@@ -207,8 +214,15 @@ async function checkCompanion(page, mobile = false) {
   await page.waitForTimeout(300);
   await shot(page, mobile ? 'mobile-dogyo-ninin' : 'dogyo-ninin');
   if (!mobile) {
-    await page.keyboard.down('w'); await page.waitForTimeout(700); await page.keyboard.up('w');
-    await page.waitForTimeout(500);
+    const start = await page.evaluate(() => __stupa.state.player.position.toArray());
+    await page.keyboard.down('w');
+    try {
+      await page.waitForFunction(start => Math.hypot(__stupa.state.player.position.x - start[0], __stupa.state.player.position.z - start[2]) >= 1.5, start, { timeout: 60000 });
+    } finally { await page.keyboard.up('w'); }
+    await page.waitForFunction(start => {
+      const followed = __stupa.skills.getJapanCompanion();
+      return followed && Math.hypot(followed.position[0] - start[0], followed.position[2] - start[2]) > 0.4;
+    }, first.companion.position, { timeout: 60000 });
     const followed = await page.evaluate(() => __stupa.skills.getJapanCompanion());
     assert(Math.hypot(followed.position[0] - first.companion.position[0], followed.position[2] - first.companion.position[2]) > 0.4, 'Kūkai walks with the pilgrim');
   }
