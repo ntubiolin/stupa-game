@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { isTibetanSurfaceLowSpec } from '../../world/tibetanSurfaces.js';
 import { createMap } from '../../world/maps/pharping.js';
 import { seededRandom } from '../../world/mapBase.js';
 import { createWellShadow } from './wellShadow.js';
@@ -43,13 +44,13 @@ function disposeGroup(group, surfaceTextures = []) {
   group.clear();
 }
 
-function makeBase() {
+function makeBase(lowSpec) {
   const scene = new THREE.Group();
   const colliders = [];
   const interactables = [];
   const listeners = new Map();
   const child = {
-    scene, colliders, interactables,
+    scene, colliders, interactables, lowSpec,
     bus: { on: (name, fn) => listeners.set(name, fn), emit: () => {} },
     state: { zone: 'pharping', player: { position: new THREE.Vector3() } },
   };
@@ -538,7 +539,8 @@ function makeMonsters(group, getHeight) {
 export async function createPharpingScene(ctx) {
   const group = new THREE.Group();
   group.name = 'StoryPharping';
-  let base = makeBase();
+  const lowSpec = isTibetanSurfaceLowSpec(ctx);
+  let base = makeBase(lowSpec);
   group.add(base.map.group);
   const getHeight = base.map.getHeight;
   const debris = makeDebris(group, getHeight);
@@ -580,7 +582,7 @@ export async function createPharpingScene(ctx) {
       disposeGroup(base.map.group, base.map.surfaceTextures);
       // The Adventure factory's rain state is one-way. Rebuild only the base;
       // deterministic base colliders already belong to the story instance.
-      base = makeBase();
+      base = makeBase(lowSpec);
       group.add(base.map.group);
     }
     if (wantRain && !base.map.isRaining()) {

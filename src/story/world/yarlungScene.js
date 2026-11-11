@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { isTibetanSurfaceLowSpec } from '../../world/tibetanSurfaces.js';
 import { YARLUNG_CHAPTER } from '../../data/story/chapters/yarlung.js';
 import { createMap } from '../../world/maps/yarlung.js';
 import { seededRandom } from '../../world/mapBase.js';
@@ -286,7 +287,9 @@ export async function createYarlungScene(ctx) {
   const group = new THREE.Group();
   group.name = 'StoryYarlung';
   const colliders = [];
-  const map = createMap({ scene: group, colliders, storyPreview: true });
+  const map = createMap({
+    scene: group, colliders, storyPreview: true, lowSpec: isTibetanSurfaceLowSpec(ctx),
+  });
   const { getHeight } = map;
   const arena = map.group.getObjectByName('AlpinePastureArena');
   // Keep the crags and terrain but hide the Adventure encounter boundary.

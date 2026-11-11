@@ -43,15 +43,30 @@ function trackTiles(group) {
   return counts;
 }
 
-for (const [map, createScene] of Object.entries({
-  Pharping: createPharpingScene,
-  Mangyul: createMangyulScene,
-  Yarlung: createYarlungScene,
-  Samye: createSamyeScene,
-  Chimphu: createChimphuScene,
-})) {
-  test(`${map} story teardown disposes each owned Tibetan texture once`, async () => {
-    const scene = await createScene({ colliders: [] });
+function assertLowSpecTiles(group) {
+  const tiles = trackTiles(group);
+  assert.ok(tiles.size >= 8);
+  for (const tile of tiles.keys()) assert.equal(tile.image.width, 64);
+  group.traverse(({ material }) => {
+    for (const mat of [material].flat()) {
+      if (mat?.map?.name.startsWith('Tibetan ')) {
+        assert.ok(mat.roughnessMap?.name.startsWith('Tibetan '));
+        assert.equal(mat.bumpMap, null);
+      }
+    }
+  });
+}
+
+for (const [map, createScene, quality] of [
+  ['Pharping', createPharpingScene, { isSoftwareWebGL: true }],
+  ['Mangyul', createMangyulScene, { lowSpec: true }],
+  ['Yarlung', createYarlungScene, { isMobile: true }],
+  ['Samye', createSamyeScene, { isSoftwareWebGL: true }],
+  ['Chimphu', createChimphuScene, { lowSpec: true }],
+]) {
+  test(`${map} story forwards low-spec quality and disposes each tile once`, async () => {
+    const scene = await createScene({ colliders: [], ...quality });
+    assertLowSpecTiles(scene.group);
     const counts = trackTiles(scene.group);
     assert.ok(counts.size >= 8 && counts.size <= 14);
     scene.dispose();
@@ -60,10 +75,11 @@ for (const [map, createScene] of Object.entries({
 }
 
 test('Pharping rain reset disposes the old tiles independently of the rebuilt chapter', async () => {
-  const scene = await createPharpingScene({ colliders: [] });
+  const scene = await createPharpingScene({ colliders: [], isSoftwareWebGL: true });
   scene.restore('rain');
   const beforeReset = trackTiles(scene.group);
   scene.restore('spring1');
+  assertLowSpecTiles(scene.group);
   const afterReset = trackTiles(scene.group);
   assert.equal(afterReset.size, beforeReset.size);
   assert.ok([...beforeReset.values()].every(count => count === 1));

@@ -144,8 +144,13 @@ function buildTiles(surface, repeat, size) {
   return { map, roughnessMap };
 }
 
+export function isTibetanSurfaceLowSpec(ctx) {
+  return Boolean(ctx.lowSpec || ctx.isMobile || ctx.isSoftwareWebGL ||
+    globalThis.matchMedia?.('(pointer: coarse)').matches);
+}
+
 export function createTibetanSurfaces(ctx) {
-  const lowSpec = ctx.lowSpec || ctx.isMobile || globalThis.matchMedia?.('(pointer: coarse)').matches;
+  const lowSpec = isTibetanSurfaceLowSpec(ctx);
   const tiles = new Map();
   const textures = new Set();
   return {

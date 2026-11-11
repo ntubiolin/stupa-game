@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { isTibetanSurfaceLowSpec } from '../../world/tibetanSurfaces.js';
 import { createBus } from '../../core/events.js';
 import { MANGYUL_CHAPTER } from '../../data/story/chapters/mangyul.js';
 import { seededRandom } from '../../world/mapBase.js';
@@ -280,7 +281,9 @@ export async function createMangyulScene(ctx) {
   const colliders = [];
   const interactables = [];
   const state = { zone: 'story-mangyul', player: { position: new THREE.Vector3() } };
-  const map = createMangyulMap({ scene, colliders, interactables, state, bus: createBus() }, { presentationOnly: true });
+  const map = createMangyulMap({
+    scene, colliders, interactables, state, bus: createBus(), lowSpec: isTibetanSurfaceLowSpec(ctx),
+  }, { presentationOnly: true });
   const { group, getHeight } = map;
   group.removeFromParent();
   group.name = 'StoryMangyul';

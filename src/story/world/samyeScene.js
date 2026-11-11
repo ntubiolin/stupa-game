@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { isTibetanSurfaceLowSpec } from '../../world/tibetanSurfaces.js';
 import { createMap } from '../../world/maps/samye.js';
 import { seededRandom } from '../../world/mapBase.js';
 import {
@@ -333,7 +334,7 @@ function makeMonstersAndPehar(group, getHeight) {
 export async function createSamyeScene(ctx) {
   const colliders = [];
   const { group, getHeight, setStage, structure, nightTorches, surfaceTextures } =
-    createMap({ colliders }, undefined, { presentationOnly: true });
+    createMap({ colliders, lowSpec: isTibetanSurfaceLowSpec(ctx) }, undefined, { presentationOnly: true });
   group.name = 'StorySamye';
   const worksite = makeWorksite(group, getHeight);
   const poseBuilders = addBuilders(group, getHeight, colliders);
