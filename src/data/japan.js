@@ -9,7 +9,8 @@ export const JAPAN_CHAPTERS = Object.freeze([
 ].map(([id, x]) => Object.freeze({ id, mapId: id, origin: Object.freeze({ x, z: 0 }) })));
 
 export const JAPAN_MAP_IDS = Object.freeze(JAPAN_CHAPTERS.map(chapter => chapter.mapId));
+export const JAPAN_SIDE_MAP_IDS = Object.freeze(['kappaCreek', 'tenguForest', 'oniPass']);
 
 export function isJapanMap(id) {
-  return JAPAN_MAP_IDS.includes(id);
+  return JAPAN_MAP_IDS.includes(id) || JAPAN_SIDE_MAP_IDS.includes(id);
 }
