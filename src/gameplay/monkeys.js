@@ -4,6 +4,7 @@
  * excitedly to catch & eat tossed bananas.
  */
 import { polar } from '../config.js';
+import { createMonkeyFeedingGame } from './monkeyFeedingGame.js';
 
 const TWO_PI = Math.PI * 2;
 
@@ -23,6 +24,7 @@ export function createMonkeys(ctx) {
   const W = config.WORLD;
   const WALL = config.WALL;
   const count = M.count || 5;
+  let feedingGame = null;
 
   const group = new THREE.Group();
   group.name = 'Monkeys';
@@ -245,7 +247,7 @@ export function createMonkeys(ctx) {
       action: 'feed',
       labelKey: 'prompt.feedMonkey',
       isAvailable: () => m.cooldown <= 0 && !m.projectile.active && m.state !== 'eat' && m.state !== 'chase',
-      onInteract: () => feedMonkey(m),
+      onInteract: () => feedingGame?.open(m) ?? feedMonkey(m),
     });
   }
 
@@ -270,7 +272,7 @@ export function createMonkeys(ctx) {
   }
 
   function feedMonkey(m) {
-    if (m.cooldown > 0 || m.projectile.active) return;
+    if (m.cooldown > 0 || m.projectile.active) return false;
 
     // Trigger player toss gesture
     bus.emit('player:gesture', { name: 'feed', target: m.position });
@@ -313,7 +315,10 @@ export function createMonkeys(ctx) {
       source: 'monkey',
     });
     bus.emit('monkey:fed', { position: m.position.clone() });
+    return true;
   }
+
+  feedingGame = createMonkeyFeedingGame(ctx, { onFeed: feedMonkey });
 
   function resolvePlazaMonkeyCollision(pos) {
     const minR = W.stupaColliderRadius + 0.55;
@@ -424,6 +429,7 @@ export function createMonkeys(ctx) {
 
   // ---------------------------------------------------------------- update
   function update(dt) {
+    feedingGame.update(dt);
     if (state.zone && state.zone !== 'stupa') return;
 
     const nightFactor = state.time.nightFactor ?? 0;
@@ -543,5 +549,6 @@ export function createMonkeys(ctx) {
   return {
     update,
     monkeys,
+    feedingGame,
   };
 }

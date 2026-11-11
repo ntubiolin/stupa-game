@@ -1,0 +1,46 @@
+import { i18n } from '../i18n.js';
+
+export const MONKEY_GAME_STRINGS = {
+  'zh-Hant': {
+    'monkey.game.title': '猴群的水果時間',
+    'monkey.game.subtitle': '觀察猴子想吃什麼，在五回合內選對水果。',
+    'monkey.game.start': '開始挑水果',
+    'monkey.game.quick': '直接餵香蕉',
+    'monkey.game.close': '關閉',
+    'monkey.game.round': '第 {round}／{total} 回合',
+    'monkey.game.request': '這隻猴子想吃：{fruit}',
+    'monkey.game.score': '好感 {affection} · 答對 {correct}',
+    'monkey.game.correct': '選對了！猴子開心地接過水果。',
+    'monkey.game.wrong': '牠搖搖頭，再看看牠想吃什麼。',
+    'monkey.game.resultTitle': '餵食完成',
+    'monkey.game.result': '答對 {correct}／{total} 次 · 好感 {affection} · 最佳 {best}',
+    'monkey.game.replay': '再玩一次',
+    'monkey.game.rewarded': '猴子收下水果，也送你一份祝福。',
+    'monkey.game.noReward': '再多觀察一下，下次一定能選對。',
+    'monkey.fruit.banana': '香蕉',
+    'monkey.fruit.apple': '蘋果',
+    'monkey.fruit.peach': '桃子',
+  },
+  en: {
+    'monkey.game.title': 'Fruit Time with the Monkeys',
+    'monkey.game.subtitle': 'Read what the monkey wants and choose the right fruit over five rounds.',
+    'monkey.game.start': 'Start choosing fruit',
+    'monkey.game.quick': 'Quick-feed a banana',
+    'monkey.game.close': 'Close',
+    'monkey.game.round': 'Round {round} of {total}',
+    'monkey.game.request': 'This monkey wants: {fruit}',
+    'monkey.game.score': 'Affection {affection} · Correct {correct}',
+    'monkey.game.correct': 'That is it! The monkey happily takes the fruit.',
+    'monkey.game.wrong': 'It shakes its head. Check what it asked for.',
+    'monkey.game.resultTitle': 'Feeding complete',
+    'monkey.game.result': '{correct} of {total} correct · Affection {affection} · Best {best}',
+    'monkey.game.replay': 'Play again',
+    'monkey.game.rewarded': 'The monkey accepts the fruit and leaves you a blessing.',
+    'monkey.game.noReward': 'Watch a little more closely and try again.',
+    'monkey.fruit.banana': 'Banana',
+    'monkey.fruit.apple': 'Apple',
+    'monkey.fruit.peach': 'Peach',
+  },
+};
+
+i18n.register(MONKEY_GAME_STRINGS);
