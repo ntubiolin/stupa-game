@@ -12,7 +12,7 @@ for (const mobile of [false,true]) {
  await page.goto(`${process.env.STORY_BASE_URL || 'http://127.0.0.1:4173'}/?mode=adventure&debug`);
  await startAdventureWithInput(page,{mobile});
  await page.evaluate(()=>{
-  const m=__game.modules.monkeys.monkeys[0];
+  const m=__stupa.scene.getObjectByName('Monkeys').children[0];
   const p=m.position; const r=Math.hypot(p.x,p.z);
   __stupa.state.player.position.set(p.x*(r+2)/r,0,p.z*(r+2)/r);
   __stupa.state.player.velocity.set(0,0,0);
@@ -20,26 +20,26 @@ for (const mobile of [false,true]) {
   window.feedEvents=0; __stupa.bus.on('monkey:fed',()=>feedEvents++);
  });
  await page.waitForFunction(()=>__stupa.state.interactionTargetsByAction?.feed?.kind==='monkey');
- await page.keyboard.press('f');
+ if(mobile) await page.locator('.prompt-pill').filter({hasText:'餵猴'}).tap(); else await page.keyboard.press('f');
  const modal=page.locator('.monkey-game:not(.is-hidden)');
  await modal.waitFor();
  await modal.locator('[data-action="close"]').click();
  assert.equal(await page.evaluate(()=>__stupa.state.uiOpen),false,'cancel releases input');
- await page.keyboard.press('f'); await modal.waitFor();
+ if(mobile) await page.locator('.prompt-pill').filter({hasText:'餵猴'}).tap(); else await page.keyboard.press('f'); await modal.waitFor();
  const click=async locator=>mobile?locator.tap():locator.click();
  await click(modal.locator('[data-action="start"]'));
  await page.screenshot({path:`${process.env.MONKEY_ARTIFACTS || '/private/tmp'}/monkey-${mobile?'mobile':'desktop'}.png`});
  for(let i=0;i<5;i++){
-  const request=await page.evaluate(()=>__game.modules.monkeys.feedingGame.getState().request);
+  const request=await page.locator('.monkey-game__request').evaluate(el=>Object.entries({banana:'香蕉',apple:'蘋果',peach:'桃子'}).find(([,name])=>el.textContent.includes(name))[0]);
   if(!mobile) await page.keyboard.press(String(['banana','apple','peach'].indexOf(request)+1));
   else await click(modal.locator(`[data-fruit="${request}"]`));
  }
  await modal.locator('[data-action="start"]').waitFor();
  assert.equal(await page.evaluate(()=>feedEvents),1,'one reward');
- assert.equal(await page.evaluate(()=>__game.modules.monkeys.feedingGame.getBestScore()),5);
+ assert.equal(await page.evaluate(()=>__stupa.save.dump().sections.monkeyGame.bestScore),5);
  await click(modal.locator('[data-action="start"]'));
  for(let i=0;i<5;i++){
-  const request=await page.evaluate(()=>__game.modules.monkeys.feedingGame.getState().request);
+  const request=await page.locator('.monkey-game__request').evaluate(el=>Object.entries({banana:'香蕉',apple:'蘋果',peach:'桃子'}).find(([,name])=>el.textContent.includes(name))[0]);
   await click(modal.locator(`[data-fruit="${request}"]`));
  }
  assert.equal(await page.evaluate(()=>feedEvents),1,'replay no repeat reward');
