@@ -170,8 +170,8 @@ function makeStone(group, geometry, material, name, from, to, size) {
   };
 }
 
-function disposeGroup(group) {
-  const resources = new Set();
+function disposeGroup(group, surfaceTextures) {
+  const resources = new Set(surfaceTextures);
   group.traverse((object) => {
     if (object.isInstancedMesh) object.dispose();
     if (object.geometry) resources.add(object.geometry);
@@ -390,7 +390,7 @@ export async function createYarlungScene(ctx) {
         const index = ctx.colliders.indexOf(collider);
         if (index >= 0) ctx.colliders.splice(index, 1);
       }
-      disposeGroup(group);
+      disposeGroup(group, map.surfaceTextures);
     },
   };
 }

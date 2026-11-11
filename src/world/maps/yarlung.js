@@ -13,6 +13,7 @@
 // Strictly 0 PointLights. Draw calls < 400, Triangles < 600k.
 // ============================================================================
 import * as THREE from 'three';
+import { createTibetanSurfaces } from '../tibetanSurfaces.js';
 import {
   createHeightfieldTerrain,
   scatterRocks,
@@ -146,6 +147,7 @@ function makeArenaMandalaTexture() {
 }
 
 export function createMap(ctx) {
+  const surfaces = createTibetanSurfaces(ctx);
   const mapDef = ctx.world?.getMap?.('yarlung') || {
     id: 'yarlung',
     origin: { x: 4000, z: 0 },
@@ -304,25 +306,30 @@ export function createMap(ctx) {
     emissiveIntensity: 0.2,
     roughness: 0.84,
   });
+  surfaces.apply(stoneWallMat, 'plaster');
   const dressedStoneMat = new THREE.MeshStandardMaterial({
     color: 0xa89d8e,
     emissive: new THREE.Color(0x241d15),
     emissiveIntensity: 0.18,
     roughness: 0.88,
   });
+  surfaces.apply(dressedStoneMat, 'masonry');
   const redFriezeMat = new THREE.MeshStandardMaterial({
     color: 0x991b1b,
     emissive: new THREE.Color(0x3b0a0a),
     emissiveIntensity: 0.22,
     roughness: 0.76,
   });
+  surfaces.apply(redFriezeMat, 'timber');
   const darkWoodMat = new THREE.MeshStandardMaterial({ color: 0x3b2416, roughness: 0.85 });
+  surfaces.apply(darkWoodMat, 'timber');
   const timberMat = new THREE.MeshStandardMaterial({
     color: 0x6b472e,
     emissive: new THREE.Color(0x24150b),
     emissiveIntensity: 0.18,
     roughness: 0.84,
   });
+  surfaces.apply(timberMat, 'timber');
   const goldRoofMat = new THREE.MeshStandardMaterial({
     color: 0xfacc15,
     roughness: 0.24,
@@ -330,6 +337,7 @@ export function createMap(ctx) {
     emissive: new THREE.Color(0xd97706),
     emissiveIntensity: 0.44,
   });
+  const tiledRoofMat = surfaces.apply(goldRoofMat.clone(), 'roof');
   const warmWindowMat = new THREE.MeshStandardMaterial({
     color: 0xfde68a,
     roughness: 0.32,
@@ -342,6 +350,7 @@ export function createMap(ctx) {
     emissive: new THREE.Color(0x0f172a),
     emissiveIntensity: 0.22,
   });
+  surfaces.apply(bannerClothMat, 'cloth');
   const prayerFlagPalette = [0x2563eb, 0xf8fafc, 0xdc2626, 0x16a34a, 0xeab308];
   const prayerFlagMats = prayerFlagPalette.map(
     (hex) =>
@@ -1333,11 +1342,11 @@ export function createMap(ctx) {
   }
 
   // Double-tiered Gilded Tibetan Royal Pitched Roof (`金頂`), Dharma Wheel & Corner Victory Banners (`幢幡`)
-  const lowerGoldEave = new THREE.Mesh(new THREE.ConeGeometry(3.05, 1.15, 4), goldRoofMat);
+  const lowerGoldEave = new THREE.Mesh(new THREE.ConeGeometry(3.05, 1.15, 4), tiledRoofMat);
   lowerGoldEave.rotation.y = Math.PI / 4;
   lowerGoldEave.position.set(-6.5, 9.75, -1.1);
 
-  const goldenRoof = new THREE.Mesh(new THREE.ConeGeometry(2.35, 1.55, 4), goldRoofMat);
+  const goldenRoof = new THREE.Mesh(new THREE.ConeGeometry(2.35, 1.55, 4), tiledRoofMat);
   goldenRoof.rotation.y = Math.PI / 4;
   goldenRoof.position.set(-6.5, 10.65, -1.1);
 
@@ -1393,6 +1402,7 @@ export function createMap(ctx) {
     roughness: 0.86,
     flatShading: true,
   });
+  surfaces.apply(limestoneSpurMat, 'rock');
   const limestoneShadowMat = new THREE.MeshStandardMaterial({
     color: 0x857764,
     emissive: new THREE.Color(0x211a12),
@@ -1400,6 +1410,7 @@ export function createMap(ctx) {
     roughness: 0.9,
     flatShading: true,
   });
+  surfaces.apply(limestoneShadowMat, 'rock');
   const buttressPillarGeo = new THREE.ConeGeometry(1.0, 1.0, 5);
   const buttressCragGeo = new THREE.DodecahedronGeometry(1.0, 0);
   const limestoneButtressSpecs = [
@@ -1487,6 +1498,7 @@ export function createMap(ctx) {
     roughness: 0.88,
     metalness: 0.08,
   });
+  surfaces.apply(cliffMat, 'rock');
   const innerVaultMat = new THREE.MeshStandardMaterial({
     color: 0x131c2b,
     roughness: 0.94,
@@ -1495,11 +1507,13 @@ export function createMap(ctx) {
     emissiveIntensity: 0.38,
     side: THREE.DoubleSide,
   });
+  surfaces.apply(innerVaultMat, 'rock');
   const caveFloorMat = new THREE.MeshStandardMaterial({
     color: 0x1b2536,
     roughness: 0.86,
     metalness: 0.14,
   });
+  surfaces.apply(caveFloorMat, 'paving');
   const quartzMat = new THREE.MeshStandardMaterial({
     color: 0xa5f3fc,
     roughness: 0.18,
@@ -2267,6 +2281,7 @@ export function createMap(ctx) {
 
   return {
     group,
+    surfaceTextures: surfaces.textures,
     getHeight,
     update,
     sheldrak: sheldrakApi,

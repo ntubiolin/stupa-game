@@ -26,7 +26,7 @@ const approaches = {
   rain: [1970, 56.5, 1970, 52.6, 0.78],
 };
 
-function disposeGroup(group) {
+function disposeGroup(group, surfaceTextures = []) {
   const geometries = new Set();
   const materials = new Set();
   group.traverse((object) => {
@@ -38,6 +38,7 @@ function disposeGroup(group) {
   });
   for (const geometry of geometries) geometry.dispose();
   for (const material of materials) material.dispose();
+  for (const texture of surfaceTextures) texture.dispose();
   group.removeFromParent();
   group.clear();
 }
@@ -576,7 +577,7 @@ export async function createPharpingScene(ctx) {
   function setBase(animateRain) {
     const wantRain = checkpoint >= 8 && (!animateRain || elapsed >= 1.1);
     if (!wantRain && base.map.isRaining()) {
-      disposeGroup(base.map.group);
+      disposeGroup(base.map.group, base.map.surfaceTextures);
       // The Adventure factory's rain state is one-way. Rebuild only the base;
       // deterministic base colliders already belong to the story instance.
       base = makeBase();
@@ -659,7 +660,7 @@ export async function createPharpingScene(ctx) {
         const index = ctx.colliders.indexOf(collider);
         if (index >= 0) ctx.colliders.splice(index, 1);
       }
-      disposeGroup(group);
+      disposeGroup(group, base.map.surfaceTextures);
     },
   };
 }

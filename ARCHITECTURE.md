@@ -21,6 +21,7 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/world/mapBase.js` | World | shared terrain heightfield, InstancedMesh rock scatter, mountain rim, seeded RNG, collider helper |
 | `src/world/wilderness.js` | World | highland steppe terrain, chorten, mani stones, boulders, peaks, return gate (lazy-loaded) |
 | `src/world/maps/grove.js` | World | Outer Sanctuary Hub map: Pilgrim Stupa Grove outside South Gate (`origin = (-1000, 0)`), mandala courtyard & lotus terrace (lazy-loaded) |
+| `src/world/tibetanSurfaces.js` | World | Per-map procedural Tibetan architecture color, roughness and relief tiles for adventure and story |
 | `src/world/maps/pharping.js` | World | Chapter 1 map: Pharping terrace, Yangleshö & Asura caves, drought-to-rain state transition (lazy-loaded) |
 | `src/world/maps/mangyul.js` | World | Chapter 2 map: Mangyul snow pass, wind gust physics, wind-shelter cairns, Tenma arena (lazy-loaded) |
 | `src/world/maps/yarlung.js` | World | Chapter 3 map: Yarlung valley, Yumbulagang fortress, Sheldrak crystal cave, Shampo glacier (lazy-loaded) |
@@ -322,6 +323,16 @@ Maps are registered in `src/data/maps.js` (`MAPS`):
   - Stingers (duck the track bus): `chapter:intro` → `vision`, `chapter:banner` → `chapterComplete`, `boss:subdued` → `subdued`, `boss:phase` → `phaseShift`, `dialogue:open` with a `guruVision.*` NPC → `guru`. Stingers are transposed into the current track's key.
   - Music shares the master gain (mute / volume) and has its own on/off + volume (`settings.music`, `settings.musicVolume`, HUD 🎵 button). When music is off, the legacy boss drum loop takes over.
   - Score authoring: phrases are strings `"NOTE:beats[:accent][^grace]"`; each track's `bar(api, vars)` runs once per bar and `api.line(phrase, startBar, instrument, vel, opts)` plays the slice that falls in the bar. Audition every track at `/music-lab.html` (dev server only).
+
+The five Tibetan chapter builders share original procedural surface profiles in
+`tibetanSurfaces.js`. Existing UVs carry plaster weathering and baked edge
+shading, masonry joints, rock strata, timber grain, roof seams, flagstone and
+woven cloth. The tiles multiply each map's existing color and roughness.
+Instances and Samye construction-stage materials remain intact. Each builder
+owns its tiles and the corresponding story teardown disposes them with that
+chapter. Desktop tiles are 128×128, with one linear texture providing both
+roughness and height. Mobile and low-spec clients use 64×64 color and roughness
+tiles and skip bump sampling. No geometry or lights are added.
 
 ---
 
