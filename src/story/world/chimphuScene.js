@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { isTibetanSurfaceLowSpec } from '../../world/tibetanSurfaces.js';
 import { CHIMPHU_CHAPTER } from '../../data/story/chapters/chimphu.js';
 import { buildChimphuMap } from '../../world/maps/chimphu.js';
 import { seededRandom } from '../../world/mapBase.js';
@@ -291,7 +292,9 @@ export async function createChimphuScene(ctx) {
   const group = new THREE.Group();
   group.name = 'StoryChimphu';
   const colliders = [];
-  const map = buildChimphuMap({ scene: group, state: { elapsed: 0 }, colliders, storyPreview: true });
+  const map = buildChimphuMap({
+    scene: group, state: { elapsed: 0 }, colliders, storyPreview: true, lowSpec: isTibetanSurfaceLowSpec(ctx),
+  });
   const { getHeight } = map;
   // The native portal is an Adventure entrance. The vision takes place at the western alcove.
   map.group.getObjectByName('TermaRealmStoneGate').visible = false;

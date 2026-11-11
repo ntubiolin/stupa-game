@@ -59,7 +59,7 @@ test('loaded Tō-ji collider extents match shipped GLB ground structures', async
   const fixtures = [
     {
       landmark: 'gojunoto', file: 'toji_gojunoto', x: 36, z: 18, scale: 1.05,
-      materials: new Set(['Toji_GraniteLight']),
+      materials: new Set(['Toji_GraniteLight_TemplePBR']),
     },
     {
       landmark: 'kondo', file: 'toji_kondo', x: 0, z: 8, scale: 1.25,
@@ -67,7 +67,7 @@ test('loaded Tō-ji collider extents match shipped GLB ground structures', async
     },
     {
       landmark: 'kodo', file: 'toji_kodo', x: 0, z: -36, scale: 1.25,
-      materials: new Set(['Toji_GraniteDark', 'Toji_HomosenRed']),
+      materials: new Set(['Toji_GraniteDark_TemplePBR', 'Toji_HomosenRed']),
     },
   ];
   for (const fixture of fixtures) {
@@ -80,7 +80,7 @@ test('loaded Tō-ji collider extents match shipped GLB ground structures', async
 
 test('loaded Kōyasan Daitō collider extents match the shipped granite structures', async () => {
   const actual = await groundBounds('konpon_daito', {
-    x: -62, z: 6, materials: new Set(['Kukai_GraniteStone']),
+    x: -62, z: 6, materials: new Set(['Kukai_GraniteStone_TemplePBR']),
   });
   assertXZClose(actual, colliderBounds(KOYASAN_LOADED_DAITO_COLLIDERS), 'konponDaito');
 });

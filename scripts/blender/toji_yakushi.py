@@ -21,7 +21,7 @@ def make_sculptor(base, fallback):
     return sculpt
 
 
-def make_yakushi(base, collection, name, pos, scale, gold):
+def make_yakushi(base, collection, name, pos, scale, gold, form='yakushi'):
     origin = Vector(pos)
     s = scale
     bronze = base.make_mat('Toji_YakushiAntique', (.24, .115, .035), roughness=.60, metallic=.72)
@@ -212,7 +212,7 @@ def make_yakushi(base, collection, name, pos, scale, gold):
 
     sphere('HairCap',(0,.01,2.015),(.164,.142,.091),hair,20,10)
     sphere('Ushnisha',(0,.016,2.105),(.073,.07,.073),hair,16,10)
-    for j in range(5):
+    for j in range(5 if form == 'yakushi' else 0):
         n=16 if j<3 else 12
         radius=.161*math.sqrt(max(.1,1-((j*.025)/.16)**2))
         for i in range(n):
@@ -220,24 +220,89 @@ def make_yakushi(base, collection, name, pos, scale, gold):
             sphere(f'HairCurl_{j}_{i}',(radius*math.cos(t),.01+radius*.86*math.sin(t),1.985+j*.025),
                    (.020,.020,.017),hair,6,4)
 
+    if form != 'yakushi':
+        # Dainichi's five-leaf crown and falling ribbons distinguish the two
+        # principal images from the uncrowned Yakushi. Original ornament,
+        # referenced to the temple photographs, not a copied texture.
+        for zz,rr in ((2.015,.176),(2.045,.174)):
+            pts=[(rr*math.sin(TAU*i/48),rr*.84*math.cos(TAU*i/48),zz) for i in range(49)]
+            tube('CrownBand'+str(zz),pts,[.012]*49,edge,6,48)
+        for i in range(5):
+            angle=(i-2)*.55
+            cx=.19*math.sin(angle);cy=-.15*math.cos(angle)
+            height=.19 if i==2 else .145
+            pts=[(cx-.057,cy,2.04),(cx-.044,cy-.009,2.10),
+                 (cx,cy-.015,2.04+height),(cx+.044,cy-.009,2.10),(cx+.057,cy,2.04)]
+            tube('CrownLeaf'+str(i),pts,[.009]*5,edge,5,20)
+            sphere('CrownJewel'+str(i),(cx,cy-.018,2.10),(.024,.012,.034),gold,10,8)
+        for side in (-1,1):
+            tube('CrownRibbon'+str(side),[(side*.165,.025,2.035),(side*.21,.025,1.86),
+                 (side*.23,.025,1.57),(side*.26,-.025,1.32)], [.014,.018,.018,.009],edge,6,24)
+        for radius in (.22,.26):
+            pts=[(radius*math.sin(-1.25+2.5*i/24),-.22*math.cos(-1.25+2.5*i/24),
+                  1.48-.13*math.cos(-1.25+2.5*i/24)) for i in range(25)]
+            tube('Pectoral'+str(radius),pts,[.009]*25,edge,5,24)
+        # A restrained diagonal robe hem and folds make the covered torso
+        # readable at gameplay distance without dense garment geometry.
+        for i in range(3):
+            tube('RobeHem'+str(i),[(-.28,-.135,1.47-i*.045),(-.18,-.218,1.34-i*.043),
+                 (.02,-.24,1.19-i*.041),(.26,-.26,1.06-i*.035)],
+                 [.008,.009,.008,.005],edge if i==0 else gold,5,20)
+
     # Covered upper arms blend into one curved forearm. Individual tapered
     # fingers and thumb retain the open right palm and empty upturned left hand.
-    tube('RaisedArm',[(-.22,.025,1.43),(-.35,.012,1.43),(-.43,-.02,1.32),(-.47,-.10,1.15),(-.435,-.21,1.27),(-.405,-.28,1.46)],
-         [.11,.11,.115,.11,.075,.05],gold,10,28)
-    tube('RestingArm',[(.22,.025,1.43),(.35,.012,1.43),(.43,-.015,1.31),(.47,-.09,1.13),(.38,-.27,1.065),(.20,-.36,1.065)],
-         [.11,.11,.115,.105,.072,.05],gold,10,26)
-    sphere('RaisedPalm',(-.402,-.286,1.50),(.073,.037,.10),gold,16,10)
-    for i in range(4):
-        xx=-.402+(i-1.5)*.033;length=(.142,.168,.158,.126)[i]
-        tube('RaisedFinger'+str(i),[(xx,-.286,1.555),(xx-.003,-.289,1.60),(xx-.008,-.283,1.555+length)],
-             [.0165,.016,.011],gold,8,10)
-    tube('RaisedThumb',[(-.341,-.285,1.47),(-.31,-.30,1.51),(-.31,-.309,1.555)], [.023,.02,.014],gold,8,12)
-    sphere('RestingPalm',(.14,-.355,1.069),(.115,.069,.033),gold,16,10)
-    for i in range(4):
-        yy=-.355+(i-1.5)*.029
-        tube('RestingFinger'+str(i),[(.095,yy,1.075),(.028,yy-.006,1.075),(-.012,yy-.003,1.094)],
-             [.014,.013,.010],gold,7,10)
-    tube('RestingThumb',[(.175,-.405,1.074),(.119,-.432,1.088),(.076,-.421,1.102)],[.020,.016,.011],gold,8,12)
+    if form == 'yakushi':
+        tube('RaisedArm',[(-.22,.025,1.43),(-.35,.012,1.43),(-.43,-.02,1.32),(-.47,-.10,1.15),(-.435,-.21,1.27),(-.405,-.28,1.46)],
+             [.11,.11,.115,.11,.075,.05],gold,10,28)
+        tube('RestingArm',[(.22,.025,1.43),(.35,.012,1.43),(.43,-.015,1.31),(.47,-.09,1.13),(.38,-.27,1.065),(.20,-.36,1.065)],
+             [.11,.11,.115,.105,.072,.05],gold,10,26)
+        sphere('RaisedPalm',(-.402,-.286,1.50),(.073,.037,.10),gold,16,10)
+        for i in range(4):
+            xx=-.402+(i-1.5)*.033;length=(.142,.168,.158,.126)[i]
+            tube('RaisedFinger'+str(i),[(xx,-.286,1.555),(xx-.003,-.289,1.60),(xx-.008,-.283,1.555+length)],
+                 [.0165,.016,.011],gold,8,10)
+        tube('RaisedThumb',[(-.341,-.285,1.47),(-.31,-.30,1.51),(-.31,-.309,1.555)], [.023,.02,.014],gold,8,12)
+        sphere('RestingPalm',(.14,-.355,1.069),(.115,.069,.033),gold,16,10)
+        for i in range(4):
+            yy=-.355+(i-1.5)*.029
+            tube('RestingFinger'+str(i),[(.095,yy,1.075),(.028,yy-.006,1.075),(-.012,yy-.003,1.094)],
+                 [.014,.013,.010],gold,7,10)
+        tube('RestingThumb',[(.175,-.405,1.074),(.119,-.432,1.088),(.076,-.421,1.102)],[.020,.016,.011],gold,8,12)
+    elif form == 'vajra':
+        # Chiken-in: the right hand (viewer left) encloses the upright left
+        # index finger. Both wrists connect continuously to bent forearms.
+        tube('RightArm',[(-.22,.025,1.43),(-.39,.005,1.34),(-.43,-.10,1.12),
+             (-.25,-.29,1.16),(-.055,-.35,1.36)], [.11,.115,.105,.078,.05],gold,10,28)
+        tube('LeftArm',[(.22,.025,1.43),(.39,.005,1.34),(.43,-.10,1.12),
+             (.25,-.29,1.07),(.055,-.36,1.10)], [.11,.115,.105,.075,.049],gold,10,28)
+        sphere('LeftFist',(.035,-.365,1.135),(.080,.061,.066),gold,16,10)
+        tube('LeftIndex',[(.005,-.375,1.16),(.005,-.378,1.29),(.004,-.376,1.405)],
+             [.020,.018,.015],gold,8,16)
+        sphere('RightPalm',(-.025,-.32,1.36),(.075,.047,.076),gold,16,10)
+        for i in range(4):
+            z=1.315+i*.033
+            tube('RightGrasp'+str(i),[(-.084,-.34,z),(-.065,-.395,z+.012),
+                 (.008,-.413,z+.015),(.047,-.379,z+.004)], [.017,.017,.016,.012],gold,8,14)
+            tube('LeftGrasp'+str(i),[(.075,-.34,1.09+i*.021),(.073,-.40,1.09+i*.021),
+                 (.015,-.414,1.095+i*.021),(-.022,-.387,1.10+i*.021)], [.015,.016,.014,.011],gold,7,12)
+        tube('RightThumb',[(-.075,-.31,1.39),(-.038,-.37,1.43),(.019,-.385,1.412)], [.024,.021,.015],gold,8,14)
+        tube('LeftThumb',[(.074,-.325,1.15),(.032,-.35,1.185),(-.013,-.386,1.174)], [.023,.020,.013],gold,8,12)
+    else:
+        # Taizokai Dainichi's meditation gesture: right palm above left in
+        # the lap, open fingers and gently touching thumbs.
+        for side in (-1,1):
+            zz=1.025 if side==-1 else .98
+            tube('MeditationArm'+str(side),[(side*.22,.025,1.43),(side*.39,.005,1.34),
+                 (side*.45,-.10,1.12),(side*.31,-.28,zz),(side*.13,-.35,zz)],
+                 [.11,.115,.105,.075,.048],gold,10,28)
+            sphere('MeditationPalm'+str(side),(side*.075,-.36,zz),(.13,.075,.033),gold,16,10)
+            for i in range(4):
+                yy=-.40+i*.029
+                tube('MeditationFinger'+str(side)+'_'+str(i),[(side*.045,yy,zz),
+                     (-side*.055,yy-.003,zz+.002),(-side*.12,yy+.005,zz+.018)],
+                     [.014,.013,.010],gold,7,10)
+            tube('MeditationThumb'+str(side),[(side*.15,-.303,zz),
+                 (side*.075,-.29,1.105),(0,-.292,1.11)], [.022,.019,.013],gold,8,14)
     # One exposed folded foot, with toes that follow the curvature of the lap.
     sphere('FoldedFoot',(.24,-.25,.937),(.23,.083,.062),gold,20,10)
     for i in range(4):
@@ -262,14 +327,14 @@ def make_yakushi(base, collection, name, pos, scale, gold):
     for r in (.275,.298,.34):
         pts=[(r*math.sin(TAU*i/48),.285,1.835+r*math.cos(TAU*i/48)) for i in range(49)]
         tube('HeadNimbus'+str(r),pts,[.011 if r==.298 else .006]*49,edge,5,48)
-    for i in range(7):
+    for i in range(7 if form == 'yakushi' else 0):
         t=(i-3)*.39;xx=.49*math.sin(t);zz=1.82+.53*math.cos(t)
         sphere('KebutsuHead'+str(i),(xx,.27,zz),(.028,.027,.035),edge,8,6)
         sphere('KebutsuBody'+str(i),(xx,.27,zz-.061),(.035,.023,.043),gold,8,6)
         sphere('KebutsuLap'+str(i),(xx,.25,zz-.097),(.055,.027,.018),edge,8,4)
 
 
-def finish_bake(scene, cache_dir):
+def finish_bake(scene, cache_dir, sculpture='Kondo_Yakushi'):
     """Bake the high-resolution surfaces into two bounded 512² textures.
 
     All exported microdetail uses a normal map; the high model never ships.
@@ -287,8 +352,8 @@ def finish_bake(scene, cache_dir):
         bpy.ops.object.join()
         obj=objects[0];obj.name=label
         return obj
-    low=join(lows,'Kondo_Yakushi_SculptedSurface')
-    high=join(highs,'Kondo_Yakushi_HighSource')
+    low=join(lows,sculpture+'_SculptedSurface')
+    high=join(highs,sculpture+'_HighSource')
     bpy.ops.object.select_all(action='DESELECT');low.select_set(True)
     bpy.context.view_layer.objects.active=low
     if not low.data.uv_layers.get('UVMap'):low.data.uv_layers.new(name='UVMap')
@@ -297,14 +362,14 @@ def finish_bake(scene, cache_dir):
     bpy.ops.object.mode_set(mode='EDIT');bpy.ops.mesh.select_all(action='SELECT')
     bpy.ops.uv.smart_project(angle_limit=math.radians(70),island_margin=.018)
     bpy.ops.object.mode_set(mode='OBJECT')
-    material=low.data.materials[0].copy();material.name='Toji_YakushiBakedGilt'
+    material=low.data.materials[0].copy();material.name='Toji_YakushiBakedGilt' if sculpture=='Kondo_Yakushi' else sculpture+'BakedGilt'
     material.use_backface_culling=True
     low.data.materials.clear();low.data.materials.append(material)
     for face in low.data.polygons:face.material_index=0
     nodes=material.node_tree.nodes;links=material.node_tree.links
     bsdf=nodes.get('Principled BSDF');output=next(n for n in nodes if n.type=='OUTPUT_MATERIAL')
     target=nodes.new('ShaderNodeTexImage');target.name='SculptureBakeTarget';nodes.active=target
-    normal=bpy.data.images.new('Toji_Yakushi_Normal',512,512,alpha=False)
+    normal=bpy.data.images.new('Toji_Yakushi_Normal' if sculpture=='Kondo_Yakushi' else sculpture+'_Normal',512,512,alpha=False)
     normal.colorspace_settings.name='Non-Color';target.image=normal
     old_engine=scene.render.engine
     scene.render.engine='CYCLES';scene.cycles.samples=16;scene.cycles.device='CPU'
@@ -315,7 +380,7 @@ def finish_bake(scene, cache_dir):
     normal.filepath_raw=str(cache_dir/'yakushi-normal.png');normal.file_format='PNG';normal.save();normal.pack()
     high.hide_render=True;high.hide_set(True)
     bpy.ops.object.select_all(action='DESELECT');low.select_set(True)
-    ao=bpy.data.images.new('Toji_Yakushi_AO',512,512,alpha=False)
+    ao=bpy.data.images.new('Toji_Yakushi_AO' if sculpture=='Kondo_Yakushi' else sculpture+'_AO',512,512,alpha=False)
     ao.colorspace_settings.name='Non-Color';target.image=ao
     ao_node=nodes.new('ShaderNodeAmbientOcclusion');ao_node.inputs['Distance'].default_value=.26
     emission=nodes.new('ShaderNodeEmission');links.new(ao_node.outputs['AO'],emission.inputs['Color'])

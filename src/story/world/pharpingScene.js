@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { isTibetanSurfaceLowSpec } from '../../world/tibetanSurfaces.js';
 import { createMap } from '../../world/maps/pharping.js';
 import { seededRandom } from '../../world/mapBase.js';
 import { createWellShadow } from './wellShadow.js';
@@ -26,7 +27,7 @@ const approaches = {
   rain: [1970, 56.5, 1970, 52.6, 0.78],
 };
 
-function disposeGroup(group) {
+function disposeGroup(group, surfaceTextures = []) {
   const geometries = new Set();
   const materials = new Set();
   group.traverse((object) => {
@@ -38,17 +39,18 @@ function disposeGroup(group) {
   });
   for (const geometry of geometries) geometry.dispose();
   for (const material of materials) material.dispose();
+  for (const texture of surfaceTextures) texture.dispose();
   group.removeFromParent();
   group.clear();
 }
 
-function makeBase() {
+function makeBase(lowSpec) {
   const scene = new THREE.Group();
   const colliders = [];
   const interactables = [];
   const listeners = new Map();
   const child = {
-    scene, colliders, interactables,
+    scene, colliders, interactables, lowSpec,
     bus: { on: (name, fn) => listeners.set(name, fn), emit: () => {} },
     state: { zone: 'pharping', player: { position: new THREE.Vector3() } },
   };
@@ -537,7 +539,8 @@ function makeMonsters(group, getHeight) {
 export async function createPharpingScene(ctx) {
   const group = new THREE.Group();
   group.name = 'StoryPharping';
-  let base = makeBase();
+  const lowSpec = isTibetanSurfaceLowSpec(ctx);
+  let base = makeBase(lowSpec);
   group.add(base.map.group);
   const getHeight = base.map.getHeight;
   const debris = makeDebris(group, getHeight);
@@ -576,10 +579,10 @@ export async function createPharpingScene(ctx) {
   function setBase(animateRain) {
     const wantRain = checkpoint >= 8 && (!animateRain || elapsed >= 1.1);
     if (!wantRain && base.map.isRaining()) {
-      disposeGroup(base.map.group);
+      disposeGroup(base.map.group, base.map.surfaceTextures);
       // The Adventure factory's rain state is one-way. Rebuild only the base;
       // deterministic base colliders already belong to the story instance.
-      base = makeBase();
+      base = makeBase(lowSpec);
       group.add(base.map.group);
     }
     if (wantRain && !base.map.isRaining()) {
@@ -659,7 +662,7 @@ export async function createPharpingScene(ctx) {
         const index = ctx.colliders.indexOf(collider);
         if (index >= 0) ctx.colliders.splice(index, 1);
       }
-      disposeGroup(group);
+      disposeGroup(group, base.map.surfaceTextures);
     },
   };
 }

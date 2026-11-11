@@ -8,6 +8,7 @@
 // ============================================================================
 
 import * as THREE from 'three';
+import { createTibetanSurfaces } from '../tibetanSurfaces.js';
 import { pushCollider, buildGateArch, addRimMountains } from '../mapBase.js';
 import { MANGYUL_MAP } from '../../data/maps/mangyul.js';
 
@@ -284,6 +285,7 @@ export function mangyulWalkHeight(wx, wz) {
 }
 
 export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
+  const surfaces = createTibetanSurfaces(ctx);
   const { scene, state, bus, i18n } = ctx;
   const zoneGroup = ctx.zoneGroups?.mangyul || new THREE.Group();
   zoneGroup.name = 'MangyulMap';
@@ -523,6 +525,7 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
       flatShading: true,
     })
   );
+  surfaces.apply(woodMat, 'timber');
   const bridgeStoneMat = trackMat(
     new THREE.MeshStandardMaterial({
       color: 0x64748b,
@@ -532,6 +535,7 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
       flatShading: true,
     })
   );
+  surfaces.apply(bridgeStoneMat, 'masonry');
   const bridgeRopeMat = trackMat(
     new THREE.MeshStandardMaterial({
       color: 0xc8a472,
@@ -806,6 +810,7 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
       flatShading: true,
     })
   );
+  surfaces.apply(flagstoneMat, 'paving');
   const flagstoneInst = trackInst(
     new THREE.InstancedMesh(flagstoneGeo, flagstoneMat, FLAGSTONE_COUNT)
   );
@@ -1040,6 +1045,7 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
       flatShading: true,
     })
   );
+  surfaces.apply(tentClothMat, 'cloth');
   const tentTrimMat = trackMat(
     new THREE.MeshStandardMaterial({
       color: 0xb91c1c,
@@ -1049,6 +1055,7 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
       flatShading: true,
     })
   );
+  surfaces.apply(tentTrimMat, 'cloth');
   const yakSkirtMat = trackMat(
     new THREE.MeshStandardMaterial({
       color: 0x3b332e,
@@ -1058,6 +1065,7 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
       flatShading: true,
     })
   );
+  surfaces.apply(yakSkirtMat, 'cloth');
 
   // Two Tibetan envoy tents with yak-hair lower skirts, golden finials & entrance canopies
   const tentPositions = [
@@ -1123,6 +1131,7 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
       flatShading: true,
     })
   );
+  surfaces.apply(saddleMat, 'cloth');
   const horseBodyGeo = trackGeo(new THREE.BoxGeometry(0.65, 0.62, 1.35));
   const horseNeckGeo = trackGeo(new THREE.BoxGeometry(0.28, 0.55, 0.35));
   const horseLegGeo = trackGeo(new THREE.CylinderGeometry(0.07, 0.05, 0.75, 5));
@@ -1240,6 +1249,7 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   const rockMat = trackMat(
     new THREE.MeshStandardMaterial({ color: 0x52606d, roughness: 0.88, flatShading: true })
   );
+  surfaces.apply(rockMat, 'rock');
   const rockInst = trackInst(new THREE.InstancedMesh(rockGeo, rockMat, ROCK_COUNT));
   rockInst.castShadow = true;
   for (let i = 0; i < ROCK_COUNT; i++) {
@@ -1588,6 +1598,7 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
       flatShading: true,
     })
   );
+  surfaces.apply(latseStoneMat, 'rock');
   const latseStoneInst = trackInst(
     new THREE.InstancedMesh(latseStoneGeo, latseStoneMat, LATSE_STONE_COUNT)
   );
@@ -1799,6 +1810,7 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   const altarStoneMat = trackMat(
     new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.85, flatShading: true })
   );
+  surfaces.apply(altarStoneMat, 'masonry');
   const oathStoneMat = trackMat(
     new THREE.MeshStandardMaterial({
       color: 0x38bdf8,
@@ -1808,6 +1820,7 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
       flatShading: true,
     })
   );
+  surfaces.apply(oathStoneMat, 'rock');
 
   // Per-element crystal & rune materials for the 4 Tenma trial types
   const elementCrystalMats = {};
@@ -1893,6 +1906,7 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
           side: THREE.DoubleSide,
         })
       );
+      surfaces.apply(fMat, 'cloth');
       const u = (f + 0.5) / 5;
       const fMesh = new THREE.Mesh(flagPlaneGeo, fMat);
       fMesh.position.set(-0.95 + u * 1.9, 2.35 - Math.sin(u * Math.PI) * 0.2, -0.35);
@@ -2779,6 +2793,7 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
     base.dispose();
     for (const im of instancedMeshes) im.dispose?.();
     for (const t of textures) t.dispose?.();
+    for (const texture of surfaces.textures) texture.dispose();
     for (const g of geometries) g.dispose?.();
     for (const m of materials) m.dispose?.();
   }

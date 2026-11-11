@@ -21,6 +21,7 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/world/mapBase.js` | World | shared terrain heightfield, InstancedMesh rock scatter, mountain rim, seeded RNG, collider helper |
 | `src/world/wilderness.js` | World | highland steppe terrain, chorten, mani stones, boulders, peaks, return gate (lazy-loaded) |
 | `src/world/maps/grove.js` | World | Outer Sanctuary Hub map: Pilgrim Stupa Grove outside South Gate (`origin = (-1000, 0)`), mandala courtyard & lotus terrace (lazy-loaded) |
+| `src/world/tibetanSurfaces.js` | World | Per-map procedural Tibetan architecture color, roughness and relief tiles for adventure and story |
 | `src/world/maps/pharping.js` | World | Chapter 1 map: Pharping terrace, Yangleshö & Asura caves, drought-to-rain state transition (lazy-loaded) |
 | `src/world/maps/mangyul.js` | World | Chapter 2 map: Mangyul snow pass, wind gust physics, wind-shelter cairns, Tenma arena (lazy-loaded) |
 | `src/world/maps/yarlung.js` | World | Chapter 3 map: Yarlung valley, Yumbulagang fortress, Sheldrak crystal cave, Shampo glacier (lazy-loaded) |
@@ -32,6 +33,7 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/data/japan.js`, `src/data/maps/japanPilgrimage.js`, `src/world/maps/japanPilgrimage.js` | World | Six-stop Kūkai route contract and four additional lazy, instanced pilgrimage maps: Qinglong, Kii, Kongōbu-ji, Okunoin |
 | `src/world/japanArchitecture.js` | World | Japanese lantern waypoint model and unlock illumination, no PointLights |
 | `src/world/tojiCourtyard.js` | World | Kondō forecourt gravel and paving, podium contact shading, and day/night-aware hall lighting on existing materials |
+| `src/world/japanLandmarkLighting.js` | World | Kōdō, Gojū-no-tō, and Konpon Daitō interior and eave shading, localized ground contact, and mobile material quality |
 | `src/world/japanLandmarkLoader.js` | World | Atomic GLB landmark replacement and owned-resource disposal, including late load responses |
 | `src/world/japanGardenArchitecture.js` | World | Deterministic gravel/bump textures, instanced fractured granite and curved cypress-bark roofs |
 | `src/world/japanVegetation.js` | World | Instanced cedar and seasonal trees, original cutout textures, spatial chunks and distance LOD |
@@ -323,6 +325,16 @@ Maps are registered in `src/data/maps.js` (`MAPS`):
   - Music shares the master gain (mute / volume) and has its own on/off + volume (`settings.music`, `settings.musicVolume`, HUD 🎵 button). When music is off, the legacy boss drum loop takes over.
   - Score authoring: phrases are strings `"NOTE:beats[:accent][^grace]"`; each track's `bar(api, vars)` runs once per bar and `api.line(phrase, startBar, instrument, vel, opts)` plays the slice that falls in the bar. Audition every track at `/music-lab.html` (dev server only).
 
+The five Tibetan chapter builders share original procedural surface profiles in
+`tibetanSurfaces.js`. Existing UVs carry plaster weathering and baked edge
+shading, masonry joints, rock strata, timber grain, roof seams, flagstone and
+woven cloth. The tiles multiply each map's existing color and roughness.
+Instances and Samye construction-stage materials remain intact. Each builder
+owns its tiles and the corresponding story teardown disposes them with that
+chapter. Desktop tiles are 128×128, with one linear texture providing both
+roughness and height. Mobile and low-spec clients use 64×64 color and roughness
+tiles and skip bump sampling. No geometry or lights are added.
+
 ---
 
 ## 🛠️ How to Add a New Chapter (`如何新增一個章節`)
@@ -362,14 +374,26 @@ Blender MCP session authors the source; gameplay only loads the exported assets.
 fallback on failure, and owns GPU-resource disposal across late async responses.
 Asset budgets and reference provenance are in `docs/japan-temple-art.md`.
 The focused Kondō reference adds `toji_materials.py` (offline PBR/UV authoring)
-and `toji_yakushi.py` (principal image plus normal/AO baking). Only Kondō gains
-the embedded 512px-or-smaller maps; high-resolution sculpt sources never ship.
+and `toji_yakushi.py` (principal image plus normal/AO baking). High-resolution
+sculpt sources stay in the offline authoring pipeline.
+`temple_materials.py` extends that pipeline to Kōdō, the pagoda and Daitō
+with 256px PBR/128px normal maps. The shared sculptor retains separate
+Dainichi crown/hand forms and 512px UV1 principal-image bakes; its Yakushi
+default and the established Kondō GLB remain unchanged.
 `tojiCourtyard.js` modifies existing materials within the forecourt, with
 short-range contact shading and day/night-aware reflected light. Its two 256px
 textures are disposed with the map and registered in `material.userData.extraTextures`
-for memory accounting. No new light, post-processing pass or ctx API is added.
-The matched-camera capture harness and budgets are documented in
-`docs/toji-quality-reference.md`.
+for memory accounting. `japanLandmarkLighting.js` applies bounded interior,
+eave, and ground contact shading to Kōdō, Gojū-no-tō, and Konpon Daitō using
+existing geometry and the shared sky's night factor. The Tō-ji approaches reuse
+the Kondō tiles. Daitō owns one additional 256px gravel tile with the same
+memory accounting. Low-spec rendering skips architectural normal maps on the
+three GLBs while retaining the sculpted figures' UV1 maps. No new light,
+post-processing pass or ctx API is added.
+The shared actual-render capture harness (`scripts/lib/quality-browser-capture.mjs`)
+serves the Kondō and Japan/Tibet expansion entry points. Matched-camera evidence,
+budgets and rebuild steps are documented in `docs/toji-quality-reference.md`
+and `docs/temple-quality-expansion.md`.
 Garden helper textures are generated once per scene; the raked surface uses a
 single plane. Vegetation shares whole-tree geometry, 128px alpha-tested foliage
 and 64×128px bark. Cedars use 52m spatial chunks with a 68m LOD transition and

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { isTibetanSurfaceLowSpec } from '../../world/tibetanSurfaces.js';
 import { YARLUNG_CHAPTER } from '../../data/story/chapters/yarlung.js';
 import { createMap } from '../../world/maps/yarlung.js';
 import { seededRandom } from '../../world/mapBase.js';
@@ -170,8 +171,8 @@ function makeStone(group, geometry, material, name, from, to, size) {
   };
 }
 
-function disposeGroup(group) {
-  const resources = new Set();
+function disposeGroup(group, surfaceTextures) {
+  const resources = new Set(surfaceTextures);
   group.traverse((object) => {
     if (object.isInstancedMesh) object.dispose();
     if (object.geometry) resources.add(object.geometry);
@@ -286,7 +287,9 @@ export async function createYarlungScene(ctx) {
   const group = new THREE.Group();
   group.name = 'StoryYarlung';
   const colliders = [];
-  const map = createMap({ scene: group, colliders, storyPreview: true });
+  const map = createMap({
+    scene: group, colliders, storyPreview: true, lowSpec: isTibetanSurfaceLowSpec(ctx),
+  });
   const { getHeight } = map;
   const arena = map.group.getObjectByName('AlpinePastureArena');
   // Keep the crags and terrain but hide the Adventure encounter boundary.
@@ -390,7 +393,7 @@ export async function createYarlungScene(ctx) {
         const index = ctx.colliders.indexOf(collider);
         if (index >= 0) ctx.colliders.splice(index, 1);
       }
-      disposeGroup(group);
+      disposeGroup(group, map.surfaceTextures);
     },
   };
 }

@@ -14,6 +14,7 @@
  * Strictly zero PointLights (uses emissive MeshStandardMaterial & AdditiveBlending).
  */
 import * as THREE from 'three';
+import { createTibetanSurfaces } from '../tibetanSurfaces.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { CHIMPHU_MAP } from '../../data/maps/chimphu.js';
 import {
@@ -213,6 +214,7 @@ function makeSyllablePlaqueTexture(text, subText = '') {
 }
 
 export function buildChimphuMap(ctx) {
+  const surfaces = createTibetanSurfaces(ctx);
   const { scene, state, bus } = ctx;
   const ox = CHIMPHU_MAP.origin.x; // 6000
   const oz = CHIMPHU_MAP.origin.z; // 0
@@ -304,28 +306,35 @@ export function buildChimphuMap(ctx) {
     roughness: 0.92,
     metalness: 0.06,
   });
+  surfaces.apply(cliffRockMat, 'rock');
   const mossRockMat = new THREE.MeshStandardMaterial({
     color: 0x3f5642,
     roughness: 0.9,
     metalness: 0.05,
   });
+  surfaces.apply(mossRockMat, 'rock');
   const stepStoneMat = new THREE.MeshStandardMaterial({
     color: 0x7c857e,
     roughness: 0.85,
     metalness: 0.08,
   });
+  surfaces.apply(stepStoneMat, 'paving');
   const whiteWallMat = new THREE.MeshStandardMaterial({
     color: 0xe7e2d5,
     roughness: 0.86,
   });
+  surfaces.apply(whiteWallMat, 'plaster');
   const maroonTrimMat = new THREE.MeshStandardMaterial({
     color: 0x7c2321,
     roughness: 0.8,
   });
+  surfaces.apply(maroonTrimMat, 'plaster');
   const woodMat = new THREE.MeshStandardMaterial({
     color: 0x5c3e26,
     roughness: 0.85,
   });
+  const tiledRoofMat = surfaces.apply(woodMat.clone(), 'roof');
+  surfaces.apply(woodMat, 'timber');
   const goldTrimMat = new THREE.MeshStandardMaterial({
     color: 0xfbbf24,
     roughness: 0.3,
@@ -417,6 +426,7 @@ export function buildChimphuMap(ctx) {
     emissiveIntensity: 0.35,
     side: THREE.DoubleSide,
   });
+  surfaces.apply(innerVaultMat, 'rock');
   disposables.push(innerVaultMat);
 
   const cliffPlacements = [
@@ -741,6 +751,7 @@ export function buildChimphuMap(ctx) {
     roughness: 0.86,
     metalness: 0.06,
   });
+  surfaces.apply(fantsangFrameMat, 'timber');
   const warmButterWindowMat = new THREE.MeshStandardMaterial({
     color: 0xffd27d,
     emissive: 0xffb347,
@@ -756,6 +767,7 @@ export function buildChimphuMap(ctx) {
     metalness: 0.05,
     side: THREE.DoubleSide,
   });
+  surfaces.apply(khatagSilkMat, 'cloth');
   disposables.push(fantsangFrameMat, warmButterWindowMat, khatagSilkMat);
 
   function addDrapedKhatag(parent, startVec, endVec, opts) {
@@ -782,7 +794,7 @@ export function buildChimphuMap(ctx) {
     const frieze = new THREE.Mesh(new THREE.BoxGeometry(4.32, 0.42, 3.72), maroonTrimMat);
     frieze.position.y = 2.48;
 
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.25, 4.0), woodMat);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.25, 4.0), tiledRoofMat);
     roof.position.y = 2.8;
 
     const doorFrame = new THREE.Mesh(new THREE.BoxGeometry(1.18, 1.92, 0.16), fantsangFrameMat);
@@ -1435,7 +1447,7 @@ export function buildChimphuMap(ctx) {
     group,
     colliders,
     interactables,
-    disposables,
+    disposables: disposables.concat([...surfaces.textures]),
     getHeight: getTerrainHeight,
     update,
   };

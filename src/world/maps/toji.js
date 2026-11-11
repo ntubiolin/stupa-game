@@ -32,6 +32,7 @@ import '../../i18n/toji.js';
 import { addJapanRouteGate } from '../japanArchitecture.js';
 import { addJapanTrees } from '../japanVegetation.js';
 import { createTojiCourtyard } from '../tojiCourtyard.js';
+import { dressJapanLandmarkGround, lightJapanLandmark } from '../japanLandmarkLighting.js';
 
 const TWO_PI = Math.PI * 2;
 
@@ -1835,12 +1836,28 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
       onReady(models) {
         const kondo = models.find(model => model.name === 'toji_kondo');
         if (kondo) courtyard.lightHall(kondo);
-        for (const model of models) model.traverse(child => {
-          if (!child.isMesh) return;
-          const name = child.material?.name || '';
-          if (name.includes('Sakura')) glbSakuraMats.push(child.material);
-          else if (name.includes('Momiji')) glbMapleMats.push(child.material);
-        });
+        const patches = [
+          { x: ox + kodoX, z: oz + kodoZ, podium: [12.4375, 6.8125], area: [19, 15] },
+          { x: ox + pagodaX, z: oz + pagodaZ, podium: [6.5625, 6.5625], approach: [1.575, 2.4024], area: [14, 14] },
+        ];
+        dressJapanLandmarkGround(terrainMesh.material, courtyard.gravel, patches);
+        dressJapanLandmarkGround(sandoStoneMat, courtyard.paving, patches, { paving: true });
+        for (const model of models) {
+          if (model !== kondo) {
+            lightJapanLandmark(model, {
+              landmark: model.name.slice('toji_'.length),
+              x: ox + model.position.x,
+              z: oz + model.position.z,
+              lowSpec: ctx.lowSpec,
+            });
+          }
+          model.traverse(child => {
+            if (!child.isMesh) return;
+            const name = child.material?.name || '';
+            if (name.includes('Sakura')) glbSakuraMats.push(child.material);
+            else if (name.includes('Momiji')) glbMapleMats.push(child.material);
+          });
+        }
         appliedSeason = null;
         applySeasonalPalette(state?.time?.season || 'spring');
         activateLoadedLandmarkColliders();
