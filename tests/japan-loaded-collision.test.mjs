@@ -11,7 +11,14 @@ const EPSILON = 1e-3;
 async function groundBounds(file, { x = 0, z = 0, scale = 1, materials }) {
   const buffer = await readFile(new URL(`../public/models/kukai/${file}.glb`, import.meta.url));
   const data = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
-  const { scene } = await new GLTFLoader().parseAsync(data, '');
+  // This Node test checks the shipped vertex data and transforms. Decode real
+  // images in the browser acceptance suite; Node has no DOM/ImageBitmap API.
+  const loader = new GLTFLoader();
+  loader.register(() => ({
+    name: 'NodeCollisionTexturePlaceholder',
+    loadTexture: async () => new THREE.Texture(),
+  }));
+  const { scene } = await loader.parseAsync(data, '');
   scene.position.set(x, 0, z);
   scene.scale.setScalar(scale);
   scene.updateMatrixWorld(true);
@@ -56,7 +63,7 @@ test('loaded Tō-ji collider extents match shipped GLB ground structures', async
     },
     {
       landmark: 'kondo', file: 'toji_kondo', x: 0, z: 8, scale: 1.25,
-      materials: new Set(['Toji_GraniteLight']),
+      materials: new Set(['Toji_GraniteLight_KondoPBR']),
     },
     {
       landmark: 'kodo', file: 'toji_kodo', x: 0, z: -36, scale: 1.25,

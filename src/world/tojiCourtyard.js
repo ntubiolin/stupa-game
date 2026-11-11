@@ -170,7 +170,7 @@ function dressCourtyardSurface(material, center, footprint, tile, paving) {
  * Dress the existing terrain and sandō materials only within Kondō's forecourt.
  * Two mipmapped tiles add no geometry, transparent overlays, or extra passes.
  */
-export function createTojiCourtyard({ origin, x, z, terrainMaterial, pavingMaterial, disposables }) {
+export function createTojiCourtyard({ origin, x, z, terrainMaterial, pavingMaterial, disposables, lowSpec = false }) {
   const center = { value: new THREE.Vector2(origin.x + x, origin.z + z) };
   // Start with the procedural podium and steps, then match the scaled GLB on asset swap.
   const footprint = { value: new THREE.Vector4(14.2, 9.2, 3.8, 1.04) };
@@ -198,6 +198,12 @@ export function createTojiCourtyard({ origin, x, z, terrainMaterial, pavingMater
         }
       });
       for (const material of materials) {
+        // Mobile keeps the authored colors/roughness and the hero's baked face,
+        // while omitting sub-pixel architectural normal detail. The loader still
+        // owns these source textures; unused normals are never uploaded to GPU.
+        if (lowSpec && material.name.endsWith('_KondoPBR') && material.normalMap) {
+          material.normalMap = null;
+        }
         extendMaterial(material, 'hall', shader => {
           addLocalCoordinates(shader, center);
           shader.uniforms.uKondoNight = SKY_SHADER_UNIFORMS.uNightFactor;

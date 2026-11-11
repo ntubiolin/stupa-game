@@ -1206,6 +1206,7 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
     terrainMaterial: terrainMesh.material,
     pavingMaterial: sandoStoneMat,
     disposables,
+    lowSpec: ctx.lowSpec,
   });
   {
     // 6.1 Two-tiered stone platform (`二重石積基壇`, `26m × 16m`, height `1.5m`)

@@ -1,5 +1,7 @@
 # Tō-ji Kondō quality reference (#301)
 
+![Matched desktop before/after: Kondō, Yakushi and courtyard](images/toji-quality-comparison.jpg)
+
 The reference scene is Kondō, its principal Yakushi image, and the entrance
 forecourt. It builds on #290 without changing the other three landmark GLBs,
 building placement, navigation, interaction, save data, or the light budget.
@@ -39,6 +41,11 @@ The existing mobile path continues to omit the desktop shadow and bloom passes
 and caps render DPR at 1.25. This reference adds no PointLights, real-time bake,
 post-processing pass, or per-frame texture allocation. Solid architectural
 materials and the closed hero surface use backface culling.
+Mobile/low-spec also omits architectural normal maps while keeping base color,
+roughness/metalness, AO, and the principal statue's baked normal map. This avoids
+uploading the small-scale wood/tile/stone/plaster normal textures and removes
+their fragment-shader work. The embedded GLB download is shared across profiles;
+this tier reduces GPU use rather than download bytes.
 
 | Kondō GLB | Before (#297) | Quality reference |
 | --- | ---: | ---: |
@@ -105,3 +112,13 @@ Both profiles run on one desktop machine. Mobile emulation verifies the mobile
 rendering path and relative resource changes; it is not a physical-phone FPS or
 thermal/battery measurement. Real device testing remains necessary before
 claiming a particular handset's sustained frame rate.
+
+The final production comparison ran in Chrome 157 on an Apple M3 Pro. Mobile
+emulation's daytime frame-interval p95 remained around 18 ms; its GPU p95 rose
+from 2.43/2.64/1.62 ms to 3.46/3.95/3.55 ms for exterior/hero/courtyard. These
+short samples document the extra rendering work, not an FPS promise. Estimated
+uploaded material textures grew from 0.92 MiB to 10.58 MiB on mobile and 12.67
+MiB on desktop. The mobile normal-map tier saves four uploaded textures and
+2.08 MiB versus the full new material set; repeated samples did not demonstrate
+a consistent GPU-time improvement from that tier alone. Both profiles passed
+all four day/night views with no browser errors or active PointLights.
