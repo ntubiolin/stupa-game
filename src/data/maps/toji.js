@@ -7,13 +7,16 @@
  * Kōdō (`講堂・二十一尊立體曼荼羅`), Nandaimon (`南大門`), and Hyōtan-ike Pond (`瓢箪池`).
  */
 import '../../i18n/toji.js';
+import { JAPAN_CHAPTERS } from '../japan.js';
+
+const { origin } = JAPAN_CHAPTERS[1];
 
 export const TOJI_MAP = {
   id: 'toji',
   type: 'hub',
   nameKey: 'map.toji',
   subtitleKey: 'map.toji.subtitle',
-  origin: { x: 7500, z: 0 },
+  origin,
   walkRadius: 105,
   level: [1, 40],
   minimapColor: '#9c8d74',
@@ -34,6 +37,15 @@ export const TOJI_MAP = {
       x: 7500,
       z: 82,
       radius: 4.0,
+      to: 'qinglong',
+      toGate: 'from-toji',
+      labelKey: 'prompt.japan.travel.qinglong',
+    },
+    {
+      id: 'return',
+      x: origin.x - 23,
+      z: 70,
+      radius: 3.3,
       to: 'stupa',
       toGate: 'south',
       labelKey: 'prompt.returnStupa',
@@ -43,14 +55,17 @@ export const TOJI_MAP = {
       x: 7500,
       z: -78,
       radius: 4.0,
-      to: 'koyasan',
+      to: 'kii',
       toGate: 'from-toji',
-      labelKey: 'prompt.toji.toKoyasan',
+      labelKey: 'prompt.japan.travel.kii',
+      chapterRequired: true,
     },
   ],
   spawns: {
     default: { x: 7500, z: 72, heading: 0 },
     south: { x: 7500, z: 74, heading: 0 },
+    'from-qinglong': { x: origin.x, z: 74, heading: 0 },
+    'from-kii': { x: origin.x, z: -70, heading: Math.PI },
     'from-stupa': { x: 7500, z: 74, heading: 0 },
     'from-koyasan': { x: 7500, z: -70, heading: Math.PI },
     waypoint: { x: 7500, z: 66, heading: 0 },

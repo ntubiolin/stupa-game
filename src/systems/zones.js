@@ -440,7 +440,13 @@ export function createZones(ctx) {
           if (destMap?.debugOnly && !ctx.debug?.enabled) return false;
           return (state.zone || 'stupa') === mapDef.id && !isTransitioning;
         },
-        onInteract: () => startTransition(g.to, g.toGate),
+        onInteract: () => {
+          if (g.chapterRequired && ctx.japanCampaign?.isChapterUnlocked?.(g.to) === false) {
+            bus.emit('toast', { key: 'toast.japan.travelLocked' });
+            return;
+          }
+          startTransition(g.to, g.toGate);
+        },
       });
     }
   }
