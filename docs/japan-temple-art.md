@@ -66,6 +66,10 @@ vegetation and seasonal palette. No new PointLights are introduced.
 `japanLandmarkLoader.js` replaces a complete procedural fallback only when every
 model in the set succeeds. Failed loads retain the fallback; disposal frees
 geometry, materials and textures, including responses arriving after teardown.
+The corresponding fallback and GLB collision footprints switch in the same
+successful commit, so the active collider always matches the visible landmark.
+Regression tests read the shipped GLBs and compare their ground structures with
+the loaded footprints; browser acceptance also exercises the real assets.
 
 ## Gardens and vegetation
 
