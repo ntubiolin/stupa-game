@@ -32,6 +32,7 @@ import { i18n } from '../../i18n.js';
 import '../../i18n/toji.js';
 import { addJapanRouteGate } from '../japanArchitecture.js';
 import { addJapanTrees } from '../japanVegetation.js';
+import { createTojiCourtyard } from '../tojiCourtyard.js';
 
 const TWO_PI = Math.PI * 2;
 
@@ -1159,6 +1160,12 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
   // ---------------------------------------------------------------- 6. Landmark 2: 東寺金堂 (Kondō — Main Golden Hall) at `local (0, 8)`
   const kondoX = 0;
   const kondoZ = 8;
+  const courtyard = createTojiCourtyard({
+    origin, x: kondoX, z: kondoZ,
+    terrainMaterial: terrainMesh.material,
+    pavingMaterial: sandoStoneMat,
+    disposables,
+  });
   {
     // 6.1 Two-tiered stone platform (`二重石積基壇`, `26m × 16m`, height `1.5m`)
     const lowerPlinth = new THREE.BoxGeometry(28.4, 0.72, 18.4);
@@ -1784,6 +1791,8 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
         { url: '/models/kukai/toji_kodo.glb', x: kodoX, z: kodoZ, scale: 1.25 },
       ],
       onReady(models) {
+        const kondo = models.find(model => model.name === 'toji_kondo');
+        if (kondo) courtyard.lightHall(kondo);
         for (const model of models) model.traverse(child => {
           if (!child.isMesh) return;
           const name = child.material?.name || '';
@@ -1896,10 +1905,11 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
 
   // Japanese Aesthetic Atmospheric Layer: Slanted Komorebi Sunbeam Shafts (`木漏れ日・瑞光`)
   // and Yamato-e Floating Golden Cloud Ribbons (`大和繪金雲・霞帯`)
+  const komorebiDayOpacity = 0.026;
   const komorebiMat = new THREE.MeshBasicMaterial({
     color: 0xffedd5,
     transparent: true,
-    opacity: 0.085,
+    opacity: komorebiDayOpacity,
     blending: THREE.AdditiveBlending,
     side: THREE.DoubleSide,
     depthWrite: false,
@@ -1909,7 +1919,6 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
     [22, 16, 15, 3.8, 7.2, 26],   // Over Weeping Fuji-zakura (`不二櫻`)
     [36, 18, 22, 4.5, 8.8, 34],   // Over Five-Story Pagoda (`五重塔`)
     [36, 12, -16, 3.6, 6.8, 24],  // Over Hyōtan-ike Lotus Pond (`瓢箪池`)
-    [0, 14, 14, 4.2, 7.8, 26],    // Over Kondō courtyard (`金堂前庭`)
     [0, 14, -28, 4.0, 7.4, 25],   // Over Kōdō courtyard (`講堂前庭`)
   ];
   for (const [bx, by, bz, rTop, rBot, bHeight] of beamSpots) {
@@ -2135,6 +2144,10 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
       return lm ? { key: lm.promptKey } : null;
     },
     update(dt, elapsed = state?.elapsed || 0) {
+      const daylight = 1 - (state?.time?.nightFactor ?? 0);
+      komorebiMat.opacity = komorebiDayOpacity * daylight;
+      komorebiMesh.visible = daylight > 0.025;
+
       // Subtle sacred pulse on the Five-Story Pagoda crowning jewel & Kōdō Garuda flame halos
       const jewelPulse = 1.0 + Math.sin(elapsed * 2.4) * 0.1;
       pagodaJewelHalo.scale.setScalar(jewelPulse);
