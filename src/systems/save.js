@@ -300,6 +300,13 @@ export function createSave(ctx, { writableSections = null } = {}) {
       // An explicitly removed root stays empty. A damaged root can be repaired
       // from our last known good snapshot.
       const base = hasSections(latest) ? latest : raw === null ? { sections: {} } : store;
+      const expected = meta.sectionExpectation;
+      if (expected && JSON.stringify(base.sections[expected.section]) !== JSON.stringify(expected.value)) {
+        const current = base.sections[expected.section];
+        if (current === undefined) delete store.sections[expected.section];
+        else store.sections[expected.section] = deepClone(current);
+        return fail('section-conflict');
+      }
       const sections = replacement === null ? { ...base.sections } : replacement(base.sections);
       for (const [section, data] of updates) {
         if (section === 'story') {
@@ -437,9 +444,12 @@ export function createSave(ctx, { writableSections = null } = {}) {
     return result.ok;
   }
 
-  function commitSection(section, data) {
+  function commitSection(section, data, options = {}) {
     if (!canWrite(section) || data === undefined) return fail('invalid-section');
-    const result = writeToStorage(new Map([[section, deepClone(data)]]));
+    // Callers holding their own snapshot can opt in to rejecting stale writes,
+    // even if an intervening flush has refreshed the save system's snapshot.
+    const sectionExpectation = Object.hasOwn(options, 'expected') ? { section, value: options.expected } : undefined;
+    const result = writeToStorage(new Map([[section, deepClone(data)]]), null, { sectionExpectation });
     if (result.ok) pendingSections.delete(section);
     return result;
   }
