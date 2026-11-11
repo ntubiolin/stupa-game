@@ -13,7 +13,7 @@
  *      - Seimon (`正門`) at `(0, 26)` with five-line imperial earthen walls (`五本線築地塀`)
  *      - Main Hall (`主殿`) at `(0, 2)` with Karahafu entrance porch & rooftop fire-prevention water tubs (`天水桶`)
  *      - Banryūtei (`蟠龍庭`) at `(0, -22)` — Japan's largest karesansui rock garden with raked Shirakawa gravel
- *        waves (`CanvasTexture`) and 140 blue Shikoku stones (`InstancedMesh`) forming coiling Male & Female Dragons
+ *        waves (`DataTexture`) and 140 blue Shikoku stones (`InstancedMesh`) forming coiling Male & Female Dragons
  *   3. East Precinct — Okunoin (`奧之院`, `lx ∈ [26, 82]`):
  *      - Millennium Cedar Avenue (`千年杉木林參道`, 96 giant cedars via `InstancedMesh`)
  *      - Gorintō Memorial Forest (`五輪塔群`, 200 five-ring stone stupas via `InstancedMesh`) & 36 Stone Lanterns
@@ -38,6 +38,7 @@ import { KOYASAN_MAP } from '../../data/maps/koyasan.js';
 import { i18n } from '../../i18n.js';
 import '../../i18n/koyasan.js';
 import { addJapanRouteGate } from '../japanArchitecture.js';
+import { addRakedGravel, createGraniteGeometry, createGraniteMaterial } from '../japanGardenArchitecture.js';
 
 const TWO_PI = Math.PI * 2;
 
@@ -129,70 +130,6 @@ export function koyasanHeight(lx, lz) {
     rimLift = u * u * 7.5;
   }
   return Math.max(0, 0.15 + baseUndulation * 0.5 + rimLift);
-}
-
-/**
- * Procedural CanvasTexture (`512×512`) for Banryūtei (`蟠龍庭`) raked white Shirakawa gravel waves (`白川砂雲海波紋`).
- */
-function createBanryuteiGravelTexture() {
-  if (typeof document === 'undefined') return null;
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
-  const c = canvas.getContext('2d');
-  if (!c) return null;
-
-  // Base pale Shirakawa granite sand
-  c.fillStyle = '#e7e5df';
-  c.fillRect(0, 0, 512, 512);
-
-  // Horizontal & sinusoidal raked wave grooves (Samon 砂紋)
-  for (let y = 6; y < 512; y += 8) {
-    const wave = Math.sin(y * 0.07) * 6;
-    c.beginPath();
-    for (let x = 0; x <= 512; x += 16) {
-      const dy = y + Math.sin(x * 0.045 + y * 0.03) * 3.5 + wave * 0.2;
-      if (x === 0) c.moveTo(x, dy);
-      else c.lineTo(x, dy);
-    }
-    c.strokeStyle = 'rgba(165, 162, 154, 0.58)';
-    c.lineWidth = 2.4;
-    c.stroke();
-
-    c.beginPath();
-    for (let x = 0; x <= 512; x += 16) {
-      const dy = y + 3.5 + Math.sin(x * 0.045 + y * 0.03) * 3.5 + wave * 0.2;
-      if (x === 0) c.moveTo(x, dy);
-      else c.lineTo(x, dy);
-    }
-    c.strokeStyle = 'rgba(252, 251, 248, 0.85)';
-    c.lineWidth = 1.8;
-    c.stroke();
-  }
-
-  // Concentric cloud-eddy ripples around the two dragon coils
-  const eddies = [
-    { cx: 148, cy: 256, maxR: 92 },
-    { cx: 364, cy: 256, maxR: 92 },
-    { cx: 256, cy: 168, maxR: 64 },
-    { cx: 256, cy: 344, maxR: 64 },
-  ];
-  for (const ed of eddies) {
-    for (let r = 18; r <= ed.maxR; r += 9) {
-      c.beginPath();
-      c.arc(ed.cx, ed.cy, r, 0, TWO_PI);
-      c.strokeStyle = 'rgba(150, 148, 140, 0.45)';
-      c.lineWidth = 2.0;
-      c.stroke();
-    }
-  }
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(2, 1);
-  tex.needsUpdate = true;
-  return tex;
 }
 
 /**
@@ -536,11 +473,6 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     depthWrite: false,
     toneMapped: false,
   });
-  const blueSchistMat = new THREE.MeshStandardMaterial({
-    color: 0x3b535e,
-    roughness: 0.78,
-    metalness: 0.14,
-  });
   const cloudGraniteMat = new THREE.MeshStandardMaterial({
     color: 0xd6d3cb,
     roughness: 0.85,
@@ -573,7 +505,6 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     lanternGlowMat,
     eternalFlameMat,
     auraRingMat,
-    blueSchistMat,
     cloudGraniteMat,
     cedarTrunkMat,
     cedarFoliageMat,
@@ -1571,23 +1502,9 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   banryuteiGroup.position.set(0, getHeight(0, -22), -22);
   kongobujiGroup.add(banryuteiGroup);
 
-  // Raked white Shirakawa gravel bed (`26m × 16m`) with procedural Samon wave texture
-  const gravelTex = createBanryuteiGravelTexture();
-  if (gravelTex) disposables.push(gravelTex);
-  const gravelBedMat = new THREE.MeshStandardMaterial({
-    color: 0xf5f3ed,
-    map: gravelTex,
-    bumpMap: gravelTex,
-    bumpScale: 0.08,
-    roughness: 0.92,
-    metalness: 0.02,
-  });
-  disposables.push(gravelBedMat);
-
-  const gravelBed = new THREE.Mesh(new THREE.BoxGeometry(26.0, 0.14, 16.0), gravelBedMat);
-  gravelBed.position.set(0, 0.07, 0);
-  gravelBed.receiveShadow = true;
-  banryuteiGroup.add(gravelBed);
+  const gravelBed = addRakedGravel(banryuteiGroup, { x: 0, y: 0.141, z: 0, width: 26, depth: 16,
+    rings: [{ x: -6.2, z: 0, stretch: 1.15 }, { x: 6.2, z: 0, stretch: 1.15 }] });
+  disposables.push(gravelBed.geometry, gravelBed.material, gravelBed.material.map);
 
   // Low timber-and-plaster viewing border & northern enclosure wall (`築地塀`)
   const brBorderTimber = [];
@@ -1620,12 +1537,13 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   addBoxCollider(-13.2, 13.2, -22 - 8.2, -22 + 8.0);
 
   // 140 Blue-Chlorite Schist Stones (`四國青石`, InstancedMesh) arranged as Coiling Male & Female Dragons (`雌雄雙龍`)
-  const dragonStoneGeo = new THREE.DodecahedronGeometry(0.55, 0);
+  const dragonStoneGeo = createGraniteGeometry(9.2, 1);
   dragonStoneGeo.scale(0.85, 1.35, 0.65);
-  disposables.push(dragonStoneGeo);
+  const dragonStoneMat = createGraniteMaterial();
+  disposables.push(dragonStoneGeo, dragonStoneMat, dragonStoneMat.map);
 
   const DRAGON_STONE_COUNT = 140;
-  const dragonStonesInst = new THREE.InstancedMesh(dragonStoneGeo, blueSchistMat, DRAGON_STONE_COUNT);
+  const dragonStonesInst = new THREE.InstancedMesh(dragonStoneGeo, dragonStoneMat, DRAGON_STONE_COUNT);
   dragonStonesInst.castShadow = true;
   dragonStonesInst.receiveShadow = true;
 
