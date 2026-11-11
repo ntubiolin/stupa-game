@@ -357,6 +357,15 @@ Blender MCP session authors the source; gameplay only loads the exported assets.
 `loadJapanLandmarks()` commits a complete set atomically, keeps its procedural
 fallback on failure, and owns GPU-resource disposal across late async responses.
 Asset budgets and reference provenance are in `docs/japan-temple-art.md`.
+The focused Kondō reference adds `toji_materials.py` (offline PBR/UV authoring)
+and `toji_yakushi.py` (principal image plus normal/AO baking). Only Kondō gains
+the embedded 512px-or-smaller maps; high-resolution sculpt sources never ship.
+`tojiCourtyard.js` modifies existing materials within the forecourt, with
+short-range contact shading and day/night-aware reflected light. Its two 256px
+textures are disposed with the map and registered in `material.userData.extraTextures`
+for memory accounting. No new light, post-processing pass or ctx API is added.
+The matched-camera capture harness and budgets are documented in
+`docs/toji-quality-reference.md`.
 Garden helper textures are generated once per scene; the raked surface uses a
 single plane. Vegetation shares whole-tree geometry, 128px alpha-tested foliage
 and 64×128px bark. Cedars use 52m spatial chunks with a 68m LOD transition and

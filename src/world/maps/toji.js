@@ -1903,35 +1903,9 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
   }));
   root.add(seasonalParticles);
 
-  // Japanese Aesthetic Atmospheric Layer: Slanted Komorebi Sunbeam Shafts (`木漏れ日・瑞光`)
-  // and Yamato-e Floating Golden Cloud Ribbons (`大和繪金雲・霞帯`)
-  const komorebiDayOpacity = 0.026;
-  const komorebiMat = new THREE.MeshBasicMaterial({
-    color: 0xffedd5,
-    transparent: true,
-    opacity: komorebiDayOpacity,
-    blending: THREE.AdditiveBlending,
-    side: THREE.DoubleSide,
-    depthWrite: false,
-  });
-  const komorebiGeos = [];
-  const beamSpots = [
-    [22, 16, 15, 3.8, 7.2, 26],   // Over Weeping Fuji-zakura (`不二櫻`)
-    [36, 18, 22, 4.5, 8.8, 34],   // Over Five-Story Pagoda (`五重塔`)
-    [36, 12, -16, 3.6, 6.8, 24],  // Over Hyōtan-ike Lotus Pond (`瓢箪池`)
-    [0, 14, -28, 4.0, 7.4, 25],   // Over Kōdō courtyard (`講堂前庭`)
-  ];
-  for (const [bx, by, bz, rTop, rBot, bHeight] of beamSpots) {
-    const shaft = new THREE.CylinderGeometry(rTop, rBot, bHeight, 12, 1, true);
-    shaft.rotateZ(-0.34);
-    shaft.rotateX(0.18);
-    shaft.translate(bx, by, bz);
-    komorebiGeos.push(shaft);
-  }
-  const komorebiMesh = new THREE.Mesh(mergeAndDispose(komorebiGeos), komorebiMat);
-  komorebiMesh.name = 'TojiKomorebiSunbeams';
-  root.add(komorebiMesh);
-  disposables.push(komorebiMesh.geometry, komorebiMat);
+  // Surface lighting now supplies the courtyard's depth. The old translucent
+  // cones crossed roofs and remained visible through the focus scene; seasonal
+  // foliage and drifting petals retain atmosphere without those beam overlays.
 
   let appliedSeason = null;
   function applySeasonalPalette(season) {
@@ -1949,8 +1923,6 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
       mapleMat.emissiveIntensity = 0.10;
       particleMat.color.setHex(0xfbcfe8);
       particleMat.opacity = 0.88;
-      komorebiMat.color.setHex(0xffe4e6);
-      komorebiMat.opacity = 0.036;
       if (rimMountainMesh?.material?.emissive) {
         rimMountainMesh.material.emissive.setHex(0x2d1f2d);
         rimMountainMesh.material.emissiveIntensity = 0.22;
@@ -1965,8 +1937,6 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
       mapleMat.emissiveIntensity = 0.08;
       particleMat.color.setHex(0xd9f99d);
       particleMat.opacity = 0.55;
-      komorebiMat.color.setHex(0xfef08a);
-      komorebiMat.opacity = 0.034;
       if (rimMountainMesh?.material?.emissive) {
         rimMountainMesh.material.emissive.setHex(0x0f2922);
         rimMountainMesh.material.emissiveIntensity = 0.18;
@@ -1981,8 +1951,6 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
       mapleMat.emissiveIntensity = 0.30;
       particleMat.color.setHex(0xef4444);
       particleMat.opacity = 0.92;
-      komorebiMat.color.setHex(0xfdba74);
-      komorebiMat.opacity = 0.042;
       if (rimMountainMesh?.material?.emissive) {
         rimMountainMesh.material.emissive.setHex(0x3b1d16);
         rimMountainMesh.material.emissiveIntensity = 0.26;
@@ -1997,8 +1965,6 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
       mapleMat.emissiveIntensity = 0.14;
       particleMat.color.setHex(0xf8fafc);
       particleMat.opacity = 0.90;
-      komorebiMat.color.setHex(0xe0f2fe);
-      komorebiMat.opacity = 0.026;
       if (rimMountainMesh?.material?.emissive) {
         rimMountainMesh.material.emissive.setHex(0x334155);
         rimMountainMesh.material.emissiveIntensity = 0.32;
@@ -2144,9 +2110,6 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
       return lm ? { key: lm.promptKey } : null;
     },
     update(dt, elapsed = state?.elapsed || 0) {
-      const daylight = 1 - (state?.time?.nightFactor ?? 0);
-      komorebiMat.opacity = komorebiDayOpacity * daylight;
-      komorebiMesh.visible = daylight > 0.025;
 
       // Subtle sacred pulse on the Five-Story Pagoda crowning jewel & Kōdō Garuda flame halos
       const jewelPulse = 1.0 + Math.sin(elapsed * 2.4) * 0.1;

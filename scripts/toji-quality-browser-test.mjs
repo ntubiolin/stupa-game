@@ -185,6 +185,7 @@ async function measureView(page) {
         const texturesAndUniforms = [
           ...Object.values(material),
           ...Object.values(material.uniforms || {}).map(uniform => uniform.value),
+          ...(material.userData.extraTextures || []),
         ];
         for (const texture of texturesAndUniforms) {
           if (!texture?.isTexture || texture.isCubeTexture || texture.isRenderTargetTexture

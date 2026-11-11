@@ -121,6 +121,9 @@ function addLocalCoordinates(shader, center) {
 }
 
 function dressCourtyardSurface(material, center, footprint, tile, paving) {
+  // Explicit ownership metadata lets the quality harness count uniforms added
+  // by onBeforeCompile, which do not appear in standard material.map fields.
+  material.userData.extraTextures = [...(material.userData.extraTextures || []), tile];
   extendMaterial(material, paving ? 'paving' : 'gravel', shader => {
     addLocalCoordinates(shader, center);
     shader.uniforms.uCourtyardTile = { value: tile };
