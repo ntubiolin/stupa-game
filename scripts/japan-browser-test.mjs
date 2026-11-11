@@ -264,6 +264,13 @@ try {
   assert.equal(japan.style, 'shingon');
   assert(japan.skills.every(skill => skill.unlocked && skill.abilityId !== skill.id), 'all Japan slots have their regional identity and temporary access');
   await checkCompanion(page);
+  await page.locator('#btn-lang-toggle').click();
+  await page.waitForFunction(() => document.getElementById('japan-emaki-title').textContent === 'Qinglong Temple');
+  assert.match(await page.locator('#japan-campaign-tracker').innerText(), /Meet Huiguo/);
+  assert.equal(await page.evaluate(() => __stupa.skills.getSkillState('skill4').name), 'Dōgyō Ninin');
+  await page.locator('#btn-lang-toggle').click();
+  await page.waitForFunction(() => document.getElementById('japan-emaki-title').textContent === '長安・青龍寺');
+  report.scenarios.push({ name: 'live Chinese/English Japan labels', passed: true });
   await checkSkillEffects(page);
   await page.keyboard.press('m');
   await page.locator('#worldmap-modal [data-tab="world"]').click();

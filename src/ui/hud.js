@@ -2037,7 +2037,7 @@ export function createHud(ctx) {
     }
 
     // 2b. Japanese Emaki Scroll Badge
-    const curLang = i18n.getLang ? i18n.getLang() : 'zh-Hant';
+    const curLang = i18n.lang;
     const emakiKey = `${curZone}:${curSeason}:${curLang}`;
     if (emakiKey !== root._lastEmakiKey) {
       root._lastEmakiKey = emakiKey;
