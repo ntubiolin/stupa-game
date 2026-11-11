@@ -914,6 +914,10 @@ export function createHud(ctx) {
 
   i18n.onChange(applyTranslations);
   bus.on('zone:change', ({ from, to } = {}) => {
+    if (from !== to && (isJapanMap(from) || isJapanMap(to))) {
+      for (const entry of activeToasts) entry.el.remove();
+      activeToasts.length = 0;
+    }
     if (isJapanMap(from) !== isJapanMap(to)) applyTranslations();
   });
   bus.on('audio:change', renderMuteButton);

@@ -345,6 +345,14 @@ test('4. Two-tier throttling: 45s periodic sync and 3s milestone event debounce'
   await new Promise((r) => setTimeout(r, 10));
   assert.equal(postCalls.length, 3);
   assert.deepEqual(postCalls[2].saveData.sections.quests.done, ['prologue_1']);
+
+  ctx.save.set('japanCampaign', { version: 1, completedSteps: ['initiation'] });
+  ctx.save.flush();
+  bus.emit('japan:progress', { stepId: 'initiation', mapId: 'qinglong' });
+  cloud.update(MILESTONE_DEBOUNCE_SEC + 0.1);
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(postCalls.length, 4);
+  assert.deepEqual(postCalls[3].saveData.sections.japanCampaign.completedSteps, ['initiation']);
 });
 
 test('5. Divergent saves conflict detection and resolution via resolveConflict("cloud" | "local")', async (t) => {
