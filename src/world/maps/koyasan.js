@@ -1151,7 +1151,14 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
       () => {}
     );
   }
-  addBoxCollider(-62 - 6.6, -62 + 6.6, 6 - 6.6, 6 + 6.6);
+  // The collider follows the complete 14 m stone plinth rather than ending
+  // inside it, preventing the player capsule from blending into its edge.
+  addBoxCollider(-62 - 7.0, -62 + 7.0, 6 - 7.0, 6 + 7.0);
+  // Four cardinal staircases project 2.31 m beyond the plinth.
+  addBoxCollider(-62 - 1.7, -62 + 1.7, 6 + 6.99, 6 + 9.31);
+  addBoxCollider(-62 - 1.7, -62 + 1.7, 6 - 9.31, 6 - 6.99);
+  addBoxCollider(-62 + 6.99, -62 + 9.31, 6 - 1.7, 6 + 1.7);
+  addBoxCollider(-62 - 9.31, -62 - 6.99, 6 - 1.7, 6 + 1.7);
 
   // Rotating golden Mandala floor ring around Konpon Daitō
   const daitoMandalaRing = new THREE.Mesh(new THREE.RingGeometry(7.6, 8.3, 48), auraRingMat);
@@ -1234,7 +1241,8 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     new THREE.Mesh(mergeAndDispose(kdRoof), cypressRoofMat),
     new THREE.Mesh(mergeAndDispose(kdGold), goldMat)
   );
-  addBoxCollider(-34 - 7.5, -34 + 7.5, 8 - 6.5, 8 + 6.5);
+  addBoxCollider(-34 - 7.8, -34 + 7.8, 8 - 6.8, 8 + 6.8);
+  addBoxCollider(-34 - 2.1, -34 + 2.1, 8 + 6.575, 8 + 8.705);
 
   // ---------------------------------------------------------------- 4D. 御影堂 (Miedō) at local (-50, -18) & 三鈷松 (Sanko-no-Matsu) at local (-44, -6)
   const miedoGroup = new THREE.Group();
@@ -1292,7 +1300,7 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     new THREE.Mesh(mergeAndDispose(mdGold), goldMat),
     new THREE.Mesh(mergeAndDispose(mdLanterns), lanternGlowMat)
   );
-  addBoxCollider(-50 - 4.8, -50 + 4.8, -18 - 4.8, -18 + 4.8);
+  addBoxCollider(-50 - 5.1, -50 + 5.1, -18 - 5.1, -18 + 5.1);
 
   // Sanko-no-Matsu (`三鈷松` — Three-Pronged Vajra Pine) at local (-44, -6)
   const sankoGroup = new THREE.Group();
@@ -1563,7 +1571,9 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     new THREE.Mesh(mergeAndDispose(omRoof), cypressRoofMat),
     new THREE.Mesh(mergeAndDispose(omGold), goldMat)
   );
-  addBoxCollider(-11.2, 11.2, 2 - 7.6, 2 + 7.6);
+  addBoxCollider(-11.2, 11.2, 2 - 7.7, 2 + 7.7);
+  // The entrance porch projects beyond the main foundation on the south side.
+  addBoxCollider(-6.0, -0.4, 2 + 7.7, 2 + 10.7);
 
   // ---------------------------------------------------------------- 5C. 蟠龍庭 (Banryūtei — Coiling Dragon Rock Garden) at local (0, -22)
   const banryuteiGroup = new THREE.Group();
@@ -2015,7 +2025,8 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     new THREE.Mesh(mergeAndDispose(trBronze), bronzeMat),
     new THREE.Mesh(mergeAndDispose(trGold), goldMat)
   );
-  addBoxCollider(48 - 8.2, 48 + 8.2, -42 - 5.2, -42 + 4.8);
+  addBoxCollider(48 - 8.4, 48 + 8.4, -42 - 5.4, -42 + 5.4);
+  addBoxCollider(48 - 2.3, 48 + 2.3, -42 + 5.18, -42 + 6.82);
 
   // `THREE.InstancedMesh` of 144 Glowing Golden Hanging Lanterns (`萬燈籠`) inside Tōrōdō
   const hCap = new THREE.ConeGeometry(0.18, 0.10, 6);
@@ -2126,7 +2137,8 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     new THREE.Mesh(mergeAndDispose(gbMausRoof), cypressRoofMat),
     new THREE.Mesh(mergeAndDispose(gbMausGold), goldMat)
   );
-  addBoxCollider(48 - 7.0, 48 + 7.0, -66 - 7.0, -66 + 6.4);
+  addBoxCollider(48 - 7.2, 48 + 7.2, -66 - 7.2, -66 + 7.2);
+  addBoxCollider(48 - 1.9, 48 + 1.9, -66 + 6.99, -66 + 8.55);
 
   // Rotating Golden Siddhaṃ `अ (A)` Mandala Ring above Kōbō Daishi Gobyō
   const siddhamMandalaGroup = new THREE.Group();
