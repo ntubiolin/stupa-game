@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { createHeightfieldTerrain, pushCollider, seededRandom } from '../mapBase.js';
+import { addCypressBarkRoof, addGraniteGroups, addRakedGravel, createCypressBarkMaterial } from '../japanGardenArchitecture.js';
+import { addJapanTrees } from '../japanVegetation.js';
 import { QINGLONG_MAP, KII_MAP, KONGOBUJI_MAP, OKUNOIN_MAP } from '../../data/maps/japanPilgrimage.js';
 
 const TAU = Math.PI * 2;
@@ -25,21 +27,24 @@ function createPrecinct(ctx, map, { height, groundHeight = height, paint, seed }
 
   const shapes = {
     box: new THREE.BoxGeometry(),
-    cedar: new THREE.ConeGeometry(0.5, 1, 8),
+    cone: new THREE.ConeGeometry(0.5, 1, 8),
     column: new THREE.CylinderGeometry(0.39, 0.5, 1, 8),
     stone: new THREE.DodecahedronGeometry(0.6, 0),
     sphere: new THREE.IcosahedronGeometry(0.5, 1),
   };
   const materials = {
-    stone: 0x797870, moss: 0x5a6d40, path: 0x9c9684, lime: 0xe4d4b6, bark: 0x524238,
-    pine: 0x254b3f, youngPine: 0x39624b, leaf: 0x6c804c, rust: 0xae5041, rose: 0xcf7f83,
+    stone: 0x797870, moss: 0x5a6d40, path: 0x9c9684, lime: 0xe4d4b6,
+    leaf: 0x6c804c, rust: 0xae5041,
     darkWood: 0x49322c, wood: 0x956346, red: 0xa33b2e, gold: 0xcb9b44, jade: 0x448278,
-    tile: 0x303743, tileEdge: 0x485462, sand: 0xddd6bc, rake: 0xb9ae96, basalt: 0x555d65,
+    tile: 0x303743, tileEdge: 0x485462, weatheredWood: 0x7c6c56, beam: 0x53483c,
     water: 0x497884, foam: 0xb5d3d1, sail: 0xe4d5ab,
     lamp: { color: 0xffc66a, emissive: 0xff9238, emissiveIntensity: 0.7 },
   };
   const rng = seededRandom(seed);
   const batches = new Map();
+  const cedars = [];
+  const cherries = [];
+  const disposables = [];
   const colliders = [];
   const matrixDummy = new THREE.Object3D();
 
@@ -82,17 +87,23 @@ function createPrecinct(ctx, map, { height, groundHeight = height, paint, seed }
       const mesh = new THREE.InstancedMesh(shapes[shape], material, matrices.length);
       mesh.name = id + '-' + shape + '-' + mat;
       matrices.forEach((matrix, i) => mesh.setMatrixAt(i, matrix));
-      mesh.castShadow = !['water', 'foam', 'path', 'sand', 'rake'].includes(mat);
+      mesh.castShadow = !['water', 'foam', 'path'].includes(mat);
       mesh.receiveShadow = true;
       root.add(mesh);
     }
     for (const [shape, geometry] of Object.entries(shapes)) {
       if (![...batches.values()].some(batch => batch.shape === shape)) geometry.dispose();
     }
-    return { group, root, colliders, getHeight, update() {} };
+    addJapanTrees(root, cedars, { name: id + ' cedars', species: 'cedar', disposables });
+    if (cherries.length) {
+      const canopyMaterial = new THREE.MeshStandardMaterial({ color: 0xe89caa, roughness: 0.82 });
+      disposables.push(canopyMaterial);
+      addJapanTrees(root, cherries, { name: id + ' cherries', species: 'cherry', canopyMaterial, disposables });
+    }
+    return { group, root, colliders, disposables, getHeight, update() {} };
   }
 
-  return { part, circle, block, height, rng, finish };
+  return { root, part, circle, block, height, rng, cedars, cherries, finish };
 }
 
 function terrainPaint(colors, pathDistance) {
@@ -225,20 +236,20 @@ function lantern(scene, x, z, scale = 1, wood = false) {
         0.11 * scale, 0.59 * scale, 0.11 * scale);
     }
   }
-  part('cedar', shell, x, y + 1.68 * scale, z, 1.05 * scale, 0.39 * scale, 1.05 * scale, Math.PI / 4);
+  part('cone', shell, x, y + 1.68 * scale, z, 1.05 * scale, 0.39 * scale, 1.05 * scale, Math.PI / 4);
   part('sphere', shell, x, y + 1.91 * scale, z, 0.27 * scale, 0.25 * scale, 0.27 * scale);
   circle(x, z, 0.38 * scale);
 }
 
 function cedar(scene, x, z, height, radius, solid = true) {
-  const y = scene.height(x, z);
-  scene.part('column', 'bark', x, y + height * 0.45, z, radius, height * 0.9, radius);
-  for (let layer = 0; layer < 4; layer++) {
-    const crown = radius * (6.3 - layer);
-    const shift = (scene.rng() - 0.5) * radius;
-    scene.part('cedar', layer % 2 ? 'youngPine' : 'pine', x + shift, y + height * (0.57 + layer * 0.11), z,
-      crown, height * 0.32, crown * 0.91, scene.rng() * TAU, 0, 0.045);
-  }
+  const yaw = scene.rng() * TAU;
+  // Keep the copse layout and downstream scenery on their original random sequence.
+  for (let i = 0; i < 7; i++) scene.rng();
+  scene.cedars.push({
+    x, y: scene.height(x, z), z, yaw,
+    height: height / 20,
+    width: radius * 0.80,
+  });
   if (solid) scene.circle(x, z, radius * 0.55);
 }
 
@@ -312,13 +323,8 @@ export function createQinglongMap(ctx) {
   flagstones(scene, () => 0, -57, -35, 5.0);
   for (const x of [-12, 12]) {
     for (const z of [2, 32]) {
-      const y = height(x, z);
-      part('column', 'bark', x, y + 2.8, z, 0.75, 5.6, 0.75);
-      for (let crown = 0; crown < 7; crown++) {
-        const a = crown * TAU / 7;
-        part('sphere', crown % 3 ? 'rose' : 'rust', x + Math.cos(a) * 1.9, y + 4.4 + rng() * 2.7,
-          z + Math.sin(a) * 1.9, 4.6, 3.1, 4.1, a);
-      }
+      scene.cherries.push({ x, y: height(x, z), z, scale: 1.48 });
+      for (let crown = 0; crown < 7; crown++) rng();
       circle(x, z, 0.48);
     }
   }
@@ -393,51 +399,160 @@ export function createKiiMap(ctx) {
   return scene.finish();
 }
 
+function kongobujiMainHall(scene, barkRoof, x, z, width, depth) {
+  const { root, part, block, height } = scene;
+  const y = height(x, z);
+  const halfWidth = width / 2;
+  const halfDepth = depth / 2;
+  const eave = 5.15;
+  const rise = 3.65;
+
+  part('box', 'stone', x, y + 0.19, z, width + 0.82, 0.38, depth + 0.82);
+  part('box', 'beam', x, y + 0.46, z, width + 1, 0.22, depth + 1);
+  part('box', 'lime', x, y + 2.7, z, width - 2.4, 4.2, depth - 2.5);
+  block(x, z, halfWidth + 0.5, halfDepth + 0.5);
+  // The new 5.5 m-wide stair projects beyond the old hall's foundation.
+  block(x, z + halfDepth + 1.20, 2.75, 0.58);
+
+  for (const side of [-1, 1]) {
+    const edge = z + side * halfDepth;
+    const wall = edge - side * 1.19;
+    part('box', 'beam', x, y + eave - 0.2, edge, width + 0.2, 0.46, 0.32);
+    part('box', 'weatheredWood', x, y + 0.9, wall, width - 2.38, 0.70, 0.12);
+    part('box', 'beam', x, y + 3.78, wall, width - 2.38, 0.15, 0.12);
+
+    for (let i = 0; i <= 10; i++) {
+      const px = x + (i / 10 - 0.5) * width;
+      part('box', 'beam', px, y + 2.79, edge, 0.28, 4.45, 0.3);
+      part('box', 'weatheredWood', px, y + 4.65, edge, 0.54, 0.18, 0.56);
+      if (i === 10) continue;
+      const bay = px + width / 20;
+      if (i > 0 && i < 9) {
+        part('box', 'weatheredWood', bay, y + 2.49, wall, width / 10 - 0.11, 2.53, 0.13);
+        if (i === 4 || i === 5) {
+          part('box', 'beam', bay + (i === 4 ? 1.08 : -1.08), y + 2.25, wall + side * 0.10,
+            0.08, 0.25, 0.06);
+        } else {
+          part('box', 'lime', bay, y + 2.63, wall + side * 0.09, width / 10 - 0.31, 1.73, 0.08);
+          for (const offset of [-0.92, -0.46, 0, 0.46, 0.92]) {
+            part('box', 'beam', bay + offset, y + 2.63, wall + side * 0.14, 0.045, 1.73, 0.05);
+          }
+          for (const rail of [2.18, 2.63, 3.08]) {
+            part('box', 'beam', bay, y + rail, wall + side * 0.14, width / 10 - 0.31, 0.045, 0.05);
+          }
+        }
+      }
+    }
+    for (let px = -halfWidth - 0.24; px < halfWidth + 0.4; px += 0.35) {
+      part('box', 'weatheredWood', x + px, y + 0.57, edge - side * 0.53, 0.34, 0.06, 1.69);
+    }
+    for (let px = -halfWidth; px <= halfWidth; px += 0.68) {
+      part('box', 'weatheredWood', x + px, y + eave - 0.16, edge + side * 0.72, 0.11, 0.16, 1.92);
+    }
+
+    const end = x + side * halfWidth;
+    part('box', 'beam', end, y + eave - 0.2, z, 0.32, 0.46, depth);
+    for (const offset of [-3.25, 0, 3.25]) {
+      part('box', 'beam', end, y + 2.79, z + offset, 0.28, 4.45, 0.3);
+    }
+    part('box', 'weatheredWood', end - side * 1.16, y + 1.11, z, 0.12, 1.1, depth - 2.5);
+    for (let pz = -halfDepth + 0.35; pz <= halfDepth - 0.35; pz += 0.35) {
+      part('box', 'weatheredWood', end - side * 0.55, y + 0.57, z + pz, 1.69, 0.06, 0.34);
+    }
+  }
+
+  addCypressBarkRoof(root, barkRoof, { x, y: y + eave, z, width: width + 3.4, depth: depth + 4.5, rise, hip: 0.21 });
+  part('box', 'beam', x, y + eave + rise, z, (width + 3.4) * 0.80, 0.29, 0.48);
+
+  for (let i = 0; i < 3; i++) {
+    part('box', 'stone', x, y + 0.09 + i * 0.08, z + halfDepth + 1.56 - i * 0.36,
+      5.5, 0.18 + i * 0.16, 0.44);
+  }
+  for (const side of [-1, 1]) {
+    part('box', 'beam', x + side * 2.45, y + 2.17, z + halfDepth + 0.31, 0.32, 3.25, 0.34);
+  }
+  part('box', 'beam', x, y + 3.74, z + halfDepth + 0.31, 5.3, 0.26, 0.36);
+  addCypressBarkRoof(root, barkRoof, { x, y: y + 3.84, z: z + halfDepth - 0.07,
+    width: 4.5, depth: 6.35, rise: 1.18, rotation: Math.PI / 2 });
+  part('box', 'beam', x, y + 5.02, z + halfDepth - 0.07, 0.28, 0.23, 4.52);
+
+  // Open rain tubs break the long ridge silhouette above the main hall.
+  for (const offset of [-8, 8]) {
+    part('box', 'beam', x + offset, y + eave + rise + 0.1, z, 1.82, 0.32, 1.78);
+    part('column', 'weatheredWood', x + offset, y + eave + rise + 0.62, z, 1.42, 0.82, 1.42);
+    for (const hoop of [0.40, 0.78]) {
+      part('column', 'beam', x + offset, y + eave + rise + hoop, z, 1.44, 0.11, 1.44);
+    }
+    part('column', 'darkWood', x + offset, y + eave + rise + 1.04, z, 1.18, 0.035, 1.18);
+  }
+}
+
+function kongobujiGardenGallery(scene, barkRoof, x) {
+  const { root, part, circle } = scene;
+  const z = -1.5;
+  const length = 23.1;
+  part('box', 'beam', x, 0.045, z, 2.52, 0.09, length);
+  for (let i = 0; i < 66; i++) {
+    part('box', 'weatheredWood', x, 0.08, z + (i - 32.5) * 0.35, 2.54, 0.06, 0.34);
+  }
+  for (const offset of [-1.14, 1.14]) {
+    part('box', 'beam', x + offset, 3.01, z, 0.22, 0.24, length);
+    for (const pz of [-12.4, -7, -2.7, 3.2, 8.9]) {
+      part('box', 'stone', x + offset, 0.16, pz, 0.42, 0.32, 0.4);
+      part('box', 'beam', x + offset, 1.63, pz, 0.22, 2.92, 0.23);
+      circle(x + offset, pz, 0.18);
+    }
+  }
+  for (let pz = z - 11; pz <= z + 11; pz += 0.73) {
+    part('box', 'weatheredWood', x, 3.03, pz, 3.13, 0.13, 0.09);
+  }
+  addCypressBarkRoof(root, barkRoof, { x, y: 3.17, z, width: length + 0.86, depth: 3.88,
+    rise: 0.79, rotation: Math.PI / 2 });
+  part('box', 'beam', x, 4.0, z, 0.26, 0.18, length + 0.88);
+}
+
 export function createKongobujiMap(ctx) {
   const scene = createPrecinct(ctx, KONGOBUJI_MAP, {
     seed: 1593,
     height: (x, z) => smoothstep(Math.abs(x), 37, 75) * (4.1 + Math.cos(z * 0.13) * 1.5),
     paint: terrainPaint([0x7f8b66, 0xb2a888, 0x4a694f], (x, z) => Math.max(0, Math.abs(x) - 15 + Math.abs(z) * 0.1)),
   });
-  const { part, block, circle, rng } = scene;
+  const { root, part, block, circle, rng } = scene;
+  const barkRoof = createCypressBarkMaterial();
   tiledGate(scene, 0, 48, 7.2, 4.5, 'darkWood');
   tiledGate(scene, 31, -36, 5.7, 4.4, 'darkWood');
-  hall(scene, 0, -24, 33, 13);
+  kongobujiMainHall(scene, barkRoof, 0, -24, 33, 13);
   flagstones(scene, () => 0, 10, 47, 5.2);
   flagstones(scene, () => 31, -31, 4, 3.7);
-  part('box', 'sand', 0, 0.018, -1.5, 27.5, 0.12, 20);
+
+  addRakedGravel(root, { x: 0, y: 0.065, z: -1.5, width: 27.5, depth: 20,
+    rings: [{ x: -6.8, z: -2.2, stretch: 1.5 }, { x: 6.8, z: 2.1, stretch: 1.5 }] });
+  const rocks = [];
   for (const side of [-1, 1]) {
-    // The two dragon heads face one another. Uneven tails and upright head stones
-    // echo the granite composition of Banryūtei.
+    // Upright head stones face each other across the center, with lower stones
+    // trailing out toward the sides of the gravel bed.
     for (let i = 0; i < 9; i++) {
       const t = i / 8;
       const x = side * (2.9 + 9.1 * t);
       const z = side * (1.5 + Math.sin(t * 4.6) * 3.9) - 1.8;
       const size = 0.6 + (1 - t) * 1.45;
-      part('stone', i < 3 ? 'basalt' : 'stone', x, size * 0.62, z, size * 1.24,
-        size * (i === 0 ? 1.78 : 0.95), size, rng() * TAU, 0.11, side * 0.19);
+      const sy = size * (i === 0 ? 1.78 : 0.72 + 0.29 * (i % 3));
+      const rotation = rng() * TAU;
+      rocks.push({ x, z, y: sy * 0.43, sx: size * 1.31, sy, sz: size * 1.1, rotation, tilt: side * 0.17 });
       circle(x, z, size * 0.63);
+      if (i % 2 === 0) {
+        rocks.push({ x: x - side * size * 0.36, z: z + side * size * 0.51,
+          y: size * 0.19, sx: size * 0.76, sy: size * 0.38, sz: size * 0.68, rotation: -rotation, tilt: 0.23 });
+      }
     }
     for (const z of [-9, 7]) lantern(scene, side * 18, z, 1.28);
-    for (let z = -14; z < 10; z += 3.6) {
-      part('box', 'wood', side * 15.2, 0.09, z, 1.8, 0.16, 3.57);
-    }
+    kongobujiGardenGallery(scene, barkRoof, side * 15.72);
+    part('box', 'stone', side * 13.84, 0.055, -1.5, 0.27, 0.11, 20.26);
   }
-  // Subtle rake lines bend into concentric arcs around the rock groups.
-  for (let line = 0; line < 38; line++) {
-    const z = -10.6 + line * 0.48;
-    for (let x = -13; x < 13; x += 0.72) {
-      const bend = 0.34 * Math.sin(x * 0.52 + z * 0.19);
-      part('box', 'rake', x, 0.082, z + bend, 0.74, 0.013, 0.046,
-        -0.17 * Math.cos(x * 0.52 + z * 0.19));
-    }
+  for (const z of [-11.62, 8.62]) {
+    part('box', 'stone', 0, 0.055, z, 27.9, 0.11, 0.27);
   }
-  for (const z of [-31.3, -28.6]) {
-    for (const x of [-8, 8]) {
-      part('column', 'wood', x, 7.8, z, 1.65, 1.12, 1.65);
-      part('column', 'darkWood', x, 8.11, z, 1.66, 0.10, 1.66);
-    }
-  }
+  addGraniteGroups(root, rocks);
   for (const side of [-1, 1]) {
     for (let i = 0; i < 6; i++) {
       const z = -29 + i * 8.3;

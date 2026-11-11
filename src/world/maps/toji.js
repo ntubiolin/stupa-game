@@ -20,7 +20,7 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { loadJapanLandmarks } from '../japanLandmarkLoader.js';
 import {
   createHeightfieldTerrain,
   addRimMountains,
@@ -31,6 +31,7 @@ import { TOJI_MAP } from '../../data/maps/toji.js';
 import { i18n } from '../../i18n.js';
 import '../../i18n/toji.js';
 import { addJapanRouteGate } from '../japanArchitecture.js';
+import { addJapanTrees } from '../japanVegetation.js';
 
 const TWO_PI = Math.PI * 2;
 
@@ -1774,44 +1775,26 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
   const glbMapleMats = [];
 
   if (typeof window !== 'undefined' && typeof fetch === 'function') {
-    const loader = new GLTFLoader();
-    const glbSpecs = [
-      { url: '/models/kukai/toji_gojunoto.glb', x: pagodaX, y: 0, z: pagodaZ, scale: 1.05 },
-      { url: '/models/kukai/toji_kondo.glb', x: kondoX, y: 0, z: kondoZ, scale: 1.25 },
-      { url: '/models/kukai/toji_kodo.glb', x: kodoX, y: 0, z: kodoZ, scale: 1.25 },
-    ];
-    let loadedCount = 0;
-    for (const spec of glbSpecs) {
-      loader.load(
-        spec.url,
-        (gltf) => {
-          const model = gltf.scene;
-          model.position.set(spec.x, spec.y, spec.z);
-          model.scale.setScalar(spec.scale);
-          model.traverse((child) => {
-            if (child.isMesh) {
-              child.castShadow = true;
-              child.receiveShadow = true;
-              const mName = child.material?.name || '';
-              if (mName.includes('Sakura')) {
-                glbSakuraMats.push(child.material);
-              } else if (mName.includes('Momiji')) {
-                glbMapleMats.push(child.material);
-              }
-            }
-          });
-          blenderMasterpieceGroup.add(model);
-          loadedCount += 1;
-          if (loadedCount === glbSpecs.length) {
-            proceduralLandmarksGroup.visible = false;
-            appliedSeason = null;
-            applySeasonalPalette(state?.time?.season || 'spring');
-          }
-        },
-        undefined,
-        () => {}
-      );
-    }
+    const landmarks = loadJapanLandmarks({
+      parent: blenderMasterpieceGroup,
+      fallback: proceduralLandmarksGroup,
+      specs: [
+        { url: '/models/kukai/toji_gojunoto.glb', x: pagodaX, z: pagodaZ, scale: 1.05 },
+        { url: '/models/kukai/toji_kondo.glb', x: kondoX, z: kondoZ, scale: 1.25 },
+        { url: '/models/kukai/toji_kodo.glb', x: kodoX, z: kodoZ, scale: 1.25 },
+      ],
+      onReady(models) {
+        for (const model of models) model.traverse(child => {
+          if (!child.isMesh) return;
+          const name = child.material?.name || '';
+          if (name.includes('Sakura')) glbSakuraMats.push(child.material);
+          else if (name.includes('Momiji')) glbMapleMats.push(child.material);
+        });
+        appliedSeason = null;
+        applySeasonalPalette(state?.time?.season || 'spring');
+      },
+    });
+    disposables.push(landmarks);
   }
 
   // ---------------------------------------------------------------- 10. Weeping Cherry (`不二櫻`) & Crimson Japanese Maples (`紅葉`) InstancedMeshes
@@ -1839,15 +1822,11 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
 
   const trunkGeos = [];
   for (const t of [...cherryTrees, ...mapleTrees]) {
-    const s = t.scale;
-    const trunk = new THREE.CylinderGeometry(0.18 * s, 0.30 * s, 2.8 * s, 7);
-    trunk.translate(t.x, 1.4 * s, t.z);
-    trunkGeos.push(trunk);
     registerCollider({
       type: 'circle',
       x: ox + t.x,
       z: oz + t.z,
-      r: 0.55 * s,
+      r: 0.55 * t.scale,
     });
   }
   // Wooden crutch poles (`添え木・支柱`) supporting the heavy weeping branches of Fuji-zakura (`不二櫻`) at `(24, 6)`
@@ -1872,86 +1851,27 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
     root.add(trunkMesh);
   }
 
-  // InstancedMesh 1: Weeping Cherry Blossom Canopies (`不二櫻`, 9 clusters per tree including cascading weeping strands)
-  const blossomGeo = new THREE.DodecahedronGeometry(1.15, 1);
   const blossomMat = new THREE.MeshStandardMaterial({
     color: 0xf9a8d4,
     roughness: 0.72,
-    metalness: 0.02,
     emissive: 0x831843,
     emissiveIntensity: 0.18,
   });
-  disposables.push(blossomGeo, blossomMat);
-
-  const blossomOffsets = [
-    [0, 3.2, 0, 1.35, 0.85, 1.35],
-    [-1.1, 2.6, 0.8, 0.95, 0.75, 0.95],
-    [1.1, 2.5, -0.7, 0.95, 0.75, 0.95],
-    [0.8, 2.4, 1.0, 0.88, 0.72, 0.88],
-    [-0.9, 2.3, -0.9, 0.88, 0.72, 0.88],
-    [-1.35, 1.75, 1.05, 0.45, 0.95, 0.45],
-    [1.35, 1.72, 0.95, 0.45, 0.95, 0.45],
-    [1.25, 1.68, -1.05, 0.45, 0.95, 0.45],
-    [-1.25, 1.70, -1.0, 0.45, 0.95, 0.45],
-  ];
-  const cherryInstanced = new THREE.InstancedMesh(
-    blossomGeo,
-    blossomMat,
-    cherryTrees.length * blossomOffsets.length
-  );
-  cherryInstanced.name = 'TojiCherryBlossomsInstanced';
-  cherryInstanced.castShadow = true;
-  const dummy = new THREE.Object3D();
-  let cIdx = 0;
-  for (const t of cherryTrees) {
-    const s = t.scale;
-    for (const [oxOff, oyOff, ozOff, sx, sy, sz] of blossomOffsets) {
-      dummy.position.set(t.x + oxOff * s, oyOff * s, t.z + ozOff * s);
-      dummy.scale.set(sx * s, sy * s, sz * s);
-      dummy.updateMatrix();
-      cherryInstanced.setMatrixAt(cIdx++, dummy.matrix);
-    }
-  }
-  cherryInstanced.instanceMatrix.needsUpdate = true;
-  root.add(cherryInstanced);
-
-  // InstancedMesh 2: Crimson Japanese Maple Canopies (`紅葉`, 5 clusters per tree)
-  const mapleGeo = new THREE.DodecahedronGeometry(1.1, 1);
   const mapleMat = new THREE.MeshStandardMaterial({
     color: 0xdc2626,
     roughness: 0.76,
-    metalness: 0.04,
     emissive: 0x7f1d1d,
     emissiveIntensity: 0.22,
   });
-  disposables.push(mapleGeo, mapleMat);
-
-  const mapleOffsets = [
-    [0, 3.1, 0, 1.35, 0.78, 1.35],
-    [-0.95, 2.5, 0.65, 0.95, 0.68, 0.95],
-    [0.95, 2.6, -0.65, 0.95, 0.68, 0.95],
-    [0.5, 2.3, 0.85, 0.88, 0.65, 0.88],
-    [-0.65, 2.2, -0.8, 0.85, 0.62, 0.85],
-  ];
-  const mapleInstanced = new THREE.InstancedMesh(
-    mapleGeo,
-    mapleMat,
-    mapleTrees.length * mapleOffsets.length
-  );
-  mapleInstanced.name = 'TojiCrimsonMaplesInstanced';
-  mapleInstanced.castShadow = true;
-  let mIdx = 0;
-  for (const t of mapleTrees) {
-    const s = t.scale;
-    for (const [oxOff, oyOff, ozOff, sx, sy, sz] of mapleOffsets) {
-      dummy.position.set(t.x + oxOff * s, oyOff * s, t.z + ozOff * s);
-      dummy.scale.set(sx * s, sy * s, sz * s);
-      dummy.updateMatrix();
-      mapleInstanced.setMatrixAt(mIdx++, dummy.matrix);
-    }
-  }
-  mapleInstanced.instanceMatrix.needsUpdate = true;
-  root.add(mapleInstanced);
+  disposables.push(blossomMat, mapleMat);
+  const onGround = tree => ({ ...tree, y: getHeight(ox + tree.x, oz + tree.z) });
+  const cherries = addJapanTrees(root, cherryTrees.map(onGround), {
+    name: 'Tō-ji weeping cherries', species: 'weepingCherry', canopyMaterial: blossomMat, disposables,
+  });
+  const maples = addJapanTrees(root, mapleTrees.map(onGround), {
+    name: 'Tō-ji maples', species: 'maple', canopyMaterial: mapleMat, disposables,
+  });
+  const dummy = new THREE.Object3D();
 
   // InstancedMesh 3: Four-Season Drifting Petals / Maple Leaves / Snowflakes (`四季落櫻・楓紅・飛雪`)
   const PARTICLE_COUNT = 160;
@@ -2008,6 +1928,8 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
   function applySeasonalPalette(season) {
     if (season === appliedSeason) return;
     appliedSeason = season;
+    cherries.setSeason(season);
+    maples.setSeason(season);
     if (season === 'spring') {
       // Full weeping Fuji-zakura cherry blossoms + fresh spring green maples
       blossomMat.color.setHex(0xf9a8d4);
@@ -2057,7 +1979,7 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
         rimMountainMesh.material.emissiveIntensity = 0.26;
       }
     } else if (season === 'winter') {
-      // Frost-covered silver-white branches & falling snow
+      // Sparse frost on bare branches and falling snow
       blossomMat.color.setHex(0xe2e8f0);
       blossomMat.emissive.setHex(0x475569);
       blossomMat.emissiveIntensity = 0.16;

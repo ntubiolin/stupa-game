@@ -5,3 +5,6 @@ dist
 .data/
 
 artifacts/
+
+# Blender Python authoring cache
+__pycache__/

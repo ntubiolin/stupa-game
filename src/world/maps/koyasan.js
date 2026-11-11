@@ -13,7 +13,7 @@
  *      - Seimon (`正門`) at `(0, 26)` with five-line imperial earthen walls (`五本線築地塀`)
  *      - Main Hall (`主殿`) at `(0, 2)` with Karahafu entrance porch & rooftop fire-prevention water tubs (`天水桶`)
  *      - Banryūtei (`蟠龍庭`) at `(0, -22)` — Japan's largest karesansui rock garden with raked Shirakawa gravel
- *        waves (`CanvasTexture`) and 140 blue Shikoku stones (`InstancedMesh`) forming coiling Male & Female Dragons
+ *        waves (`DataTexture`) and 140 blue Shikoku stones (`InstancedMesh`) forming coiling Male & Female Dragons
  *   3. East Precinct — Okunoin (`奧之院`, `lx ∈ [26, 82]`):
  *      - Millennium Cedar Avenue (`千年杉木林參道`, 96 giant cedars via `InstancedMesh`)
  *      - Gorintō Memorial Forest (`五輪塔群`, 200 five-ring stone stupas via `InstancedMesh`) & 36 Stone Lanterns
@@ -27,7 +27,7 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { loadJapanLandmarks } from '../japanLandmarkLoader.js';
 import {
   createHeightfieldTerrain,
   addRimMountains,
@@ -38,6 +38,8 @@ import { KOYASAN_MAP } from '../../data/maps/koyasan.js';
 import { i18n } from '../../i18n.js';
 import '../../i18n/koyasan.js';
 import { addJapanRouteGate } from '../japanArchitecture.js';
+import { addRakedGravel, createGraniteGeometry, createGraniteMaterial } from '../japanGardenArchitecture.js';
+import { addJapanTrees } from '../japanVegetation.js';
 
 const TWO_PI = Math.PI * 2;
 
@@ -129,70 +131,6 @@ export function koyasanHeight(lx, lz) {
     rimLift = u * u * 7.5;
   }
   return Math.max(0, 0.15 + baseUndulation * 0.5 + rimLift);
-}
-
-/**
- * Procedural CanvasTexture (`512×512`) for Banryūtei (`蟠龍庭`) raked white Shirakawa gravel waves (`白川砂雲海波紋`).
- */
-function createBanryuteiGravelTexture() {
-  if (typeof document === 'undefined') return null;
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
-  const c = canvas.getContext('2d');
-  if (!c) return null;
-
-  // Base pale Shirakawa granite sand
-  c.fillStyle = '#e7e5df';
-  c.fillRect(0, 0, 512, 512);
-
-  // Horizontal & sinusoidal raked wave grooves (Samon 砂紋)
-  for (let y = 6; y < 512; y += 8) {
-    const wave = Math.sin(y * 0.07) * 6;
-    c.beginPath();
-    for (let x = 0; x <= 512; x += 16) {
-      const dy = y + Math.sin(x * 0.045 + y * 0.03) * 3.5 + wave * 0.2;
-      if (x === 0) c.moveTo(x, dy);
-      else c.lineTo(x, dy);
-    }
-    c.strokeStyle = 'rgba(165, 162, 154, 0.58)';
-    c.lineWidth = 2.4;
-    c.stroke();
-
-    c.beginPath();
-    for (let x = 0; x <= 512; x += 16) {
-      const dy = y + 3.5 + Math.sin(x * 0.045 + y * 0.03) * 3.5 + wave * 0.2;
-      if (x === 0) c.moveTo(x, dy);
-      else c.lineTo(x, dy);
-    }
-    c.strokeStyle = 'rgba(252, 251, 248, 0.85)';
-    c.lineWidth = 1.8;
-    c.stroke();
-  }
-
-  // Concentric cloud-eddy ripples around the two dragon coils
-  const eddies = [
-    { cx: 148, cy: 256, maxR: 92 },
-    { cx: 364, cy: 256, maxR: 92 },
-    { cx: 256, cy: 168, maxR: 64 },
-    { cx: 256, cy: 344, maxR: 64 },
-  ];
-  for (const ed of eddies) {
-    for (let r = 18; r <= ed.maxR; r += 9) {
-      c.beginPath();
-      c.arc(ed.cx, ed.cy, r, 0, TWO_PI);
-      c.strokeStyle = 'rgba(150, 148, 140, 0.45)';
-      c.lineWidth = 2.0;
-      c.stroke();
-    }
-  }
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(2, 1);
-  tex.needsUpdate = true;
-  return tex;
 }
 
 /**
@@ -536,11 +474,6 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     depthWrite: false,
     toneMapped: false,
   });
-  const blueSchistMat = new THREE.MeshStandardMaterial({
-    color: 0x3b535e,
-    roughness: 0.78,
-    metalness: 0.14,
-  });
   const cloudGraniteMat = new THREE.MeshStandardMaterial({
     color: 0xd6d3cb,
     roughness: 0.85,
@@ -549,10 +482,6 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   const cedarTrunkMat = new THREE.MeshStandardMaterial({
     color: 0x4a3222,
     roughness: 0.92,
-  });
-  const cedarFoliageMat = new THREE.MeshStandardMaterial({
-    color: 0x1e3f29,
-    roughness: 0.86,
   });
   const pineFoliageMat = new THREE.MeshStandardMaterial({
     color: 0x2c5834,
@@ -573,10 +502,8 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     lanternGlowMat,
     eternalFlameMat,
     auraRingMat,
-    blueSchistMat,
     cloudGraniteMat,
     cedarTrunkMat,
-    cedarFoliageMat,
     pineFoliageMat
   );
 
@@ -1133,23 +1060,11 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   daitoGroup.add(daitoFallbackGroup);
 
   if (typeof window !== 'undefined' && typeof fetch === 'function') {
-    const loader = new GLTFLoader();
-    loader.load(
-      '/models/kukai/konpon_daito.glb',
-      (gltf) => {
-        const model = gltf.scene;
-        model.traverse((child) => {
-          if (child.isMesh) {
-            child.castShadow = true;
-            child.receiveShadow = true;
-          }
-        });
-        daitoGroup.add(model);
-        daitoFallbackGroup.visible = false;
-      },
-      undefined,
-      () => {}
-    );
+    disposables.push(loadJapanLandmarks({
+      parent: daitoGroup,
+      fallback: daitoFallbackGroup,
+      specs: [{ url: '/models/kukai/konpon_daito.glb' }],
+    }));
   }
   // The collider follows the complete 14 m stone plinth rather than ending
   // inside it, preventing the player capsule from blending into its edge.
@@ -1581,23 +1496,9 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   banryuteiGroup.position.set(0, getHeight(0, -22), -22);
   kongobujiGroup.add(banryuteiGroup);
 
-  // Raked white Shirakawa gravel bed (`26m × 16m`) with procedural Samon wave texture
-  const gravelTex = createBanryuteiGravelTexture();
-  if (gravelTex) disposables.push(gravelTex);
-  const gravelBedMat = new THREE.MeshStandardMaterial({
-    color: 0xf5f3ed,
-    map: gravelTex,
-    bumpMap: gravelTex,
-    bumpScale: 0.08,
-    roughness: 0.92,
-    metalness: 0.02,
-  });
-  disposables.push(gravelBedMat);
-
-  const gravelBed = new THREE.Mesh(new THREE.BoxGeometry(26.0, 0.14, 16.0), gravelBedMat);
-  gravelBed.position.set(0, 0.07, 0);
-  gravelBed.receiveShadow = true;
-  banryuteiGroup.add(gravelBed);
+  const gravelBed = addRakedGravel(banryuteiGroup, { x: 0, y: 0.141, z: 0, width: 26, depth: 16,
+    rings: [{ x: -6.2, z: 0, stretch: 1.15 }, { x: 6.2, z: 0, stretch: 1.15 }] });
+  disposables.push(gravelBed.geometry, gravelBed.material, gravelBed.material.map);
 
   // Low timber-and-plaster viewing border & northern enclosure wall (`築地塀`)
   const brBorderTimber = [];
@@ -1630,58 +1531,40 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   addBoxCollider(-13.2, 13.2, -22 - 8.2, -22 + 8.0);
 
   // 140 Blue-Chlorite Schist Stones (`四國青石`, InstancedMesh) arranged as Coiling Male & Female Dragons (`雌雄雙龍`)
-  const dragonStoneGeo = new THREE.DodecahedronGeometry(0.55, 0);
-  dragonStoneGeo.scale(0.85, 1.35, 0.65);
-  disposables.push(dragonStoneGeo);
+  const dragonStoneGeo = createGraniteGeometry(9.2, 1);
+  dragonStoneGeo.scale(1.06, 1.12, 0.91);
+  const dragonStoneMat = createGraniteMaterial();
+  disposables.push(dragonStoneGeo, dragonStoneMat, dragonStoneMat.map);
 
   const DRAGON_STONE_COUNT = 140;
-  const dragonStonesInst = new THREE.InstancedMesh(dragonStoneGeo, blueSchistMat, DRAGON_STONE_COUNT);
+  const dragonStonesInst = new THREE.InstancedMesh(dragonStoneGeo, dragonStoneMat, DRAGON_STONE_COUNT);
   dragonStonesInst.castShadow = true;
   dragonStonesInst.receiveShadow = true;
 
-  let dStoneIdx = 0;
-  // West Dragon (`雄龍`, 70 stones along a coiling S-curve centered around x = -6.2)
-  for (let i = 0; i < 70; i++) {
-    const u = i / 69; // 0 (tail in north) -> 1 (head rearing toward south-center)
-    const spineZ = -6.2 + u * 12.4;
-    const spineX = -6.4 + Math.sin(u * Math.PI * 2.2) * 3.4;
-    const rowOffset = ((i % 3) - 1) * 0.52;
-    const sx = spineX + rowOffset;
-    const sz = spineZ + (i % 2) * 0.25;
-    const isHead = i >= 64;
-    const hScale = isHead ? 1.85 : 0.75 + Math.sin(u * Math.PI) * 0.85 + (i % 3) * 0.18;
+  const stoneRng = seededRandom(1643);
+  const stonesPerDragon = DRAGON_STONE_COUNT / 2;
+  let stoneIndex = 0;
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < stonesPerDragon; i++) {
+      const u = i / (stonesPerDragon - 1);
+      const coil = u * TWO_PI * 1.1;
+      const spineZ = side * (6.2 - u * 12.4);
+      const spineX = side * (6.4 - Math.sin(coil) * 3.4);
+      const rowOffset = ((i % 3) - 1) * 0.66;
+      const x = spineX + rowOffset + (stoneRng() - 0.5) * 0.48;
+      const z = spineZ + (stoneRng() - 0.5) * 0.72;
+      const isHead = i === 65 || i === 68;
+      const isOuterStone = i % 3 !== 1;
+      const height = isHead ? 1.55 + stoneRng() * 0.63 : 0.25 + stoneRng() * (isOuterStone ? 0.63 : 1.08);
+      const width = (isHead ? 1.26 : 0.53) + stoneRng() * 0.62;
+      const yaw = Math.atan2(Math.cos(coil) * 3.4, 4) + (stoneRng() - 0.5) * 2.7;
 
-    dummy.position.set(sx, 0.14 + hScale * 0.32, sz);
-    dummy.rotation.set(
-      0.22 * Math.cos(u * Math.PI * 2),
-      Math.atan2(Math.cos(u * Math.PI * 2.2) * 3.4, 4.0) + (i % 3) * 0.25,
-      0.18
-    );
-    dummy.scale.set(0.85 + (i % 2) * 0.25, hScale, 0.75 + (i % 3) * 0.2);
-    dummy.updateMatrix();
-    dragonStonesInst.setMatrixAt(dStoneIdx++, dummy.matrix);
-  }
-
-  // East Dragon (`雌龍`, 70 stones along a mirrored S-curve centered around x = +6.2)
-  for (let i = 0; i < 70; i++) {
-    const u = i / 69;
-    const spineZ = 6.2 - u * 12.4;
-    const spineX = 6.4 - Math.sin(u * Math.PI * 2.2) * 3.4;
-    const rowOffset = ((i % 3) - 1) * 0.52;
-    const sx = spineX + rowOffset;
-    const sz = spineZ - (i % 2) * 0.25;
-    const isHead = i >= 64;
-    const hScale = isHead ? 1.80 : 0.72 + Math.sin(u * Math.PI) * 0.82 + (i % 3) * 0.18;
-
-    dummy.position.set(sx, 0.14 + hScale * 0.32, sz);
-    dummy.rotation.set(
-      -0.22 * Math.cos(u * Math.PI * 2),
-      Math.atan2(-Math.cos(u * Math.PI * 2.2) * 3.4, -4.0) + (i % 3) * 0.25,
-      -0.18
-    );
-    dummy.scale.set(0.85 + (i % 2) * 0.25, hScale, 0.75 + (i % 3) * 0.2);
-    dummy.updateMatrix();
-    dragonStonesInst.setMatrixAt(dStoneIdx++, dummy.matrix);
+      dummy.position.set(x, 0.14 + height * 0.35, z);
+      dummy.rotation.set((stoneRng() - 0.5) * 0.66, yaw, (stoneRng() - 0.5) * 0.72);
+      dummy.scale.set(width, height, width * (0.68 + stoneRng() * 0.52));
+      dummy.updateMatrix();
+      dragonStonesInst.setMatrixAt(stoneIndex++, dummy.matrix);
+    }
   }
   dragonStonesInst.instanceMatrix.needsUpdate = true;
   banryuteiGroup.add(dragonStonesInst);
@@ -1720,28 +1603,11 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   okunoinGroup.add(okunoinPathMesh);
 
   // ---------------------------------------------------------------- 6B. Millennium Cedar Avenue (`千年杉木林`, 96 trees via InstancedMesh)
-  const cedarTrunkGeo = new THREE.CylinderGeometry(0.38, 0.68, 18.0, 8);
-  cedarTrunkGeo.translate(0, 9.0, 0);
-
-  const fTier1 = new THREE.ConeGeometry(3.4, 6.5, 8);
-  fTier1.translate(0, 12.5, 0);
-  const fTier2 = new THREE.ConeGeometry(2.7, 5.8, 8);
-  fTier2.translate(0, 16.2, 0);
-  const fTier3 = new THREE.ConeGeometry(1.85, 5.0, 8);
-  fTier3.translate(0, 19.6, 0);
-  const cedarCrownGeo = mergeAndDispose([fTier1, fTier2, fTier3]);
-  disposables.push(cedarTrunkGeo, cedarCrownGeo);
-
   const CEDAR_COUNT = 96;
-  const cedarTrunksInst = new THREE.InstancedMesh(cedarTrunkGeo, cedarTrunkMat, CEDAR_COUNT);
-  const cedarCrownsInst = new THREE.InstancedMesh(cedarCrownGeo, cedarFoliageMat, CEDAR_COUNT);
-  cedarTrunksInst.castShadow = true;
-  cedarTrunksInst.receiveShadow = true;
-  cedarCrownsInst.castShadow = true;
-
   const cedarRng = seededRandom(8160);
-  let cedarIdx = 0;
-  for (let i = 0; i < 320 && cedarIdx < CEDAR_COUNT; i++) {
+  const cedars = [];
+  for (let i = 0; i < 320 && cedars.length < CEDAR_COUNT; i++) {
+    const cedarIdx = cedars.length;
     let cx;
     let cz;
     if (cedarIdx < 76) {
@@ -1766,19 +1632,13 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     const cy = getHeight(cx, cz);
     const sc = 0.78 + cedarRng() * 0.55;
     const hScale = 0.85 + cedarRng() * 0.55;
-    dummy.position.set(cx, cy - 0.2, cz);
-    dummy.rotation.set(0, cedarRng() * TWO_PI, (cedarRng() - 0.5) * 0.04);
-    dummy.scale.set(sc, sc * hScale, sc);
-    dummy.updateMatrix();
-    cedarTrunksInst.setMatrixAt(cedarIdx, dummy.matrix);
-    cedarCrownsInst.setMatrixAt(cedarIdx, dummy.matrix);
-    cedarIdx++;
+    cedars.push({
+      x: cx, y: cy - 0.2, z: cz,
+      width: sc, height: sc * hScale,
+      yaw: cedarRng() * TWO_PI, lean: (cedarRng() - 0.5) * 0.04,
+    });
   }
-  cedarTrunksInst.count = cedarIdx;
-  cedarCrownsInst.count = cedarIdx;
-  cedarTrunksInst.instanceMatrix.needsUpdate = true;
-  cedarCrownsInst.instanceMatrix.needsUpdate = true;
-  okunoinGroup.add(cedarTrunksInst, cedarCrownsInst);
+  addJapanTrees(okunoinGroup, cedars, { name: 'Mount Kōya cedars', species: 'cedar', disposables });
 
   // ---------------------------------------------------------------- 6C. Gorintō Memorial Forest (`五輪塔群`, 200 five-ring stupas via InstancedMesh)
   const gorintoGeo = createGorintoGeometry();
@@ -2181,8 +2041,7 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     emissiveIntensity: 0.16,
     roughness: 0.74,
   });
-  const koyasanCrownGeo = new THREE.DodecahedronGeometry(1.35, 1);
-  disposables.push(koyasanMapleMat, koyasanCherryMat, koyasanCrownGeo);
+  disposables.push(koyasanMapleMat, koyasanCherryMat);
 
   const koyasanMapleSpots = [
     [-74, 18], [-74, -8], [-22, 18], [-22, -8], [-16, 22], [16, 22],
@@ -2192,31 +2051,13 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     [-64, 24], [-36, 24], [-58, -14], [-32, -12], [-14, 34], [14, 34],
     [-12, -32], [12, -32],
   ];
-  const koyasanMapleInst = new THREE.InstancedMesh(
-    koyasanCrownGeo,
-    koyasanMapleMat,
-    koyasanMapleSpots.length
-  );
-  const koyasanCherryInst = new THREE.InstancedMesh(
-    koyasanCrownGeo,
-    koyasanCherryMat,
-    koyasanCherrySpots.length
-  );
-  koyasanMapleSpots.forEach(([mx, mz], idx) => {
-    dummy.position.set(mx, getHeight(mx, mz) + 3.2, mz);
-    dummy.scale.set(1.35, 0.95, 1.35);
-    dummy.updateMatrix();
-    koyasanMapleInst.setMatrixAt(idx, dummy.matrix);
+  const onGround = ([x, z]) => ({ x, y: getHeight(x, z), z, scale: 1.05 });
+  const maples = addJapanTrees(root, koyasanMapleSpots.map(onGround), {
+    name: 'Mount Kōya maples', species: 'maple', canopyMaterial: koyasanMapleMat, disposables,
   });
-  koyasanCherrySpots.forEach(([cx, cz], idx) => {
-    dummy.position.set(cx, getHeight(cx, cz) + 3.3, cz);
-    dummy.scale.set(1.4, 0.98, 1.4);
-    dummy.updateMatrix();
-    koyasanCherryInst.setMatrixAt(idx, dummy.matrix);
+  const cherries = addJapanTrees(root, koyasanCherrySpots.map(onGround), {
+    name: 'Mount Kōya cherries', species: 'cherry', canopyMaterial: koyasanCherryMat, disposables,
   });
-  koyasanMapleInst.instanceMatrix.needsUpdate = true;
-  koyasanCherryInst.instanceMatrix.needsUpdate = true;
-  root.add(koyasanMapleInst, koyasanCherryInst);
 
   // Japanese Aesthetic Atmospheric Layer: Slanted Komorebi Sunbeam Shafts (`高野山木漏れ日・密嚴瑞光`)
   const koyasanKomorebiMat = new THREE.MeshBasicMaterial({
@@ -2251,6 +2092,8 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   function applyKoyasanSeason(season) {
     if (season === appliedKoyasanSeason) return;
     appliedKoyasanSeason = season;
+    cherries.setSeason(season);
+    maples.setSeason(season);
     if (season === 'spring') {
       koyasanCherryMat.color.setHex(0xf9a8d4);
       koyasanCherryMat.emissive.setHex(0x831843);
@@ -2401,7 +2244,7 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     },
     getStats() {
       return {
-        cedarCount: cedarTrunksInst.count,
+        cedarCount: cedars.length,
         gorintoCount: gorintoInst.count,
         stoneLanternCount: stoneLanternsInst.count,
         hangingLanternCount: hangingLanternsInst.count,
