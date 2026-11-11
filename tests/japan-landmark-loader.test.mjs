@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { loadJapanLandmarks } from '../src/world/japanLandmarkLoader.js';
+import { lightJapanLandmark } from '../src/world/japanLandmarkLighting.js';
 
 function fixture(onReady) {
   const parent = new THREE.Group();
@@ -60,4 +61,39 @@ test('disposing while loading cannot attach or leak a late model', async () => {
   assert.equal(await f.loaded.ready, false); assert.equal(f.parent.children.length, 0);
   assert.deepEqual(a.disposals, { geometry: 1, material: 1, texture: 1 });
   assert.deepEqual(b.disposals, a.disposals);
+});
+
+test('low-spec landmark lighting keeps the UV1 hero bake and releases unused architectural normals', async () => {
+  for (const lowSpec of [true, false]) {
+    const architectureNormal = new THREE.Texture();
+    const heroNormal = new THREE.Texture();
+    heroNormal.channel = 1;
+    const architecture = new THREE.MeshStandardMaterial({ name: 'Timber_TemplePBR', normalMap: architectureNormal });
+    const hero = new THREE.MeshStandardMaterial({ name: 'Dainichi_BakedGilt', normalMap: heroNormal });
+    const scene = new THREE.Group();
+    const geometry = new THREE.BoxGeometry();
+    scene.add(new THREE.Mesh(geometry, [architecture, hero]), new THREE.Mesh(geometry, architecture));
+    const disposed = [];
+    architectureNormal.addEventListener('dispose', () => disposed.push(architectureNormal));
+    heroNormal.addEventListener('dispose', () => disposed.push(heroNormal));
+
+    const loaded = loadJapanLandmarks({
+      parent: new THREE.Group(),
+      fallback: new THREE.Group(),
+      specs: [{ url: 'toji_kodo.glb', scale: 1.25 }],
+      loader: { async loadAsync() { return { scene }; } },
+      onReady([model]) {
+        lightJapanLandmark(model, { landmark: 'kodo', x: 7500, z: -36, lowSpec });
+      },
+    });
+
+    assert.equal(await loaded.ready, true);
+    assert.equal(architecture.normalMap, lowSpec ? null : architectureNormal);
+    assert.equal(hero.normalMap, heroNormal);
+    assert.equal(hero.normalMap.channel, 1);
+    assert.equal(architecture.customProgramCacheKey().split('|japan-hall-south').length, 2);
+    assert.equal(disposed.length, 0);
+    loaded.dispose();
+    assert.deepEqual(disposed, [architectureNormal, heroNormal]);
+  }
 });

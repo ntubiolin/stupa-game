@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { extendJapanMaterial } from './japanLandmarkLighting.js';
 import { seededRandom } from './mapBase.js';
 import { SKY_SHADER_UNIFORMS } from './sky.js';
 
@@ -90,15 +91,8 @@ function makeTile(draw) {
   return texture;
 }
 
-function extendMaterial(material, key, compile) {
-  const previousCompile = material.onBeforeCompile;
-  const previousKey = material.customProgramCacheKey();
-  material.onBeforeCompile = function (shader, renderer) {
-    previousCompile.call(this, shader, renderer);
-    compile(shader);
-  };
-  material.customProgramCacheKey = () => `${previousKey}|toji-${key}`;
-  material.needsUpdate = true;
+export function createJapanGravelTile() {
+  return makeTile(drawGravel);
 }
 
 function addLocalCoordinates(shader, center) {
@@ -124,7 +118,7 @@ function dressCourtyardSurface(material, center, footprint, tile, paving) {
   // Explicit ownership metadata lets the quality harness count uniforms added
   // by onBeforeCompile, which do not appear in standard material.map fields.
   material.userData.extraTextures = [...(material.userData.extraTextures || []), tile];
-  extendMaterial(material, paving ? 'paving' : 'gravel', shader => {
+  extendJapanMaterial(material, paving ? 'toji-paving' : 'toji-gravel', shader => {
     addLocalCoordinates(shader, center);
     shader.uniforms.uCourtyardTile = { value: tile };
     shader.uniforms.uKondoFootprint = footprint;
@@ -174,7 +168,7 @@ export function createTojiCourtyard({ origin, x, z, terrainMaterial, pavingMater
   const center = { value: new THREE.Vector2(origin.x + x, origin.z + z) };
   // Start with the procedural podium and steps, then match the scaled GLB on asset swap.
   const footprint = { value: new THREE.Vector4(14.2, 9.2, 3.8, 1.04) };
-  const gravel = makeTile(drawGravel);
+  const gravel = createJapanGravelTile();
   const paving = makeTile(drawPaving);
   if (gravel) {
     dressCourtyardSurface(terrainMaterial, center, footprint, gravel, false);
@@ -186,6 +180,8 @@ export function createTojiCourtyard({ origin, x, z, terrainMaterial, pavingMater
   }
 
   return {
+    gravel,
+    paving,
     lightHall(model) {
       const scale = model.scale.x;
       footprint.value.set(9.1, 5.9, 2.4, 0.96).multiplyScalar(scale);
@@ -204,7 +200,7 @@ export function createTojiCourtyard({ origin, x, z, terrainMaterial, pavingMater
         if (lowSpec && material.name.endsWith('_KondoPBR') && material.normalMap) {
           material.normalMap = null;
         }
-        extendMaterial(material, 'hall', shader => {
+        extendJapanMaterial(material, 'toji-hall', shader => {
           addLocalCoordinates(shader, center);
           shader.uniforms.uKondoNight = SKY_SHADER_UNIFORMS.uNightFactor;
           shader.fragmentShader = shader.fragmentShader

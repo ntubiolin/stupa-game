@@ -32,6 +32,7 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/data/japan.js`, `src/data/maps/japanPilgrimage.js`, `src/world/maps/japanPilgrimage.js` | World | Six-stop Kūkai route contract and four additional lazy, instanced pilgrimage maps: Qinglong, Kii, Kongōbu-ji, Okunoin |
 | `src/world/japanArchitecture.js` | World | Japanese lantern waypoint model and unlock illumination, no PointLights |
 | `src/world/tojiCourtyard.js` | World | Kondō forecourt gravel and paving, podium contact shading, and day/night-aware hall lighting on existing materials |
+| `src/world/japanLandmarkLighting.js` | World | Kōdō, Gojū-no-tō, and Konpon Daitō interior and eave shading, localized ground contact, and mobile material quality |
 | `src/world/japanLandmarkLoader.js` | World | Atomic GLB landmark replacement and owned-resource disposal, including late load responses |
 | `src/world/japanGardenArchitecture.js` | World | Deterministic gravel/bump textures, instanced fractured granite and curved cypress-bark roofs |
 | `src/world/japanVegetation.js` | World | Instanced cedar and seasonal trees, original cutout textures, spatial chunks and distance LOD |
@@ -362,12 +363,18 @@ Blender MCP session authors the source; gameplay only loads the exported assets.
 fallback on failure, and owns GPU-resource disposal across late async responses.
 Asset budgets and reference provenance are in `docs/japan-temple-art.md`.
 The focused Kondō reference adds `toji_materials.py` (offline PBR/UV authoring)
-and `toji_yakushi.py` (principal image plus normal/AO baking). Only Kondō gains
-the embedded 512px-or-smaller maps; high-resolution sculpt sources never ship.
+and `toji_yakushi.py` (principal image plus normal/AO baking). High-resolution
+sculpt sources stay in the offline authoring pipeline.
 `tojiCourtyard.js` modifies existing materials within the forecourt, with
 short-range contact shading and day/night-aware reflected light. Its two 256px
 textures are disposed with the map and registered in `material.userData.extraTextures`
-for memory accounting. No new light, post-processing pass or ctx API is added.
+for memory accounting. `japanLandmarkLighting.js` applies bounded interior,
+eave, and ground contact shading to Kōdō, Gojū-no-tō, and Konpon Daitō using
+existing geometry and the shared sky's night factor. The Tō-ji approaches reuse
+the Kondō tiles. Daitō owns one additional 256px gravel tile with the same
+memory accounting. Low-spec rendering skips architectural normal maps on the
+three GLBs while retaining the sculpted figures' UV1 maps. No new light,
+post-processing pass or ctx API is added.
 The matched-camera capture harness and budgets are documented in
 `docs/toji-quality-reference.md`.
 Garden helper textures are generated once per scene; the raked surface uses a
