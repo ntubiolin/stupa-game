@@ -20,7 +20,7 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { loadJapanLandmarks } from '../japanLandmarkLoader.js';
 import {
   createHeightfieldTerrain,
   addRimMountains,
@@ -1756,44 +1756,26 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
   const glbMapleMats = [];
 
   if (typeof window !== 'undefined' && typeof fetch === 'function') {
-    const loader = new GLTFLoader();
-    const glbSpecs = [
-      { url: '/models/kukai/toji_gojunoto.glb', x: pagodaX, y: 0, z: pagodaZ, scale: 1.05 },
-      { url: '/models/kukai/toji_kondo.glb', x: kondoX, y: 0, z: kondoZ, scale: 1.25 },
-      { url: '/models/kukai/toji_kodo.glb', x: kodoX, y: 0, z: kodoZ, scale: 1.25 },
-    ];
-    let loadedCount = 0;
-    for (const spec of glbSpecs) {
-      loader.load(
-        spec.url,
-        (gltf) => {
-          const model = gltf.scene;
-          model.position.set(spec.x, spec.y, spec.z);
-          model.scale.setScalar(spec.scale);
-          model.traverse((child) => {
-            if (child.isMesh) {
-              child.castShadow = true;
-              child.receiveShadow = true;
-              const mName = child.material?.name || '';
-              if (mName.includes('Sakura')) {
-                glbSakuraMats.push(child.material);
-              } else if (mName.includes('Momiji')) {
-                glbMapleMats.push(child.material);
-              }
-            }
-          });
-          blenderMasterpieceGroup.add(model);
-          loadedCount += 1;
-          if (loadedCount === glbSpecs.length) {
-            proceduralLandmarksGroup.visible = false;
-            appliedSeason = null;
-            applySeasonalPalette(state?.time?.season || 'spring');
-          }
-        },
-        undefined,
-        () => {}
-      );
-    }
+    const landmarks = loadJapanLandmarks({
+      parent: blenderMasterpieceGroup,
+      fallback: proceduralLandmarksGroup,
+      specs: [
+        { url: '/models/kukai/toji_gojunoto.glb', x: pagodaX, z: pagodaZ, scale: 1.05 },
+        { url: '/models/kukai/toji_kondo.glb', x: kondoX, z: kondoZ, scale: 1.25 },
+        { url: '/models/kukai/toji_kodo.glb', x: kodoX, z: kodoZ, scale: 1.25 },
+      ],
+      onReady(models) {
+        for (const model of models) model.traverse(child => {
+          if (!child.isMesh) return;
+          const name = child.material?.name || '';
+          if (name.includes('Sakura')) glbSakuraMats.push(child.material);
+          else if (name.includes('Momiji')) glbMapleMats.push(child.material);
+        });
+        appliedSeason = null;
+        applySeasonalPalette(state?.time?.season || 'spring');
+      },
+    });
+    disposables.push(landmarks);
   }
 
   // ---------------------------------------------------------------- 10. Weeping Cherry (`不二櫻`) & Crimson Japanese Maples (`紅葉`) InstancedMeshes

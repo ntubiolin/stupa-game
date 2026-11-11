@@ -16,12 +16,13 @@ import bpy
 import bmesh
 import math
 import os
+from pathlib import Path
 from mathutils import Vector
 
-ARTIFACT_DIR = "/Users/linyusheng/.gemini/antigravity/brain/cbab4513-8817-4e76-9d7c-e3fb52f208a8"
-GLB_OUT_DIR = "/Users/linyusheng/.gemini/antigravity/worktrees/stupa_game/japan_kukai_epic_locations/public/models/kukai"
-os.makedirs(ARTIFACT_DIR, exist_ok=True)
-os.makedirs(GLB_OUT_DIR, exist_ok=True)
+REPO_ROOT = Path(__file__).resolve().parents[2]
+ARTIFACT_DIR = os.environ.get("JAPAN_ARTIFACT_DIR", str(REPO_ROOT / "artifacts/japan-art"))
+GLB_OUT_DIR = os.environ.get("JAPAN_MODEL_DIR", str(REPO_ROOT / "public/models/kukai"))
+
 
 
 def make_mat(name, base_color, roughness=0.5, metallic=0.0, emission_color=None, emission_strength=0.0):
@@ -1096,6 +1097,8 @@ def clear_all_meshes():
 
 
 def main():
+    os.makedirs(ARTIFACT_DIR, exist_ok=True)
+    os.makedirs(GLB_OUT_DIR, exist_ok=True)
     bpy.ops.wm.read_factory_settings(use_empty=True)
     scene = bpy.context.scene
     pal = create_palette()

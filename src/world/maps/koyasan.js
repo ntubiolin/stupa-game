@@ -27,7 +27,7 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { loadJapanLandmarks } from '../japanLandmarkLoader.js';
 import {
   createHeightfieldTerrain,
   addRimMountains,
@@ -1133,23 +1133,11 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   daitoGroup.add(daitoFallbackGroup);
 
   if (typeof window !== 'undefined' && typeof fetch === 'function') {
-    const loader = new GLTFLoader();
-    loader.load(
-      '/models/kukai/konpon_daito.glb',
-      (gltf) => {
-        const model = gltf.scene;
-        model.traverse((child) => {
-          if (child.isMesh) {
-            child.castShadow = true;
-            child.receiveShadow = true;
-          }
-        });
-        daitoGroup.add(model);
-        daitoFallbackGroup.visible = false;
-      },
-      undefined,
-      () => {}
-    );
+    disposables.push(loadJapanLandmarks({
+      parent: daitoGroup,
+      fallback: daitoFallbackGroup,
+      specs: [{ url: '/models/kukai/konpon_daito.glb' }],
+    }));
   }
   addBoxCollider(-62 - 6.6, -62 + 6.6, 6 - 6.6, 6 + 6.6);
 

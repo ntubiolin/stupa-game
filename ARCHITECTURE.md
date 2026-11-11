@@ -31,6 +31,7 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/world/maps/koyasan.js` | World | Kūkai Epic map: Mount Kōya (`高野山`, `origin = (8000, 0)`), Danjō Garan (`壇上伽藍` Konpon Daitō, Kondō, Miedō, Sanko-no-Matsu), Kongōbu-ji (`金剛峯寺` & Banryūtei rock garden), and Okunoin (`奧之院` Gobyōbashi, 1,000-year cedars, Gorintō stupas, Tōrōdō & Kōbō Daishi Gobyō) (lazy-loaded) |
 | `src/data/japan.js`, `src/data/maps/japanPilgrimage.js`, `src/world/maps/japanPilgrimage.js` | World | Six-stop Kūkai route contract and four additional lazy, instanced pilgrimage maps: Qinglong, Kii, Kongōbu-ji, Okunoin |
 | `src/world/japanArchitecture.js` | World | Japanese lantern waypoint model and unlock illumination, no PointLights |
+| `src/world/japanLandmarkLoader.js` | World | Atomic GLB landmark replacement and owned-resource disposal, including late load responses |
 | `src/data/japanCampaign.js`, `src/systems/japanCampaign.js`, `src/gameplay/japanCampaignModels.js`, `src/ui/japanCampaign.js` | Gameplay | Thirty ordered Japan objectives, regional NPCs, local lamp, encounter markers and mobile tracker; isolated campaign save |
 | `src/data/japanSkills.js`, `src/player/japanPilgrim.js`, `src/gameplay/skills/japanSkillVisuals.js`, `src/gameplay/skills/kukaiCompanion.js` | Gameplay | Regional player outfit, seven Shingon ability forms, shared combat rules and temporary Kūkai follower |
 | `src/world/maps/sandbox.js` | World | debug sandbox arena with flat ground, scattered rocks, trial stone circle, Mani cairn (lazy-loaded) |
@@ -346,6 +347,13 @@ Qinglong → Tō-ji → Kii → Kōya → Kongōbu-ji → Okunoin. This is a the
 pilgrimage through the Epic, not a strictly chronological reconstruction.
 Existing `toji` and `koyasan` IDs and their landmark architecture remain compatible.
 New scenes use shared geometry/instancing and add no PointLights.
+
+The temple art pipeline (`scripts/blender/build_japan_temple_art.py` and
+`japan_sculpture.py`) reproducibly exports four material-batched GLBs. A dedicated
+Blender MCP session authors the source; gameplay only loads the exported assets.
+`loadJapanLandmarks()` commits a complete set atomically, keeps its procedural
+fallback on failure, and owns GPU-resource disposal across late async responses.
+Asset budgets and reference provenance are in `docs/japan-temple-art.md`.
 
 Settings starts the campaign at Qinglong. The Japan world route shows all six
 stops and enables chapter travel through `ctx.japanCampaign.isChapterUnlocked`.
