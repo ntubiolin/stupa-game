@@ -1,4 +1,5 @@
 import '../i18n/settings.js';
+import { isJapanMap } from '../data/japan.js';
 import '../i18n/muralPrototype.js';
 import { DIFFICULTIES, getDifficulty, resolveDifficulty } from '../data/combatSettings.js';
 import { MURAL_PROTO_MODES, MURAL_PROTO_PASSCODE, normalizeMuralProtoMode } from './muralPrototype.js';
@@ -26,8 +27,7 @@ export function isJapanModeEnabled(ctx) {
   const saved = ctx?.save?.get?.('settings', {})?.japanMode ?? ctx?.state?.japanMode;
   return (
     normalizeJapanMode(saved) === 'on' ||
-    ctx?.state?.zone === 'toji' ||
-    ctx?.state?.zone === 'koyasan'
+    isJapanMap(ctx?.state?.zone)
   );
 }
 
@@ -84,6 +84,7 @@ export function createSettingsUi(ctx) {
       </div>
       <p id="japan-mode-hint" class="settings-hint" aria-live="polite"></p>
       <div id="japan-mode-try-actions" class="settings-mural-proto__try-actions is-hidden">
+        <button type="button" class="settings-mural-proto__try-btn" data-japan-tp="qinglong" data-i18n="settings.japanMode.start"></button>
         <button type="button" class="settings-mural-proto__try-btn" data-japan-tp="toji" data-i18n="settings.japanMode.tryToji"></button>
         <button type="button" class="settings-mural-proto__try-btn settings-mural-proto__try-btn--b" data-japan-tp="koyasan" data-i18n="settings.japanMode.tryKoyasan"></button>
       </div>
@@ -544,7 +545,7 @@ export function createSettingsUi(ctx) {
       close();
       if (targetZone && ctx.zones?.teleport) {
         ctx.zones.teleport(targetZone, {
-          spawn: targetZone === 'toji' ? 'gojunoto' : 'garan',
+          spawn: { toji: 'gojunoto', koyasan: 'garan' }[targetZone] || 'default',
         });
       }
     });

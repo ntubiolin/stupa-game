@@ -29,8 +29,9 @@ const zh = {
   'settings.japanMode': '🇯🇵 日本模式（空海大師篇）',
   'settings.japanMode.off': '關閉（預設）',
   'settings.japanMode.on': '開啟',
-  'settings.japanMode.offHint': '預設隱藏日本空海大師支線地圖（京都東寺、高野山），維持純粹的尼泊爾與雪域藏傳巡禮世界輿圖。',
-  'settings.japanMode.onHint': '已開啟日本模式！於「聖境巡禮圖（按 M）」顯示東方真言密教支線快捷傳送列，並於「世界輿圖」解鎖「京都東寺」與「高野山・金剛峯寺」。',
+  'settings.japanMode.offHint': '開啟後可在世界輿圖查看空海巡禮路線。',
+  'settings.japanMode.start': '從青龍寺開始巡禮',
+  'settings.japanMode.onHint': '從青龍寺出發，完成各章巡禮以開啟下一站。也可直接參觀東寺與高野山。',
   'settings.japanMode.tryToji': '🏯 立即前往：京都東寺',
   'settings.japanMode.tryKoyasan': '⛰️ 立即前往：高野山',
 
@@ -111,8 +112,9 @@ const en = {
   'settings.japanMode': '🇯🇵 Japan Mode (Kūkai Shingon Edition)',
   'settings.japanMode.off': 'Off (Default)',
   'settings.japanMode.on': 'On',
-  'settings.japanMode.offHint': 'Hides the Japanese Kūkai Shingon expansion maps (Kyoto Tō-ji & Mount Kōya) by default, keeping the Himalayan pilgrimage world map pure.',
-  'settings.japanMode.onHint': 'Japan Mode enabled! Displays the Eastern Shingon quick-travel bar and unlocks Kyoto Tō-ji and Mount Kōya on the World Map (press M).',
+  'settings.japanMode.offHint': 'Enable to show Kūkai’s pilgrimage on the World Map.',
+  'settings.japanMode.start': 'Begin the pilgrimage at Qinglong Temple',
+  'settings.japanMode.onHint': 'Begin at Qinglong Temple and complete each chapter to open the next stop. Tō-ji and Mount Kōya are also open for visits.',
   'settings.japanMode.tryToji': '🏯 Visit Now: Kyoto Tō-ji',
   'settings.japanMode.tryKoyasan': '⛰️ Visit Now: Mount Kōya',
 

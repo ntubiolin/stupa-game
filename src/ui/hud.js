@@ -12,6 +12,8 @@
  */
 import { Vector3 } from 'three';
 import { ACHIEVEMENTS } from '../systems/merit.js';
+import { isJapanMap } from '../data/japan.js';
+import '../i18n/japanMaps.js';
 import '../i18n/elites.js';
 import '../i18n/stupaBuild.js';
 
@@ -2018,7 +2020,7 @@ export function createHud(ctx) {
       }
     }
 
-    // 2b. Japanese Emaki Scroll Badge (`#japan-emaki-scroll`) for `toji` & `koyasan`
+    // 2b. Japanese Emaki Scroll Badge
     const curLang = i18n.getLang ? i18n.getLang() : 'zh-Hant';
     const emakiKey = `${curZone}:${curSeason}:${curLang}`;
     if (emakiKey !== root._lastEmakiKey) {
@@ -2027,10 +2029,11 @@ export function createHud(ctx) {
       const emakiSeal = root.querySelector('#japan-emaki-seal');
       const emakiTitle = root.querySelector('#japan-emaki-title');
       const emakiSub = root.querySelector('#japan-emaki-sub');
-      const isJp = curZone === 'toji' || curZone === 'koyasan';
+      const isJp = isJapanMap(curZone);
       if (emakiScroll) {
         emakiScroll.classList.toggle('is-hidden', !isJp);
         if (isJp && emakiSeal && emakiTitle && emakiSub) {
+          emakiScroll.lang = curLang;
           const isEn = curLang === 'en';
           if (curZone === 'toji') {
             emakiSeal.textContent = '空海';
@@ -2042,7 +2045,7 @@ export function createHud(ctx) {
               winter: isEn ? 'Sacred Pagoda in Snow' : '冬・九條雪見伽藍',
             };
             emakiSub.textContent = seasonVerse[curSeason] || seasonVerse.spring;
-          } else {
+          } else if (curZone === 'koyasan') {
             emakiSeal.textContent = '遍照';
             emakiTitle.textContent = isEn ? 'Mt. Kōya · Kongōbu-ji' : '高野山・金剛峯';
             const seasonVerse = {
@@ -2052,6 +2055,10 @@ export function createHud(ctx) {
               winter: isEn ? 'Snowy Mandala Basin' : '冬・密嚴淨土雪嶺',
             };
             emakiSub.textContent = seasonVerse[curSeason] || seasonVerse.spring;
+          } else {
+            emakiSeal.textContent = '空海';
+            emakiTitle.textContent = i18n.t(`hud.japan.emaki.${curZone}.name`);
+            emakiSub.textContent = i18n.t(`hud.japan.emaki.${curZone}.verse`);
           }
         }
       }

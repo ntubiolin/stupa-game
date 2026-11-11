@@ -30,6 +30,7 @@ import {
 import { TOJI_MAP } from '../../data/maps/toji.js';
 import { i18n } from '../../i18n.js';
 import '../../i18n/toji.js';
+import { addJapanRouteGate } from '../japanArchitecture.js';
 
 const TWO_PI = Math.PI * 2;
 
@@ -417,6 +418,10 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
   const disposables = [];
 
   function registerCollider(shape) {
+    if (shape.type === 'box') {
+      const { cx, cz, hx, hz } = shape;
+      shape = { type: 'box', minX: cx - hx, maxX: cx + hx, minZ: cz - hz, maxZ: cz + hz };
+    }
     const col = { ...shape, zone: 'toji' };
     colliders.push(col);
     pushCollider(ctx, 'toji', shape);
@@ -427,6 +432,11 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
     if (Array.isArray(ctx?.interactables)) {
       ctx.interactables.push(item);
     }
+  }
+
+  addJapanRouteGate(root, -23, getHeight(ox - 23, oz + 70), 70);
+  for (const x of [-25.05, -20.95]) {
+    registerCollider({ type: 'circle', x: ox + x, z: oz + 70, r: 0.38 });
   }
 
   // ---------------------------------------------------------------- 1. Terrain & Distant Kyoto Mountains
