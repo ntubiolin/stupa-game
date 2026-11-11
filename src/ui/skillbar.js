@@ -12,6 +12,7 @@
  *   using pointerdown + stopPropagation() for simultaneous dual-thumb joystick + skill casting.
  */
 import { SKILLS } from '../data/skills.js';
+import { isJapanMap } from '../data/japan.js';
 import { i18n } from '../i18n.js';
 import '../i18n/skills.js';
 import { getSkillIconSvg, getProtectorIconSvg } from './skillIcons.js';
@@ -92,10 +93,9 @@ export function createSkillbar(ctx) {
     skillBarEl.appendChild(btn);
     slotEls.set(def.id, {
       btn,
-      def,
       cdEl: btn.querySelector('.skill-slot__cd'),
       cdTextEl: btn.querySelector('.skill-slot__cd-text'),
-      mpEl: btn.querySelector('.skill-slot__mp'),
+      glyphEl: btn.querySelector('.skill-slot__glyph'),
       rankDotsEl: btn.querySelector('.skill-slot__rank-dots'),
       ultFillEl: btn.querySelector('.skill-slot__ult-fill'),
       chargeEl: btn.querySelector('.skill-slot__charge'),
@@ -187,6 +187,7 @@ export function createSkillbar(ctx) {
   mobileSlotEls.set(basicDef.id, {
     btn: centerBtn,
     cdEl: centerBtn.querySelector('.arc-btn__cd'),
+    glyphEl: centerBtn.querySelector('.arc-btn__glyph'),
   });
 
   // Arc satellite buttons around the primary button
@@ -219,6 +220,7 @@ export function createSkillbar(ctx) {
     mobileSlotEls.set(def.id, {
       btn: b,
       cdEl: b.querySelector('.arc-btn__cd'),
+      glyphEl: b.querySelector('.arc-btn__glyph'),
     });
   });
 
@@ -296,6 +298,23 @@ export function createSkillbar(ctx) {
   });
   mobilePadEl.appendChild(jumpPadBtn);
 
+  const bowPadBtn = document.createElement('button');
+  bowPadBtn.id = 'btn-mobile-pad-prostrate';
+  bowPadBtn.type = 'button';
+  bowPadBtn.className = 'arc-btn arc-btn--prostrate glass-panel is-hidden';
+  bowPadBtn.dataset.mobileAction = 'prostrate';
+  bowPadBtn.innerHTML = '<span class="arc-btn__icon" aria-hidden="true">🙏</span><kbd class="arc-btn__key">Q</kbd>';
+  bowPadBtn.addEventListener('pointerdown', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    ctx.input?.trigger('prostrate');
+  });
+  bowPadBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (e.detail === 0) ctx.input?.trigger('prostrate');
+  });
+  mobilePadEl.appendChild(bowPadBtn);
+
   playHud.appendChild(mobilePadEl);
 
   // ---------------------------------------------------------------- 3. Skills Modal Panel (K)
@@ -339,7 +358,43 @@ export function createSkillbar(ctx) {
     renderModal();
   });
 
-  function formatEffectText(def, rankIndex) {
+  function skillGlyph(def) {
+    return def.abilityId ? def.glyph : getSkillIconSvg(def.id);
+  }
+
+  function syncSkillLabels() {
+    const japan = isJapanMap(state.zone);
+    const title = i18n.t(japan ? 'skills.japan.title' : 'skills.title');
+    skillBarEl.setAttribute('aria-label', title);
+    mobilePadEl.setAttribute('aria-label', title);
+    openModalBtn.setAttribute('aria-label', title);
+    bowPadBtn.setAttribute('aria-label', `${i18n.t('controls.prostrate')} (Q)`);
+    skillBarEl.classList.toggle('is-shingon', japan);
+    mobilePadEl.classList.toggle('is-shingon', japan);
+
+    for (const skill of ctx.skills?.list?.() || []) {
+      const desktop = slotEls.get(skill.id);
+      const mobile = mobileSlotEls.get(skill.id);
+      const label = `${skill.name} (${skill.keyLabel})`;
+      for (const control of [desktop, mobile]) {
+        if (!control) continue;
+        control.glyphEl.innerHTML = skillGlyph(skill.def);
+        control.btn.dataset.abilityId = skill.abilityId;
+        control.btn.setAttribute('aria-label', label);
+      }
+      if (desktop?.tooltipEl) desktop.tooltipEl.textContent = skill.name;
+      if (mobile) mobile.btn.title = label;
+    }
+  }
+
+  function formatEffectText(def, rankIndex, enhancement) {
+    if (def.abilityId === 'dogyoNinin') {
+      const healingPct = def.rankScaling.healingPct[rankIndex] * (enhancement === 'a' ? 1.5 : 1);
+      return i18n.t('skills.japan.companionEffect', {
+        dur: def.rankScaling.duration[rankIndex],
+        pct: Number((healingPct * 100).toFixed(2)),
+      });
+    }
     const shieldPct = def.rankScaling?.shieldPct?.[rankIndex];
     if (typeof shieldPct === 'number') {
       return i18n.t('skills.effectShield', { pct: Math.round(shieldPct * 100) });
@@ -401,7 +456,9 @@ export function createSkillbar(ctx) {
     const pts = ctx.skills.getPoints();
     const inHub = (state.zone || 'stupa') === 'stupa' || state.zoneType === 'hub';
 
-    modalTitleEl.textContent = i18n.t('skills.title');
+    const japan = isJapanMap(state.zone);
+    modalEl.classList.toggle('is-shingon', japan);
+    modalTitleEl.textContent = i18n.t(japan ? 'skills.japan.title' : 'skills.title');
     modalSubtitleEl.textContent = i18n.t('skills.subtitle');
     modalPointsPillEl.textContent = i18n.t('skills.points', { points: pts });
     modalPointsPillEl.dataset.points = String(pts);
@@ -419,14 +476,15 @@ export function createSkillbar(ctx) {
       const row = document.createElement('article');
       row.className = `skill-row ${sk.unlocked ? 'is-unlocked' : 'is-locked'}`;
       row.dataset.skillId = def.id;
+      row.dataset.abilityId = sk.abilityId;
       if (def.alias) row.dataset.skillAlias = def.alias;
       row.dataset.slot = def.slot;
 
       const curIdx = Math.max(0, Math.min(sk.maxRank - 1, sk.rank - 1));
-      const curEffect = formatEffectText(def, curIdx);
+      const curEffect = formatEffectText(def, curIdx, sk.enh);
       const nextEffect =
         sk.rank < sk.maxRank
-          ? i18n.t('skills.nextEffect', { effect: formatEffectText(def, curIdx + 1) })
+          ? i18n.t('skills.nextEffect', { effect: formatEffectText(def, curIdx + 1, sk.enh) })
           : i18n.t('skills.maxRankReached');
 
       const mpLabel =
@@ -434,7 +492,7 @@ export function createSkillbar(ctx) {
           ? i18n.t('skills.mpCost', { mp: def.mpCost })
           : i18n.t('skills.mpFree');
       const cdLabel = def.maxCharge
-        ? i18n.t('skills.chargeCost', { max: def.maxCharge })
+        ? i18n.t('skills.chargeCost', { max: sk.maxCharge })
         : i18n.t('skills.cooldown', {
             cd: sk.effectiveCooldown.toFixed(2).replace(/\.00$/, ''),
           });
@@ -449,7 +507,7 @@ export function createSkillbar(ctx) {
       row.innerHTML = `
         <div class="skill-row__main">
           <div class="skill-row__icon" data-skill-id="${def.id}">
-            <span class="skill-row__glyph" aria-hidden="true">${getSkillIconSvg(def.id)}</span>
+            <span class="skill-row__glyph" aria-hidden="true">${skillGlyph(def)}</span>
             <kbd class="skill-row__key">${def.keyLabel}</kbd>
           </div>
           <div class="skill-row__info">
@@ -494,7 +552,7 @@ export function createSkillbar(ctx) {
             </button>
           </div>
         </div>
-        ${def.id === 'protector' ? renderProtectorSelector() : ''}
+        ${def.id === 'protector' && !def.abilityId ? renderProtectorSelector() : ''}
         ${
           enhA && enhB
             ? `
@@ -597,11 +655,7 @@ export function createSkillbar(ctx) {
 
   // Re-render modal & tooltips when language or skill ranks/points/protectors change
   i18n.onChange(() => {
-    for (const ui of slotEls.values()) {
-      const name = i18n.t(ui.def.nameKey);
-      if (ui.tooltipEl) ui.tooltipEl.textContent = name;
-      ui.btn.setAttribute('aria-label', `${name} (${ui.def.keyLabel})`);
-    }
+    syncSkillLabels();
     const jumpLabel = i18n.t('controls.jump');
     const jumpTip = jumpBarBtn.querySelector('.skill-slot__tooltip');
     if (jumpTip) jumpTip.textContent = jumpLabel;
@@ -624,8 +678,10 @@ export function createSkillbar(ctx) {
     if (modalOpen) renderModal();
   });
   bus?.on('zone:change', () => {
+    syncSkillLabels();
     if (modalOpen) renderModal();
   });
+  syncSkillLabels();
 
   // ---------------------------------------------------------------- 4. Per-Frame Update
   function update() {
@@ -655,7 +711,9 @@ export function createSkillbar(ctx) {
     const freeMp = Boolean(state.player?.shrineFreeMp);
 
     // Toggle mobile pad vs Stupa ritual buttons based on zone
-    if (isCombat) {
+    const japan = isJapanMap(state.zone);
+    bowPadBtn.classList.toggle('is-hidden', !japan || isCombat);
+    if (isCombat || japan) {
       mobilePadEl.classList.remove('is-hidden');
       if (mobileActions) mobileActions.classList.add('is-combat-hidden');
     } else {
@@ -682,9 +740,9 @@ export function createSkillbar(ctx) {
       const noMp =
         !freeMp &&
         sk.unlocked &&
-        def.mpCost > 0 &&
+        sk.mpCost > 0 &&
         (def.id !== 'mantra' || isCombat) &&
-        curMp < def.mpCost;
+        curMp < sk.mpCost;
 
       const ui = slotEls.get(def.id);
       if (ui) {

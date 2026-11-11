@@ -5368,6 +5368,17 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
   display: block;
 }
 
+.is-shingon .skill-slot__glyph,
+.is-shingon .skill-row__glyph,
+.is-shingon .arc-btn__glyph {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.is-shingon .arc-btn--primary .arc-btn__glyph {
+  font-size: 2rem;
+}
+
 .skill-slot__tooltip {
   position: absolute;
   bottom: calc(100% + 7px);
@@ -5941,6 +5952,20 @@ body.is-touch-device:has(#play-hud:not(.is-hidden):not(.is-hud-minimized)) .joys
   width: 44px;
   height: 44px;
   border-color: rgba(251, 191, 36, 0.55);
+}
+
+.mobile-skill-pad.is-shingon .arc-btn--jump {
+  right: 8px;
+  bottom: 81px;
+  width: 37px;
+  height: 37px;
+}
+
+.arc-btn--prostrate {
+  right: 154px;
+  bottom: 176px;
+  width: 44px;
+  height: 44px;
 }
 
 .arc-btn--interact.is-ready {

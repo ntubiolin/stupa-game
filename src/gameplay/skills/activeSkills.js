@@ -9,6 +9,11 @@
  * Strictly 0 PointLights (uses additive MeshBasicMaterial / emissive / rings / canvas sprites).
  */
 import * as THREE from 'three';
+import { isJapanMap } from '../../data/japan.js';
+import {
+  disposeSkillVisual, makeAjikanWard, makeDiamondRealm, makeFudoSword, makeGorinWave,
+} from './japanSkillVisuals.js';
+import { createKukaiCompanion } from './kukaiCompanion.js';
 
 const GURU_SYLLABLES = ['ཨོཾ', 'ཨཱཿ', 'ཧཱུྃ', 'བ', 'ཛྲ', 'གུ', 'རུ', 'པ', 'དྨ', 'སི', 'དྡྷི', 'ཧཱུྃ'];
 
@@ -23,10 +28,16 @@ export function createActiveSkills(ctx) {
   const plantedDaggers = [];
   const expandingRings = [];
   const guruChannels = [];
+  const japanWaves = [];
+  const kukai = createKukaiCompanion(ctx, group, (position) => {
+    spawnExpandingRing(position, 2.4, 0xf9c576, 0.8);
+    spawnExpandingRing(state.player.position, 1.45, 0xa7f0bd, 0.65);
+  });
 
   // Orbiting lotus shield petals
   let lotusPetalGroup = null;
   let lotusShieldActive = false;
+  let ajikanWard = null;
 
   function ensureLotusPetals() {
     if (lotusPetalGroup) return lotusPetalGroup;
@@ -129,6 +140,18 @@ export function createActiveSkills(ctx) {
     });
   }
 
+  function spawnJapanWave(mesh, origin, radius, duration, dir = 0) {
+    mesh.position.copy(origin);
+    mesh.rotation.y = dir;
+    mesh.scale.set(0.22, 1, 0.22);
+    group.add(mesh);
+    const opacities = new Map();
+    mesh.traverse((part) => {
+      if (part.material) opacities.set(part.material, part.material.opacity);
+    });
+    japanWaves.push({ mesh, opacities, radius, duration, elapsed: 0 });
+  }
+
   function buildPhurbaMesh() {
     const dagger = new THREE.Group();
     // 3-sided pyramid blade
@@ -212,7 +235,10 @@ export function createActiveSkills(ctx) {
       origin = cloneEnemyPos(state.player?.position),
       dir = state.player.heading || 0,
       damageMult = 1.4,
+      abilityId,
     } = payload;
+    const sword = abilityId === 'fudoSword';
+    const buildBlade = sword ? makeFudoSword : buildPhurbaMesh;
 
     const hasSplitPower = hasPhurbaSplitPower();
     const rootDur = 2.0 + (hasSplitPower ? 1.0 : 0);
@@ -242,7 +268,7 @@ export function createActiveSkills(ctx) {
       const halfWidth = 0.65;
 
       // Spawn visual flying 3-sided Phurba dagger
-      const mesh = buildPhurbaMesh();
+      const mesh = buildBlade();
       mesh.position.set(origin.x, (origin.y || 0) + 1.0, origin.z);
       mesh.rotation.y = a;
       group.add(mesh);
@@ -259,7 +285,7 @@ export function createActiveSkills(ctx) {
         start: mesh.position.clone(),
         end: new THREE.Vector3(endX, endY + 0.9, endZ),
         elapsed: 0,
-        duration: 0.28,
+        duration: sword ? 0.42 : 0.28,
       });
 
       // Query enemies along the 12m x 1m line
@@ -295,7 +321,7 @@ export function createActiveSkills(ctx) {
             centerEndY,
             origin.z - Math.cos(dir) * 6.0
           );
-      const plantedMesh = buildPhurbaMesh();
+      const plantedMesh = buildBlade();
       plantedMesh.position.set(plantPos.x, (plantPos.y || 0) + 0.45, plantPos.z);
       plantedMesh.rotation.x = -Math.PI * 0.5;
       group.add(plantedMesh);
@@ -306,6 +332,7 @@ export function createActiveSkills(ctx) {
         timer: 1.0,
         radius: 4.0,
         damageMult: 0.6,
+        sword,
       });
     }
 
@@ -317,7 +344,7 @@ export function createActiveSkills(ctx) {
       for (const other of nearby) {
         if (other.id === firstHitEnemy.id) continue;
         const otherPos = cloneEnemyPos(other, firstHitPos.y);
-        const boltMesh = buildPhurbaMesh();
+        const boltMesh = buildBlade();
         boltMesh.position.set(firstHitPos.x, (firstHitPos.y || 0) + 0.9, firstHitPos.z);
         boltMesh.rotation.y = Math.atan2(
           -(otherPos.x - firstHitPos.x),
@@ -363,6 +390,7 @@ export function createActiveSkills(ctx) {
       dir = state.player.heading || 0,
       damageMult = 1.0,
       stunDuration = 1.0,
+      abilityId,
     } = payload;
 
     // Enh A ('周遍'): full 360° circle (5m radius) around player
@@ -371,14 +399,19 @@ export function createActiveSkills(ctx) {
     const radius = isCircle ? 5.0 : 7.0;
     const halfAngle = isCircle ? Math.PI : Math.PI * 0.25;
 
-    spawnExpandingRing(origin, radius, 0xfde68a, 0.48);
+    if (abilityId === 'gorinResonance') {
+      spawnJapanWave(makeGorinWave(halfAngle), origin, radius, 0.65, dir);
+    } else {
+      spawnExpandingRing(origin, radius, 0xfde68a, 0.48);
+    }
 
     // Dispel enemy magic projectiles inside the cone/circle
-    const dispelledCount =
-      ctx.projectiles?.dispelInArea?.(origin, radius, {
-        dir,
-        halfAngle: isCircle ? Math.PI : halfAngle,
-      }) || 0;
+    const dispelledCount = ctx.projectiles?.dispelInArea?.({
+      origin,
+      radius,
+      dirRad: dir,
+      halfAngleRad: halfAngle,
+    }) || 0;
 
     // Query enemies inside cone or circle
     const targets = isCircle
@@ -417,10 +450,14 @@ export function createActiveSkills(ctx) {
     if (!lotusShieldActive) return;
     lotusShieldActive = false;
     if (lotusPetalGroup) lotusPetalGroup.visible = false;
+    const ajikan = Boolean(ajikanWard);
+    if (ajikanWard) disposeSkillVisual(ajikanWard);
+    ajikanWard = null;
+    if (reason === 'zoneChange') return;
 
     const origin = cloneEnemyPos(state.player?.position);
     const radius = 4.0;
-    spawnExpandingRing(origin, radius, 0xf472b6, 0.55);
+    spawnExpandingRing(origin, radius, ajikan ? 0xbce8ff : 0xf472b6, 0.55);
 
     const targets = ctx.enemies?.queryCircle?.(origin, radius) || [];
     for (const e of targets) {
@@ -455,18 +492,26 @@ export function createActiveSkills(ctx) {
       enh = null,
       shieldPct = 0.3,
       duration = 6.0,
+      abilityId,
     } = payload;
 
     const maxHp = Math.max(1, Number(state.player?.maxHp) || 100);
     const shieldAmount = Math.max(1, Math.round(maxHp * shieldPct));
 
     lotusShieldActive = true;
-    const petals = ensureLotusPetals();
-    petals.visible = true;
-    petals.position.copy(state.player.position);
+    if (abilityId === 'ajikanWard') {
+      if (ajikanWard) disposeSkillVisual(ajikanWard);
+      ajikanWard = makeAjikanWard();
+      ajikanWard.position.copy(state.player.position);
+      group.add(ajikanWard);
+    } else {
+      const petals = ensureLotusPetals();
+      petals.visible = true;
+      petals.position.copy(state.player.position);
+    }
 
     if (ctx.vitals?.addShield) {
-      ctx.vitals.addShield(shieldAmount, duration, { enh, source: 'lotusShield' });
+      ctx.vitals.addShield(shieldAmount, duration, { enh, source: abilityId === 'ajikanWard' ? 'ajikanWard' : 'lotusShield' });
     } else {
       state.player.shield = shieldAmount;
       state.player.shieldMax = shieldAmount;
@@ -475,18 +520,23 @@ export function createActiveSkills(ctx) {
       state.player.shieldEnh = enh;
     }
 
-    spawnExpandingRing(state.player.position, 2.2, 0xf9a8d4, 0.45);
+    spawnExpandingRing(state.player.position, 2.2, ajikanWard ? 0xbce8ff : 0xf9a8d4, 0.45);
     bus?.emit('sfx', { name: 'lotus' });
   }
 
   bus?.on('shield:ended', ({ reason, absorbed, enh, source } = {}) => {
-    if (source === 'lotusShield' || lotusShieldActive) {
+    if (source === 'lotusShield' || source === 'ajikanWard' || lotusShieldActive) {
       triggerLotusBurst(reason, absorbed, enh);
     }
   });
 
   // ---------------------------------------------------------------- 4. Dharma Protector Summon (護法召喚)
   function castProtector(payload = {}) {
+    if (payload.abilityId === 'dogyoNinin') {
+      kukai.summon(payload);
+      return;
+    }
+
     const {
       enh = null,
       damageMult = 1.0,
@@ -545,26 +595,42 @@ export function createActiveSkills(ctx) {
       damageMult = 5.0,
       radius = 16.0,
       channelDuration = 2.5,
+      abilityId,
     } = payload;
+    const japan = abilityId === 'diamondRealm';
 
     const effectiveRadius = enh === 'a' ? 22.0 : radius;
 
     // Player is invulnerable during the 2.5s channel
-    state.player.invulnUntil = Math.max(
-      state.player.invulnUntil || 0,
-      (state.elapsed || 0) + channelDuration
-    );
-    if (ctx.vitals?.addBuff) {
-      ctx.vitals.addBuff('vajraGuruChannel', { invuln: true }, channelDuration);
-    }
+    const invulnUntil = (state.elapsed || 0) + channelDuration;
+    const previousInvulnUntil = state.player.invulnUntil || 0;
+    state.player.invulnUntil = Math.max(previousInvulnUntil, invulnUntil);
+    ctx.vitals?.addBuff?.(japan ? 'diamondRealmChannel' : 'vajraGuruChannel', { invuln: true }, channelDuration);
 
     // Enh B ('加持'): for 10.0s after casting, all skills cost 0 MP
     if (enh === 'b') {
       if (ctx.vitals?.addBuff) {
-        ctx.vitals.addBuff('guruBlessing', { freeMp: true }, 10.0);
+        ctx.vitals.addBuff(japan ? 'diamondRealmBlessing' : 'guruBlessing', { freeMp: true }, 10.0);
       } else {
         state.player.shrineFreeMp = true;
       }
+    }
+
+    if (japan) {
+      const mandala = makeDiamondRealm();
+      spawnJapanWave(mandala, origin, effectiveRadius, channelDuration);
+      const result = applyGuruWave(origin, effectiveRadius, damageMult);
+      guruChannels.push({
+        ringGroup: mandala,
+        japan: true,
+        invulnUntil,
+        previousInvulnUntil,
+        elapsed: 0,
+        duration: channelDuration,
+      });
+      bus?.emit('sfx', { name: 'vajraGuru' });
+      bus?.emit('vajraGuru:cast', { rank, enh, radius: effectiveRadius, ...result });
+      return;
     }
 
     // Build 12 Tibetan syllables ring expanding outward to effectiveRadius
@@ -609,7 +675,8 @@ export function createActiveSkills(ctx) {
       damageMult,
       elapsed: 0,
       duration: channelDuration,
-      climaxTriggered: true,
+      invulnUntil,
+      previousInvulnUntil,
     });
 
     spawnExpandingRing(origin, effectiveRadius, 0xfbbf24, 1.1);
@@ -630,8 +697,52 @@ export function createActiveSkills(ctx) {
   bus?.on('skill:effect:protector', castProtector);
   bus?.on('skill:effect:vajraGuru', castVajraGuru);
 
+  bus?.on('zone:change', ({ from, to } = {}) => {
+    if (!isJapanMap(from) && !isJapanMap(to)) return;
+
+    kukai.dismiss();
+    const player = state.player;
+    if (lotusShieldActive) {
+      triggerLotusBurst('zoneChange');
+      if (player.shieldSource === 'ajikanWard' || player.shieldSource === 'lotusShield') {
+        ctx.vitals?.clearShield?.('zoneChange');
+      }
+    }
+    for (const list of [flyingDaggers, plantedDaggers, expandingRings, japanWaves]) {
+      for (const { mesh } of list) disposeSkillVisual(mesh);
+      list.length = 0;
+    }
+    for (const channel of guruChannels) {
+      if (!channel.japan) disposeSkillVisual(channel.ringGroup);
+      if (player.invulnUntil === channel.invulnUntil) {
+        player.invulnUntil = channel.previousInvulnUntil;
+      }
+    }
+    guruChannels.length = 0;
+    ctx.vitals?.removeBuff?.('diamondRealmChannel');
+    ctx.vitals?.removeBuff?.('diamondRealmBlessing');
+    ctx.vitals?.removeBuff?.('vajraGuruChannel');
+    ctx.vitals?.removeBuff?.('guruBlessing');
+  });
+
   // ---------------------------------------------------------------- Per-Frame Update
   function update(dt) {
+    kukai.update(dt);
+
+    for (let i = japanWaves.length - 1; i >= 0; i--) {
+      const wave = japanWaves[i];
+      wave.elapsed += dt;
+      const u = Math.min(1, wave.elapsed / wave.duration);
+      const radius = 0.22 + (wave.radius - 0.22) * Math.pow(u, 0.72);
+      wave.mesh.scale.set(radius, 1, radius);
+      for (const [material, opacity] of wave.opacities) {
+        material.opacity = opacity * (1 - Math.pow(u, 1.75));
+      }
+      if (u >= 1) {
+        disposeSkillVisual(wave.mesh);
+        japanWaves.splice(i, 1);
+      }
+    }
     // 1. Update flying Phurba daggers
     for (let i = flyingDaggers.length - 1; i >= 0; i--) {
       const d = flyingDaggers[i];
@@ -640,7 +751,7 @@ export function createActiveSkills(ctx) {
       d.mesh.position.lerpVectors(d.start, d.end, u);
       d.mesh.rotation.z += dt * 18;
       if (u >= 1) {
-        group.remove(d.mesh);
+        disposeSkillVisual(d.mesh);
         flyingDaggers.splice(i, 1);
       }
     }
@@ -651,7 +762,7 @@ export function createActiveSkills(ctx) {
       pd.timer -= dt;
       pd.mesh.rotation.y += dt * 8;
       if (pd.timer <= 0) {
-        spawnExpandingRing(pd.pos, pd.radius, 0x38bdf8, 0.45);
+        spawnExpandingRing(pd.pos, pd.radius, pd.sword ? 0xff7936 : 0x38bdf8, 0.45);
         const hits = ctx.enemies?.queryCircle?.(pd.pos, pd.radius) || [];
         for (const e of hits) {
           const rolled = computeSkillDamage(pd.damageMult);
@@ -662,18 +773,19 @@ export function createActiveSkills(ctx) {
             source: 'phurba:explode',
           });
         }
-        group.remove(pd.mesh);
+        disposeSkillVisual(pd.mesh);
         plantedDaggers.splice(i, 1);
       }
     }
 
     // 3. Orbiting Lotus Shield petals
-    if (lotusShieldActive && lotusPetalGroup) {
+    if (lotusShieldActive) {
       if ((state.player?.shield || 0) <= 0) {
         triggerLotusBurst('broken', state.player?.shieldAbsorbed || 0, state.player?.shieldEnh);
       } else {
-        lotusPetalGroup.position.copy(state.player.position);
-        lotusPetalGroup.rotation.y += dt * 2.6;
+        const ward = ajikanWard || lotusPetalGroup;
+        ward.position.copy(state.player.position);
+        ward.rotation.y += dt * (ajikanWard ? 0.7 : 2.6);
       }
     }
 
@@ -698,6 +810,10 @@ export function createActiveSkills(ctx) {
       const gc = guruChannels[i];
       gc.elapsed += dt;
       const u = Math.min(1, gc.elapsed / gc.duration);
+      if (gc.japan) {
+        if (u >= 1) guruChannels.splice(i, 1);
+        continue;
+      }
       const curRad = 1.5 + (gc.maxRadius - 1.5) * Math.pow(u, 0.75);
 
       gc.ringGroup.position.x = state.player.position.x;
@@ -715,7 +831,7 @@ export function createActiveSkills(ctx) {
       state.player.invulnUntil = Math.max(state.player.invulnUntil || 0, (state.elapsed || 0) + 0.15);
 
       if (u >= 1) {
-        group.remove(gc.ringGroup);
+        disposeSkillVisual(gc.ringGroup);
         guruChannels.splice(i, 1);
       }
     }
@@ -729,6 +845,7 @@ export function createActiveSkills(ctx) {
     castProtector,
     castVajraGuru,
     triggerLotusBurst,
+    getJapanCompanion: kukai.getState,
   };
 
   ctx.activeSkills = api;
