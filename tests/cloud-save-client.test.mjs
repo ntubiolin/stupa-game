@@ -13,6 +13,13 @@ import {
 } from '../src/systems/cloudSave.js';
 import { createCommunity } from '../src/systems/community.js';
 
+test('Japan-only pilgrimage progress is not overwritten as a fresh save (#285)', () => {
+  const save = (japanCampaign) => ({ version: 2, sections: { japanCampaign } });
+  assert.equal(isFreshSave(save({ version: 1, completedSteps: [] })), true);
+  assert.equal(isFreshSave(save({ version: 1, completedSteps: ['initiation'] })), false);
+  assert.equal(isFreshSave(save({ version: 1, completedSteps: null })), true);
+});
+
 function withMockEnv(t, initialStorage = {}) {
   const origStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
   const origFetch = Object.getOwnPropertyDescriptor(globalThis, 'fetch');

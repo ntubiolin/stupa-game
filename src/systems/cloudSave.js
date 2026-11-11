@@ -24,6 +24,7 @@ const MILESTONE_EVENTS = [
   'terma:cleared',
   'story:chapter-change',
   'story:phone-change',
+  'japan:progress',
   'community:stupaBuilt',
   'community:samyeContributed',
 ];
@@ -84,6 +85,8 @@ export function isFreshSave(doc) {
     && s.kora === 0
     && s.questsDone === 0
     && !hasStoryProgress(doc)
+    && !(Array.isArray(doc?.sections?.japanCampaign?.completedSteps)
+      && doc.sections.japanCampaign.completedSteps.length > 0)
   );
 }
 
