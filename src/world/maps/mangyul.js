@@ -13,6 +13,10 @@ import { MANGYUL_MAP } from '../../data/maps/mangyul.js';
 
 const ORIGIN_X = MANGYUL_MAP.origin.x; // 3000
 const ORIGIN_Z = MANGYUL_MAP.origin.z; // 0
+const KYIRONG_BRIDGE_Z = 67;
+const KYIRONG_BRIDGE_DECK_HALF_Z = 3.475;
+const KYIRONG_BRIDGE_APPROACH_HALF_Z = 4.675;
+const KYIRONG_BRIDGE_ROAD_HALF_X = 1.6;
 
 // Vibrant 5-color Tibetan Lungta palette (Blue, White, Red, Green, Yellow)
 const LUNGTA_COLORS = [0x2563eb, 0xf8fafc, 0xdc2626, 0x16a34a, 0xeab308];
@@ -256,6 +260,27 @@ export function mangyulHeightFn(wx, wz) {
   }
 
   return h;
+}
+
+const KYIRONG_BRIDGE_DECK_Y = mangyulHeightFn(ORIGIN_X, KYIRONG_BRIDGE_Z) + 0.39;
+
+/** Walkable surface height, including the Kyirong suspension bridge deck and approaches. */
+export function mangyulWalkHeight(wx, wz) {
+  const terrainY = mangyulHeightFn(wx, wz);
+  const lx = wx - ORIGIN_X;
+  const bridgeDistance = Math.abs(wz - KYIRONG_BRIDGE_Z);
+  if (Math.abs(lx) > KYIRONG_BRIDGE_ROAD_HALF_X || bridgeDistance >= KYIRONG_BRIDGE_APPROACH_HALF_Z) {
+    return terrainY;
+  }
+  if (bridgeDistance <= KYIRONG_BRIDGE_DECK_HALF_Z) return KYIRONG_BRIDGE_DECK_Y;
+  const side = wz < KYIRONG_BRIDGE_Z ? -1 : 1;
+  const bankY = mangyulHeightFn(
+    ORIGIN_X,
+    KYIRONG_BRIDGE_Z + side * KYIRONG_BRIDGE_APPROACH_HALF_Z,
+  );
+  const t = (KYIRONG_BRIDGE_APPROACH_HALF_Z - bridgeDistance)
+    / (KYIRONG_BRIDGE_APPROACH_HALF_Z - KYIRONG_BRIDGE_DECK_HALF_Z);
+  return THREE.MathUtils.lerp(bankY, KYIRONG_BRIDGE_DECK_Y, t);
 }
 
 export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
@@ -528,10 +553,49 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   );
   const bridgeGroup = new THREE.Group();
   bridgeGroup.name = 'KyirongSuspensionBridge';
-  const bridgeY = mangyulHeightFn(ORIGIN_X, 67) + 0.28;
-  bridgeGroup.position.set(0, bridgeY, 67);
+  const bridgeY = KYIRONG_BRIDGE_DECK_Y - 0.11;
+  bridgeGroup.position.set(0, bridgeY, KYIRONG_BRIDGE_Z);
   const deck = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(3.8, 0.22, 6.2)), woodMat);
   bridgeGroup.add(deck);
+
+  // Short timber ramps make the same smooth transition exposed by getHeight,
+  // so feet never float above an invisible approach surface.
+  const approachRun = KYIRONG_BRIDGE_APPROACH_HALF_Z - KYIRONG_BRIDGE_DECK_HALF_Z;
+  const approachThickness = 0.18;
+  for (const side of [-1, 1]) {
+    const bankY = mangyulHeightFn(
+      ORIGIN_X,
+      KYIRONG_BRIDGE_Z + side * KYIRONG_BRIDGE_APPROACH_HALF_Z,
+    );
+    const pitch = Math.atan2(KYIRONG_BRIDGE_DECK_Y - bankY, approachRun);
+    const ramp = new THREE.Mesh(
+      trackGeo(new THREE.BoxGeometry(3.8, approachThickness, approachRun / Math.cos(pitch))),
+      woodMat,
+    );
+    ramp.position.set(
+      0,
+      (KYIRONG_BRIDGE_DECK_Y + bankY) * 0.5 - bridgeY
+        - Math.cos(pitch) * approachThickness * 0.5,
+      side * (KYIRONG_BRIDGE_DECK_HALF_Z + approachRun * 0.5)
+        - side * Math.sin(pitch) * approachThickness * 0.5,
+    );
+    ramp.rotation.x = side * pitch;
+    ramp.castShadow = true;
+    ramp.receiveShadow = true;
+    bridgeGroup.add(ramp);
+    for (const x of [-1.75, 1.75]) {
+      const curb = new THREE.Mesh(
+        trackGeo(new THREE.BoxGeometry(0.18, 0.18, approachRun / Math.cos(pitch))),
+        woodMat,
+      );
+      curb.position.copy(ramp.position);
+      curb.position.x = x;
+      curb.position.y += 0.18;
+      curb.rotation.x = ramp.rotation.x;
+      curb.castShadow = true;
+      bridgeGroup.add(curb);
+    }
+  }
 
   // Stone bridge abutments & twin suspension pylon towers at north & south banks
   const abutmentGeo = trackGeo(new THREE.BoxGeometry(4.3, 0.65, 0.85));
@@ -539,7 +603,7 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   const pylonCrossbeamGeo = trackGeo(new THREE.BoxGeometry(4.45, 0.28, 0.38));
   for (const az of [-3.05, 3.05]) {
     const abutment = new THREE.Mesh(abutmentGeo, bridgeStoneMat);
-    abutment.position.set(0, -0.18, az);
+    abutment.position.set(0, -0.215, az);
     bridgeGroup.add(abutment);
 
     // Portal crossbeam & twin stone/timber suspension pylons
@@ -626,6 +690,18 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
     }
   }
   root.add(bridgeGroup);
+
+  // Keep the player between the suspension ropes and pylons while leaving the
+  // full north-south bridge roadway and its bank approaches unobstructed.
+  for (const side of [-1, 1]) {
+    pushCollider(ctx, 'mangyul', {
+      type: 'box',
+      minX: ORIGIN_X + (side < 0 ? -2.12 : KYIRONG_BRIDGE_ROAD_HALF_X),
+      maxX: ORIGIN_X + (side < 0 ? -KYIRONG_BRIDGE_ROAD_HALF_X : 2.12),
+      minZ: KYIRONG_BRIDGE_Z - KYIRONG_BRIDGE_APPROACH_HALF_Z,
+      maxZ: KYIRONG_BRIDGE_Z + KYIRONG_BRIDGE_APPROACH_HALF_Z,
+    });
+  }
 
   // High Gorge-Spanning Prayer-Flag Catenary Lines across the Southern Kyirong Crossing (z ~ 46..70)
   const gorgeFlagSpans = [
@@ -2710,7 +2786,7 @@ export function createMangyulMap(ctx, { presentationOnly = false } = {}) {
   return {
     id: 'mangyul',
     group: zoneGroup,
-    getHeight: mangyulHeightFn,
+    getHeight: mangyulWalkHeight,
     update,
     dispose,
     tenma: tenmaApi,

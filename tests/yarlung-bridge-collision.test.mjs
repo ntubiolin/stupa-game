@@ -60,6 +60,31 @@ test('Yarlung river bridge elevates deck height, ramps smoothly to both banks, a
   // 1. Bridge 3D group and North/South side railing box colliders exist
   const bridgeGroup = yarlung.group.getObjectByName('YarlungRiverBridge');
   assert.ok(bridgeGroup, 'Expected YarlungRiverBridge group in Yarlung map');
+  const deckSurfaces = bridgeGroup.children.filter(child => child.geometry?.type === 'BoxGeometry');
+  const deck = deckSurfaces.find(child => child.geometry.parameters.width === 11
+    && child.geometry.parameters.height === 0.28);
+  const plank = deckSurfaces.find(child => child.geometry.parameters.width === 0.42
+    && child.geometry.parameters.height === 0.04);
+  assert.ok(deck && plank, 'Expected deck and transverse plank geometry');
+  assert.equal(bridgeGroup.position.y + deck.position.y + deck.geometry.parameters.height / 2, 0.52);
+  const plankTop = bridgeGroup.position.y + plank.position.y + plank.geometry.parameters.height / 2;
+  assert.ok(plankTop > 0.52 && plankTop - 0.52 < 0.001,
+    'decorative planks need a sub-millimeter render offset above the collision height');
+  bridgeGroup.updateWorldMatrix(true, true);
+  const ramps = deckSurfaces.filter(child => child.geometry.parameters.width === 1.62
+    && child.geometry.parameters.height === 0.24);
+  assert.equal(ramps.length, 2, 'Expected both rendered approach ramps');
+  for (const x of [3993.8, 4006.2]) {
+    const ramp = ramps.find(child => Math.sign(child.position.x) === Math.sign(x - 4000));
+    const ray = new THREE.Raycaster(
+      new THREE.Vector3(x, 10, 42),
+      new THREE.Vector3(0, -1, 0),
+    );
+    const surface = ray.intersectObject(ramp, false)[0];
+    assert.ok(surface, `Expected rendered approach ramp at x=${x}`);
+    assert.ok(Math.abs(surface.point.y - yarlung.getHeight(x, 42)) < 0.02,
+      `Rendered ramp must match walk height at x=${x}: ${surface.point.y} vs ${yarlung.getHeight(x, 42)}`);
+  }
   const bridgeBoxColliders = ctx.colliders.filter(
     (c) => c.zone === 'yarlung' && c.type === 'box',
   );
