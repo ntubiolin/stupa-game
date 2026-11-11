@@ -64,15 +64,17 @@ function makeKukai() {
 export function createKukaiCompanion(ctx, effectGroup, showHealingWave) {
   const { state, bus } = ctx;
   const destination = new THREE.Vector3();
+  const lateralOffset = ctx.isMobile ? 0.86 : 1.52;
+  const rearOffset = ctx.isMobile ? 0.62 : 1.24;
   let companion = null;
 
   function getPosition() {
     const player = state.player;
     const yaw = player.heading || 0;
     destination.set(
-      player.position.x + Math.cos(yaw) * 1.52 + Math.sin(yaw) * 1.24,
+      player.position.x + Math.cos(yaw) * lateralOffset + Math.sin(yaw) * rearOffset,
       player.position.y,
-      player.position.z - Math.sin(yaw) * 1.52 + Math.cos(yaw) * 1.24
+      player.position.z - Math.sin(yaw) * lateralOffset + Math.cos(yaw) * rearOffset
     );
     destination.y = ctx.world?.getHeight?.(destination.x, destination.z) ?? player.position.y;
     return destination;

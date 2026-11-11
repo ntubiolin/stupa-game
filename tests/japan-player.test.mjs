@@ -12,10 +12,11 @@ import { createCodex } from '../src/systems/codex.js';
 import { createSkills } from '../src/systems/skills.js';
 import { createVitals } from '../src/systems/vitals.js';
 
-function makeGame(saved = {}) {
+function makeGame(saved = {}, { isMobile = false } = {}) {
   const data = structuredClone(saved);
   const ctx = {
     THREE,
+    isMobile,
     config: CONFIG,
     scene: new THREE.Group(),
     camera: new THREE.PerspectiveCamera(),
@@ -277,4 +278,24 @@ test('Japan skill and chant events leave Himalayan mantra lore locked', () => {
   assert.equal(ctx.skills.cast('chant'), true);
   assert.equal(codex.isUnlocked('omManiPadmeHum'), true);
   assert.deepEqual(unlocked, ['omManiPadmeHum']);
+});
+
+
+test('Kūkai stays closer to the pilgrim on mobile and follows turns at that distance', () => {
+  const desktop = makeGame();
+  const mobile = makeGame({}, { isMobile: true });
+  for (const game of [desktop, mobile]) {
+    game.go('toji');
+    assert.equal(game.ctx.skills.cast('dogyoNinin'), true);
+  }
+
+  assert.deepEqual(desktop.ctx.activeSkills.getJapanCompanion().position, [1.52, 0, 1.24]);
+  assert.deepEqual(mobile.ctx.activeSkills.getJapanCompanion().position, [0.86, 0, 0.62]);
+
+  mobile.ctx.state.player.heading = Math.PI / 2;
+  mobile.tick(1);
+  const [x, y, z] = mobile.ctx.activeSkills.getJapanCompanion().position;
+  assert.ok(Math.abs(x - 0.62) < 0.001);
+  assert.equal(y, 0);
+  assert.ok(Math.abs(z + 0.86) < 0.001);
 });
