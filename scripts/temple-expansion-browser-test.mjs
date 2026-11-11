@@ -23,7 +23,7 @@ await runQualityCapture({
   title: 'Japan temples and Tibet landscapes before and after',
   envPrefix: 'TEMPLE_EXPANSION',
   defaultOutput: 'artifacts/temple-expansion',
-  sceneSetup: 'HUD and the combat enemy scene group are hidden in the browser. God mode protects the idle player. First-visit chapter cards are suppressed, and Samye uses monastery stage 4.',
+  sceneSetup: 'The HUD and combat enemy scene group are hidden throughout capture. Enemy AI is frozen and combat projectiles are cleared. God mode protects the idle player. First-visit chapter cards are suppressed, and Samye uses monastery stage 4.',
   mapGroups: {
     toji: 'Zone_toji',
     koyasan: 'KoyasanMap',
@@ -48,8 +48,17 @@ await runQualityCapture({
     { map, id: id + '-night', title: title + ' at night', from, at, time: 0.86 },
   ]),
   prepareMap: (page, map) => page.evaluate(map => {
-    const { scene, quests, vitals, world } = __stupa;
-    scene.getObjectByName('Enemies').visible = false;
+    const { scene, enemies, projectiles, quests, vitals, world } = __stupa;
+    const enemyGroup = scene.getObjectByName('Enemies');
+    // The enemy system rewrites visibility every frame in combat zones.
+    // This override is scoped to the disposable capture page.
+    Object.defineProperty(enemyGroup, 'visible', {
+      configurable: true,
+      get: () => false,
+      set: () => {},
+    });
+    enemies.freeze(true);
+    projectiles.clear();
     vitals.god(true);
     const introFlag = world.getMap(map).chapterIntro?.flag;
     if (introFlag) quests.setFlag(introFlag);
