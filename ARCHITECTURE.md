@@ -32,6 +32,8 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/data/japan.js`, `src/data/maps/japanPilgrimage.js`, `src/world/maps/japanPilgrimage.js` | World | Six-stop Kūkai route contract and four additional lazy, instanced pilgrimage maps: Qinglong, Kii, Kongōbu-ji, Okunoin |
 | `src/world/japanArchitecture.js` | World | Japanese lantern waypoint model and unlock illumination, no PointLights |
 | `src/world/japanLandmarkLoader.js` | World | Atomic GLB landmark replacement and owned-resource disposal, including late load responses |
+| `src/world/japanGardenArchitecture.js` | World | Deterministic gravel/bump textures, instanced fractured granite and curved cypress-bark roofs |
+| `src/world/japanVegetation.js` | World | Instanced cedar and seasonal trees, original cutout textures, spatial chunks and distance LOD |
 | `src/data/japanCampaign.js`, `src/systems/japanCampaign.js`, `src/gameplay/japanCampaignModels.js`, `src/ui/japanCampaign.js` | Gameplay | Thirty ordered Japan objectives, regional NPCs, local lamp, encounter markers and mobile tracker; isolated campaign save |
 | `src/data/japanSkills.js`, `src/player/japanPilgrim.js`, `src/gameplay/skills/japanSkillVisuals.js`, `src/gameplay/skills/kukaiCompanion.js` | Gameplay | Regional player outfit, seven Shingon ability forms, shared combat rules and temporary Kūkai follower |
 | `src/world/maps/sandbox.js` | World | debug sandbox arena with flat ground, scattered rocks, trial stone circle, Mani cairn (lazy-loaded) |
@@ -354,6 +356,12 @@ Blender MCP session authors the source; gameplay only loads the exported assets.
 `loadJapanLandmarks()` commits a complete set atomically, keeps its procedural
 fallback on failure, and owns GPU-resource disposal across late async responses.
 Asset budgets and reference provenance are in `docs/japan-temple-art.md`.
+Garden helper textures are generated once per scene; the raked surface uses a
+single plane. Vegetation shares whole-tree geometry, 128px alpha-tested foliage
+and 64×128px bark. Cedars use 52m spatial chunks with a 68m LOD transition and
+12% hysteresis; distant trees do not cast shadows. Existing Tō-ji/Kōya seasonal
+updates swap prebuilt blossom/leaf/frost textures without per-frame allocation.
+No new public ctx API, bus events or save fields are introduced.
 
 Settings starts the campaign at Qinglong. The Japan world route shows all six
 stops and enables chapter travel through `ctx.japanCampaign.isChapterUnlocked`.

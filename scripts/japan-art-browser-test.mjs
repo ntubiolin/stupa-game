@@ -41,6 +41,8 @@ try {
       const { x, z } = world.getMap(map).origin;
       camera.position.set(x + from[0], from[1], z + from[2]);
       camera.lookAt(x + at[0], at[1], z + at[2]);
+      renderer.setPixelRatio(1);
+      renderer.setSize(1440, 1000, false);
       renderer.render(scene, camera);
       let pointLights = 0; scene.traverse(o => { if (o.isPointLight) pointLights++; });
       return { png: renderer.domElement.toDataURL('image/png').split(',')[1],

@@ -168,7 +168,7 @@ def make_sculptor(base):
 
         # Pointed aureole; body is in front of it. Scalloped outer rim and a
         # circular nimbus replace the old solid rectangular panel.
-        cz=(headz+.65)/2;hh=(headz+.55-.65)/2
+        cz=(headz+.55+.65)/2;hh=(headz+.55-.65)/2
         verts=[(0,.30,cz)];faces=[]
         n=40 if hero else 24
         outline=[]
@@ -192,7 +192,7 @@ def make_sculptor(base):
         if 'Yakushi' in name:
             for i in range(7):
                 t=(i-3)*.40
-                px=.59*math.sin(t);pz=headz-.05+.55*math.cos(t)
+                px=.49*math.sin(t);pz=headz-.05+.55*math.cos(t)
                 ball(f'KebutsuHead{i}',(px,.22,pz),(.037,.035,.047),trim,1)
                 ball(f'KebutsuBody{i}',(px,.22,pz-.085),(.045,.035,.06),trim,1)
                 ball(f'KebutsuLegs{i}',(px,.20,pz-.13),(.065,.04,.025),trim,1)

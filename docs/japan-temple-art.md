@@ -67,6 +67,23 @@ vegetation and seasonal palette. No new PointLights are introduced.
 model in the set succeeds. Failed loads retain the fallback; disposal frees
 geometry, materials and textures, including responses arriving after teardown.
 
+## Gardens and vegetation
+
+Kongōbu-ji's 1,406 physical rake segments (16,872 triangles) become a two-triangle
+surface with an original 768×576 gravel/bump texture. Its precinct, before the
+separate tree update, drops from 46,140 to 32,978 triangles while adding covered
+wooden galleries and a curved cypress-bark roof. Kōyasan retains 140 instanced
+stones with varied profiles and spacing; its more detailed stones add 6,150
+triangles. Routes and collision footprints remain covered by reachability tests.
+
+Trees use branching trunks and layered needle/leaf cutouts. The 128×128 foliage
+textures use alpha testing, mipmaps and opaque depth writes, avoiding sorted
+transparent leaves. Cedars share geometry in 52m spatial chunks; distant clusters
+switch to reduced geometry at 68m with hysteresis and skip shadow casting. Existing
+seasonal hooks select prebuilt blossom, leaf and sparse winter textures. These
+choices bound the cost of improved silhouettes; they do not imply every camera
+renders fewer triangles than the old solid cones.
+
 ## Verification
 
 ```sh

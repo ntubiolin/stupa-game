@@ -613,8 +613,10 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     new THREE.Mesh(mergeAndDispose(wgGold), goldMat)
   );
 
-  // ==================================================================  // PRECINCT 1: 壇上伽藍 (DANJŌ GARAN — West Precinct, lx ∈ [-82, -18])
-  // ==================================================================  const garanGroup = new THREE.Group();
+  // =========================================================================
+  // PRECINCT 1: 壇上伽藍 (DANJŌ GARAN — West Precinct, lx ∈ [-82, -18])
+  // =========================================================================
+  const garanGroup = new THREE.Group();
   garanGroup.name = 'Koyasan_DanjoGaran';
   root.add(garanGroup);
 
@@ -1298,8 +1300,10 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   sankoGroup.add(sankoAuraRing);
   addCircleCollider(-44, -6, 2.4);
 
-  // ==================================================================  // PRECINCT 2: 金剛峯寺 (KONGŌBU-JI — Center Precinct, lx ∈ [-22, 24])
-  // ==================================================================  const kongobujiGroup = new THREE.Group();
+  // =========================================================================
+  // PRECINCT 2: 金剛峯寺 (KONGŌBU-JI — Center Precinct, lx ∈ [-22, 24])
+  // =========================================================================
+  const kongobujiGroup = new THREE.Group();
   kongobujiGroup.name = 'Koyasan_Kongobuji';
   root.add(kongobujiGroup);
 
@@ -1568,8 +1572,10 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   }
   banryuteiGroup.add(new THREE.Mesh(mergeAndDispose(cloudRockGeos), cloudGraniteMat));
 
-  // ==================================================================  // PRECINCT 3: 奧之院 (OKUNOIN — East/Northeast Precinct, lx ∈ [26, 82])
-  // ==================================================================  const okunoinGroup = new THREE.Group();
+  // =========================================================================
+  // PRECINCT 3: 奧之院 (OKUNOIN — East/Northeast Precinct, lx ∈ [26, 82])
+  // =========================================================================
+  const okunoinGroup = new THREE.Group();
   okunoinGroup.name = 'Koyasan_Okunoin';
   root.add(okunoinGroup);
 
