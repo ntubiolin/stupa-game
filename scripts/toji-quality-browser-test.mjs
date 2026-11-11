@@ -1,4 +1,4 @@
-// Start Vite for the build under test. Then run with STORY_BASE_URL,
+// Serve the build under test with Vite dev or preview. Then run with STORY_BASE_URL,
 // TOJI_QUALITY_SOURCE (served revision), and TOJI_QUALITY_LABEL (before/after).
 // TOJI_QUALITY_OUTPUT defaults to artifacts/toji-quality. Set BROWSER_CHANNEL
 // to use an installed Chromium channel such as chrome. Run with --compare
@@ -10,6 +10,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { arch, platform, release } from 'node:os';
 import { resolve } from 'node:path';
 import { chromium, devices } from 'playwright';
+import { TextureUtils } from 'three';
 import { adventureBrowserArgs, startAdventureWithInput } from './adventure-browser-start.mjs';
 
 const base = process.env.STORY_BASE_URL || 'http://127.0.0.1:4173';
@@ -65,8 +66,9 @@ function summarize(samples, gpu) {
 
 async function readProfile(page) {
   return page.evaluate(() => {
-    const { ctx } = window.__game;
-    const { renderer, isMobile, isSoftwareWebGL } = ctx;
+    const { renderer } = window.__stupa;
+    const isMobile = document.body.classList.contains('is-mobile-device');
+    const isSoftwareWebGL = document.body.classList.contains('low-spec-env');
     const gl = renderer.getContext();
     const debug = gl.getExtension('WEBGL_debug_renderer_info');
     return {
@@ -111,9 +113,8 @@ async function setView(page, view) {
 }
 
 async function measureView(page) {
-  return page.evaluate(async ({ warmup, sample }) => {
+  const { textures, memory, ...metrics } = await page.evaluate(async ({ warmup, sample }) => {
     const { renderer, scene, state, camera, sky } = __stupa;
-    const { THREE } = window.__game.ctx;
     const { info } = renderer;
     const originalReset = info.reset;
     const gl = renderer.getContext();
@@ -196,29 +197,6 @@ async function measureView(page) {
       }
     });
 
-    let estimatedMaterialTextureBytes = 0;
-    let unsupportedTextureCount = 0;
-    for (const texture of textures.values()) {
-      try {
-        let levels = texture.mipmaps.length > 0 ? texture.mipmaps : [texture.image];
-        if (texture.generateMipmaps && texture.mipmaps.length === 0) {
-          levels = [];
-          let { width, height } = texture.image;
-          for (;;) {
-            levels.push({ width, height });
-            if (width === 1 && height === 1) break;
-            width = Math.max(1, Math.floor(width / 2));
-            height = Math.max(1, Math.floor(height / 2));
-          }
-        }
-        estimatedMaterialTextureBytes += levels.reduce((bytes, { width, height }) => (
-          bytes + THREE.TextureUtils.getByteLength(width, height, texture.format, texture.type)
-        ), 0);
-      } catch {
-        unsupportedTextureCount++;
-      }
-    }
-
     return {
       samples,
       gpuSamples: disjoint ? [] : gpuSamples,
@@ -229,10 +207,40 @@ async function measureView(page) {
         fov: camera.fov, aspect: camera.aspect },
       pointLights,
       activePointLights,
-      memory: { ...info.memory, estimatedMaterialTextureBytes,
-        uploadedMaterialTextures: textures.size, unsupportedTextureCount },
+      memory: { ...info.memory },
+      textures: [...textures.values()].map(texture => ({
+        format: texture.format,
+        type: texture.type,
+        generateMipmaps: texture.generateMipmaps && texture.mipmaps.length === 0,
+        levels: (texture.mipmaps.length > 0 ? texture.mipmaps : [texture.image])
+          .map(({ width, height }) => [width, height]),
+      })),
     };
   }, frames);
+
+  let estimatedMaterialTextureBytes = 0;
+  let unsupportedTextureCount = 0;
+  for (const { format, type, generateMipmaps, levels } of textures) {
+    try {
+      if (generateMipmaps) {
+        let [width, height] = levels[0];
+        while (width > 1 || height > 1) {
+          width = Math.max(1, Math.floor(width / 2));
+          height = Math.max(1, Math.floor(height / 2));
+          levels.push([width, height]);
+        }
+      }
+      estimatedMaterialTextureBytes += levels.reduce((bytes, [width, height]) => (
+        bytes + TextureUtils.getByteLength(width, height, format, type)
+      ), 0);
+    } catch {
+      unsupportedTextureCount++;
+    }
+  }
+  return {
+    ...metrics,
+    memory: { ...memory, estimatedMaterialTextureBytes, uploadedMaterialTextures: textures.length, unsupportedTextureCount },
+  };
 }
 
 async function captureProfile(browser, report, dir, name, options) {
