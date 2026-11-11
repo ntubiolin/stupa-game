@@ -36,6 +36,15 @@ export function createYokaiMap(ctx, id) {
     addTree(THREE, group, x, z, treeShared, scale);
     ctx.colliders.push({ type: 'circle', x, z, r: .48 * scale, zone: id });
   }
+  if (id === 'tenguForest') {
+    // A second cedar ring closes the forest silhouette while retaining the broad central combat corridor.
+    for (let i = 0; i < 18; i++) {
+      const a = (i / 18) * Math.PI * 2 + .11; const r = 40 + (i % 2) * 3;
+      const x = origin.x + Math.cos(a) * r; const z = origin.z + Math.sin(a) * r;
+      addTree(THREE, group, x, z, treeShared, .92);
+      ctx.colliders.push({ type: 'circle', x, z, r: .44, zone: id });
+    }
+  }
 
   if (id === 'kappaCreek') {
     // A shallow creek: players may wade across it or use the stepping stones.
@@ -55,6 +64,15 @@ export function createYokaiMap(ctx, id) {
       ctx.colliders.push({ type: 'circle', x: origin.x + 2.3, z: origin.z + z, r: .38, zone: id });
     }
   } else {
+    const borderRockGeo = new THREE.ConeGeometry(2.8, 9, 6);
+    const borderRockMat = new THREE.MeshStandardMaterial({ color: 0x382d2b, roughness: 1 });
+    for (let i = 0; i < 22; i++) {
+      const a = (i / 22) * Math.PI * 2; const r = 56 + (i % 3) * 2;
+      const peak = new THREE.Mesh(borderRockGeo, borderRockMat);
+      peak.position.set(origin.x + Math.cos(a) * r, 4.1 + (i % 4) * .55, origin.z + Math.sin(a) * r);
+      peak.scale.set(.75 + (i % 3) * .2, .9 + (i % 4) * .12, .8); peak.rotation.y = a; group.add(peak);
+      ctx.colliders.push({ type: 'circle', x: peak.position.x, z: peak.position.z, r: 1.9, zone: id });
+    }
     for (let i = 0; i < 18; i++) {
       const a = i * 2.13; const r = 20 + (i % 5) * 7;
       const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(1.1 + (i % 3) * .45, 0), new THREE.MeshStandardMaterial({ color: 0x463936, roughness: 1 }));

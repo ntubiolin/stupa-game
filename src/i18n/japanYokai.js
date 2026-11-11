@@ -14,6 +14,9 @@ i18n.register({
     'worldNode.oniPass.desc': '登上火山岩山道，閃避赤鬼的重棒與震地攻擊。',
     'worldNode.kappaCreek.level': '支線 Lv.8–14', 'worldNode.tenguForest.level': '支線 Lv.14–22', 'worldNode.oniPass.level': '支線 Lv.22–30',
     'worldNode.japan.short.kappaCreek': '河童溪谷', 'worldNode.japan.short.tenguForest': '天狗杉林', 'worldNode.japan.short.oniPass': '赤鬼山道',
+    'hud.japan.emaki.kappaCreek.name': '紀伊・河童溪谷', 'hud.japan.emaki.kappaCreek.verse': '水霧踏石・河童潛影',
+    'hud.japan.emaki.tenguForest.name': '紀伊・天狗杉林', 'hud.japan.emaki.tenguForest.verse': '朱鳥居・鴉羽疾風',
+    'hud.japan.emaki.oniPass.name': '紀伊・赤鬼山道', 'hud.japan.emaki.oniPass.verse': '赤岩震地・鬼棒雷鳴',
   },
   en: {
     'map.kappaCreek': 'Kappa Creek', 'map.kappaCreek.subtitle': 'Stepping stones through a misty yōkai stream',
@@ -28,5 +31,8 @@ i18n.register({
     'worldNode.oniPass.desc': 'Climb the volcanic pass and dodge the red oni’s club and ground slam.',
     'worldNode.kappaCreek.level': 'Side quest Lv.8–14', 'worldNode.tenguForest.level': 'Side quest Lv.14–22', 'worldNode.oniPass.level': 'Side quest Lv.22–30',
     'worldNode.japan.short.kappaCreek': 'Kappa Creek', 'worldNode.japan.short.tenguForest': 'Tengu Forest', 'worldNode.japan.short.oniPass': 'Red Oni Pass',
+    'hud.japan.emaki.kappaCreek.name': 'Kii · Kappa Creek', 'hud.japan.emaki.kappaCreek.verse': 'Mist, Stepping Stones, Hidden Kappa',
+    'hud.japan.emaki.tenguForest.name': 'Kii · Tengu Cedar Forest', 'hud.japan.emaki.tenguForest.verse': 'Vermilion Gates, Crow-Wing Wind',
+    'hud.japan.emaki.oniPass.name': 'Kii · Red Oni Pass', 'hud.japan.emaki.oniPass.verse': 'Red Stone, Earthshaking Club',
   },
 });

@@ -1,13 +1,13 @@
 import '../../i18n/japanYokai.js';
 
 const SIDE_MAPS = [
-  { id: 'kappaCreek', originX: 12000, level: [8, 14], color: '#477f78', kind: 'kappa', count: 7 },
-  { id: 'tenguForest', originX: 12500, level: [14, 22], color: '#6b4935', kind: 'tengu', count: 6 },
-  { id: 'oniPass', originX: 13000, level: [22, 30], color: '#7d403b', kind: 'akaOni', count: 5 },
+  { id: 'kappaCreek', originX: 12000, level: [8, 14], color: '#477f78', kind: 'kappa', count: 7, fogColor: 0x6c9290, fogDensity: .008 },
+  { id: 'tenguForest', originX: 12500, level: [14, 22], color: '#6b4935', kind: 'tengu', count: 6, fogColor: 0x59604c, fogDensity: .014 },
+  { id: 'oniPass', originX: 13000, level: [22, 30], color: '#7d403b', kind: 'akaOni', count: 5, fogColor: 0x80605a, fogDensity: .011 },
 ];
 
 function makeMap(spec) {
-  const { id, originX, level, color, kind, count } = spec;
+  const { id, originX, level, color, kind, count, fogColor, fogDensity } = spec;
   return {
     id, type: 'combat', nameKey: `map.${id}`, subtitleKey: `map.${id}.subtitle`,
     origin: { x: originX, z: 0 }, level, levelRange: level, walkRadius: 68,
@@ -22,6 +22,7 @@ function makeMap(spec) {
     spawnTable: [{ kind, area: 'near', count: Math.ceil(count / 2) }, { kind, area: 'deep', count: Math.floor(count / 2) }],
     elitePacks: { champion: 1, rare: id === 'oniPass' ? 1 : 0 },
     spawnAreas: { near: { minR: 18, maxR: 38 }, deep: { minR: 40, maxR: 59 } },
+    sky: { fogColor, fogDensity },
     ambience: 'wild', enterToastKey: `toast.japanYokai.${id}`, debugOnly: false, loaded: false,
     load: () => import('../../world/maps/japanYokai.js')
       .then(module => ({ createMap: ctx => module.createYokaiMap(ctx, id) })),
