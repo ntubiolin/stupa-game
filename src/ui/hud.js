@@ -17,6 +17,14 @@ import '../i18n/japanMaps.js';
 import '../i18n/elites.js';
 import '../i18n/stupaBuild.js';
 
+const JAPAN_SKILL_HELP_KEYS = {
+  'controls.basic': 'skill.japan.sankosho.name',
+  'controls.chant': 'skill.japan.komyoShingon.name',
+  'mobile.chant': 'skill.japan.komyoShingon.name',
+  'help.mantra.title': 'skill.japan.komyoShingon.name',
+  'help.mantra.desc': 'skill.japan.komyoShingon.desc',
+};
+
 const RING_RADIUS = 24;
 const RING_CIRC = 2 * Math.PI * RING_RADIUS;
 const CHANT_RING_RADIUS = 30;
@@ -841,11 +849,12 @@ export function createHud(ctx) {
   }
 
   function applyTranslations() {
+    const japan = isJapanMap(state.zone);
     const nodes = root.querySelectorAll('[data-i18n]');
     for (let i = 0; i < nodes.length; i++) {
       const el = nodes[i];
       const key = el.getAttribute('data-i18n');
-      if (key) el.textContent = i18n.t(key);
+      if (key) el.textContent = i18n.t((japan && JAPAN_SKILL_HELP_KEYS[key]) || key);
     }
 
     titleLangZh.classList.toggle('is-active', i18n.lang === 'zh');
@@ -904,6 +913,9 @@ export function createHud(ctx) {
   }
 
   i18n.onChange(applyTranslations);
+  bus.on('zone:change', ({ from, to } = {}) => {
+    if (isJapanMap(from) !== isJapanMap(to)) applyTranslations();
+  });
   bus.on('audio:change', renderMuteButton);
 
   // ---------------------------------------------------------------- toasts

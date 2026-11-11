@@ -11,6 +11,7 @@
  *  - Debug inspection API (__stupa.projectiles: spawn, clear, count, showHitboxes)
  */
 import * as THREE from 'three';
+import { makeSankosho } from './skills/japanSkillVisuals.js';
 
 const TWO_PI = Math.PI * 2;
 
@@ -460,6 +461,7 @@ export function createProjectiles(ctx) {
   // --- Hum Bolt Pool (Friendly Skill Projectile)
   const HUM_POOL_CAP = 16;
   const humBoltPool = [];
+  let sankoshoTemplate = null;
   for (let i = 0; i < HUM_POOL_CAP; i++) {
     const group = new THREE.Group();
     group.visible = false;
@@ -471,7 +473,9 @@ export function createProjectiles(ctx) {
     sprite.scale.set(0.68, 0.68, 0.68);
     sprite.position.set(0, 0.08, 0);
 
-    group.add(core, halo, tail, sprite);
+    const humVisual = new THREE.Group();
+    humVisual.add(core, halo, tail, sprite);
+    group.add(humVisual);
 
     const hitbox = new THREE.Mesh(hitboxSphereGeo, hitboxMat);
     hitbox.visible = false;
@@ -486,6 +490,8 @@ export function createProjectiles(ctx) {
       active: false,
       group,
       halo,
+      humVisual,
+      sankosho: null,
       hitbox,
       pos: new THREE.Vector3(),
       dir: new THREE.Vector3(0, 0, -1),
@@ -632,6 +638,18 @@ export function createProjectiles(ctx) {
       slot.hitRadius = params.hitRadius ?? 0.68;
       slot.target = params.target || null;
       slot.hitIds.clear();
+
+      const japan = params.abilityId === 'sankosho';
+      if (japan && !slot.sankosho) {
+        sankoshoTemplate ??= makeSankosho();
+        slot.sankosho = sankoshoTemplate.clone();
+        slot.group.add(slot.sankosho);
+      }
+      slot.humVisual.visible = !japan;
+      if (slot.sankosho) {
+        slot.sankosho.visible = japan;
+        slot.sankosho.rotation.z = 0;
+      }
 
       slot.group.position.copy(slot.pos);
       slot.group.rotation.set(0, heading, 0);
@@ -976,6 +994,7 @@ export function createProjectiles(ctx) {
       hb.pos.y = gY + 1.1;
 
       hb.halo.rotation.z += dt * 9.0;
+      if (hb.sankosho?.visible) hb.sankosho.rotation.z += dt * 14;
 
       // Check obstacle colliders
       let hitObstacle = false;

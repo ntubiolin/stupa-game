@@ -49,7 +49,7 @@ export const SKILLS = [
       b: { id: 'b', nameKey: 'skill.humBolt.enhB.name', descKey: 'skill.humBolt.enhB.desc' },
     },
     unlock: { flag: null, hintKey: null },
-    cast(ctx, { rank = 1, enh = null, origin, dir, target }) {
+    cast(ctx, { rank = 1, enh = null, origin, dir, target, abilityId }) {
       const idx = Math.max(0, Math.min(4, rank - 1));
       let damageMult = this.rankScaling.damageMult[idx] ?? 0.60;
       const tsogyalBoosted = Boolean(ctx.powers?.consumeTsogyalHum?.());
@@ -70,6 +70,7 @@ export const SKILLS = [
         enh,
         damageMult,
         tsogyalBoosted,
+        abilityId,
         speed: 22,
         maxRange: 14,
       });
@@ -98,15 +99,15 @@ export const SKILLS = [
       b: { id: 'b', nameKey: 'skill.mantra.enhB.name', descKey: 'skill.mantra.enhB.desc' },
     },
     unlock: { flag: null, hintKey: null },
-    cast(ctx, { rank = 1, enh = null, peaceful = false }) {
+    cast(ctx, { rank = 1, enh = null, peaceful = false, abilityId }) {
       const idx = Math.max(0, Math.min(4, rank - 1));
       const damageMult = this.rankScaling.damageMult[idx] ?? 1.0;
       const radiusAdd = this.rankScaling.radiusAdd[idx] ?? 0;
       if (ctx.mantra?.castFromSkill) {
-        return ctx.mantra.castFromSkill({ rank, enh, damageMult, radiusAdd, peaceful });
+        return ctx.mantra.castFromSkill({ rank, enh, damageMult, radiusAdd, peaceful, abilityId });
       }
       if (ctx.mantra?.cast) {
-        ctx.mantra.cast({ rank, enh, damageMult, radiusAdd, peaceful });
+        ctx.mantra.cast({ rank, enh, damageMult, radiusAdd, peaceful, abilityId });
         return true;
       }
       return true;

@@ -12,6 +12,9 @@ import {
   resolveAppearanceColors,
 } from '../data/appearance.js';
 
+import { isJapanMap } from '../data/japan.js';
+import { createJapanPilgrim } from './japanPilgrim.js';
+
 const TWO_PI = Math.PI * 2;
 
 function wrapAngle(a) {
@@ -247,7 +250,7 @@ export function createPlayer(ctx) {
     forearmPivot.add(hand);
 
     torsoPivot.add(pivot);
-    return { pivot, forearmPivot, hand };
+    return { pivot, sleeve, forearmPivot, hand };
   }
 
   const leftArm = makeArm(-1);
@@ -267,6 +270,22 @@ export function createPlayer(ctx) {
   }
   const leftLeg = makeLeg(-1);
   const rightLeg = makeLeg(1);
+
+  const japanParts = createJapanPilgrim(THREE, {
+    body, torso: torsoPivot, head: headGroup, leftArm, rightArm,
+  });
+  const himalayanParts = [
+    skirt, hem, torso, shawl, sash, neckGroup, chestGroup, backGroup,
+    hairGroup, hatGroup, leftArm.sleeve, rightArm.sleeve,
+  ];
+
+  function syncPilgrimModel() {
+    const japan = isJapanMap(state.zone) && !state.customizing;
+    for (const part of japanParts) part.visible = japan;
+    for (const part of himalayanParts) part.visible = !japan;
+    root.userData.pilgrimStyle = japan ? 'shingon' : 'himalayan';
+  }
+  syncPilgrimModel();
 
   // Subtle lotus-gold ground aura during prostrations & mantra chanting
   const auraGeo = new THREE.RingGeometry(0.32, 0.58, 28);
@@ -1137,6 +1156,7 @@ export function createPlayer(ctx) {
   });
 
   bus.on('zone:change', () => {
+    syncPilgrimModel();
     gesture = null;
     prostrateTime = -1;
     chantTimer = 0;
@@ -1572,6 +1592,8 @@ export function createPlayer(ctx) {
 
   // ---------------------------------------------------------------- update
   function update(dt) {
+    const pilgrimStyle = isJapanMap(state.zone) && !state.customizing ? 'shingon' : 'himalayan';
+    if (root.userData.pilgrimStyle !== pilgrimStyle) syncPilgrimModel();
     const input = ctx.input;
     updateBlink(dt);
     updateNameplate();
@@ -1672,7 +1694,8 @@ export function createPlayer(ctx) {
       chantTimer = 0;
       prostrateTime = 0;
       prostrateStartHeading = state.player.heading;
-      prostrateTargetHeading = Math.atan2(state.player.position.x, state.player.position.z);
+      prostrateTargetHeading = ctx.japanCampaign?.getProstrationHeading?.()
+        ?? Math.atan2(state.player.position.x, state.player.position.z);
       state.player.velocity.set(0, 0, 0);
       state.player.isMoving = false;
       state.player.action = 'prostrate';

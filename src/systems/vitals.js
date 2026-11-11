@@ -424,6 +424,16 @@ export function createVitals(ctx) {
     emitChanged();
   }
 
+  function removeBuff(id) {
+    const buffs = state.player.buffs;
+    const index = buffs?.findIndex((buff) => buff.id === id) ?? -1;
+    if (index < 0) return false;
+    buffs.splice(index, 1);
+    recalcDerived();
+    emitChanged();
+    return true;
+  }
+
   function addPermanent(statOrPatch, n) {
     const p = state.player;
     if (!p.permanent) p.permanent = { atk: 0, def: 0, maxHp: 0, maxMp: 0 };
@@ -797,6 +807,7 @@ export function createVitals(ctx) {
     addExp,
     spendMp,
     addBuff,
+    removeBuff,
     addShield,
     clearShield,
     addPermanent,
