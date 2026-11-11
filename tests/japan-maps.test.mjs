@@ -155,6 +155,21 @@ test('Okunoin river crossing uses the elevated bridge and blocks movement throug
   assert.ok(pos.z >= 5.5 + CONFIG.PLAYER.radius - 1e-4, 'River bank prevents crossing away from the bridge');
 });
 
+test('Tō-ji landmark actions run through the selected interactable', async () => {
+  const { ctx, instance } = await loadMap('toji');
+  const kondo = ctx.interactables.find(target => target.id === 'toji-kondo');
+  const restores = [];
+  ctx.bus.emit = (event, payload) => {
+    if (event === 'vitals:restore') restores.push(payload);
+  };
+  ctx.state.player.position.copy(kondo.getPosition());
+  ctx.input = { pressed: action => action === 'interact' };
+  instance.update(1 / 60);
+  assert.equal(restores.length, 0, 'Map updates leave the input to the interaction system');
+  kondo.onInteract();
+  assert.deepEqual(restores, [{ hp: 30, mp: 30, source: 'toji' }]);
+});
+
 test('Japanese waypoints signal unlock with a lantern and no PointLights', () => {
   const marker = buildJapanWaypoint(false);
   const initial = marker.userData.paper.emissiveIntensity;
