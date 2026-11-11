@@ -2142,16 +2142,6 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
     });
   }
 
-  function findNearbyLandmark(pPos) {
-    if (!pPos) return null;
-    for (const lm of landmarkDefs) {
-      if (Math.hypot(pPos.x - lm.x, pPos.z - lm.z) <= lm.radius) {
-        return lm;
-      }
-    }
-    return null;
-  }
-
   // ---------------------------------------------------------------- 12. Debug API Registration (`ctx.debug.register('toji', ...)`)
   const debugApi = {
     getLandmarks: () => landmarkDefs.map((l) => ({ ...l })),
@@ -2201,7 +2191,7 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
     getInteractionPrompt() {
       const pPos = state?.player?.position;
       if (!pPos || state?.uiOpen) return null;
-      const lm = findNearbyLandmark(pPos);
+      const lm = landmarkDefs.find(({ x, z, radius }) => Math.hypot(pPos.x - x, pPos.z - z) <= radius);
       return lm ? { key: lm.promptKey } : null;
     },
     update(dt, elapsed = state?.elapsed || 0) {
@@ -2227,14 +2217,6 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
         seasonalParticles.setMatrixAt(i, dummy.matrix);
       }
       seasonalParticles.instanceMatrix.needsUpdate = true;
-
-      const pPos = state?.player?.position;
-      if (pPos && !state?.uiOpen && ctx?.input?.pressed?.('interact')) {
-        const lm = findNearbyLandmark(pPos);
-        if (lm) {
-          triggerLandmarkInteraction(lm);
-        }
-      }
     },
     dispose() {
       for (const d of disposables) {

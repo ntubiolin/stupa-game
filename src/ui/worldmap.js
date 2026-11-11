@@ -810,8 +810,8 @@ export function createWorldMap(ctx) {
               </div>
               <div class="kukai-quick-travel-bar__actions">
                 <button type="button" class="kukai-quick-travel-btn" data-quick-tp="qinglong" data-route-label="mapModal.japan.start"></button>
-                <button type="button" class="kukai-quick-travel-btn" data-quick-tp="toji" data-route-label="settings.japanMode.tryToji"></button>
-                <button type="button" class="kukai-quick-travel-btn" data-quick-tp="koyasan" data-route-label="settings.japanMode.tryKoyasan"></button>
+                <button type="button" class="kukai-quick-travel-btn" data-quick-tp="toji" data-route-label="mapModal.japan.visitToji"></button>
+                <button type="button" class="kukai-quick-travel-btn" data-quick-tp="koyasan" data-route-label="mapModal.japan.visitKoyasan"></button>
                 <button type="button" class="kukai-quick-travel-btn kukai-quick-travel-btn--return" data-quick-tp="stupa" data-route-label="mapModal.japan.return"></button>
               </div>
             </div>
@@ -975,11 +975,12 @@ export function createWorldMap(ctx) {
     const kukaiBar = overlayEl.querySelector('.kukai-quick-travel-bar');
     const enabled = isJapanModeEnabled(ctx);
     if (kukaiBar) kukaiBar.classList.toggle('is-hidden', !enabled);
+    overlayEl.classList.toggle('has-japan-route', enabled);
     if (!enabled) showJapanRoute = false;
 
     const onPilgrimage = isJapanMap(state.zone);
-    const returnBtn = overlayEl.querySelector('[data-quick-tp="stupa"]');
-    returnBtn.hidden = !onPilgrimage;
+    overlayEl.querySelector('[data-quick-tp="qinglong"]').hidden = state.zone === 'qinglong';
+    overlayEl.querySelector('[data-quick-tp="stupa"]').hidden = !onPilgrimage;
     overlayEl.querySelector('.world-route-board').classList.toggle('is-japan', showJapanRoute);
     for (const button of overlayEl.querySelectorAll('[data-world-route]')) {
       const isSelected = (button.dataset.worldRoute === 'japan') === showJapanRoute;
@@ -1071,7 +1072,9 @@ export function createWorldMap(ctx) {
         const isCur = curZone === n.id;
         const isSel = selectedWorldNodeId === n.id;
         const hasMap = Boolean(MAPS[n.id]);
-        const name = i18n.t(n.nameKey);
+        const name = showJapanRoute
+          ? i18n.t(`worldNode.japan.short.${n.id}`)
+          : i18n.t(n.nameKey);
         const lvl = worldNodeLevel(n);
 
         return `
@@ -1131,7 +1134,9 @@ export function createWorldMap(ctx) {
 
     let statusText = i18n.t('mapModal.world.status.locked');
     if (isCur) statusText = i18n.t('mapModal.world.status.current');
-    else if (isUnl && hasMap && canTp) statusText = i18n.t('mapModal.world.status.unlocked');
+    else if (node.japanOnly) {
+      statusText = i18n.t(isUnl ? 'mapModal.japan.available' : 'toast.japan.travelLocked');
+    } else if (isUnl && hasMap && canTp) statusText = i18n.t('mapModal.world.status.unlocked');
     else if (isUnl) statusText = i18n.t('mapModal.world.status.unlockedView');
     else if (!hasMap) statusText = i18n.t('mapModal.world.status.unreached');
 
@@ -1460,7 +1465,7 @@ export function createWorldMap(ctx) {
       selectedCodexId = opts.codexId;
       activeCodexCategory = 'all';
     }
-    if (tab === 'world' && !opts.keepSelectedNode) {
+    if (!opts.keepSelectedNode) {
       selectedWorldNodeId = state.zone || 'stupa';
     }
 
