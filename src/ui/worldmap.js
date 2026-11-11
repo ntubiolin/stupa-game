@@ -2,11 +2,14 @@ import '../i18n/codex.js';
 import '../i18n/murals.js';
 import { i18n } from '../i18n.js';
 import { MAPS } from '../data/maps.js';
+import { JAPAN_MAP_IDS, isJapanMap } from '../data/japan.js';
 import { CODEX_CATEGORIES } from '../data/codex.js';
 import { CHAPTER_MURALS, getChapterMural } from '../data/murals.js';
 import { MuralScrollCanvas } from './mural/scroll.js';
 import { resolveWaypointCoords } from '../gameplay/waypoints.js';
 import { isJapanModeEnabled } from './settings.js';
+
+const JAPAN_NODE_POSITIONS = [[0.47, 0.17], [0.8, 0.17], [0.8, 0.5], [0.72, 0.81], [0.37, 0.81], [0.18, 0.50]];
 
 /**
  * World route nodes across all chapters (Hand-drawn / Parchment Himalayan Trail).
@@ -22,7 +25,7 @@ export const WORLD_ROUTE_NODES = [
     levelKey: 'worldNode.stupa.level',
     descKey: 'worldNode.stupa.desc',
     labelZh: '博達哈大佛塔 Lv.1',
-    connectsTo: ['grove', 'wild', 'pharping', 'toji'],
+    connectsTo: ['grove', 'wild', 'pharping'],
   },
   {
     id: 'grove',
@@ -112,36 +115,19 @@ export const WORLD_ROUTE_NODES = [
     levelKey: 'worldNode.zangdokPalri.level',
     descKey: 'worldNode.zangdokPalri.desc',
     labelZh: '伏藏秘境 Lv.31–40',
-    connectsTo: ['toji'],
+    connectsTo: [],
   },
-  {
-    id: 'toji',
-    chapter: 0,
-    nx: 0.56,
-    ny: 0.14,
+  ...JAPAN_MAP_IDS.map((id, index) => ({
+    id,
+    chapter: index + 1,
+    nx: JAPAN_NODE_POSITIONS[index][0],
+    ny: JAPAN_NODE_POSITIONS[index][1],
     japanOnly: true,
-    alwaysUnlocked: true,
     freeTeleport: true,
-    nameKey: 'worldNode.toji.name',
-    levelKey: 'worldNode.toji.level',
-    descKey: 'worldNode.toji.desc',
-    labelZh: '京都東寺・教王護國寺',
-    connectsTo: ['stupa', 'koyasan'],
-  },
-  {
-    id: 'koyasan',
-    chapter: 0,
-    nx: 0.36,
-    ny: 0.12,
-    japanOnly: true,
-    alwaysUnlocked: true,
-    freeTeleport: true,
-    nameKey: 'worldNode.koyasan.name',
-    levelKey: 'worldNode.koyasan.level',
-    descKey: 'worldNode.koyasan.desc',
-    labelZh: '高野山・金剛峯寺',
-    connectsTo: ['toji'],
-  },
+    nameKey: MAPS[id].nameKey,
+    descKey: `worldNode.${id}.desc`,
+    connectsTo: [JAPAN_MAP_IDS[index + 1]].filter(Boolean),
+  })),
   {
     id: 'sandbox',
     chapter: 0,
@@ -769,6 +755,7 @@ export function createWorldMap(ctx) {
   let worldNodesLayerEl = null;
   let worldDetailEl = null;
   let worldBannerEl = null;
+  let showJapanRoute = false;
   let codexFilterEl = null;
   let codexCountEl = null;
   let codexGridEl = null;
@@ -800,22 +787,6 @@ export function createWorldMap(ctx) {
         </header>
 
         <div class="worldmap-modal__body">
-          <!-- Quick-Travel Banner for Eastern Shingon (Japan Kūkai Edition: Tō-ji & Kōyasan, shown when Japan Mode is enabled in Settings) -->
-          <div class="kukai-quick-travel-bar is-hidden">
-            <span class="kukai-quick-travel-bar__label">🇯🇵 東方真言密教支線（空海大師篇）：</span>
-            <div class="kukai-quick-travel-bar__actions">
-              <button type="button" class="kukai-quick-travel-btn" data-quick-tp="toji">
-                🏯 前往：京都東寺（五重塔・金堂・講堂）
-              </button>
-              <button type="button" class="kukai-quick-travel-btn" data-quick-tp="koyasan">
-                ⛰️ 前往：高野山（壇上伽藍・金剛峯寺・奧之院）
-              </button>
-              <button type="button" class="kukai-quick-travel-btn kukai-quick-travel-btn--return" data-quick-tp="stupa">
-                ☸ 返回博達哈佛塔
-              </button>
-            </div>
-          </div>
-
           <!-- TAB 1: Current Zone Map & Legend -->
           <section class="worldmap-view" data-view="map">
             <div class="zone-map-layout">
@@ -830,8 +801,20 @@ export function createWorldMap(ctx) {
             </div>
           </section>
 
-          <!-- TAB 2: World Route Map (Parchment Himalayan Trail) -->
+          <!-- TAB 2: World Route Map -->
           <section class="worldmap-view is-hidden" data-view="world">
+            <div class="kukai-quick-travel-bar is-hidden">
+              <div class="kukai-quick-travel-bar__actions">
+                <button type="button" class="kukai-quick-travel-btn" data-world-route="himalaya" data-route-label="mapModal.japan.himalaya"></button>
+                <button type="button" class="kukai-quick-travel-btn" data-world-route="japan" data-route-label="mapModal.japan.route"></button>
+              </div>
+              <div class="kukai-quick-travel-bar__actions">
+                <button type="button" class="kukai-quick-travel-btn" data-quick-tp="qinglong" data-route-label="mapModal.japan.start"></button>
+                <button type="button" class="kukai-quick-travel-btn" data-quick-tp="toji" data-route-label="settings.japanMode.tryToji"></button>
+                <button type="button" class="kukai-quick-travel-btn" data-quick-tp="koyasan" data-route-label="settings.japanMode.tryKoyasan"></button>
+                <button type="button" class="kukai-quick-travel-btn kukai-quick-travel-btn--return" data-quick-tp="stupa" data-route-label="mapModal.japan.return"></button>
+              </div>
+            </div>
             <div class="world-route-banner"></div>
             <div class="world-route-layout">
               <div class="world-route-board">
@@ -903,11 +886,18 @@ export function createWorldMap(ctx) {
         switchTab(tabBtn.getAttribute('data-tab'));
         return;
       }
+      const routeBtn = e.target.closest('[data-world-route]');
+      if (routeBtn) {
+        showJapanRoute = routeBtn.dataset.worldRoute === 'japan';
+        selectedWorldNodeId = showJapanRoute ? (isJapanMap(state.zone) ? state.zone : 'qinglong') : 'stupa';
+        renderWorldRouteTab();
+        return;
+      }
       const quickTpBtn = e.target.closest('[data-quick-tp]');
       if (quickTpBtn) {
         const targetZone = quickTpBtn.getAttribute('data-quick-tp');
         if (targetZone) {
-          handleTeleportToNode(targetZone);
+          handleTeleportToNode(targetZone, { quickVisit: true });
         }
       }
     });
@@ -928,6 +918,10 @@ export function createWorldMap(ctx) {
     if (tabWorld) tabWorld.textContent = i18n.t('mapModal.tab.world');
     if (tabCodex) tabCodex.textContent = i18n.t('mapModal.tab.codex');
     if (tabMurals) tabMurals.textContent = i18n.t('mapModal.tab.murals');
+
+    for (const button of overlayEl.querySelectorAll('[data-route-label]')) {
+      button.textContent = i18n.t(button.dataset.routeLabel);
+    }
 
     const legendTitle = overlayEl.querySelector('.zone-map-legend__title');
     if (legendTitle) legendTitle.textContent = i18n.t('mapModal.legend.title');
@@ -979,8 +973,17 @@ export function createWorldMap(ctx) {
   function syncJapanModeUi() {
     if (!overlayEl) return;
     const kukaiBar = overlayEl.querySelector('.kukai-quick-travel-bar');
-    if (kukaiBar) {
-      kukaiBar.classList.toggle('is-hidden', !isJapanModeEnabled(ctx));
+    const enabled = isJapanModeEnabled(ctx);
+    if (kukaiBar) kukaiBar.classList.toggle('is-hidden', !enabled);
+    if (!enabled) showJapanRoute = false;
+
+    const onPilgrimage = isJapanMap(state.zone);
+    const returnBtn = overlayEl.querySelector('[data-quick-tp="stupa"]');
+    returnBtn.hidden = !onPilgrimage;
+    overlayEl.querySelector('.world-route-board').classList.toggle('is-japan', showJapanRoute);
+    for (const button of overlayEl.querySelectorAll('[data-world-route]')) {
+      const isSelected = (button.dataset.worldRoute === 'japan') === showJapanRoute;
+      button.setAttribute('aria-pressed', String(isSelected));
     }
   }
 
@@ -988,20 +991,40 @@ export function createWorldMap(ctx) {
     const jpEnabled = isJapanModeEnabled(ctx);
     return WORLD_ROUTE_NODES.filter((n) => {
       if (n.japanOnly && !jpEnabled) return false;
+      if (n.id !== 'stupa' && Boolean(n.japanOnly) !== showJapanRoute) return false;
       if (!n.debugOnly) return true;
       return (
         Boolean(ctx.debug?.enabled) ||
         state.zone === n.id ||
         Boolean(ctx.waypoints?.isUnlocked?.(n.id))
       );
-    });
+    }).map(n => (
+      n.id === 'stupa' && showJapanRoute
+        ? { ...n, nx: 0.15, ny: 0.17, connectsTo: ['qinglong'], freeTeleport: true }
+        : n
+    ));
+  }
+
+  function isWorldNodeUnlocked(node) {
+    if (node.japanOnly) {
+      return node.id === 'qinglong' || ctx.japanCampaign?.isChapterUnlocked?.(node.id) !== false;
+    }
+    return node.id === 'stupa' || Boolean(ctx.waypoints?.isUnlocked?.(node.id));
+  }
+
+  function worldNodeLevel(node) {
+    return node.japanOnly
+      ? i18n.t('worldNode.japan.chapter', { number: node.chapter })
+      : i18n.t(node.levelKey);
   }
 
   function renderWorldRouteTab() {
     if (!overlayEl || !worldNodesLayerEl || !routeSvgEl) return;
 
+    syncJapanModeUi();
     const canTp = canPlayerTeleportNow();
     if (worldBannerEl) {
+      worldBannerEl.hidden = showJapanRoute;
       worldBannerEl.textContent = canTp
         ? i18n.t('mapModal.world.canTeleport')
         : i18n.t('mapModal.world.cannotTeleport');
@@ -1032,9 +1055,7 @@ export function createWorldMap(ctx) {
         const isMostlyVertical = Math.abs(n1x - n2x) < 40;
         const mx = ((n1x + n2x) * 0.5 + (isMostlyVertical ? -14 : 0)).toFixed(1);
         const my = ((n1y + n2y) * 0.5 + (isMostlyVertical ? 0 : -16)).toFixed(1);
-        const bothUnlocked =
-          (Boolean(ctx.waypoints?.isUnlocked?.(n.id)) || n.id === 'stupa' || Boolean(n.alwaysUnlocked)) &&
-          (Boolean(ctx.waypoints?.isUnlocked?.(target.id)) || target.id === 'stupa' || Boolean(target.alwaysUnlocked));
+        const bothUnlocked = isWorldNodeUnlocked(n) && isWorldNodeUnlocked(target);
         pathsHtml.push(
           `<path d="M ${x1} ${y1} Q ${mx} ${my} ${x2} ${y2}" class="route-edge ${bothUnlocked ? 'is-unlocked' : ''}" />`,
         );
@@ -1046,12 +1067,12 @@ export function createWorldMap(ctx) {
     const curZone = state.zone || 'stupa';
     worldNodesLayerEl.innerHTML = nodes
       .map((n) => {
-        const isUnl = Boolean(ctx.waypoints?.isUnlocked?.(n.id)) || n.id === 'stupa' || Boolean(n.alwaysUnlocked);
+        const isUnl = isWorldNodeUnlocked(n);
         const isCur = curZone === n.id;
         const isSel = selectedWorldNodeId === n.id;
         const hasMap = Boolean(MAPS[n.id]);
         const name = i18n.t(n.nameKey);
-        const lvl = i18n.t(n.levelKey);
+        const lvl = worldNodeLevel(n);
 
         return `
           <button
@@ -1073,7 +1094,12 @@ export function createWorldMap(ctx) {
         const nodeId = btn.getAttribute('data-node-id');
         selectedWorldNodeId = nodeId;
         const nodeObj = nodeById[nodeId];
-        const isUnl = Boolean(ctx.waypoints?.isUnlocked?.(nodeId)) || nodeId === 'stupa' || Boolean(nodeObj?.alwaysUnlocked);
+        if (showJapanRoute) {
+          renderWorldRouteTab();
+          worldNodesLayerEl.querySelector(`[data-node-id="${nodeId}"]`)?.focus();
+          return;
+        }
+        const isUnl = isWorldNodeUnlocked(nodeObj);
         const hasMap = Boolean(MAPS[nodeId]);
         const allowTp = canPlayerTeleportNow() || Boolean(nodeObj?.freeTeleport);
 
@@ -1098,7 +1124,7 @@ export function createWorldMap(ctx) {
 
   function renderWorldNodeDetail(node) {
     if (!worldDetailEl || !node) return;
-    const isUnl = Boolean(ctx.waypoints?.isUnlocked?.(node.id)) || node.id === 'stupa' || Boolean(node.alwaysUnlocked);
+    const isUnl = isWorldNodeUnlocked(node);
     const isCur = (state.zone || 'stupa') === node.id;
     const hasMap = Boolean(MAPS[node.id]);
     const canTp = canPlayerTeleportNow() || Boolean(node.freeTeleport);
@@ -1114,7 +1140,7 @@ export function createWorldMap(ctx) {
     worldDetailEl.innerHTML = `
       <div class="world-detail__header">
         <div class="world-detail__title">${i18n.t(node.nameKey)}</div>
-        <div class="world-detail__level">${i18n.t(node.levelKey)}</div>
+        <div class="world-detail__level">${worldNodeLevel(node)}</div>
       </div>
       <div class="world-detail__status ${isUnl ? 'is-unlocked' : 'is-locked'}">${statusText}</div>
       <p class="world-detail__desc">${i18n.t(node.descKey)}</p>
@@ -1124,9 +1150,9 @@ export function createWorldMap(ctx) {
             ? `<button type="button" class="world-detail__tp-btn" data-tp-node="${node.id}">${i18n.t('mapModal.world.teleportBtn')}</button>`
             : ''
         }
-        <button type="button" class="quest-mural-open-btn" data-mural-node="${node.id}">
+        ${!showJapanRoute ? `<button type="button" class="quest-mural-open-btn" data-mural-node="${node.id}">
           📜 ${i18n.t('mural.ui.viewScroll')}
-        </button>
+        </button>` : ''}
       </div>
     `;
 
@@ -1145,14 +1171,20 @@ export function createWorldMap(ctx) {
     }
   }
 
-  function handleTeleportToNode(mapId) {
+  function handleTeleportToNode(mapId, { quickVisit = false } = {}) {
     if (!MAPS[mapId]) {
       bus.emit('toast', { text: i18n.t('prologue.toast.pharpingComingSoon') });
       return false;
     }
+    const japan = isJapanMap(mapId);
+    const returnToHub = mapId === 'stupa' && isJapanMap(state.zone);
+    if (japan && !isJapanModeEnabled(ctx)) return false;
+    if (japan && !quickVisit && !isWorldNodeUnlocked({ id: mapId, japanOnly: true })) return false;
     close();
-    if ((mapId === 'toji' || mapId === 'koyasan') && ctx.zones?.teleport) {
-      ctx.zones.teleport(mapId, { spawn: 'default' });
+    if ((japan || returnToHub) && ctx.zones?.teleport) {
+      const legacySpawn = { toji: 'gojunoto', koyasan: 'garan' }[mapId];
+      const spawn = returnToHub ? 'south' : (quickVisit && legacySpawn) || 'default';
+      ctx.zones.teleport(mapId, { spawn });
     } else if (ctx.waypoints?.teleportTo) {
       ctx.waypoints.teleportTo(mapId);
     } else if (ctx.zones?.teleport) {
@@ -1422,6 +1454,7 @@ export function createWorldMap(ctx) {
     isOpen = true;
     state.uiOpen = true;
     waypointTeleportMode = Boolean(opts.waypointMode);
+    showJapanRoute = isJapanMap(state.zone);
 
     if (opts.codexId) {
       selectedCodexId = opts.codexId;

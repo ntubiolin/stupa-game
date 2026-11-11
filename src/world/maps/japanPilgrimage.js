@@ -6,7 +6,7 @@ const TAU = Math.PI * 2;
 const { clamp, smoothstep } = THREE.MathUtils;
 
 // Keep village architecture, small scenery, and grove canopies in shared instanced batches.
-function createPrecinct(ctx, map, { height, paint, seed }) {
+function createPrecinct(ctx, map, { height, groundHeight = height, paint, seed }) {
   const { id, origin } = map;
   const group = ctx.zoneGroups?.[id] ?? new THREE.Group();
   if (!ctx.zoneGroups?.[id]) ctx.scene?.add(group);
@@ -17,7 +17,7 @@ function createPrecinct(ctx, map, { height, paint, seed }) {
 
   const getHeight = (x, z) => height(x - origin.x, z - origin.z);
   const terrain = createHeightfieldTerrain(ctx, {
-    origin, size: 184, segments: 132, heightFn: getHeight,
+    origin, size: 184, segments: 132, heightFn: (x, z) => groundHeight(x - origin.x, z - origin.z),
     colorFn: (_x, _z, y, x, z) => paint(x, z, y),
   }).mesh;
   terrain.name = id + '-terrain';
@@ -63,7 +63,13 @@ function createPrecinct(ctx, map, { height, paint, seed }) {
   }
 
   function block(x, z, hx, hz) {
-    collider({ type: 'box', cx: origin.x + x, cz: origin.z + z, hx, hz });
+    collider({
+      type: 'box',
+      minX: origin.x + x - hx,
+      maxX: origin.x + x + hx,
+      minZ: origin.z + z - hz,
+      maxZ: origin.z + z + hz,
+    });
   }
 
   function finish() {
@@ -323,6 +329,7 @@ export function createQinglongMap(ctx) {
       part('box', 'wood', x, 5.57, -59.5, 5.1, 0.16, 0.20);
     }
   }
+  part('box', 'wood', 0, 5.57, -59.5, 3.1, 0.16, 0.20);
   block(0, -59.6, 85, 0.6);
   part('box', 'water', 0, -3.5, -134, 330, 0.3, 147);
   for (let i = 0; i < 135; i++) {
@@ -443,11 +450,13 @@ export function createKongobujiMap(ctx) {
 export function createOkunoinMap(ctx) {
   const river = z => -2.4 * (1 - smoothstep(Math.abs(z), 3.3, 8.5));
   const bridge = z => 1.2 * (1 - smoothstep(Math.abs(z), 1.0, 9.2));
+  const banks = (x, z) => river(z) + smoothstep(Math.abs(x), 9, 67) * Math.cos(z * 0.04) * 3.5;
   const scene = createPrecinct(ctx, OKUNOIN_MAP, {
     seed: 835,
     height: (x, z) => Math.abs(x) < 2.75 && Math.abs(z) < 9.2
       ? bridge(z)
-      : river(z) + smoothstep(Math.abs(x), 9, 67) * Math.cos(z * 0.04) * 3.5,
+      : banks(x, z),
+    groundHeight: banks,
     paint: terrainPaint([0x4f6556, 0x858778, 0x37574f], x => Math.abs(x)),
   });
   const { part, height, block, rng } = scene;

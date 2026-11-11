@@ -7177,7 +7177,7 @@ body.is-touch-device .mobile-skill-pad {
 
 /* ==========================================================================
    Japanese Yamato-e / Urushi Aesthetic Theme (`body[data-zone-aesthetic="japanese"]`)
-   Applied automatically in Kyoto Tō-ji (`toji`) and Mount Kōya (`koyasan`)
+   Applied automatically across the Kūkai pilgrimage maps
    ========================================================================== */
 
 body[data-zone-aesthetic="japanese"] {
@@ -7315,11 +7315,24 @@ body[data-zone-aesthetic="japanese"] .glass-panel {
   display: none !important;
 }
 
-.kukai-quick-travel-bar__label {
-  font-size: 0.86rem;
-  font-weight: 700;
-  color: #fde68a;
-  letter-spacing: 0.02em;
+.world-route-board.is-japan {
+  background:
+    radial-gradient(ellipse at 32% 15%, rgba(237, 174, 127, 0.20), transparent 60%),
+    radial-gradient(ellipse at 79% 72%, rgba(68, 107, 88, 0.24), transparent 72%),
+    linear-gradient(150deg, #4a3030, #292324 70%);
+}
+
+.world-route-board.is-japan .world-node {
+  width: min(124px, 27%);
+}
+
+.kukai-quick-travel-btn[data-world-route] {
+  background: rgba(60, 40, 37, 0.77);
+}
+
+.kukai-quick-travel-btn[data-world-route][aria-pressed="true"] {
+  background: #9a382d;
+  border-color: #f4c975;
 }
 
 .kukai-quick-travel-bar__actions {
@@ -7352,3 +7365,17 @@ body[data-zone-aesthetic="japanese"] .glass-panel {
 }
 
 
+
+.japan-emaki-scroll[lang="en"] :is(.japan-emaki-scroll__title, .japan-emaki-scroll__sub) {
+  text-orientation: mixed;
+}
+
+@media (max-width: 600px) {
+  .japan-emaki-scroll {
+    left: min(45vw, 204px);
+  }
+  .kukai-quick-travel-bar {
+    padding: 8px;
+    gap: 6px;
+  }
+}
