@@ -411,6 +411,8 @@ function kongobujiMainHall(scene, barkRoof, x, z, width, depth) {
   part('box', 'beam', x, y + 0.46, z, width + 1, 0.22, depth + 1);
   part('box', 'lime', x, y + 2.7, z, width - 2.4, 4.2, depth - 2.5);
   block(x, z, halfWidth + 0.5, halfDepth + 0.5);
+  // The new 5.5 m-wide stair projects beyond the old hall's foundation.
+  block(x, z + halfDepth + 1.20, 2.75, 0.58);
 
   for (const side of [-1, 1]) {
     const edge = z + side * halfDepth;

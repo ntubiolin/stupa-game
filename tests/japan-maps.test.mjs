@@ -191,7 +191,7 @@ test('Pilgrimage temple steps stop the player before the rendered stonework (#29
   const cases = [
     { map: 'qinglong', start: [0, 6], hallZ: -6, depth: 13 },
     { map: 'qinglong', start: [21, 22], hallZ: 11, depth: 12 },
-    { map: 'kongobuji', start: [0, -12], hallZ: -24, depth: 13 },
+    { map: 'kongobuji', start: [0, -12], hallZ: -24, depth: 13, stepProjection: 1.78 },
     { map: 'okunoin', start: [0, -47], hallZ: -57, depth: 10 },
   ];
 
@@ -203,7 +203,7 @@ test('Pilgrimage temple steps stop the player before the rendered stonework (#29
     ctx.state.player.position.set(ox + lx, instance.getHeight(ox + lx, oz + lz), oz + lz);
     for (let i = 0; i < 40; i++) player.moveWithCollisions(0, -0.5);
 
-    const stepEdge = sample.hallZ + sample.depth / 2 + 1.615;
+    const stepEdge = sample.hallZ + sample.depth / 2 + (sample.stepProjection ?? 1.615);
     const localZ = ctx.state.player.position.z - oz;
     assert.ok(localZ >= stepEdge + CONFIG.PLAYER.radius - 1e-4,
       `${sample.map} player entered the hall steps at z=${localZ}`);
