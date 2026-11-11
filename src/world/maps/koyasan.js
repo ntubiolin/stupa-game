@@ -39,6 +39,7 @@ import { i18n } from '../../i18n.js';
 import '../../i18n/koyasan.js';
 import { addJapanRouteGate } from '../japanArchitecture.js';
 import { addRakedGravel, createGraniteGeometry, createGraniteMaterial } from '../japanGardenArchitecture.js';
+import { addJapanTrees } from '../japanVegetation.js';
 
 const TWO_PI = Math.PI * 2;
 
@@ -482,10 +483,6 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     color: 0x4a3222,
     roughness: 0.92,
   });
-  const cedarFoliageMat = new THREE.MeshStandardMaterial({
-    color: 0x1e3f29,
-    roughness: 0.86,
-  });
   const pineFoliageMat = new THREE.MeshStandardMaterial({
     color: 0x2c5834,
     roughness: 0.82,
@@ -507,7 +504,6 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     auraRingMat,
     cloudGraniteMat,
     cedarTrunkMat,
-    cedarFoliageMat,
     pineFoliageMat
   );
 
@@ -617,10 +613,8 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     new THREE.Mesh(mergeAndDispose(wgGold), goldMat)
   );
 
-  // =========================================================================
-  // PRECINCT 1: 壇上伽藍 (DANJŌ GARAN — West Precinct, lx ∈ [-82, -18])
-  // =========================================================================
-  const garanGroup = new THREE.Group();
+  // ==================================================================  // PRECINCT 1: 壇上伽藍 (DANJŌ GARAN — West Precinct, lx ∈ [-82, -18])
+  // ==================================================================  const garanGroup = new THREE.Group();
   garanGroup.name = 'Koyasan_DanjoGaran';
   root.add(garanGroup);
 
@@ -1304,10 +1298,8 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   sankoGroup.add(sankoAuraRing);
   addCircleCollider(-44, -6, 2.4);
 
-  // =========================================================================
-  // PRECINCT 2: 金剛峯寺 (KONGŌBU-JI — Center Precinct, lx ∈ [-22, 24])
-  // =========================================================================
-  const kongobujiGroup = new THREE.Group();
+  // ==================================================================  // PRECINCT 2: 金剛峯寺 (KONGŌBU-JI — Center Precinct, lx ∈ [-22, 24])
+  // ==================================================================  const kongobujiGroup = new THREE.Group();
   kongobujiGroup.name = 'Koyasan_Kongobuji';
   root.add(kongobujiGroup);
 
@@ -1576,10 +1568,8 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   }
   banryuteiGroup.add(new THREE.Mesh(mergeAndDispose(cloudRockGeos), cloudGraniteMat));
 
-  // =========================================================================
-  // PRECINCT 3: 奧之院 (OKUNOIN — East/Northeast Precinct, lx ∈ [26, 82])
-  // =========================================================================
-  const okunoinGroup = new THREE.Group();
+  // ==================================================================  // PRECINCT 3: 奧之院 (OKUNOIN — East/Northeast Precinct, lx ∈ [26, 82])
+  // ==================================================================  const okunoinGroup = new THREE.Group();
   okunoinGroup.name = 'Koyasan_Okunoin';
   root.add(okunoinGroup);
 
@@ -1597,28 +1587,11 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   okunoinGroup.add(okunoinPathMesh);
 
   // ---------------------------------------------------------------- 6B. Millennium Cedar Avenue (`千年杉木林`, 96 trees via InstancedMesh)
-  const cedarTrunkGeo = new THREE.CylinderGeometry(0.38, 0.68, 18.0, 8);
-  cedarTrunkGeo.translate(0, 9.0, 0);
-
-  const fTier1 = new THREE.ConeGeometry(3.4, 6.5, 8);
-  fTier1.translate(0, 12.5, 0);
-  const fTier2 = new THREE.ConeGeometry(2.7, 5.8, 8);
-  fTier2.translate(0, 16.2, 0);
-  const fTier3 = new THREE.ConeGeometry(1.85, 5.0, 8);
-  fTier3.translate(0, 19.6, 0);
-  const cedarCrownGeo = mergeAndDispose([fTier1, fTier2, fTier3]);
-  disposables.push(cedarTrunkGeo, cedarCrownGeo);
-
   const CEDAR_COUNT = 96;
-  const cedarTrunksInst = new THREE.InstancedMesh(cedarTrunkGeo, cedarTrunkMat, CEDAR_COUNT);
-  const cedarCrownsInst = new THREE.InstancedMesh(cedarCrownGeo, cedarFoliageMat, CEDAR_COUNT);
-  cedarTrunksInst.castShadow = true;
-  cedarTrunksInst.receiveShadow = true;
-  cedarCrownsInst.castShadow = true;
-
   const cedarRng = seededRandom(8160);
-  let cedarIdx = 0;
-  for (let i = 0; i < 320 && cedarIdx < CEDAR_COUNT; i++) {
+  const cedars = [];
+  for (let i = 0; i < 320 && cedars.length < CEDAR_COUNT; i++) {
+    const cedarIdx = cedars.length;
     let cx;
     let cz;
     if (cedarIdx < 76) {
@@ -1643,19 +1616,13 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     const cy = getHeight(cx, cz);
     const sc = 0.78 + cedarRng() * 0.55;
     const hScale = 0.85 + cedarRng() * 0.55;
-    dummy.position.set(cx, cy - 0.2, cz);
-    dummy.rotation.set(0, cedarRng() * TWO_PI, (cedarRng() - 0.5) * 0.04);
-    dummy.scale.set(sc, sc * hScale, sc);
-    dummy.updateMatrix();
-    cedarTrunksInst.setMatrixAt(cedarIdx, dummy.matrix);
-    cedarCrownsInst.setMatrixAt(cedarIdx, dummy.matrix);
-    cedarIdx++;
+    cedars.push({
+      x: cx, y: cy - 0.2, z: cz,
+      width: sc, height: sc * hScale,
+      yaw: cedarRng() * TWO_PI, lean: (cedarRng() - 0.5) * 0.04,
+    });
   }
-  cedarTrunksInst.count = cedarIdx;
-  cedarCrownsInst.count = cedarIdx;
-  cedarTrunksInst.instanceMatrix.needsUpdate = true;
-  cedarCrownsInst.instanceMatrix.needsUpdate = true;
-  okunoinGroup.add(cedarTrunksInst, cedarCrownsInst);
+  addJapanTrees(okunoinGroup, cedars, { name: 'Mount Kōya cedars', species: 'cedar', disposables });
 
   // ---------------------------------------------------------------- 6C. Gorintō Memorial Forest (`五輪塔群`, 200 five-ring stupas via InstancedMesh)
   const gorintoGeo = createGorintoGeometry();
@@ -2056,8 +2023,7 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     emissiveIntensity: 0.16,
     roughness: 0.74,
   });
-  const koyasanCrownGeo = new THREE.DodecahedronGeometry(1.35, 1);
-  disposables.push(koyasanMapleMat, koyasanCherryMat, koyasanCrownGeo);
+  disposables.push(koyasanMapleMat, koyasanCherryMat);
 
   const koyasanMapleSpots = [
     [-74, 18], [-74, -8], [-22, 18], [-22, -8], [-16, 22], [16, 22],
@@ -2067,31 +2033,13 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     [-64, 24], [-36, 24], [-58, -14], [-32, -12], [-14, 34], [14, 34],
     [-12, -32], [12, -32],
   ];
-  const koyasanMapleInst = new THREE.InstancedMesh(
-    koyasanCrownGeo,
-    koyasanMapleMat,
-    koyasanMapleSpots.length
-  );
-  const koyasanCherryInst = new THREE.InstancedMesh(
-    koyasanCrownGeo,
-    koyasanCherryMat,
-    koyasanCherrySpots.length
-  );
-  koyasanMapleSpots.forEach(([mx, mz], idx) => {
-    dummy.position.set(mx, getHeight(mx, mz) + 3.2, mz);
-    dummy.scale.set(1.35, 0.95, 1.35);
-    dummy.updateMatrix();
-    koyasanMapleInst.setMatrixAt(idx, dummy.matrix);
+  const onGround = ([x, z]) => ({ x, y: getHeight(x, z), z, scale: 1.05 });
+  const maples = addJapanTrees(root, koyasanMapleSpots.map(onGround), {
+    name: 'Mount Kōya maples', species: 'maple', canopyMaterial: koyasanMapleMat, disposables,
   });
-  koyasanCherrySpots.forEach(([cx, cz], idx) => {
-    dummy.position.set(cx, getHeight(cx, cz) + 3.3, cz);
-    dummy.scale.set(1.4, 0.98, 1.4);
-    dummy.updateMatrix();
-    koyasanCherryInst.setMatrixAt(idx, dummy.matrix);
+  const cherries = addJapanTrees(root, koyasanCherrySpots.map(onGround), {
+    name: 'Mount Kōya cherries', species: 'cherry', canopyMaterial: koyasanCherryMat, disposables,
   });
-  koyasanMapleInst.instanceMatrix.needsUpdate = true;
-  koyasanCherryInst.instanceMatrix.needsUpdate = true;
-  root.add(koyasanMapleInst, koyasanCherryInst);
 
   // Japanese Aesthetic Atmospheric Layer: Slanted Komorebi Sunbeam Shafts (`高野山木漏れ日・密嚴瑞光`)
   const koyasanKomorebiMat = new THREE.MeshBasicMaterial({
@@ -2126,6 +2074,8 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   function applyKoyasanSeason(season) {
     if (season === appliedKoyasanSeason) return;
     appliedKoyasanSeason = season;
+    cherries.setSeason(season);
+    maples.setSeason(season);
     if (season === 'spring') {
       koyasanCherryMat.color.setHex(0xf9a8d4);
       koyasanCherryMat.emissive.setHex(0x831843);
@@ -2276,7 +2226,7 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     },
     getStats() {
       return {
-        cedarCount: cedarTrunksInst.count,
+        cedarCount: cedars.length,
         gorintoCount: gorintoInst.count,
         stoneLanternCount: stoneLanternsInst.count,
         hangingLanternCount: hangingLanternsInst.count,
