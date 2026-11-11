@@ -1,6 +1,7 @@
 import '../i18n/codex.js';
 import { i18n } from '../i18n.js';
 import { CODEX_CATEGORIES, CODEX_ENTRIES, CODEX_BY_ID } from '../data/codex.js';
+import { isJapanMap } from '../data/japan.js';
 
 const DEFAULT_UNLOCKED = CODEX_ENTRIES.filter((e) => e.defaultUnlocked).map((e) => e.id);
 if (!DEFAULT_UNLOCKED.includes('boudhanath')) {
@@ -190,10 +191,13 @@ export function createCodex(ctx) {
     }
   });
 
-  // Mantra cast / skill cast
-  bus.on('mantra:cast', () => unlock('omManiPadmeHum'));
-  bus.on('player:chant', () => unlock('omManiPadmeHum'));
-  bus.on('skill:cast', () => unlock('omManiPadmeHum'));
+  function unlockMantraLore() {
+    if (!isJapanMap(ctx.state?.zone)) unlock('omManiPadmeHum');
+  }
+
+  bus.on('mantra:cast', unlockMantraLore);
+  bus.on('player:chant', unlockMantraLore);
+  bus.on('skill:cast', unlockMantraLore);
 
   // Enemy liberation
   bus.on('enemy:liberated', () => unlock('liberation'));

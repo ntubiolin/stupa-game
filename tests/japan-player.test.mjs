@@ -8,6 +8,7 @@ import { createMantra } from '../src/gameplay/mantra.js';
 import { createProjectiles } from '../src/gameplay/projectiles.js';
 import { i18n } from '../src/i18n.js';
 import { createPlayer } from '../src/player/player.js';
+import { createCodex } from '../src/systems/codex.js';
 import { createSkills } from '../src/systems/skills.js';
 import { createVitals } from '../src/systems/vitals.js';
 
@@ -17,6 +18,7 @@ function makeGame(saved = {}) {
     THREE,
     config: CONFIG,
     scene: new THREE.Group(),
+    camera: new THREE.PerspectiveCamera(),
     bus: createBus(),
     colliders: [],
     state: {
@@ -214,4 +216,65 @@ test('Shingon attacks apply the shared combat rules and distinct effects, with c
     assert.equal(ctx.scene.getObjectByName(name), undefined);
   }
   ctx.scene.traverse((object) => assert.equal(Boolean(object.isPointLight), false));
+});
+
+
+test('only default overhead names use the localized Japan nameplate, without changing the save', () => {
+  let label = '';
+  const nameplateContext = {
+    clearRect() {}, beginPath() {}, roundRect() {}, fill() {}, stroke() {},
+    fillText(text) { label = text; },
+  };
+  const previousDocument = globalThis.document;
+  const previousLanguage = i18n.lang;
+  globalThis.document = {
+    documentElement: {},
+    createElement: () => ({
+      getContext() { return this.width === 320 ? nameplateContext : null; },
+    }),
+  };
+
+  try {
+    i18n.setLang('zh');
+    for (const name of ['', '雪域行者', 'Snowland Pilgrim', 'Nima Dorje']) {
+      const { ctx, go, data } = makeGame({ appearance: { name } });
+      go('toji');
+      ctx.player.update(0);
+      assert.equal(label, `☸ [Lv.1] ${name === 'Nima Dorje' ? name : '日本行者'}`);
+
+      i18n.setLang('en');
+      ctx.player.update(0);
+      assert.equal(label, `☸ [Lv.1] ${name === 'Nima Dorje' ? name : 'Shingon Pilgrim'}`);
+
+      go('stupa');
+      ctx.player.update(0);
+      assert.equal(label, `☸ [Lv.1] ${name || 'Snowland Pilgrim'}`);
+      assert.equal(ctx.player.getAppearance().name, name);
+      assert.equal(data.appearance.name, name);
+      i18n.setLang('zh');
+    }
+  } finally {
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+    i18n.setLang(previousLanguage);
+  }
+});
+
+test('Japan skill and chant events leave Himalayan mantra lore locked', () => {
+  const { ctx, go } = makeGame();
+  const codex = createCodex({ ...ctx, save: undefined });
+  const unlocked = [];
+  ctx.bus.on('codex:unlock', ({ id }) => unlocked.push(id));
+
+  go('toji');
+  assert.equal(ctx.skills.cast('dogyoNinin'), true);
+  ctx.bus.emit('player:chant');
+  ctx.bus.emit('mantra:cast');
+  assert.equal(codex.isUnlocked('omManiPadmeHum'), false);
+  assert.deepEqual(unlocked, []);
+
+  go('stupa');
+  assert.equal(ctx.skills.cast('chant'), true);
+  assert.equal(codex.isUnlocked('omManiPadmeHum'), true);
+  assert.deepEqual(unlocked, ['omManiPadmeHum']);
 });
