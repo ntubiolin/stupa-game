@@ -1538,7 +1538,7 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
 
   // 140 Blue-Chlorite Schist Stones (`四國青石`, InstancedMesh) arranged as Coiling Male & Female Dragons (`雌雄雙龍`)
   const dragonStoneGeo = createGraniteGeometry(9.2, 1);
-  dragonStoneGeo.scale(0.85, 1.35, 0.65);
+  dragonStoneGeo.scale(1.06, 1.12, 0.91);
   const dragonStoneMat = createGraniteMaterial();
   disposables.push(dragonStoneGeo, dragonStoneMat, dragonStoneMat.map);
 
@@ -1547,49 +1547,30 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   dragonStonesInst.castShadow = true;
   dragonStonesInst.receiveShadow = true;
 
-  let dStoneIdx = 0;
-  // West Dragon (`雄龍`, 70 stones along a coiling S-curve centered around x = -6.2)
-  for (let i = 0; i < 70; i++) {
-    const u = i / 69; // 0 (tail in north) -> 1 (head rearing toward south-center)
-    const spineZ = -6.2 + u * 12.4;
-    const spineX = -6.4 + Math.sin(u * Math.PI * 2.2) * 3.4;
-    const rowOffset = ((i % 3) - 1) * 0.52;
-    const sx = spineX + rowOffset;
-    const sz = spineZ + (i % 2) * 0.25;
-    const isHead = i >= 64;
-    const hScale = isHead ? 1.85 : 0.75 + Math.sin(u * Math.PI) * 0.85 + (i % 3) * 0.18;
+  const stoneRng = seededRandom(1643);
+  const stonesPerDragon = DRAGON_STONE_COUNT / 2;
+  let stoneIndex = 0;
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < stonesPerDragon; i++) {
+      const u = i / (stonesPerDragon - 1);
+      const coil = u * TWO_PI * 1.1;
+      const spineZ = side * (6.2 - u * 12.4);
+      const spineX = side * (6.4 - Math.sin(coil) * 3.4);
+      const rowOffset = ((i % 3) - 1) * 0.66;
+      const x = spineX + rowOffset + (stoneRng() - 0.5) * 0.48;
+      const z = spineZ + (stoneRng() - 0.5) * 0.72;
+      const isHead = i === 65 || i === 68;
+      const isOuterStone = i % 3 !== 1;
+      const height = isHead ? 1.55 + stoneRng() * 0.63 : 0.25 + stoneRng() * (isOuterStone ? 0.63 : 1.08);
+      const width = (isHead ? 1.26 : 0.53) + stoneRng() * 0.62;
+      const yaw = Math.atan2(Math.cos(coil) * 3.4, 4) + (stoneRng() - 0.5) * 2.7;
 
-    dummy.position.set(sx, 0.14 + hScale * 0.32, sz);
-    dummy.rotation.set(
-      0.22 * Math.cos(u * Math.PI * 2),
-      Math.atan2(Math.cos(u * Math.PI * 2.2) * 3.4, 4.0) + (i % 3) * 0.25,
-      0.18
-    );
-    dummy.scale.set(0.85 + (i % 2) * 0.25, hScale, 0.75 + (i % 3) * 0.2);
-    dummy.updateMatrix();
-    dragonStonesInst.setMatrixAt(dStoneIdx++, dummy.matrix);
-  }
-
-  // East Dragon (`雌龍`, 70 stones along a mirrored S-curve centered around x = +6.2)
-  for (let i = 0; i < 70; i++) {
-    const u = i / 69;
-    const spineZ = 6.2 - u * 12.4;
-    const spineX = 6.4 - Math.sin(u * Math.PI * 2.2) * 3.4;
-    const rowOffset = ((i % 3) - 1) * 0.52;
-    const sx = spineX + rowOffset;
-    const sz = spineZ - (i % 2) * 0.25;
-    const isHead = i >= 64;
-    const hScale = isHead ? 1.80 : 0.72 + Math.sin(u * Math.PI) * 0.82 + (i % 3) * 0.18;
-
-    dummy.position.set(sx, 0.14 + hScale * 0.32, sz);
-    dummy.rotation.set(
-      -0.22 * Math.cos(u * Math.PI * 2),
-      Math.atan2(-Math.cos(u * Math.PI * 2.2) * 3.4, -4.0) + (i % 3) * 0.25,
-      -0.18
-    );
-    dummy.scale.set(0.85 + (i % 2) * 0.25, hScale, 0.75 + (i % 3) * 0.2);
-    dummy.updateMatrix();
-    dragonStonesInst.setMatrixAt(dStoneIdx++, dummy.matrix);
+      dummy.position.set(x, 0.14 + height * 0.35, z);
+      dummy.rotation.set((stoneRng() - 0.5) * 0.66, yaw, (stoneRng() - 0.5) * 0.72);
+      dummy.scale.set(width, height, width * (0.68 + stoneRng() * 0.52));
+      dummy.updateMatrix();
+      dragonStonesInst.setMatrixAt(stoneIndex++, dummy.matrix);
+    }
   }
   dragonStonesInst.instanceMatrix.needsUpdate = true;
   banryuteiGroup.add(dragonStonesInst);
