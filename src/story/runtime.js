@@ -5,6 +5,7 @@ import { createBus } from '../core/events.js';
 import { createDebug } from '../core/debug.js';
 import { createSave } from '../systems/save.js';
 import { createCloudSave } from '../systems/cloudSave.js';
+import { createAnalytics } from '../systems/analytics.js';
 import { i18n } from '../i18n.js';
 import '../i18n/storyRuntime.js';
 import '../i18n/storyDirector.js';
@@ -69,6 +70,7 @@ const ctx = { THREE, scene, camera, renderer, isSoftwareWebGL, config: CONFIG, s
   zoneGroups: { stupa: stupaGroup }, colliders: [], interactables: [] };
 createDebug(ctx); createSave(ctx, { writableSections: ['story'] }); // Deliberately no i18n.bindSave: narrative writes only story.
 const cloudSave = createCloudSave(ctx);
+const analytics = createAnalytics(ctx, { mode: 'story' });
 const mapInstances = {};
 let chapterScene = null, stagedScene = null, activeChapter = null, chapterCheckpoint = null, prepareToken = 0;
 let testingChapter = false, previewLoading = false;
@@ -337,6 +339,7 @@ async function enterBeat({ beat }) {
       showCard('complete.title', 'complete.body', 'complete.action', () => {}); break;
   }
   refreshHud(); storyAudio.enterBeat(beat);
+  if (!testingChapter) analytics.enterGame();
 }
 function distanceToPharpingPractitioner() {
   if (state.zone !== 'pharping') return Infinity;
@@ -610,6 +613,7 @@ ctx.bus.on('story:chapter-change',({chapterId,checkpointId,replaying,testing=fal
   if (finale && ['response', 'complete'].includes(checkpointId)) queueMicrotask(() => {
     if (activeChapter === 'finale' && chapterCheckpoint === checkpointId) chapterInteract();
   });
+  if (!testingChapter) analytics.enterGame();
   const introKey = `chapter.${chapterId}.intro`;
   if (fresh && checkpointId === getChapter(chapterId).entryCheckpoint && t(introKey) !== `mirror.${introKey}`) {
     showCard(`chapter.${chapterId}.title`, introKey, 'chapter.close', () => {});
@@ -656,6 +660,7 @@ function frame(now) {
   hud.querySelector('.story-save').textContent = ctx.save.getStatus().ok ? t('saved') : t('chapter.saveError');
   if (!testingChapter && !previewLoading && !debugPanel.isOpen()) story.update(dt);
   phone.update(dt); documentary.update(dt); memory.update(dt); ctx.save.update(dt); cloudSave.update(dt);
+  if (!testingChapter && !previewLoading) analytics.update(dt);
   const waypoint = hud.querySelector('.story-waypoint');
   if (currentTarget && !state.uiOpen) {
     camera.updateMatrixWorld();
