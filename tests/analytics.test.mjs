@@ -122,6 +122,47 @@ test('installation ID is stable outside save export/reset and client reports onl
   assert.equal(ctx.save.exportString().includes(installationId), false);
 });
 
+test('account switch during an in-flight report retries with the new session', async (t) => {
+  const originalFetch = Object.getOwnPropertyDescriptor(globalThis, 'fetch');
+  let resolveFirst;
+  const firstResponse = new Promise((resolve) => { resolveFirst = resolve; });
+  const authorizations = [];
+  let sessionToken = 'session-a';
+  Object.defineProperty(globalThis, 'fetch', {
+    configurable: true,
+    value: async (_url, init) => {
+      authorizations.push(init.headers.Authorization);
+      if (authorizations.length === 1) return firstResponse;
+      return { ok: true, json: async () => ({ ok: true, day: taipeiDay() }) };
+    },
+  });
+  t.after(() => {
+    if (originalFetch) Object.defineProperty(globalThis, 'fetch', originalFetch);
+    else delete globalThis.fetch;
+  });
+
+  const bus = createBus();
+  const ctx = {
+    bus,
+    save: { getInstallationIdAsync: async () => 'visitor_account_switch_1' },
+    cloudSave: { getSessionToken: () => sessionToken },
+  };
+  const analytics = createAnalytics(ctx, { mode: 'adventure', apiBase: 'https://example.test' });
+  analytics.enterGame();
+  await Promise.resolve();
+  assert.deepEqual(authorizations, ['Bearer session-a']);
+
+  sessionToken = 'session-b';
+  bus.emit('cloudSave:signedIn', {}); // Suppressed while A is still in flight.
+  assert.equal(authorizations.length, 1);
+  resolveFirst({ ok: true, json: async () => ({ ok: true, day: taipeiDay() }) });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  analytics.update(30);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(authorizations, ['Bearer session-a', 'Bearer session-b']);
+});
+
 test('HTTP endpoint counts verified Google exchange and merges authenticated gameplay', async () => {
   const baseAuth = createAuthManager({ secret: 'analytics-http-test', allowDevAuth: true });
   const verifiedUser = {
