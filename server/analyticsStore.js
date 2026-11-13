@@ -65,7 +65,7 @@ export function createAnalyticsStore(options = {}) {
   const inMemoryOnly = options.inMemoryOnly !== undefined ? Boolean(options.inMemoryOnly) : Boolean(process.env.STUPA_IN_MEMORY);
   const startedAt = new Date().toISOString();
   let db = inMemoryOnly ? null : openDatabase(dbPath);
-  if (!inMemoryOnly && !db) throw new Error(`Unable to open analytics database: ${dbPath}`);
+  const unavailable = !inMemoryOnly && !db;
   const googleUsers = new Map();
   const dailyPlayers = new Map();
   const dailyAliases = new Map();
@@ -95,7 +95,15 @@ export function createAnalyticsStore(options = {}) {
   const countDay = db?.prepare('SELECT COUNT(*) AS count FROM analytics_daily_players WHERE day = ?');
   const getCollectionSince = db?.prepare("SELECT value FROM analytics_metadata WHERE key = 'collection_since'");
 
+  function assertAvailable() {
+    if (!unavailable) return;
+    const error = new Error(`Analytics persistence unavailable: ${dbPath}`);
+    error.code = 'ANALYTICS_UNAVAILABLE';
+    throw error;
+  }
+
   function recordGoogleSignIn(uid, now = Date.now()) {
+    assertAvailable();
     if (!uid) return false;
     const playerKey = digest('google', uid);
     if (upsertGoogle) upsertGoogle.run(playerKey, now, now);
@@ -111,6 +119,7 @@ export function createAnalyticsStore(options = {}) {
   }
 
   function recordGameplay({ visitorId, uid = '', authenticated = false, mode = 'adventure', now = Date.now() } = {}) {
+    assertAvailable();
     const cleanVisitorId = typeof visitorId === 'string' && VISITOR_ID_RE.test(visitorId) ? visitorId : '';
     if (!cleanVisitorId) return { ok: false, status: 400, error: 'invalid-visitor-id' };
     const day = taipeiDay(now);
@@ -154,6 +163,7 @@ export function createAnalyticsStore(options = {}) {
   }
 
   function getSummary(day = taipeiDay()) {
+    assertAvailable();
     const cleanDay = /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : taipeiDay();
     const googleUserCount = countGoogle ? Number(countGoogle.get()?.count) || 0 : googleUsers.size;
     const dau = countDay
@@ -173,5 +183,13 @@ export function createAnalyticsStore(options = {}) {
     db = null;
   }
 
-  return { engine: db ? 'sqlite' : 'memory', dbPath, recordGoogleSignIn, recordGameplay, getSummary, close };
+  return {
+    engine: unavailable ? 'unavailable' : db ? 'sqlite' : 'memory',
+    available: !unavailable,
+    dbPath,
+    recordGoogleSignIn,
+    recordGameplay,
+    getSummary,
+    close,
+  };
 }

@@ -243,12 +243,14 @@ export function createApiMiddleware(store = getDefaultStore(), wsHub = null) {
         );
         return true;
       }
+      let analyticsRecorded = null;
       if (authResult.user?.authType === 'google') {
         try {
           store.analytics.recordGoogleSignIn(authResult.user.uid);
-        } catch {
-          sendJson(res, { ok: false, error: 'analytics-persistence-failed' }, 500);
-          return true;
+          analyticsRecorded = true;
+        } catch (error) {
+          analyticsRecorded = false;
+          console.error('[analytics] Failed to record verified Google sign-in:', error?.message || error);
         }
       }
       sendJson(res, {
@@ -256,6 +258,7 @@ export function createApiMiddleware(store = getDefaultStore(), wsHub = null) {
         sessionToken: authResult.sessionToken,
         expiresAt: authResult.expiresAt,
         user: authResult.user,
+        ...(analyticsRecorded !== null ? { analyticsRecorded } : {}),
       });
       return true;
     }
@@ -284,8 +287,13 @@ export function createApiMiddleware(store = getDefaultStore(), wsHub = null) {
           authenticated: Boolean(user && user.authType !== 'dev'),
         });
         sendJson(res, result, result.status || (result.ok ? 200 : 400));
-      } catch {
-        sendJson(res, { ok: false, error: 'analytics-persistence-failed' }, 500);
+      } catch (error) {
+        const unavailable = error?.code === 'ANALYTICS_UNAVAILABLE';
+        sendJson(
+          res,
+          { ok: false, error: unavailable ? 'analytics-unavailable' : 'analytics-persistence-failed' },
+          unavailable ? 503 : 500,
+        );
       }
       return true;
     }

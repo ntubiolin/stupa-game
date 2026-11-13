@@ -12,10 +12,10 @@ import { createAuthManager } from '../server/auth.js';
 import { createMultiplayerStore } from '../server/store.js';
 import { createApiMiddleware } from '../server/handler.js';
 
-async function callApi(handler, url, body = {}, headers = {}) {
+async function callApi(handler, url, body = {}, headers = {}, method = 'POST') {
   let payload = null;
   const responseHeaders = {};
-  const req = { method: 'POST', url, body, headers, socket: { remoteAddress: '127.0.0.1' } };
+  const req = { method, url, body, headers, socket: { remoteAddress: '127.0.0.1' } };
   const res = {
     statusCode: 200,
     setHeader: (key, value) => { responseHeaders[key] = value; },
@@ -211,4 +211,55 @@ test('JSON cloud-save fallback keeps analytics in a sibling SQLite database', ()
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('unavailable analytics storage preserves core APIs and reports collection failure', async (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'stupa-analytics-unavailable-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const originalConsoleError = console.error;
+  const loggedErrors = [];
+  console.error = (...args) => loggedErrors.push(args.join(' '));
+  t.after(() => { console.error = originalConsoleError; });
+
+  const baseAuth = createAuthManager({ secret: 'analytics-unavailable-test' });
+  const verifiedUser = {
+    uid: 'google-unavailable-1', email: 'player@example.com', displayName: 'Player', photoURL: '',
+    provider: 'google', authType: 'google',
+  };
+  const auth = {
+    ...baseAuth,
+    authenticateGoogle: async () => ({
+      ok: true,
+      user: verifiedUser,
+      sessionToken: baseAuth.issueSessionToken(verifiedUser),
+      expiresAt: Date.now() + 60_000,
+    }),
+  };
+  const store = createMultiplayerStore({
+    dbPath: path.join(dir, 'community.json'),
+    saveDbPath: '/dev/null',
+    inMemoryOnly: false,
+    auth,
+  });
+  assert.equal(store.analytics.engine, 'unavailable');
+  assert.throws(() => store.analytics.getSummary(), { code: 'ANALYTICS_UNAVAILABLE' });
+  const handler = createApiMiddleware(store);
+
+  const health = await callApi(handler, '/api/health', {}, {}, 'GET');
+  assert.equal(health.status, 200);
+  assert.equal(health.body.status, 'healthy');
+  const community = await callApi(handler, '/api/community', {}, {}, 'GET');
+  assert.equal(community.status, 200);
+
+  const login = await callApi(handler, '/api/auth/google', { idToken: 'verified-by-test-auth' });
+  assert.equal(login.status, 200);
+  assert.equal(login.body.analyticsRecorded, false);
+  assert(loggedErrors.some((message) => message.includes('Failed to record verified Google sign-in')));
+
+  const gameplay = await callApi(handler, '/api/analytics/play', {
+    visitorId: 'visitor_unavailable_1', mode: 'adventure',
+  });
+  assert.equal(gameplay.status, 503);
+  assert.equal(gameplay.body.error, 'analytics-unavailable');
+  store.close();
 });
