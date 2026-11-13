@@ -10,6 +10,7 @@ export function createAnalytics(ctx, options = {}) {
   let retryTimer = 0;
   let inFlight = false;
   let lastReceipt = null;
+  let lastSessionToken = null;
 
   function currentTaipeiDay() {
     return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -23,7 +24,7 @@ export function createAnalytics(ctx, options = {}) {
     try {
       const sessionToken = ctx.cloudSave?.getSessionToken?.() || '';
       if (!force && lastReceipt?.day === currentTaipeiDay()
-        && lastReceipt.signedIn === Boolean(sessionToken)) return true;
+        && lastSessionToken === sessionToken) return true;
       const visitorId = ctx.save?.getInstallationIdAsync
         ? await ctx.save.getInstallationIdAsync()
         : ctx.save?.getInstallationId?.();
@@ -44,6 +45,7 @@ export function createAnalytics(ctx, options = {}) {
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data?.ok) return false;
       lastReceipt = { day: data.day, signedIn: Boolean(sessionToken) };
+      lastSessionToken = sessionToken;
       retryTimer = 0;
       return true;
     } catch {
