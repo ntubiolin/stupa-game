@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createAuthManager } from './auth.js';
 import { createSaveStore } from './saveStore.js';
+import { createAnalyticsStore } from './analyticsStore.js';
 
 export const SAMYE_TARGET_STUPAS = 1008;
 export const MAX_DB_BYTES = 256 * 1024;
@@ -296,6 +297,14 @@ export function createMultiplayerStore(options = {}) {
       inMemoryOnly,
       saveDbPath: resolvedSaveDbPath,
     });
+  const analytics = options.analyticsStore || createAnalyticsStore({
+    inMemoryOnly,
+    dbPath: options.analyticsDbPath
+      || process.env.STUPA_ANALYTICS_DB_PATH
+      || (resolvedSaveDbPath.endsWith('.json')
+        ? path.join(path.dirname(resolvedSaveDbPath), 'stupa-analytics.sqlite')
+        : resolvedSaveDbPath),
+  });
 
   let community = createInitialCommunityState();
 
@@ -1123,11 +1132,15 @@ export function createMultiplayerStore(options = {}) {
     shardCapacity,
     auth,
     saves,
+    analytics,
     saveStore: saves,
     getSave: (...args) => saves.getSave(...args),
     putSave: (...args) => saves.putSave(...args),
     deleteSave: (...args) => saves.deleteSave(...args),
-    close: () => saves.close?.(),
+    close: () => {
+      analytics.close?.();
+      saves.close?.();
+    },
     applyCommunityAction,
     getCommunityState,
     updatePresence,

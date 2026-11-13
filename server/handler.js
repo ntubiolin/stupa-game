@@ -243,12 +243,50 @@ export function createApiMiddleware(store = getDefaultStore(), wsHub = null) {
         );
         return true;
       }
+      if (authResult.user?.authType === 'google') {
+        try {
+          store.analytics.recordGoogleSignIn(authResult.user.uid);
+        } catch {
+          sendJson(res, { ok: false, error: 'analytics-persistence-failed' }, 500);
+          return true;
+        }
+      }
       sendJson(res, {
         ok: true,
         sessionToken: authResult.sessionToken,
         expiresAt: authResult.expiresAt,
         user: authResult.user,
       });
+      return true;
+    }
+
+    // A player becomes active only after a runtime confirms actual game entry.
+    if (pathname === '/api/analytics/play') {
+      if (req.method !== 'POST') {
+        sendJson(res, { ok: false, error: 'Method not allowed' }, 405);
+        return true;
+      }
+      if (!checkSaveRateLimit(req)) {
+        sendJson(res, { ok: false, error: 'Too many requests' }, 429);
+        return true;
+      }
+      const body = await readJsonBody(req);
+      if (body?.__tooLarge) {
+        sendJson(res, { ok: false, error: 'Payload too large' }, 413);
+        return true;
+      }
+      const user = store.auth?.extractAuthUser?.(req) || null;
+      try {
+        const result = store.analytics.recordGameplay({
+          visitorId: body?.visitorId,
+          mode: body?.mode,
+          uid: user?.uid,
+          authenticated: Boolean(user && user.authType !== 'dev'),
+        });
+        sendJson(res, result, result.status || (result.ok ? 200 : 400));
+      } catch {
+        sendJson(res, { ok: false, error: 'analytics-persistence-failed' }, 500);
+      }
       return true;
     }
 
