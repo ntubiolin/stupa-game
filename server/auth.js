@@ -109,6 +109,7 @@ export function sanitizeUserProfile(raw = {}) {
     displayName,
     photoURL,
     provider: 'google',
+    ...(raw.authType === 'google' || raw.authType === 'dev' ? { authType: raw.authType } : {}),
   };
 }
 
@@ -296,14 +297,14 @@ export async function verifyGoogleIdToken(idTokenOrInput, options = {}) {
     }
     if (allowDev) {
       const profileCandidate = idTokenOrInput.devProfile || idTokenOrInput;
-      return sanitizeUserProfile(profileCandidate);
+      return sanitizeUserProfile({ ...profileCandidate, authType: 'dev' });
     }
     return null;
   }
 
   if (typeof idTokenOrInput !== 'string') {
     if (allowDev && options.devProfile && typeof options.devProfile === 'object') {
-      return sanitizeUserProfile(options.devProfile);
+      return sanitizeUserProfile({ ...options.devProfile, authType: 'dev' });
     }
     return null;
   }
@@ -323,6 +324,7 @@ export async function verifyGoogleIdToken(idTokenOrInput, options = {}) {
       email: email || `${uid || 'pilgrim'}@stupa.local`,
       displayName: displayName || uid || '朝聖行者',
       photoURL: photoRest.length > 0 ? photoRest.join(':') : '',
+      authType: 'dev',
     });
   }
 
@@ -388,6 +390,7 @@ export async function verifyGoogleIdToken(idTokenOrInput, options = {}) {
       email: payload.email,
       displayName: payload.name || payload.given_name,
       photoURL: payload.picture,
+      authType: 'google',
     });
   }
 
@@ -411,6 +414,7 @@ export async function verifyGoogleIdToken(idTokenOrInput, options = {}) {
       email: payload.email,
       displayName: payload.name || payload.displayName,
       photoURL: payload.picture || payload.photoURL,
+      authType: 'dev',
     });
   }
 
@@ -443,6 +447,7 @@ export function issueSessionToken(user, options = {}) {
     displayName: cleanUser.displayName,
     photoURL: cleanUser.photoURL,
     provider: cleanUser.provider || 'google',
+    authType: cleanUser.authType,
     iat: now,
     exp,
   });
@@ -557,6 +562,7 @@ export function extractAuthUser(req, authManager = null) {
     displayName: verified.displayName,
     photoURL: verified.photoURL,
     provider: verified.provider || 'google',
+    authType: verified.authType,
   };
 }
 
@@ -583,7 +589,7 @@ export function createAuthManager(defaultOptions = {}) {
     if (idToken) {
       user = await verifyGoogleIdToken(idToken, opts);
     } else if (devProfile) {
-      user = await verifyGoogleIdToken({ devProfile }, opts);
+      user = await verifyGoogleIdToken({ devProfile: { ...devProfile, authType: 'dev' } }, opts);
     }
 
     if (!user) {

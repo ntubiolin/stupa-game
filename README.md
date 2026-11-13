@@ -208,6 +208,7 @@ npm run server
   - **即時共修後端（Oracle Cloud Tokyo）**：Node.js HTTP REST（`/api/community`、`/api/presence`、`/api/coop`）與原生 RFC 6455 WebSocket（`/ws/multiplayer`），由 Caddy 自動簽發 Let's Encrypt HTTPS/WSS 憑證並透過 `systemd` 常駐守護。
 - **核心連線與共修功能**：
   - **跨裝置持久化**：酥油燈祈願牆（`🪔`）、個人祈願佛塔林（`🏛️`）與桑耶寺千八小塔全球共建進度原子寫入 `.data/stupa-backend.json`，並每 6 小時自動異地備份至 Google Drive。
+  - **使用統計**：正式後端從功能部署日起統計已驗證 Google 登入總人數，以及包含訪客、依台北日曆日去重且實際進入遊戲才計數的 DAU。後端主機可執行 `npm run analytics:report -- YYYY-MM-DD` 查詢彙總數字。
   - **12 人區域自動分流（Zone Sharding）**：各章節地圖自動維持每分流上限 12 名行者（如 `stupa#1`、`stupa#2`），即時同步周遭行者位置、大禮拜與咒輪共鳴。
   - **2–4 人公開／私密小隊（Co-op Rooms）**：支援公開房間大廳配對、隊長斷線自動移交（Host Migration）與伏藏秘境種子同步。
 - **嚴格容量上限與防濫用保護**：

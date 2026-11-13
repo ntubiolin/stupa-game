@@ -6,6 +6,7 @@
  * 1-second throttled writes, and immediate flush on `visibilitychange` / `pagehide`.
  */
 export const SAVE_STORAGE_KEY = 'stupa.save.v2';
+export const INSTALLATION_STORAGE_KEY = 'stupa.installation.v1';
 const SAVE_VERSION = 2;
 export const STORY_SAVE_VERSION = 2;
 const THROTTLE_SEC = 1.0;
@@ -396,6 +397,26 @@ export function createSave(ctx, { writableSections = null } = {}) {
 
   loadInitialStore();
 
+  function getInstallationId() {
+    try {
+      const existing = localStorage.getItem(INSTALLATION_STORAGE_KEY);
+      if (/^[a-zA-Z0-9_-]{16,96}$/.test(existing || '')) return existing;
+      const generated = globalThis.crypto?.randomUUID?.()
+        || `visitor_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 14)}`;
+      localStorage.setItem(INSTALLATION_STORAGE_KEY, generated);
+      return generated;
+    } catch {
+      return null;
+    }
+  }
+
+  async function getInstallationIdAsync() {
+    if (typeof navigator !== 'undefined' && navigator.locks?.request) {
+      return navigator.locks.request('stupa-installation-id', { mode: 'exclusive' }, getInstallationId);
+    }
+    return getInstallationId();
+  }
+
   function get(section, fallback = {}) {
     if (!section) return deepClone(fallback);
     const existing = pendingSections.has(section) ? pendingSections.get(section) : store.sections?.[section];
@@ -689,6 +710,8 @@ export function createSave(ctx, { writableSections = null } = {}) {
     dump,
     update,
     getWriteCount() { return writeCount; },
+    getInstallationId,
+    getInstallationIdAsync,
   };
 
   if (ctx) {
