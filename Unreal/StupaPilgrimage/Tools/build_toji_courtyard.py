@@ -221,10 +221,13 @@ def blossom_atlas():
     return masked_material("Fuji_zakura_Petals_and_Pedicels", rgba[..., :3], rgba[..., 3])
 
 
-def foliage_card(mesh, rng, center, radius, style, tile=None):
+def foliage_card(mesh, rng, center, radius, style, tile=None, upright=False):
     phi = rng.uniform(0, math.tau)
     along = Vector((math.cos(phi), math.sin(phi), rng.uniform(-0.65, 0.65))).normalized()
-    across = Vector((-math.sin(phi), math.cos(phi), rng.uniform(-0.85, 0.85))).normalized()
+    tilt = rng.uniform(-0.85, 0.85)
+    if upright:
+        tilt = math.copysign(0.56 + 0.90 * abs(tilt), tilt)
+    across = Vector((-math.sin(phi), math.cos(phi), tilt)).normalized()
     if tile is not None:
         row, col = divmod(tile, 2)
         points = [center + radius*(u*along + v*across) for u,v in ((-1,-1), (1,-1), (1,1), (-1,1))]
@@ -255,12 +258,13 @@ def tree(rng, wood, leaves, x, y, h, is_cherry, hero=False):
     branches = 8 if hero else 7
     sprays = 7 if hero else 5
     twigs = 7 if hero else 4
+    spread = h * (1.4 if hero else 1)
     for i in range(branches):
         angle = twist + i * 2.39996
         outward = Vector((math.cos(angle), math.sin(angle), 0))
         sideways = Vector((-outward.y, outward.x, 0))
         start = trunk[2+i//2].lerp(trunk[3+i//2], rng.uniform(0.12, 0.88))
-        end = crown + outward * h * rng.uniform(0.25, 0.48) + Vector((0, 0, h * rng.uniform(-0.23, 0.05)))
+        end = crown + outward * spread * rng.uniform(0.25, 0.48) + Vector((0, 0, h * rng.uniform(-0.23, 0.05)))
         shoulder = start.lerp(end, 0.24) - outward * 0.22 + Vector((0, 0, 0.17))
         middle = start.lerp(end, 0.58) + sideways * rng.uniform(-0.46, 0.46)
         tube(wood, [start, shoulder, middle, end], [h * 0.021, h * 0.015, h * 0.009, 0.011], rng.random())
@@ -283,7 +287,8 @@ def tree(rng, wood, leaves, x, y, h, is_cherry, hero=False):
                 for m in range(clusters):
                     center = origin.lerp(twig, 0.56 + m * (0.40 / (clusters - 1)))
                     if is_cherry:
-                        foliage_card(leaves, rng, center, rng.uniform(0.16, 0.24), 0, rng.randrange(4))
+                        radius = rng.uniform(0.16, 0.24) * (1.55 if hero else 1)
+                        foliage_card(leaves, rng, center, radius, 0, rng.randrange(4), upright=hero)
                     else:
                         foliage_card(leaves, rng, center, rng.uniform(0.15, 0.27), 1 + rng.randrange(3))
 
@@ -291,9 +296,9 @@ def tree(rng, wood, leaves, x, y, h, is_cherry, hero=False):
 def build():
     rng = random.Random(SEED)
     gravel = texture_material("Courtyard_Shallow_Granite_Gravel", ((0.13, 0.112, 0.094), (0.32, 0.30, 0.27)),
-                              (17, 17), 2.4, 0.92, 1)
+                              (17, 17), 0.85, 0.92, 1)
     granite = texture_material("Sando_Dressed_Granite", ((0.16, 0.139, 0.116), (0.43, 0.39, 0.35)),
-                               (4, 4), 2.0, 0.78, 2)
+                               (4, 4), 0.65, 0.78, 2)
     moss = texture_material("Courtyard_Moss_and_Root_Soil", ((0.039, 0.045, 0.024), (0.125, 0.148, 0.066)),
                              (3, 3), 1.5, 0.96, 3)
     bark = texture_material("Tree_Fissured_Bark", ((0.036, 0.021, 0.015), (0.14, 0.095, 0.068)),
@@ -335,7 +340,7 @@ def build():
               rng.uniform(0.014, 0.051), 0.8)
     paving.create([granite])
     trees = (
-        (24, 6, 8.9, True), (25.5, -8, 7.1, True), (-22, 24, 7.3, True),
+        (24, 6, 7.1, True), (25.5, -8, 7.1, True), (-22, 24, 7.3, True),
         (-24, -18, 7.0, True), (22, -42, 7.3, True), (-18, 54, 6.0, True),
         (26.5, -18.5, 6.0, False), (44.5, -18, 7.0, False), (48, 8, 7.0, False),
         (-25, 4, 6.8, False), (-22, -44, 6.3, False), (18, 56, 6.6, False),

@@ -12,10 +12,10 @@ From the repository root, with Blender 5.2.3 installed:
   --python-exit-code 1 --python Unreal/StupaPilgrimage/Tools/build_toji_courtyard.py
 ```
 
-Pass `-- --output /tmp/TojiCourtyard.glb` to write a comparison copy. Two clean builds produced SHA-256 `73993a80e1968ca6fec3ea988e29c5ffccdbafc091eb27464ff616ba08e9d2a3` with 17 meshes, 174,241 triangles, 12 embedded PNGs and no required glTF extensions. The checked-in GLB allows the UE level generator to run without Blender.
+Pass `-- --output /tmp/TojiCourtyard.glb` to write a comparison copy. Two clean builds produced SHA-256 `011734d6ab53de78bb8543f0bd9854bef14c2d7be09285b330f82ce099e101e8` with 17 meshes, 174,241 triangles, 12 embedded PNGs and no required glTF extensions. The checked-in GLB allows the UE level generator to run without Blender.
 
 Blender scene coordinates use metres with +X east, +Y north and +Z up. The importer aligns the courtyard origin with the map-local Web origin. Pavement tops are within 3 cm of UE Z=0. Collision belongs to the UE level generator so the fine visual detail does not snag the player.
 
-`Tools/toji_art.py` assembles the directional key, sky capture, distance haze and localized altar fill. Gameplay controls the tagged `Toji.Sun` and `Toji.SkyLight` actors for day, dusk and night. The QA manifest `Unreal/QA/toji-views.json` defines the comparison cameras and lighting states.
+`Tools/toji_art.py` assembles the directional key, sky capture, distance haze and localized altar fill. Gameplay controls the tagged sun, skylight and altar fill, with a dedicated moonlight exposure range at night. The QA manifest `Unreal/QA/toji-views.json` defines the comparison cameras and lighting states.
 
-Independent Blender renders of the assembled temple and courtyard verified orientation, texture import and alpha-mask silhouettes, including the close blossom view from map-local `(22, 3, 18)` toward `(24, 3.2, 6)`. The procedural vegetation is an authored approximation. Appearance, exposure, cooked materials, capture framing and performance require verification in the packaged UE scene.
+Independent Blender renders of the assembled temple and courtyard verified orientation, texture import and alpha-mask silhouettes, including the close blossom view from map-local `(22, 3, 18)` toward `(24, 3.2, 6)`. The procedural vegetation is an authored approximation. See the [Mac playtest and matched screenshots](../../../../docs/toji-native-playtest.md) for the packaged scene.

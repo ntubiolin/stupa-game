@@ -1,9 +1,12 @@
 #include "TojiGameMode.h"
 
 #include "Components/DirectionalLightComponent.h"
+#include "Components/RectLightComponent.h"
 #include "Components/SkyLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/DirectionalLight.h"
+#include "Engine/PostProcessVolume.h"
+#include "Engine/RectLight.h"
 #include "Engine/SkyLight.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -406,6 +409,29 @@ void ATojiGameMode::FindLights()
             break;
         }
     }
+    for (TActorIterator<ARectLight> It(GetWorld()); It; ++It)
+    {
+        if (It->ActorHasTag(TEXT("Toji.AltarFill")))
+        {
+            AltarFill = It->RectLightComponent;
+            DayAltarIntensity = AltarFill->Intensity;
+            break;
+        }
+    }
+
+    NightExposure = GetWorld()->SpawnActor<APostProcessVolume>();
+    if (NightExposure)
+    {
+        // Keep moonlit surfaces dark even when they fill the entire frame.
+        NightExposure->bUnbound = true;
+        NightExposure->bEnabled = false;
+        NightExposure->Settings.bOverride_AutoExposureMinBrightness = true;
+        NightExposure->Settings.bOverride_AutoExposureMaxBrightness = true;
+        NightExposure->Settings.AutoExposureMinBrightness = 4.0f;
+        NightExposure->Settings.AutoExposureMaxBrightness = 6.0f;
+        NightExposure->Settings.bOverride_AutoExposureBias = true;
+        NightExposure->Settings.AutoExposureBias += 5.0f;
+    }
 }
 
 void ATojiGameMode::SetTimeOfDay(int32 Time)
@@ -415,6 +441,15 @@ void ATojiGameMode::SetTimeOfDay(int32 Time)
         return;
     }
     TimeOfDay = Time;
+    const bool bNight = Time == 2;
+    if (NightExposure)
+    {
+        NightExposure->bEnabled = bNight;
+    }
+    if (AltarFill)
+    {
+        AltarFill->SetIntensity(bNight ? 300.0f : DayAltarIntensity);
+    }
     if (Sun)
     {
         UDirectionalLightComponent* Light = Sun->FindComponentByClass<UDirectionalLightComponent>();
@@ -430,7 +465,7 @@ void ATojiGameMode::SetTimeOfDay(int32 Time)
         {
             // Match the spring light rays sampled at Web t=0.72 (sun) and t=0.86 (moon).
             Sun->SetActorRotation(Time == 1 ? FRotator(-10.30, 74.97, 0) : FRotator(-35.06, -88.76, 0));
-            Light->SetIntensity(Time == 1 ? 8000.0f : 1.8f);
+            Light->SetIntensity(Time == 1 ? 8000.0f : 0.35f);
             Light->SetLightColor(FLinearColor::White);
             Light->SetTemperature(Time == 1 ? 3800.0f : 8500.0f);
             Light->SetUseTemperature(true);

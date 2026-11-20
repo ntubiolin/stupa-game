@@ -6,8 +6,10 @@
 #include "TojiGameMode.generated.h"
 
 class ADirectionalLight;
+class APostProcessVolume;
 class ASkyLight;
 class ATojiCharacter;
+class URectLightComponent;
 class UStaticMeshComponent;
 
 UCLASS()
@@ -57,9 +59,16 @@ private:
     UPROPERTY()
     TObjectPtr<ASkyLight> SkyLight;
 
+    UPROPERTY()
+    TObjectPtr<URectLightComponent> AltarFill;
+
+    UPROPERTY()
+    TObjectPtr<APostProcessVolume> NightExposure;
+
     FRotator DaySunRotation;
     float DayIntensity = 0;
     float DaySkyIntensity = 1;
+    float DayAltarIntensity = 0;
     float DayTemperature = 6500;
     bool bDayUseTemperature = false;
     FColor DaySunColor = FColor::White;
