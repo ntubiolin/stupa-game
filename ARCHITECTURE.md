@@ -403,6 +403,12 @@ and 64×128px bark. Cedars use 52m spatial chunks with a 68m LOD transition and
 updates swap prebuilt blossom/leaf/frost textures without per-frame allocation.
 No new public ctx API, bus events or save fields are introduced.
 
+Tō-ji and Mount Kōya share the adventure wind direction and strength with the
+prayer flags. Each map updates one set of uniforms in `japanTreeWind.js`.
+Its vertex deformation anchors roots, bends the crown with a traveling gust
+and flutters branch tips. Instanced trees share the bend across trunk,
+foliage and shadow passes, including both cedar LODs.
+
 Settings starts the campaign at Qinglong. The Japan world route shows all six
 stops and enables chapter travel through `ctx.japanCampaign.isChapterUnlocked`.
 Forward gates marked `chapterRequired` enforce the same rule. Legacy Tō-ji/Kōya
