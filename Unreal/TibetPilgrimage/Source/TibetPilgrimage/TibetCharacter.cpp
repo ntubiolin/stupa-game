@@ -49,7 +49,8 @@ void ATibetCharacter::BeginPlay()
         Body->SetupAttachment(Joint);
         Body->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, *FString::Printf(TEXT("/Game/Figures/%s.%s"),Parts[i],Parts[i])));
         Body->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-        Body->SetRelativeRotation(FRotator(0,-90,0));
+        // FBX imports the Blender forward axis as -Y. Turn it to UE +X, with left limbs on -Y.
+        Body->SetRelativeRotation(FRotator(0,90,0));
         Body->RegisterComponent();
     }
 }
