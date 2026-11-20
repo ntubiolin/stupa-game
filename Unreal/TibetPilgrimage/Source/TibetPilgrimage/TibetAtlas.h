@@ -23,5 +23,6 @@ private:
     TStrongObjectPtr<UTexture2D> Texture;
     FSlateBrush Illustration;
     int32 Selected = 0;
+    bool bWriteFailed = false;
     FString SelectedLegend() const;
 };

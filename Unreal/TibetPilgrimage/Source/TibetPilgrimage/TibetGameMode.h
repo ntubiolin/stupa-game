@@ -142,6 +142,8 @@ public:
     int32 CurrentAreaIndex() const;
     FString AreaName(int32 Index) const;
     bool HasVisitedArea(int32 Index) const;
+    bool CanTravelFromAtlas(int32 Pin) const;
+    bool TravelFromAtlas(int32 Pin);
     FString Status(bool bTouchControls) const;
     bool IsEnglish() const { return Save && Save->bEnglish; }
     FString Local(const TCHAR* En, const TCHAR* Zh) const { return IsEnglish() ? En : Zh; }
@@ -219,6 +221,8 @@ private:
     TArray<float> HealTicks;
     void UpdatePills(float Now);
     bool Store();
+    int32 AtlasDestination(int32 Pin) const;
+    bool TravelToMap(const FString& Destination);
     void MoveToNextMap();
     void SetNotice(const FString& Line);
     void Pulse(const FVector& At, const FLinearColor& Color, float Magnitude);

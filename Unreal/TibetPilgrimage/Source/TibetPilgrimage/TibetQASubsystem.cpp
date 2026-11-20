@@ -88,6 +88,7 @@ void UTibetQASubsystem::Tick(float)
         Finish(true, TEXT("transition\t") + World->GetMapName());
         return;
     }
+    if (Task == TEXT("AtlasTravel")) { AtlasTravel(*PC, *Mode); return; }
     if (Task != TEXT("Campaign") && World->GetMapName() != StartMap) { Finish(false, TEXT("Unexpected map: ") + World->GetMapName()); return; }
     if (Task == TEXT("Courtyard") || Task == TEXT("CourtyardResume")) Courtyard(*PC,*Mode);
     else if (Task == TEXT("Arrival")) Arrival(*PC);
@@ -480,6 +481,50 @@ bool UTibetQASubsystem::TapPlayControl(FName Tag,float XFraction)
     if(bSlider) App.OnTouchMoved(At,1,0,Map.GetPrimaryPlatformUser(),Map.GetDefaultInputDevice());
     App.OnTouchEnded(At,0,Map.GetPrimaryPlatformUser(),Map.GetDefaultInputDevice());
     return true;
+}
+
+void UTibetQASubsystem::AtlasTravel(APlayerController& PC, ATibetGameMode& Mode)
+{
+    const double Now = FPlatformTime::Seconds();
+    if (Now - Began > 35) { Finish(false, TEXT("Atlas travel timed out")); return; }
+    if (Now - Began < 1.8 || Now - LastAction < .2 || FScreenshotRequest::IsScreenshotRequested()) return;
+    LastAction = Now;
+    const bool Homeward = FParse::Param(FCommandLine::Get(), TEXT("TibetQAHomeward"));
+    const int32 Target = Homeward ? 0 : 1;
+    if (Mode.CurrentAreaIndex() == Target)
+    {
+        const bool ProgressOK = !Homeward || Mode.GetStep() == 1;
+        Finish(Mode.HasVisitedArea(1) && ProgressOK && !PC.IsPaused(), TEXT("arrived\t") + GetWorld()->GetMapName());
+        return;
+    }
+    if (Mode.CurrentAreaIndex() != (Homeward ? 1 : 0)) { Finish(false, TEXT("Unexpected travel origin")); return; }
+    auto* HUD = PC.GetHUD<ATibetHUD>();
+    if (!HUD) return;
+    switch (Frames)
+    {
+    case 0:
+        SendKey(PC, EKeys::M, true); SendKey(PC, EKeys::M, false); break;
+    case 1:
+        if (!HUD->IsJournalOpen() || !PC.IsPaused()) { Finish(false, TEXT("Atlas did not open")); return; }
+        if (!TapPlayControl(TEXT("TibetAtlas6"))) return;
+        break;
+    case 2:
+    {
+        const auto Travel = FindJournalButton(GEngine->GameViewport->GetWindow().ToSharedRef(), TEXT("TibetAtlasTravel"));
+        if (!Travel || Travel->GetVisibility().IsVisible() || Mode.CanTravelFromAtlas(6))
+        { Finish(false, TEXT("Unvisited Samye became reachable")); return; }
+        if (!TapPlayControl(Homeward ? TEXT("TibetAtlas0") : TEXT("TibetAtlas1"))) return;
+        break;
+    }
+    case 3:
+        if (!Mode.CanTravelFromAtlas(Target)) { Finish(false, TEXT("Open destination is locked")); return; }
+        FScreenshotRequest::RequestScreenshot(Output / TEXT("destination.png"), true, false, false); break;
+    case 4:
+        if (!TapPlayControl(TEXT("TibetAtlasTravel"))) return;
+        Record(TEXT("atlas-click\t") + GetWorld()->GetMapName()); break;
+    default: return;
+    }
+    ++Frames;
 }
 
 void UTibetQASubsystem::Journal(APlayerController& PC,ATibetGameMode& Mode)
