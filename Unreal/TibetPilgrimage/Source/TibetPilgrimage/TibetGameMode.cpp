@@ -212,7 +212,7 @@ void ATibetGameMode::Refresh()
         }
         const FString Path=FString::Printf(TEXT("/Game/Figures/%s.%s"),*Model,*Model);
         Focus=MeshActor(GetWorld(),At,Path,FVector(K==EObjective::Boss?1.48:1));
-        if (Focus) Focus->SetActorRotation(FRotator(0,90,0));
+        if (Focus) Focus->SetActorRotation(FRotator(0,-90,0));
     }
     else
     {
@@ -357,7 +357,7 @@ void ATibetGameMode::CastSkill(int32 Slot)
         const FString Guardian=TEXT("/Game/Figures/Tenma.Tenma");
         if(auto* Protector=MeshActor(GetWorld(),From+P->GetActorRightVector()*140-FVector(0,0,115),Guardian,FVector(1.08)))
         {
-            Protector->SetActorRotation(FRotator(0,(To-From).Rotation().Yaw-90,0));
+            Protector->SetActorRotation(FRotator(0,(To-From).Rotation().Yaw+90,0));
             Protector->SetLifeSpan(1.25f);
         }
     }
@@ -389,7 +389,7 @@ void ATibetGameMode::Tick(float Dt)
         if(Delta.Size2D()>95 && Delta.Size2D()<1800)
         {
             Messenger->AddActorWorldOffset(Delta.GetSafeNormal2D()*FMath::Min<double>(Dt*470,Delta.Size2D()-90));
-            Messenger->SetActorRotation(FRotator(0,Delta.Rotation().Yaw-90,0));
+            Messenger->SetActorRotation(FRotator(0,Delta.Rotation().Yaw+90,0));
         }
     }
     if ((K==EObjective::Reach || K==EObjective::Kora || K==EObjective::Escort) && Dist<140)
@@ -410,7 +410,7 @@ void ATibetGameMode::Tick(float Dt)
     if ((K==EObjective::Combat || K==EObjective::Boss) && Focus && Stun<=0 && Dist<1600)
     {
         const FVector Dir=ToPlayer.GetSafeNormal2D();
-        Focus->SetActorRotation(FRotator(0,Dir.Rotation().Yaw-90,0));
+        Focus->SetActorRotation(FRotator(0,Dir.Rotation().Yaw+90,0));
         if(Dist>124) Focus->AddActorWorldOffset(Dir*FMath::Min<double>(Dt*(K==EObjective::Boss?165:115),Dist-120));
         HurtTimer-=Dt;
         if(Dist<200 && HurtTimer<=0)
