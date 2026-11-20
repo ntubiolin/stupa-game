@@ -29,6 +29,7 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/world/maps/chimphu.js` | World | Chapter 5 hub map: Chimphu hermitage caves, butter-lamp alcoves, Terma Realm portal (lazy-loaded) |
 | `src/world/maps/terma.js` | World | Chapter 5 endgame dungeon: seeded 3-floor procedural layout (Cave / Snow / Mandala themes) (lazy-loaded) |
 | `src/world/maps/toji.js` | World | Kūkai Epic map: Kyoto Tō-ji (`教王護國寺`, `origin = (7500, 0)`), Five-Story Pagoda (`五重塔`), Kondō (`金堂` Yakushi Triad), Kōdō (`講堂` 21-Deity 3D Mandala), Nandaimon & Hyōtan-ike pond (lazy-loaded) |
+| `src/world/japanSeasonalDrift.js` | World | Samples instanced cherry and maple crowns in map coordinates for a bounded, wind-driven pool of seasonal petals and leaves around the player. |
 | `src/world/maps/koyasan.js` | World | Kūkai Epic map: Mount Kōya (`高野山`, `origin = (8000, 0)`), Danjō Garan (`壇上伽藍` Konpon Daitō, Kondō, Miedō, Sanko-no-Matsu), Kongōbu-ji (`金剛峯寺` & Banryūtei rock garden), and Okunoin (`奧之院` Gobyōbashi, 1,000-year cedars, Gorintō stupas, Tōrōdō & Kōbō Daishi Gobyō) (lazy-loaded) |
 | `src/data/japan.js`, `src/data/maps/japanPilgrimage.js`, `src/world/maps/japanPilgrimage.js` | World | Six-stop Kūkai route contract and four additional lazy, instanced pilgrimage maps: Qinglong, Kii, Kongōbu-ji, Okunoin |
 | `src/world/japanArchitecture.js` | World | Japanese lantern waypoint model and unlock illumination, no PointLights |
@@ -402,6 +403,12 @@ and 64×128px bark. Cedars use 52m spatial chunks with a 68m LOD transition and
 12% hysteresis; distant trees do not cast shadows. Existing Tō-ji/Kōya seasonal
 updates swap prebuilt blossom/leaf/frost textures without per-frame allocation.
 No new public ctx API, bus events or save fields are introduced.
+
+Tō-ji and Mount Kōya share the adventure wind direction and strength with the
+prayer flags. Each map updates one set of uniforms in `japanTreeWind.js`.
+Its vertex deformation anchors roots, bends the crown with a traveling gust
+and flutters branch tips. Instanced trees share the bend across trunk,
+foliage and shadow passes, including both cedar LODs.
 
 Settings starts the campaign at Qinglong. The Japan world route shows all six
 stops and enables chapter travel through `ctx.japanCampaign.isChapterUnlocked`.

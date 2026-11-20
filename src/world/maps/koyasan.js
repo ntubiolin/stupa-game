@@ -38,6 +38,8 @@ import { i18n } from '../../i18n.js';
 import '../../i18n/koyasan.js';
 import { addJapanRouteGate } from '../japanArchitecture.js';
 import { addRakedGravel, createGraniteGeometry, createGraniteMaterial } from '../japanGardenArchitecture.js';
+import { createJapanTreeWind } from '../japanTreeWind.js';
+import { addSeasonalDrift } from '../japanSeasonalDrift.js';
 import { addJapanTrees } from '../japanVegetation.js';
 import { addJapanUnderstory } from '../japanUnderstory.js';
 import { createJapanGravelTile } from '../tojiCourtyard.js';
@@ -279,6 +281,7 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   const colliders = [];
   const interactables = [];
   const disposables = [];
+  const treeWind = createJapanTreeWind(origin);
   const fallbackDaitoColliders = [];
 
   const getHeight = (lx, lz) => koyasanHeight(lx, lz);
@@ -1312,6 +1315,8 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     skPine.push(pad);
   }
 
+  treeWind.bendMaterial(cedarTrunkMat, 7);
+  treeWind.bendMaterial(pineFoliageMat, 7);
   sankoGroup.add(
     new THREE.Mesh(mergeAndDispose(skStone), stonePlinthMat),
     new THREE.Mesh(mergeAndDispose(skTrunk), cedarTrunkMat),
@@ -1695,7 +1700,7 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
       yaw: cedarRng() * TWO_PI, lean: (cedarRng() - 0.5) * 0.04,
     });
   }
-  addJapanTrees(okunoinGroup, cedars, { name: 'Mount Kōya cedars', species: 'cedar', disposables });
+  addJapanTrees(okunoinGroup, cedars, { name: 'Mount Kōya cedars', species: 'cedar', wind: treeWind, disposables });
 
   // ---------------------------------------------------------------- 6C. Gorintō Memorial Forest (`五輪塔群`, 200 five-ring stupas via InstancedMesh)
   const gorintoGeo = createGorintoGeometry();
@@ -2110,10 +2115,14 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   ];
   const onGround = ([x, z]) => ({ x, y: getHeight(x, z), z, scale: 1.05 });
   const maples = addJapanTrees(root, koyasanMapleSpots.map(onGround), {
-    name: 'Mount Kōya maples', species: 'maple', canopyMaterial: koyasanMapleMat, disposables,
+    name: 'Mount Kōya maples', species: 'maple', canopyMaterial: koyasanMapleMat, wind: treeWind, disposables,
   });
   const cherries = addJapanTrees(root, koyasanCherrySpots.map(onGround), {
-    name: 'Mount Kōya cherries', species: 'cherry', canopyMaterial: koyasanCherryMat, disposables,
+    name: 'Mount Kōya cherries', species: 'cherry', canopyMaterial: koyasanCherryMat, wind: treeWind, disposables,
+  });
+
+  const canopyDrift = addSeasonalDrift(root, {
+    cherries, maples, groundHeight: getHeight, lowSpec: ctx.lowSpec, seed: 8731, disposables,
   });
 
   addJapanUnderstory(root, {
@@ -2307,7 +2316,12 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   // ---------------------------------------------------------------- 9. Per-Frame Animation Update
   function update(dt) {
     const elapsed = state.elapsed || 0;
-    applyKoyasanSeason(state?.time?.season || 'spring');
+    const season = state?.time?.season || 'spring';
+    applyKoyasanSeason(season);
+    const player = state?.player?.position;
+    canopyDrift.update(dt, season, state?.wind, player?.x - ox, player?.z - oz);
+
+    treeWind.update(state.wind, elapsed);
 
     // Slowly rotate the golden Siddhaṃ mandala above Kōbō Daishi Gobyō
     siddhamMandalaGroup.rotation.y = elapsed * 0.45;

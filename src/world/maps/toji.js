@@ -30,6 +30,8 @@ import { TOJI_MAP } from '../../data/maps/toji.js';
 import { i18n } from '../../i18n.js';
 import '../../i18n/toji.js';
 import { addJapanRouteGate } from '../japanArchitecture.js';
+import { createJapanTreeWind } from '../japanTreeWind.js';
+import { addSeasonalDrift } from '../japanSeasonalDrift.js';
 import { addJapanTrees } from '../japanVegetation.js';
 import { addJapanUnderstory } from '../japanUnderstory.js';
 import { createTojiCourtyard } from '../tojiCourtyard.js';
@@ -445,6 +447,7 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
   const colliders = [];
   const interactables = [];
   const disposables = [];
+  const treeWind = createJapanTreeWind(origin);
   const fallbackLandmarkColliders = [];
 
   function registerCollider(shape) {
@@ -1946,15 +1949,20 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
   disposables.push(blossomMat, mapleMat);
   const onGround = tree => ({ ...tree, y: getHeight(ox + tree.x, oz + tree.z) });
   const cherries = addJapanTrees(root, cherryTrees.map(onGround), {
-    name: 'Tō-ji weeping cherries', species: 'weepingCherry', canopyMaterial: blossomMat, disposables,
+    name: 'Tō-ji weeping cherries', species: 'weepingCherry', canopyMaterial: blossomMat, wind: treeWind, disposables,
   });
   const maples = addJapanTrees(root, mapleTrees.map(onGround), {
-    name: 'Tō-ji maples', species: 'maple', canopyMaterial: mapleMat, disposables,
+    name: 'Tō-ji maples', species: 'maple', canopyMaterial: mapleMat, wind: treeWind, disposables,
   });
   const dummy = new THREE.Object3D();
 
-  // InstancedMesh 3: Four-Season Drifting Petals / Maple Leaves / Snowflakes (`四季落櫻・楓紅・飛雪`)
-  const PARTICLE_COUNT = 160;
+  const canopyDrift = addSeasonalDrift(root, {
+    cherries, maples, groundHeight: (x, z) => getHeight(ox + x, oz + z),
+    lowSpec: ctx.lowSpec, seed: 7219, disposables,
+  });
+
+  // Summer motes and winter snow still drift over the entire courtyard.
+  const PARTICLE_COUNT = ctx.lowSpec ? 48 : 160;
   const particleGeo = new THREE.PlaneGeometry(0.18, 0.14);
   const particleMat = new THREE.MeshBasicMaterial({
     color: 0xfbcfe8,
@@ -1972,7 +1980,9 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
     phase: i * 0.618,
     speed: 0.75 + (i % 7) * 0.14,
   }));
+  seasonalParticles.visible = false;
   root.add(seasonalParticles);
+  disposables.push(seasonalParticles);
 
   // Surface lighting now supplies the courtyard's depth. The old translucent
   // cones crossed roofs and remained visible through the focus scene; seasonal
@@ -1992,8 +2002,6 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
       mapleMat.color.setHex(0x4d9c46);
       mapleMat.emissive.setHex(0x1b4322);
       mapleMat.emissiveIntensity = 0.10;
-      particleMat.color.setHex(0xfbcfe8);
-      particleMat.opacity = 0.88;
       if (rimMountainMesh?.material?.emissive) {
         rimMountainMesh.material.emissive.setHex(0x2d1f2d);
         rimMountainMesh.material.emissiveIntensity = 0.22;
@@ -2020,8 +2028,6 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
       mapleMat.color.setHex(0xdc2626);
       mapleMat.emissive.setHex(0x991b1b);
       mapleMat.emissiveIntensity = 0.30;
-      particleMat.color.setHex(0xef4444);
-      particleMat.opacity = 0.92;
       if (rimMountainMesh?.material?.emissive) {
         rimMountainMesh.material.emissive.setHex(0x3b1d16);
         rimMountainMesh.material.emissiveIntensity = 0.26;
@@ -2181,6 +2187,7 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
       return lm ? { key: lm.promptKey } : null;
     },
     update(dt, elapsed = state?.elapsed || 0) {
+      treeWind.update(state?.wind, elapsed);
 
       // Subtle sacred pulse on the Five-Story Pagoda crowning jewel & Kōdō Garuda flame halos
       const jewelPulse = 1.0 + Math.sin(elapsed * 2.4) * 0.1;
@@ -2191,6 +2198,10 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
       // Four-Season Dynamic Foliage & Drifting Sakura / Maple / Snow Particles
       const curSeason = state?.time?.season || 'spring';
       applySeasonalPalette(curSeason);
+      const player = state?.player?.position;
+      canopyDrift.update(dt, curSeason, state?.wind, player?.x - ox, player?.z - oz);
+      seasonalParticles.visible = curSeason === 'summer' || curSeason === 'winter';
+      if (!seasonalParticles.visible) return;
       for (let i = 0; i < PARTICLE_COUNT; i++) {
         const p = particleSeeds[i];
         const py = 14.0 - (((elapsed * p.speed + p.y) % 13.8 + 13.8) % 13.8);
