@@ -136,6 +136,8 @@ void ATibetGameMode::StartPlay()
         UGameplayStatics::OpenLevel(this,FName(*FString::Printf(TEXT("/Game/Maps/Tibet/%s"),*Save->Map)));
         return;
     }
+    Health = MaxHealth();
+    Mana = MaxMana();
     PlayerFeedback.ObjectiveTime = GetWorld()->GetTimeSeconds();
     Route=Map;
     if (Map==TEXT("chimphu") && Save->bReturnFromTerma) Route=TEXT("return");
@@ -395,6 +397,11 @@ FString ATibetGameMode::Status(bool bTouchControls) const
         }
     }
     if (GetWorld()->GetTimeSeconds()<NoticeUntil) S+=TEXT("\n")+Notice;
+    if (LastPackReward!=ETibetItem::Count && GetWorld()->GetTimeSeconds()<PackRewardUntil)
+    {
+        const auto& Item=TibetItemInfo(LastPackReward);
+        S+=Local(TEXT("\nAdded to your pack · "),TEXT("\n收入行囊・"))+Local(Item.NameEn,Item.NameZh);
+    }
     return S;
 }
 void ATibetGameMode::Store()
@@ -495,6 +502,9 @@ void ATibetGameMode::Refresh()
 void ATibetGameMode::Advance()
 {
     PlayerFeedback.ObjectiveTime = GetWorld()->GetTimeSeconds();
+    const ETibetItem Rewards[] = {ETibetItem::Vajra, ETibetItem::Bell, ETibetItem::Map, ETibetItem::Robe};
+    bool WasOwned[UE_ARRAY_COUNT(Rewards)];
+    for (int32 I = 0; I < UE_ARRAY_COUNT(Rewards); ++I) WasOwned[I] = OwnsItem(Rewards[I]);
     if (++Save->Counts.FindOrAdd(Route)>=Objective(Route,GetStep()).Count)
     {
         Save->Counts[Route]=0;
@@ -507,6 +517,14 @@ void ATibetGameMode::Advance()
             Messenger=nullptr;
         }
         if (Route==TEXT("ending")) Save->bComplete=true;
+    }
+    for (int32 I = 0; I < UE_ARRAY_COUNT(Rewards); ++I)
+    {
+        if (!WasOwned[I] && OwnsItem(Rewards[I]))
+        {
+            LastPackReward = Rewards[I];
+            PackRewardUntil = GetWorld()->GetTimeSeconds() + 5.f;
+        }
     }
     Store();
     Refresh();
@@ -521,6 +539,7 @@ void ATibetGameMode::MoveToNextMap()
     else if(Map==TEXT("terma3")) {Dest=TEXT("chimphu"); Save->bReturnFromTerma=true;}
     else if(Order.IsValidIndex(Id+1)) Dest=Order[Id+1];
     if(Dest.IsEmpty()) return;
+    if (Dest==TEXT("stupa")) Save->PillCharges=4;
     Save->Map=Dest;
     Store();
     bTravel=true;
@@ -739,7 +758,7 @@ void ATibetGameMode::CastSkill(int32 Slot)
     if (Effect) Effect->Start(Slot, From, To, P, RitualMaterial);
 
     const int32 Before = EnemyMaximum > 0 ? EnemyHealth : 0;
-    const int32 Damage = Hit ? FMath::Min(Before, Skill.Power) : 0;
+    const int32 Damage = Hit ? FMath::Min(Before, Skill.Power + int(IsEquipped(ETibetItem::Vajra))) : 0;
     // Snapshot actual loss before advancing the route or replacing a defeated actor.
     const int32 After = Before - Damage;
     UE_LOG(LogTemp, Display,
@@ -779,7 +798,8 @@ void ATibetGameMode::Tick(float Dt)
     if (!Save || bTravel || IsCampaignComplete()) return;
     auto* P=UGameplayStatics::GetPlayerPawn(this,0);
     if (!P) return;
-    Mana=FMath::Min(100.f,Mana+Dt*5);
+    UpdatePills(Now);
+    Mana=FMath::Min(MaxMana(),Mana+Dt*5);
     for(float& T:Cooldown) T=FMath::Max(0.f,T-Dt);
     Shield=FMath::Max(0.f,Shield-Dt); Stun=FMath::Max(0.f,Stun-Dt);
     const auto K=Objective(Route,GetStep()).Kind;
@@ -837,12 +857,12 @@ void ATibetGameMode::Tick(float Dt)
             if(Health<=0)
             {
                 P->TeleportTo(FVector(-2000,0,100),FRotator::ZeroRotator);
-                Health=100; Mana=100; Refresh();
+                Health=MaxHealth(); Mana=MaxMana(); HealTicks.Reset(); Refresh();
                 SetNotice(Local(TEXT("Restored at the trailhead."),TEXT("已在登山口恢復。")));
             }
         }
     }
-    else Health=FMath::Min(100.f,Health+Dt*2);
+    else Health=FMath::Min(MaxHealth(),Health+Dt*2);
 }
 void ATibetGameMode::ChangeLanguage()
 {

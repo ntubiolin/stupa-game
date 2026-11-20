@@ -238,6 +238,8 @@ void ATibetCharacter::SetupPlayerInputComponent(UInputComponent* Input)
     Input->BindKey(EKeys::E,IE_Released,this,&ATibetCharacter::ReleaseInteract);
     Input->BindKey(EKeys::L,IE_Pressed,this,&ATibetCharacter::Language);
     Input->BindKey(EKeys::M,IE_Pressed,this,&ATibetCharacter::OpenMap).bExecuteWhenPaused=true;
+    Input->BindKey(EKeys::I,IE_Pressed,this,&ATibetCharacter::OpenPack).bExecuteWhenPaused=true;
+    Input->BindKey(EKeys::X,IE_Pressed,this,&ATibetCharacter::UseQuickSlot);
     Input->BindKey(EKeys::K,IE_Pressed,this,&ATibetCharacter::OpenSkills).bExecuteWhenPaused=true;
     Input->BindKey(EKeys::Escape,IE_Pressed,this,&ATibetCharacter::ToggleMenu).bExecuteWhenPaused=true;
     Input->BindKey(EKeys::LeftShift,IE_Pressed,this,&ATibetCharacter::TryJump);
@@ -286,6 +288,14 @@ void ATibetCharacter::CancelGameplayInput()
 void ATibetCharacter::OpenMap()
 {
     if (auto* HUD=Cast<ATibetHUD>(GetController<APlayerController>()->GetHUD())) HUD->ToggleJournal(ETibetPage::Map);
+}
+void ATibetCharacter::OpenPack()
+{
+    if (auto* HUD=Cast<ATibetHUD>(GetController<APlayerController>()->GetHUD())) HUD->ToggleJournal(ETibetPage::Pack);
+}
+void ATibetCharacter::UseQuickSlot()
+{
+    if (auto* HUD=Cast<ATibetHUD>(GetController<APlayerController>()->GetHUD())) HUD->UseQuickSlot();
 }
 void ATibetCharacter::OpenSkills()
 {

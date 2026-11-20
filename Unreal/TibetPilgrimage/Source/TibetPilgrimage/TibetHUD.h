@@ -14,6 +14,7 @@ public:
     void ToggleJournal(ETibetPage Page);
     void CloseJournal();
     bool HasDrawnInteractionCue() const { return bDrewInteraction; }
+    void UseQuickSlot();
     bool IsJournalOpen() const;
     ETibetPage GetJournalPage() const { return Page; }
 protected:

@@ -43,6 +43,8 @@ private:
     void DoCast(int32 Skill);
     void Language();
     void OpenMap();
+    void OpenPack();
+    void UseQuickSlot();
     void OpenSkills();
     void ToggleMenu();
     void TryJump();
