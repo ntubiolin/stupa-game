@@ -1,0 +1,9 @@
+[
+  {"id":"kondo","title":"金堂外觀","from":[23,12,42],"at":[0,6,8],"time":0.39,"light":"day"},
+  {"id":"yakushi","title":"藥師如來近景","from":[0,4.65,12],"at":[0,4.75,7.25],"time":0.39,"light":"day"},
+  {"id":"courtyard","title":"前庭石階","from":[11.5,3.6,36],"at":[1,2.65,19],"time":0.39,"light":"day"},
+  {"id":"blossoms","title":"春季樹冠與樹幹","from":[22,3.0,18],"at":[24,3.2,6],"time":0.39,"light":"day"},
+  {"id":"dusk","title":"薄暮前庭","from":[11.5,3.6,36],"at":[1,2.65,19],"time":0.72,"light":"dusk","nightRange":[0,0.5]},
+  {"id":"night","title":"金堂夜景","from":[23,12,42],"at":[0,6,8],"time":0.86,"light":"night"},
+  {"id":"pilgrim","title":"前庭行者","from":[2.2,1.65,26.4],"at":[0,1.05,23],"player":[0,23],"time":0.39,"light":"day"}
+]
