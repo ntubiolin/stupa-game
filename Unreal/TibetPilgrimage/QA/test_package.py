@@ -128,7 +128,7 @@ def main():
                 raise ValueError("First gameplay objective was not reached")
             capture(exe,stage,output,"resume","Resume","stupa",["-TibetQAExpected=1"],slot)
             campaign = capture(exe,stage,output,"campaign","Campaign","stupa",[],slot)
-            required = {v["id"] for v in VIEWS}
+            required = {v["id"] for v in VIEWS} - {"grove"}
             reached = {row[1] for row in campaign if row[0]=="step"}
             if required-reached or campaign[-1] != ["pass","campaign completed"]:
                 raise ValueError(f"Incomplete route, missing {required-reached}")
@@ -136,9 +136,16 @@ def main():
             for row in campaign:
                 if row[0]=="step" and (not route or route[-1]!=row[1]):
                     route.append(row[1])
-            expected = [v["id"] for v in VIEWS] + ["chimphu","stupa"]
+            expected = [v["id"] for v in VIEWS if v["id"] != "grove"] + ["chimphu","stupa"]
             if route != expected:
                 raise ValueError(f"Unexpected journey sequence: {route}")
+            side_slot = slot + "-side"
+            entry = capture(exe,stage,output,"side-entry","GroveEntry","stupa",[],side_slot)
+            if entry[-1] != ["pass","transition","grove"]:
+                raise ValueError("The south exit did not lead to the grove")
+            grove = capture(exe,stage,output,"grove","Play","grove",[],side_slot)
+            if grove[-1] != ["pass","transition","stupa"] or not any(row[:3]==["step","grove","1"] for row in grove):
+                raise ValueError("Grove consecration or return to Boudhanath failed")
 
 
 if __name__ == "__main__":
