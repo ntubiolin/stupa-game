@@ -19,8 +19,8 @@ def maps_to_cook():
 
 def check_maps(maps):
     missing = [m for m in maps if not (ROOT / "Content" / (m[6:] + ".umap")).is_file()]
-    if missing or not LOG.exists() or "TIBET_MAPS_READY" not in LOG.read_text(errors="replace"):
-        raise SystemExit(f"Generate the campaign first. Missing maps: {missing}. See {LOG}")
+    if missing:
+        raise SystemExit(f"Generate the campaign first. Missing maps: {missing}")
 
 
 def main():
@@ -46,6 +46,8 @@ def main():
         LOG.unlink(missing_ok=True)
         run(editor, PROJECT, "-unattended", "-nosplash", "-nop4",
             f"-abslog={LOG}", f"-ExecutePythonScript={ROOT / 'Tools/generate_tibet.py'}")
+        if not LOG.exists() or "TIBET_MAPS_READY" not in LOG.read_text(errors="replace"):
+            raise SystemExit(f"Map generation did not complete. See {LOG}")
         check_maps(maps)
     elif args.command == "play":
         check_maps(maps)
