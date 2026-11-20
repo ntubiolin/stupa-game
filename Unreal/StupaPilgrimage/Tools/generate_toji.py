@@ -9,13 +9,19 @@ import unreal
 
 TOOLS = Path(__file__).resolve().parent
 PROJECT = TOOLS.parent
-KONDO = PROJECT.parents[1] / "public/models/kukai/toji_kondo.glb"
+LANDMARK_MODELS = PROJECT.parents[1] / "public/models/kukai"
+KONDO = LANDMARK_MODELS / "toji_kondo.glb"
 MAP = "/Game/Maps/Toji"
 MAP_FILE = PROJECT / "Content/Maps/Toji.umap"
 IMPORT_ROOT = "/Game/Generated/Toji"
 KONDO_OFFSET = (-800, 0, 0)
 KONDO_SCALE = 1.25
 BOUNDS_TOLERANCE_CM = 2
+# Three.js landmark positions, scales and web podium half extents (east, south), in meters.
+BACKDROPS = (
+    ("Kodo", "toji_kodo.glb", 0, -36, 1.25, (12.4375, 6.8125), 1.20),
+    ("Gojunoto", "toji_gojunoto.glb", 36, 18, 1.05, (6.5625, 6.5625), 1.42),
+)
 
 
 def kondo_source_bounds():
@@ -128,10 +134,23 @@ def make_kondo_walkable(components):
         component.set_collision_profile_name("BlockAll")
 
 
+def spawn_collision_box(actor_editor, label, center, extent):
+    actor = actor_editor.spawn_actor_from_class(unreal.StaticMeshActor, unreal.Vector(*center))
+    actor.set_actor_label(label)
+    actor.set_actor_scale3d(unreal.Vector(*(half_size / 50 for half_size in extent)))
+    mesh = actor.static_mesh_component
+    mesh.set_static_mesh(unreal.load_asset("/Engine/BasicShapes/Cube"))
+    mesh.set_collision_profile_name("BlockAll")
+    mesh.set_cast_shadow(False)
+    actor.set_actor_hidden_in_game(True)
+    actor.set_is_temporarily_hidden_in_editor(True)
+
+
 def generate():
     # The art module is adjacent to this entry point in the source tree.
     sys.path.insert(0, str(TOOLS))
     import toji_art
+    import toji_figures
 
     levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
@@ -162,20 +181,33 @@ def generate():
         raise RuntimeError("Placed Kondō is outside the expected Tō-ji dimensions")
     make_kondo_walkable(kondo_components)
 
+    def import_level_scene(path, destination):
+        return import_scene(path, destination, level, actor_editor)
+
+    toji_figures.populate(unreal, import_level_scene, actor_editor, yaw)
+
+    for label, filename, east, south, scale, podium, height in BACKDROPS:
+        actors, components = import_level_scene(LANDMARK_MODELS / filename, f"{IMPORT_ROOT}/{label}")
+        north_cm, east_cm = -100 * south, 100 * east
+        place_scene(actors, actor_editor, yaw, (north_cm, east_cm, 0), scale)
+        for component in components:
+            component.set_collision_profile_name("NoCollision")
+        half_east, half_south = podium
+        half_height_cm = 50 * height
+        spawn_collision_box(
+            actor_editor, f"Toji {label} podium collision",
+            (north_cm, east_cm, half_height_cm - 2),
+            (100 * half_south, 100 * half_east, half_height_cm),
+        )
+
     def import_courtyard(path):
-        actors, components = import_scene(path, f"{IMPORT_ROOT}/Courtyard", level, actor_editor)
+        actors, components = import_level_scene(path, f"{IMPORT_ROOT}/Courtyard")
         place_scene(actors, actor_editor, yaw, (0, 0, 0), 1)
         for component in components:
             component.set_collision_profile_name("NoCollision")
 
     toji_art.populate(unreal, import_courtyard)
-    floor = actor_editor.spawn_actor_from_class(unreal.StaticMeshActor, unreal.Vector(0, 0, -52))
-    floor.set_actor_label("Toji ground collision")
-    floor.set_actor_scale3d(unreal.Vector(210, 210, 1))
-    floor.static_mesh_component.set_static_mesh(unreal.load_asset("/Engine/BasicShapes/Cube"))
-    floor.static_mesh_component.set_collision_profile_name("BlockAll")
-    floor.set_actor_hidden_in_game(True)
-    floor.set_is_temporarily_hidden_in_editor(True)
+    spawn_collision_box(actor_editor, "Toji ground collision", (0, 0, -52), (10500, 10500, 50))
 
     start = actor_editor.spawn_actor_from_class(unreal.PlayerStart, unreal.Vector(-4400, 0, 102))
     start.set_actor_label("Toji south approach")
