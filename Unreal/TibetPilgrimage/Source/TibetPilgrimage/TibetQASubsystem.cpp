@@ -98,6 +98,7 @@ void UTibetQASubsystem::Tick(float)
     else if (Task == TEXT("Photo")) Photo(*PC);
     else if (Task == TEXT("Play") || Task == TEXT("Campaign") || Task == TEXT("GroveEntry") ||
              Task == TEXT("Skills") || Task == TEXT("Feedback")) Play(*PC, *Mode);
+    else if (Task == TEXT("ScoreMix")) ScoreMix(*Mode);
     else if (Task == TEXT("LearnedSkills")) LearnedSkills(*PC, *Mode);
     else if (Task == TEXT("Resume"))
     {
