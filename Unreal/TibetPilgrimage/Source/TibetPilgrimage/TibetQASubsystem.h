@@ -38,6 +38,7 @@ private:
     int32 GateFrames = 0;
     uint8 GatePhases = 0;
     void Play(APlayerController& PC, ATibetGameMode& Mode);
+    void ScoreMix(ATibetGameMode& Mode);
     void LearnedSkills(APlayerController& PC, ATibetGameMode& Mode);
     void SkillEncounter(APlayerController& PC, ATibetGameMode& Mode);
     void PlayerFeedback(APlayerController& PC, ATibetGameMode& Mode);
