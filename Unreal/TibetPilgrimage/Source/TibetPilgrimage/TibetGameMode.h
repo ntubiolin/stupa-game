@@ -41,6 +41,7 @@ public:
     bool IsEnglish() const { return Save && Save->bEnglish; }
     FString Local(const TCHAR* En, const TCHAR* Zh) const { return IsEnglish() ? En : Zh; }
 private:
+    UPROPERTY() TObjectPtr<class UMaterialInterface> RitualMaterial;
     UPROPERTY() TObjectPtr<UTibetSave> Save;
     UPROPERTY() TObjectPtr<AActor> Focus;
     UPROPERTY() TObjectPtr<AActor> Messenger;
@@ -50,6 +51,8 @@ private:
     float Cooldown[7]{};
     FString Notice;
     bool bTravel = false, bEscorting = false;
+    AActor* MeshActor(const FVector& Position, const FString& MeshPath, const FVector& Scale,
+        const FLinearColor* Color = nullptr);
     FVector Anchor() const;
     void Refresh();
     void Advance();

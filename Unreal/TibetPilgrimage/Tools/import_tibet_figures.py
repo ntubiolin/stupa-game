@@ -1,9 +1,13 @@
 """Import original Blender figures before cooking the pilgrimage maps."""
 import json
+import sys
 from pathlib import Path
 import unreal
 
 def import_meshes():
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from generate_effect_material import generate
+    generate()
     source = Path(__file__).resolve().parents[1] / "Assets" / "Figures"
     counts = json.loads((source / "triangle-counts.json").read_text())
     mesh_editor = unreal.get_editor_subsystem(unreal.StaticMeshEditorSubsystem)
