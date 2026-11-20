@@ -47,6 +47,9 @@ public:
     float GetHealth() const { return Health; }
     void ChangeLanguage();
     FString AreaName() const;
+    int32 CurrentAreaIndex() const;
+    FString AreaName(int32 Index) const;
+    bool HasVisitedArea(int32 Index) const;
     FString Status(bool bTouchControls) const;
     bool IsEnglish() const { return Save && Save->bEnglish; }
     FString Local(const TCHAR* En, const TCHAR* Zh) const { return IsEnglish() ? En : Zh; }

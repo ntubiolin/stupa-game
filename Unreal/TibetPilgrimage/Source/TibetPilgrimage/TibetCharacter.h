@@ -12,6 +12,7 @@ public:
     ATibetCharacter();
     virtual void SetPlayerDefaults() override;
     virtual void Tick(float DeltaSeconds) override;
+    void CancelGameplayInput();
     virtual void SetupPlayerInputComponent(UInputComponent* Input) override;
 protected:
     virtual void BeginPlay() override;
@@ -29,5 +30,9 @@ private:
     void DoInteract();
     void DoCast(int32 Skill);
     void Language();
-    void Quit();
+    void OpenMap();
+    void OpenSkills();
+    void ToggleMenu();
+    void TryJump();
+    bool JournalOpen() const;
 };

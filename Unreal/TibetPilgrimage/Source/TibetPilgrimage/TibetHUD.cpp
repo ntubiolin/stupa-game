@@ -3,102 +3,71 @@
 #include "Engine/GameViewportClient.h"
 #include "Engine/Canvas.h"
 #include "GameFramework/PlayerController.h"
-#include "Fonts/CompositeFont.h"
-#include "Misc/Paths.h"
+#include "TibetCharacter.h"
+#include "TibetPlayOverlay.h"
+#include "Framework/Application/SlateApplication.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
-#include "Styling/CoreStyle.h"
-#include "Widgets/Input/SButton.h"
-#include "Widgets/Layout/SBorder.h"
-#include "Widgets/Layout/SBox.h"
-#include "Widgets/Layout/SSafeZone.h"
-#include "Widgets/SOverlay.h"
-#include "Widgets/SBoxPanel.h"
-#include "Widgets/Text/STextBlock.h"
 
 void ATibetHUD::BeginPlay()
 {
     Super::BeginPlay();
 #if !UE_BUILD_SHIPPING
     FString QA;
-    if(FParse::Value(FCommandLine::Get(),TEXT("TibetQA="),QA) && QA==TEXT("Photo")) return;
+    if (FParse::Value(FCommandLine::Get(),TEXT("TibetQA="),QA) && QA==TEXT("Photo")) return;
 #endif
     auto* Viewport=GetWorld()->GetGameViewport();
-    auto* M=GetWorld()->GetAuthGameMode<ATibetGameMode>();
-    if(!Viewport || !M) return;
-    const FLinearColor Paper(.96,.92,.81),Gold(.96,.69,.30),Panel(.025,.036,.033,.81);
-    const FSlateBrush* White=FCoreStyle::Get().GetBrush("WhiteBrush");
-    const FString Fallback=FPaths::EngineContentDir()/TEXT("Slate/Fonts/DroidSansFallback.ttf");
-    const auto Typeface=MakeShared<FStandaloneCompositeFont>(TEXT("Regular"),Fallback,EFontHinting::Default,EFontLoadingPolicy::LazyLoad);
-    auto Font=[Typeface](int32 Size){return FSlateFontInfo(Typeface,Size,TEXT("Regular"),FFontOutlineSettings());};
-    TSharedRef<SVerticalBox> Content=SNew(SVerticalBox);
-    Content->AddSlot().AutoHeight()[SNew(STextBlock).Font(Font(22)).ColorAndOpacity(Gold)
-        .Text_Lambda([M](){return FText::FromString(M->AreaName());})];
-    Content->AddSlot().AutoHeight().Padding(0,4)[SNew(STextBlock).Font(Font(14)).ColorAndOpacity(Paper)
-        .WrapTextAt(420).Text_Lambda([M](){return FText::FromString(M->GetObjectiveText());})];
+    auto* Mode=GetWorld()->GetAuthGameMode<ATibetGameMode>();
+    if (!Viewport || !Mode) return;
     const bool Touch=PLATFORM_IOS || FParse::Param(FCommandLine::Get(),TEXT("TibetTouch"));
-    Content->AddSlot().AutoHeight()[SNew(STextBlock).Font(Font(12)).ColorAndOpacity(Gold)
-        .WrapTextAt(420).Text_Lambda([M,Touch](){return FText::FromString(M->Status(Touch));})];
-    TSharedRef<SVerticalBox> Controls=SNew(SVerticalBox);
-    if(Touch)
-    {
-        // Screen-height fractions use the actual viewport overlay's Slate space, including its DPI scale.
-        // On a 440-point landscape iPhone, 11% is a 48.4-point hit target.
-        auto Height=[this](){return Overlay ? float(Overlay->GetCachedGeometry().GetLocalSize().Y) : 0.f;};
-        auto Target=TAttribute<FOptionalSize>::CreateLambda([Height](){
-            return FOptionalSize(FMath::Max(44.f,Height()*.11f));
-        });
-        auto TouchFont=TAttribute<FSlateFontInfo>::CreateLambda([Height,Font](){
-            return Font(FMath::Max(12,FMath::RoundToInt(Height()*.027f)));
-        });
-        TSharedRef<SHorizontalBox> Row=SNew(SHorizontalBox);
-        Controls->AddSlot().AutoHeight()[Row];
-        const TCHAR* En[]={TEXT("Act"),TEXT("Hūṃ"),TEXT("Chant"),TEXT("Phurba"),TEXT("Bell"),TEXT("Lotus"),TEXT("Guard"),TEXT("Guru"),TEXT("EN/中")};
-        const TCHAR* Zh[]={TEXT("互動"),TEXT("吽"),TEXT("真言"),TEXT("金剛橛"),TEXT("鈴"),TEXT("蓮盾"),TEXT("護法"),TEXT("上師"),TEXT("中/EN")};
-        for(int32 i=0;i<UE_ARRAY_COUNT(En);++i)
-        {
-            if(i==3 || i==6)
-            {
-                Row=SNew(SHorizontalBox);
-                Controls->AddSlot().HAlign(HAlign_Right).AutoHeight()[Row];
-            }
-            FString E=En[i],Z=Zh[i];
-            Row->AddSlot().AutoWidth().Padding(2)[SNew(SBox).MinDesiredWidth(Target).MinDesiredHeight(Target)
-                [SNew(SButton).HAlign(HAlign_Center).VAlign(VAlign_Center)
-                .ContentPadding(FMargin(5,3)).IsFocusable(false)
-                .OnClicked_Lambda([M,i](){if(i==0)M->Interact();else if(i==8)M->ChangeLanguage();else M->CastSkill(i-1);return FReply::Handled();})
-                [SNew(STextBlock).Font(TouchFont).ColorAndOpacity(FLinearColor::White)
-                    .Text_Lambda([M,E,Z](){return FText::FromString(M->IsEnglish()?E:Z);})]]];
-        }
-    }
-    else
-    {
-        Controls->AddSlot().AutoHeight()[SNew(STextBlock).Font(Font(12)).ColorAndOpacity(Paper)
-            .Text_Lambda([M](){return FText::FromString(M->Local(
-                TEXT("WASD Move   Hold right mouse and drag to look   E Interact\nSpace Hūṃ   R Chant   1–4/T Skills   L Language"),
-                TEXT("WASD 移動   按住滑鼠右鍵拖曳轉向   E 互動\n空白鍵 吽   R 真言   1–4/T 法術   L 語言")));})];
-    }
-    auto Layout=SNew(SOverlay).Visibility(EVisibility::SelfHitTestInvisible)
-        +SOverlay::Slot().HAlign(HAlign_Left).VAlign(VAlign_Top).Padding(16)
-        [SNew(SBorder).Visibility(EVisibility::HitTestInvisible).BorderImage(White).BorderBackgroundColor(Panel)
-            .Padding(FMargin(14,9))[Content]]
-        +SOverlay::Slot().HAlign(HAlign_Right).VAlign(VAlign_Bottom).Padding(16)
-        [SNew(SBorder).BorderImage(White).BorderBackgroundColor(Panel).Padding(5)[Controls]];
-    if(Touch)
-    {
-        Layout->AddSlot().HAlign(HAlign_Left).VAlign(VAlign_Bottom).Padding(24)[
-            SNew(STextBlock).Visibility(EVisibility::HitTestInvisible).Font(Font(14)).ColorAndOpacity(Paper)
-            .Text_Lambda([M](){return FText::FromString(M->Local(TEXT("Drag left to walk · right to look"),TEXT("左側拖曳移動・右側轉向")));})];
-    }
-    Overlay=SNew(SSafeZone).Visibility(EVisibility::SelfHitTestInvisible)[Layout];
+    Overlay=SNew(STibetPlayOverlay).Mode(Mode).HUD(this).Touch(Touch);
+    if (!Touch && GetOwningPlayerController()) GetOwningPlayerController()->SetShowMouseCursor(true);
     Viewport->AddViewportWidgetContent(Overlay.ToSharedRef());
+}
+
+bool ATibetHUD::IsJournalOpen() const
+{
+    return Page!=ETibetPage::Play;
+}
+
+void ATibetHUD::ToggleJournal(ETibetPage Next)
+{
+    auto* PC=GetOwningPlayerController();
+    if (!Overlay || !PC) return;
+    if (Next==Page || Next==ETibetPage::Play) { CloseJournal(); return; }
+    if (!IsJournalOpen())
+    {
+        if (auto* Pilgrim=Cast<ATibetCharacter>(PC->GetPawn())) Pilgrim->CancelGameplayInput();
+        bCursorBeforeJournal=PC->bShowMouseCursor;
+        bPausedByJournal=!PC->IsPaused() && PC->SetPause(true);
+        PC->SetShowMouseCursor(true);
+        FSlateApplication::Get().ReleaseAllPointerCapture();
+    }
+    Page=Next;
+    Overlay->Show(Page);
+    FSlateApplication::Get().SetKeyboardFocus(Overlay,EFocusCause::SetDirectly);
+}
+
+void ATibetHUD::CloseJournal()
+{
+    if (!IsJournalOpen()) return;
+    Page=ETibetPage::Play;
+    if (auto* PC=GetOwningPlayerController())
+    {
+        if (bPausedByJournal) PC->SetPause(false);
+        PC->SetShowMouseCursor(bCursorBeforeJournal);
+        if (auto* Pilgrim=Cast<ATibetCharacter>(PC->GetPawn())) Pilgrim->CancelGameplayInput();
+    }
+    bPausedByJournal=false;
+    if (Overlay) Overlay->Show(Page);
+    FSlateApplication::Get().SetAllUserFocusToGameViewport();
 }
 void ATibetHUD::DrawHUD()
 {
     Super::DrawHUD();
     const auto* M=GetWorld()->GetAuthGameMode<ATibetGameMode>();
     const auto* PC=GetOwningPlayerController();
-    if(!Overlay || !Canvas || !PC || !PC->GetPawn() || !M || M->IsCampaignComplete()) return;
+    if(IsJournalOpen() || !Overlay || !Canvas || !PC || !PC->GetPawn() || !M || M->IsCampaignComplete()) return;
     const FVector Target=M->GetObjectiveLocation()+FVector(0,0,130);
     FVector2D Point;
     const bool InFront=PC->ProjectWorldLocationToScreen(Target,Point,true);
@@ -130,6 +99,7 @@ void ATibetHUD::DrawHUD()
 }
 void ATibetHUD::EndPlay(const EEndPlayReason::Type Reason)
 {
+    if (IsJournalOpen()) CloseJournal();
     if(Overlay && GetWorld()->GetGameViewport()) GetWorld()->GetGameViewport()->RemoveViewportWidgetContent(Overlay.ToSharedRef());
     Overlay.Reset();
     Super::EndPlay(Reason);
