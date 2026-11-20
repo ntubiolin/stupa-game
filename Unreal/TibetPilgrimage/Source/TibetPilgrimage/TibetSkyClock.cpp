@@ -34,7 +34,7 @@ ATibetSkyClock::ATibetSkyClock()
 void ATibetSkyClock::BeginPlay()
 {
     Super::BeginPlay();
-    if(TActorIterator<ADirectionalLight> It{GetWorld()}; It) Sun=It->GetComponent();
+    if(TActorIterator<ADirectionalLight> It{GetWorld()}; It) Sun=It->FindComponentByClass<UDirectionalLightComponent>();
     if(TActorIterator<ASkyLight> It{GetWorld()}; It) Sky=It->GetLightComponent();
     if(TActorIterator<AExponentialHeightFog> It{GetWorld()}; It) Fog=It->GetComponent();
     TArray<FVector> Points;
