@@ -66,14 +66,14 @@ void UTibetQASubsystem::Tick(float)
         FParse::Value(Args, TEXT("TibetQAStart="), StartMap);
         Began = FPlatformTime::Seconds();
     }
-    if (Task == TEXT("Play") && World->GetMapName() != StartMap)
+    if ((Task == TEXT("Play") || Task == TEXT("GroveEntry")) && World->GetMapName() != StartMap)
     {
         Finish(true, TEXT("transition\t") + World->GetMapName());
         return;
     }
     if (Task != TEXT("Campaign") && World->GetMapName() != StartMap) { Finish(false, TEXT("Unexpected map: ") + World->GetMapName()); return; }
     if (Task == TEXT("Photo")) Photo(*PC);
-    else if (Task == TEXT("Play") || Task == TEXT("Campaign")) Play(*PC, *Mode);
+    else if (Task == TEXT("Play") || Task == TEXT("Campaign") || Task == TEXT("GroveEntry")) Play(*PC, *Mode);
     else if (Task == TEXT("Resume"))
     {
         int32 Expected = INDEX_NONE;
@@ -148,7 +148,7 @@ void UTibetQASubsystem::Play(APlayerController& PC, ATibetGameMode& Mode)
     const int32 Step = Mode.GetStep(), Progress = Mode.GetStepProgress();
     const FName Kind = Mode.GetObjectiveKind();
     const FVector Pos = PC.GetPawn()->GetActorLocation();
-    const FVector Goal = Mode.GetObjectiveLocation();
+    const FVector Goal = Task == TEXT("GroveEntry") ? FVector(-1860,-480,0) : Mode.GetObjectiveLocation();
     if (Step != PreviousStep || Progress != PreviousProgress)
     {
         Record(FString::Printf(TEXT("step\t%s\t%d\t%d\t%s\t%s\t%s"),*GetWorld()->GetMapName(),Step,Progress,*Kind.ToString(),
