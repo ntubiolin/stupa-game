@@ -750,3 +750,11 @@ preserved.
 - A browser installation ID is owned by `ctx.save.getInstallationIdAsync()` in the separate `stupa.installation.v1` key. It survives save reset/import, stays out of backup/cloud-save documents, and uses Web Locks to avoid first-load tab races.
 - `analytics_daily_aliases` binds a same-day guest installation to the authenticated account. Retries, reloads, concurrent tabs, stale guest requests, and authenticated use across devices stay idempotent. Switching between two accounts counts each account once.
 - Collection begins when the analytics tables are first deployed. Existing cloud saves are not used as historical backfill. Run `npm run analytics:report -- YYYY-MM-DD` on the backend host to read `{ collectionSince, day, googleUsers, dau }`. Anonymous players who clear site storage receive a new installation ID and may count again.
+
+## Unreal Engine Tō-ji prototype
+
+The native prototype lives in [Unreal/StupaPilgrimage](Unreal/StupaPilgrimage/README.md). The Unreal game and editor targets share the `StupaPilgrimage` runtime module. The game starts at `/Game/Maps/Toji` using the native `TojiGameMode`.
+
+The editor generation script uses Interchange to load the source Kondō GLB with its transforms and PBR materials, applies the placement from the Three.js map, places the Kōdō and five-story pagoda from the web map at their original scales, and invokes the Tō-ji courtyard art hook in the same level. Imported content and the map are generated from repository sources. BuildCookRun includes the generated map and its dependencies in the host desktop package.
+
+Map positions use centimeters. The native coordinate axes are +X north, +Y east and +Z up. The web origin `(7500, 0, 0)` is the native origin. Ground collision is generated independently of courtyard art, with triangle collision on the Kondō and simple podium colliders for the Kōdō and pagoda.

@@ -1,0 +1,69 @@
+{
+  "onDisplay": {
+    "status": "interrupted by game EXIT command before 900-second completion",
+    "offscreenRequested": false,
+    "activeSecondsFromLog": 203.662,
+    "completedLaps": 3,
+    "engineInitializationSeconds": 1.13,
+    "peakApplicationPhysicalFootprintBytes": 6205919072,
+    "engineCsv": {
+      "completedChunksExcludingBoot": 0,
+      "capturedSecondsExcludingBoot": null,
+      "timingsMs": {
+        "GameThreadTime": null,
+        "RenderThreadTime": null,
+        "GPUTime": null
+      }
+    },
+    "finalizedProfilerPathsReported": 3,
+    "rawCsvStatus": "Profiler finalized chunks before quit. The prior runner copied files only on success."
+  },
+  "offscreen": {
+    "status": "interrupted by game EXIT command before 900-second completion",
+    "offscreenRequested": true,
+    "activeSecondsFromLog": 164.448,
+    "completedLaps": 2,
+    "engineInitializationSeconds": 0.99,
+    "peakApplicationPhysicalFootprintBytes": 6218485576,
+    "engineCsv": {
+      "completedChunksExcludingBoot": 1,
+      "capturedSecondsExcludingBoot": 59.342,
+      "timingsMs": {
+        "GameThreadTime": {
+          "samples": 1800,
+          "median": 1.24,
+          "p95": 7.57,
+          "p99": 9.26,
+          "max": 116.78
+        },
+        "RenderThreadTime": {
+          "samples": 1800,
+          "median": 32.53,
+          "p95": 37.11,
+          "p99": 43.37,
+          "max": 113.81
+        },
+        "GPUTime": {
+          "samples": 1800,
+          "median": 32.07,
+          "p95": 36.29,
+          "p99": 38.5,
+          "max": 46.21
+        }
+      }
+    },
+    "finalizedProfilerPathsReported": 2,
+    "profiledFrameTimeMs": {
+      "samples": 1799,
+      "median": 32.53,
+      "p95": 36.96,
+      "p99": 39.42,
+      "max": 117.46
+    },
+    "profiledAverageFps": 30.33
+  },
+  "sustained15Minutes": "deferred",
+  "storyElapsedSeconds": 85.239,
+  "clipDurationSeconds": 86.5,
+  "clipSha256": "0d99260fd2b848bd459d6c8aaf4425afd508e35e24390652c88a41bdc597c847"
+}
