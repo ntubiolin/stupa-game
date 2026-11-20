@@ -17,7 +17,7 @@ class IOSPackageTests(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
-        self.root = Path(temp.name)
+        self.root = Path(temp.name).resolve()
         self.target = self.root / "Engine/Binaries/IOS/UnrealGame.target"
         self.target.parent.mkdir(parents=True)
         self.target.touch()
