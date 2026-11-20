@@ -88,7 +88,7 @@ def capture(exe, stage, dest, name, mode, level, options, slot, size=(1440, 900)
     # Arrival exercises the default launch map and leaves the pawn camera untouched.
     map_args = [] if mode == "Arrival" else ["/Game/Maps/Tibet/" + level]
     # Native pointer dispatch must hit the real package window on the desktop.
-    interactive_window = mode in ("Journal", "Courtyard")
+    interactive_window = mode in ("Journal", "Courtyard", "AtlasTravel")
     rendering = [] if interactive_window else ["-RenderOffscreen"]
     exec_commands = "r.ScreenPercentage 100,r.DynamicRes.OperationMode 0"
     if max_fps:
@@ -236,7 +236,7 @@ def compare(web, mac, output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["photos", "arrival", "camera", "play", "skills", "learned", "journal", "pack", "feedback", "score", "compare"])
+    parser.add_argument("action", choices=["photos", "arrival", "camera", "play", "skills", "learned", "journal", "atlas", "pack", "feedback", "score", "compare"])
     parser.add_argument("--exe", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--web", type=Path)
@@ -285,6 +285,15 @@ def main():
                         raise ValueError(f"Missing camera angle observations in {name}")
                     if shot_data(output/name/"travel.png") == shot_data(output/name/"orbit.png"):
                         raise ValueError(f"Camera views are identical in {name}")
+        elif args.action == "atlas":
+            capture(exe, stage, output, "checkpoint", "Play", "stupa", ["-TibetQAStopStep=1"], slot)
+            # Both launches start at the default stupa level. The second must resume in the grove.
+            for name, origin, target, options in (("outbound", "stupa", "grove", []),
+                                                   ("resume-return", "grove", "stupa", ["-TibetQAHomeward"])):
+                rows = capture(exe, stage, output, name, "AtlasTravel", "stupa", options, slot)
+                if ["atlas-click", origin] not in rows or rows[-1] != ["pass", "arrived", target]:
+                    raise ValueError(f"{name}: expected a real map click in {origin} and arrival in {target}")
+                shot_data(output / name / "destination.png")
         elif args.action == "pack":
             for name, opts, size in (("desktop-zh", [], (1440, 900)), ("compact-en", ["-TibetTouch", "-TibetQAEnglish"], (884, 420))):
                 save = slot+"-"+name

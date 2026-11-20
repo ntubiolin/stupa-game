@@ -84,7 +84,7 @@ void STibetAtlas::Construct(const FArguments& Args)
         auto Pin=SNew(SButton).Tag(FName(*FString::Printf(TEXT("TibetAtlas%d"),I))).ButtonStyle(&PinStyle())
             .ContentPadding(0).IsFocusable(false).HAlign(HAlign_Center).VAlign(VAlign_Top)
             .ButtonColorAndOpacity(FLinearColor::Transparent)
-            .OnClicked_Lambda([this,I](){Selected=I; return FReply::Handled();})
+            .OnClicked_Lambda([this,I](){Selected=I; bWriteFailed=false; return FReply::Handled();})
             [SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush")).Padding(FMargin(Compact?4:8,2))
                 .BorderBackgroundColor_Lambda([this,I](){return Selected==I ? FLinearColor(FColor(109,53,30)) : Ink;})
                 [SNew(STextBlock).Font(PinFont).Text(FText::FromString(Caption)).ColorAndOpacity(Here?Jade:Visited?Gold:Paper)]];
@@ -102,12 +102,22 @@ void STibetAtlas::Construct(const FArguments& Args)
     const auto Detail = SNew(SVerticalBox);
     Detail->AddSlot().AutoHeight()[SNew(STextBlock).Tag(TEXT("TibetAtlasSelection")).Font(TitleFont)
         .ColorAndOpacity(Gold).AutoWrapText(true).Text_Lambda([this](){const auto& N=AtlasNodes[Selected]; return FText::FromString(Mode->Local(N.En,N.Zh));})];
-    Detail->AddSlot().AutoHeight().Padding(0,2,0,0)[SNew(STextBlock).Font(DetailFont).ColorAndOpacity(Jade)
+    Detail->AddSlot().AutoHeight().Padding(0,2,0,0)[SNew(STextBlock).Font(DetailFont).ColorAndOpacity(Jade).AutoWrapText(true)
         .Text_Lambda([this](){return FText::FromString(SelectedLegend());})];
     Detail->AddSlot().AutoHeight().Padding(0,6,0,9)[SNew(STextBlock).Font(DetailFont).ColorAndOpacity(Paper).AutoWrapText(true)
         .Text_Lambda([this](){const auto& N=AtlasNodes[Selected];return FText::FromString(Mode->Local(N.DetailEn,N.DetailZh));})];
     Detail->AddSlot().AutoHeight()[SNew(STextBlock).Font(DetailFont).ColorAndOpacity(Jade).AutoWrapText(true)
         .Text(FText::FromString(Mode->Local(TEXT("◆ Here   ◇ Visited   · Unvisited"),TEXT("◆ 所在地　◇ 已到訪　· 尚未到訪"))))];
+    Detail->AddSlot().AutoHeight().Padding(0,8,0,0)[SNew(SButton).Tag(TEXT("TibetAtlasTravel"))
+        .ButtonStyle(&PinStyle()).ButtonColorAndOpacity(Gold)
+        .Visibility_Lambda([this](){return Mode.IsValid() && Mode->CanTravelFromAtlas(Selected) ? EVisibility::Visible : EVisibility::Collapsed;})
+        .ContentPadding(FMargin(10,5)).HAlign(HAlign_Center)
+        .OnClicked_Lambda([this](){
+            if (Mode.IsValid() && !Mode->TravelFromAtlas(Selected)) bWriteFailed = true;
+            return FReply::Handled();
+        })
+        [SNew(STextBlock).Font(TitleFont).ColorAndOpacity(Ink)
+            .Text(FText::FromString(Mode->Local(TEXT("Travel here"),TEXT("傳送到此地"))))]];
     // Keep the original 16:9 painting intact and dock the selected place beside it.
     const bool Stack=Args._Width<490;
     const float ChartWidth=FMath::Max(200.f,FMath::Min(Stack?Args._Width:Args._Width*.73f,Args._Height*16.f/9.f));
@@ -122,8 +132,10 @@ void STibetAtlas::Construct(const FArguments& Args)
 FString STibetAtlas::SelectedLegend() const
 {
     const int32 Current=Mode->CurrentAreaIndex();
-    FString Status = (Selected==FMath::Min(Current,8)) ? Mode->Local(TEXT("You are here"),TEXT("目前所在")) :
-        Mode->HasVisitedArea(Selected) ? Mode->Local(TEXT("Visited"),TEXT("已到訪")) : Mode->Local(TEXT("Unvisited"),TEXT("尚未到訪"));
+    if (bWriteFailed) return Mode->Local(TEXT("Could not save progress. Try again."),TEXT("進度無法儲存，請重試。"));
+    FString Status = Mode->Local(TEXT("Follow the pilgrimage to visit and unlock travel."),TEXT("請沿主線首次抵達此地，即可解鎖傳送。"));
+    if (Selected == FMath::Min(Current,8)) Status = Mode->Local(TEXT("You are here"),TEXT("目前所在"));
+    else if (Mode->CanTravelFromAtlas(Selected)) Status = Mode->Local(TEXT("Travel available"),TEXT("可傳送"));
     if (Selected==8 && Current>=8) Status=Mode->AreaName() + TEXT(" · ") + Status;
     return Status;
 }

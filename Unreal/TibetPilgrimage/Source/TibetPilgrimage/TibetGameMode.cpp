@@ -135,7 +135,7 @@ void ATibetGameMode::StartPlay()
     Save=Cast<UTibetSave>(UGameplayStatics::LoadGameFromSlot(SlotName,0));
     if (!Save) Save=NewObject<UTibetSave>(this);
     // A normal app launch opens stupa. Explicit test slots and epilogue returns start the named map.
-    if (Map==TEXT("stupa") && !Save->bEpilogue && Order.Contains(Save->Map) && Save->Map!=Map
+    if (Map==TEXT("stupa") && Order.Contains(Save->Map) && Save->Map!=Map
         && !FParse::Param(FCommandLine::Get(),TEXT("TibetNoResume")) && !FParse::Param(FCommandLine::Get(),TEXT("TibetDirect")))
     {
         bTravel=true;
@@ -145,6 +145,7 @@ void ATibetGameMode::StartPlay()
     Health = MaxHealth();
     Mana = MaxMana();
     PlayerFeedback.ObjectiveTime = GetWorld()->GetTimeSeconds();
+    Save->ResolveReturnOnArrival(Map);
     Route=Map;
     if (Map==TEXT("chimphu") && Save->bReturnFromTerma) Route=TEXT("return");
     if (Map==TEXT("stupa") && Save->bEpilogue) Route=TEXT("ending");
@@ -317,6 +318,51 @@ bool ATibetGameMode::HasVisitedArea(int32 Index) const
 {
     return Save && Order.IsValidIndex(Index) && Save->Steps.Contains(Order[Index]);
 }
+int32 ATibetGameMode::AtlasDestination(int32 Pin) const
+{
+    const int32 CaveEntrance = Order.IndexOfByKey(TEXT("terma1"));
+    if (Pin < 0 || Pin > CaveEntrance) return INDEX_NONE;
+    if (Pin == CaveEntrance)
+    {
+        // The atlas has one pin for three rooms. Return to the deepest visited room.
+        for (int32 Room = Order.Num() - 1; Room >= CaveEntrance; --Room)
+            if (HasVisitedArea(Room)) return Room;
+    }
+    return Pin;
+}
+
+bool ATibetGameMode::CanTravelFromAtlas(int32 Pin) const
+{
+    const int32 Dest = AtlasDestination(Pin);
+    if (!Save || bTravel || !Order.IsValidIndex(Dest) || FMath::Min(CurrentAreaIndex(), Order.IndexOfByKey(TEXT("terma1"))) == Pin) return false;
+    return Order[Dest] == TEXT("stupa") || Order[Dest] == TEXT("grove") || HasVisitedArea(Dest);
+}
+
+bool ATibetGameMode::TravelFromAtlas(int32 Pin)
+{
+    return CanTravelFromAtlas(Pin) && TravelToMap(Order[AtlasDestination(Pin)]);
+}
+
+bool ATibetGameMode::TravelToMap(const FString& Destination)
+{
+    if (!Save || bTravel || !Order.Contains(Destination)) return false;
+    const FString PreviousMap = Save->Map;
+    const int32 PreviousCharges = Save->PillCharges;
+    Save->Map = Destination;
+    if (Destination == TEXT("stupa")) Save->PillCharges = 4;
+    if (!Store())
+    {
+        Save->Map = PreviousMap;
+        Save->PillCharges = PreviousCharges;
+        return false;
+    }
+    bTravel = true;
+    if (auto* PC = GetWorld()->GetFirstPlayerController())
+        if (auto* HUD = PC->GetHUD<ATibetHUD>()) HUD->CloseJournal();
+    UGameplayStatics::OpenLevel(this, FName(*(TEXT("/Game/Maps/Tibet/") + Destination)));
+    return true;
+}
+
 ATibetGameMode::EInteraction ATibetGameMode::InteractionAt(const FVector& PlayerLocation) const
 {
     if (!Save || bTravel || IsCampaignComplete()) return EInteraction::None;
@@ -424,6 +470,15 @@ bool ATibetGameMode::Store()
     UE_LOG(LogTemp,Error,TEXT("Tibet: checkpoint write failed in %s"),*Map);
     return false;
 }
+void UTibetSave::ResolveReturnOnArrival(const FString& Destination)
+{
+    // The journal allows a detour between finishing a chapter and reporting back.
+    if (Destination == TEXT("chimphu") && Steps.FindRef(TEXT("terma3")) >= Routes().FindChecked(TEXT("terma3")).Num())
+        bReturnFromTerma = true;
+    if (Destination == TEXT("stupa") && Steps.FindRef(TEXT("return")) >= Routes().FindChecked(TEXT("return")).Num())
+        bEpilogue = true;
+}
+
 int32 UTibetSave::NextUnlitLamp() const
 {
     for (int32 I=0; I<SouthLampTable; ++I)
@@ -591,15 +646,10 @@ void ATibetGameMode::MoveToNextMap()
     FString Dest;
     if(Map==TEXT("stupa")) Dest=TEXT("wild");
     else if(Map==TEXT("grove")) Dest=TEXT("stupa");
-    else if(Route==TEXT("return")) {Dest=TEXT("stupa"); Save->bEpilogue=true;}
-    else if(Map==TEXT("terma3")) {Dest=TEXT("chimphu"); Save->bReturnFromTerma=true;}
+    else if(Route==TEXT("return")) Dest=TEXT("stupa");
+    else if(Map==TEXT("terma3")) Dest=TEXT("chimphu");
     else if(Order.IsValidIndex(Id+1)) Dest=Order[Id+1];
-    if(Dest.IsEmpty()) return;
-    if (Dest==TEXT("stupa")) Save->PillCharges=4;
-    Save->Map=Dest;
-    Store();
-    bTravel=true;
-    UGameplayStatics::OpenLevel(this,FName(*FString::Printf(TEXT("/Game/Maps/Tibet/%s"),*Dest)));
+    TravelToMap(Dest);
 }
 bool ATibetGameMode::AtButterLamp() const
 {
@@ -674,8 +724,7 @@ void ATibetGameMode::Interact()
     }
     if (Action==EInteraction::Grove)
     {
-        Save->Map=TEXT("grove"); Store(); bTravel=true;
-        UGameplayStatics::OpenLevel(this,FName(TEXT("/Game/Maps/Tibet/grove")));
+        TravelToMap(TEXT("grove"));
         return;
     }
     if(Action==EInteraction::Gate) MoveToNextMap();
