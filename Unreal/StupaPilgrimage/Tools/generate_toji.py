@@ -11,6 +11,7 @@ TOOLS = Path(__file__).resolve().parent
 PROJECT = TOOLS.parent
 KONDO = PROJECT.parents[1] / "public/models/kukai/toji_kondo.glb"
 MAP = "/Game/Maps/Toji"
+MAP_FILE = PROJECT / "Content/Maps/Toji.umap"
 IMPORT_ROOT = "/Game/Generated/Toji"
 KONDO_OFFSET = (-800, 0, 0)
 KONDO_SCALE = 1.25
@@ -135,10 +136,13 @@ def generate():
     levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     actor_editor = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
-    if assets.does_asset_exist(MAP):
+    if MAP_FILE.is_file():
         if not levels.load_level(MAP):
             raise RuntimeError(f"Could not open {MAP}")
-        actors = actor_editor.get_all_level_actors()
+        actors = [
+            actor for actor in actor_editor.get_all_level_actors()
+            if not isinstance(actor, unreal.WorldSettings)
+        ]
         if actors and not actor_editor.destroy_actors(actors):
             raise RuntimeError(f"Could not clear generated actors from {MAP}")
     elif not levels.new_level(MAP):
