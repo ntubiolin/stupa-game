@@ -6,7 +6,7 @@ This native prototype uses the repository’s original [Kondō GLB](../../public
 
 Use a stable Unreal Engine 5.8 installation with desktop C++ tooling and Python 3.10 or newer available on the host. Windows targets Win64 and DirectX 12 with Shader Model 6. On macOS, use an Apple Silicon Mac with a Metal SM6-capable GPU and an Epic-supported Xcode installation. Follow Epic’s version-specific requirements for [Windows](https://dev.epicgames.com/documentation/unreal-engine/hardware-and-software-specifications-for-unreal-engine?application_version=5.8) and [macOS](https://dev.epicgames.com/documentation/unreal-engine/macos-development-requirements-for-unreal-engine?application_version=5.8).
 
-Run the following from the repository root. Set the Unreal installation path to the directory containing the engine’s `Engine/` subdirectory.
+Run the following from the repository root. Set `--ue-root` to the versioned installation directory containing `Engine/`. For the default Mac Launcher location, `/Users/Shared/Epic Games` is the parent folder and `/Users/Shared/Epic Games/UE_5.8` is the versioned path.
 
 **macOS (zsh)**
 
@@ -37,3 +37,5 @@ After generation, run the same tool with `package`. It calls Unreal Automation T
 ## Map coordinates
 
 Unreal uses centimeters with +X north, +Y east, and +Z up. A Three.js world point `(x, y, z)` maps to Unreal `(-100*z, 100*(x-7500), 100*y)`. The Kondō is centered at `(-800, 0, 0)`, faces south, and uses the same 1.25 scale as the web map. The generator verifies the imported and placed bounds against the GLB node transforms and uses the depth asymmetry of the south stair to resolve the importer’s horizontal orientation. It reuses that orientation for the courtyard. The PlayerStart is at `(-4400, 0, 102)`, facing north.
+
+The Kōdō at `(3600, 0, 0)` uses the web scale of 1.25. The five-story pagoda at `(-1800, 3600, 0)` uses the web scale of 1.05. Both use their original GLBs and the same orientation correction as the Kondō. Each has a simple collider for its podium. The mandala interaction remains on the approach south of the Kōdō.
