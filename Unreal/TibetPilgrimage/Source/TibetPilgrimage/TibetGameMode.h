@@ -19,6 +19,13 @@ public:
     UPROPERTY(SaveGame) bool bComplete = false;
 };
 
+struct FTibetSkillState
+{
+    FString Name, Binding;
+    float Cost = 0, CooldownRemaining = 0, CooldownDuration = 0, ActiveRemaining = 0;
+    bool bUnlocked = false;
+};
+
 UCLASS()
 class TIBETPILGRIMAGE_API ATibetGameMode : public AGameModeBase
 {
@@ -35,6 +42,9 @@ public:
     bool IsCampaignComplete() const { return Save && Save->bComplete; }
     void Interact();
     void CastSkill(int32 Slot = 0);
+    FTibetSkillState GetSkillState(int32 Slot) const;
+    float GetMana() const { return Mana; }
+    float GetHealth() const { return Health; }
     void ChangeLanguage();
     FString AreaName() const;
     FString Status(bool bTouchControls) const;
