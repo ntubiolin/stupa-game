@@ -17,8 +17,12 @@ mkdir -p "$result"
 node "$qa/capture-web.mjs" http://127.0.0.1:4477 "$result/web"
 python3 "$qa/test_package.py" photos --exe "$app" --output "$result/mac"
 python3 "$qa/test_package.py" arrival --exe "$app" --output "$result/arrival"
+python3 "$qa/test_package.py" camera --exe "$app" --output "$result/camera"
 python3 "$qa/test_package.py" play --exe "$app" --output "$result/play"
 python3 "$qa/test_package.py" skills --exe "$app" --output "$result/skills"
+python3 "$qa/test_package.py" feedback --exe "$app" --output "$result/feedback"
+
+python3 "$qa/capture_passages.py" --exe "$app" --output "$result/passages"
 python3 "$qa/test_package.py" learned --exe "$app" --output "$result/learned"
 python3 "$qa/test_package.py" journal --exe "$app" --output "$result/journal"
 python3 "$qa/test_package.py" compare --web "$result/web" --mac "$result/mac" --output "$result/comparison"
@@ -26,7 +30,13 @@ python3 "$qa/test_package.py" compare --web "$result/web" --mac "$result/mac" --
 
 arrival 使用新存檔和預設開場鏡頭，確認塔座、塔尖與洛桑都在畫面內，並保存玩家進場原圖。接著透過遊戲輸入實測游標移動、右鍵拖曳，以及放開右鍵後邊走邊移動游標時的鏡頭朝向。
 
+camera 先執行 arrival，再以每秒 30 與 60 幀上限實測側移路徑、鏡頭跟隨、按住 Q／E 與放開後的回正、選單輸入隔離，以及洛桑面前的 E 輕按互動。events.tsv 記錄鏡頭、角色和移動基準的角度。
+
+capture_passages.py 從青浦走上洞口階梯，再穿越伏藏三層。每一層都擷取一般玩家鏡頭下傳送門明暗兩相、量測可見門柱像素與實際進門高度，並在固定機位檢查燭光能照見地面、拱頂保留暗部。關卡產生前可執行 `python3 Unreal/TibetPilgrimage/QA/test_cave_passages.py` 檢查六張地圖的階面、洞頂淨空及互動位置。
+
 learned 從伏藏第三層走回青浦與博達哈，重開後實際施放上師心咒，另用新存檔核對鎖定狀態及法力。
+
+feedback 在桌面與窄版進入虛空寶庫，穿過第一個任務目標並讓守護者接觸主角。它依序核對任務提示、蓮盾期間生命維持 100、護盾到期後生命降至 84、角色受擊動作以及效果消退，也會比較三張畫面兩側的受擊提示。
 
 play 在第一盞酥油燈點亮後重啟遊戲，核對存檔進度與燈芯上的可見火焰，再繼續走完主線及塔林支線。
 

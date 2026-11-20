@@ -19,6 +19,21 @@ namespace TibetCamera
             FRotator::NormalizeAxis(View.Yaw + Degrees.X * Sensitivity), 0.0);
     }
 
+    constexpr double OrbitDegreesPerSecond = 105.;
+    constexpr double InteractHoldSeconds = .20;
+
+    inline double FollowYaw(double View, double Travel, double Dt)
+    {
+        // At large angles turn at a comfortable fixed speed, then ease to a stop.
+        // Crossing between the two regimes within a frame uses the leftover time.
+        constexpr double Rate = 175., TimeConstant = .22, EaseDistance = Rate * TimeConstant;
+        const double Gap = FRotator::NormalizeAxis(Travel - View);
+        const double Distance = FMath::Abs(Gap);
+        const double LinearTime = FMath::Min(Dt, FMath::Max(0., Distance - EaseDistance) / Rate);
+        const double Remaining = (Distance - Rate * LinearTime) * FMath::Exp(-(Dt - LinearTime) / TimeConstant);
+        return FRotator::NormalizeAxis(Travel - (Remaining < .05 ? 0. : FMath::Sign(Gap) * Remaining));
+    }
+
     // Limit the boom's descent as the lens tilts up, keeping the camera above the ground.
     inline double BoomPitch(double ViewPitch)
     {

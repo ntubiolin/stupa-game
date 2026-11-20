@@ -13,6 +13,7 @@ sys.path.insert(0, str(TOOLS))
 
 from import_tibet_figures import import_meshes
 from migrate_tibet_maps import strip_import_metadata
+from tibet_cave_lighting import dress_passages, wick_material
 from tibet_landscapes import MAPS, landscape
 from tibet_surfaces import make_surfaces
 
@@ -29,7 +30,9 @@ def place(levels, actors, cls, name, xyz=(0, 0, 0), rot=None):
 
 
 def lighting(levels, actors, stage):
-    cave = stage.startswith("terma")
+    dress_passages(levels, actors, place, stage)
+    if stage.startswith("terma"):
+        return
     courtyard = stage == "stupa"
     place(levels, actors, unreal.SkyAtmosphere, "Himalayan sky")
     sun = place(
@@ -37,41 +40,25 @@ def lighting(levels, actors, stage):
         actors,
         unreal.DirectionalLight,
         "Pilgrimage sunlight",
-        rot=unreal.Rotator(pitch=-16 if cave else -41, yaw=24 if courtyard else 53),
+        rot=unreal.Rotator(pitch=-41, yaw=24 if courtyard else 53),
     )
     light = sun.get_component_by_class(unreal.DirectionalLightComponent)
     light.set_editor_property("mobility", unreal.ComponentMobility.MOVABLE)
-    light.set_editor_property("intensity", 1800 if cave else 35000)
+    light.set_editor_property("intensity", 35000)
     light.set_editor_property("use_temperature", True)
-    light.set_editor_property("temperature", 6900 if stage == "terma2" else 5700 if courtyard else 5150)
+    light.set_editor_property("temperature", 5700 if courtyard else 5150)
     if courtyard:
         # Broader daylight softens the cloth shadows across the curved whitewash.
         light.set_editor_property("light_source_angle", 2.2)
     light.set_editor_property("atmosphere_sun_light", True)
-    if cave:
-        # An indirect fill models reflected mineral light in the enclosed walkable vault.
-        # A shadow-free directional fill works on the forward mobile renderer as well.
-        glow = place(
-            levels,
-            actors,
-            unreal.DirectionalLight,
-            "Reflected mineral light",
-            rot=unreal.Rotator(pitch=-27, yaw=143),
-        )
-        bounced = glow.get_component_by_class(unreal.DirectionalLightComponent)
-        bounced.set_editor_property("mobility", unreal.ComponentMobility.MOVABLE)
-        bounced.set_editor_property("intensity", 165)
-        bounced.set_editor_property("cast_shadows", False)
-        bounced.set_editor_property("use_temperature", True)
-        bounced.set_editor_property("temperature", 3900 if stage == "terma3" else 8400)
     sky = place(levels, actors, unreal.SkyLight, "Skylight")
     fill = sky.get_component_by_class(unreal.SkyLightComponent)
     fill.set_editor_property("mobility", unreal.ComponentMobility.MOVABLE)
-    fill.set_editor_property("intensity", 0.62 if cave else 1.45 if courtyard else 1)
+    fill.set_editor_property("intensity", 1.45 if courtyard else 1)
     fill.set_editor_property("real_time_capture", True)
     fog = place(levels, actors, unreal.ExponentialHeightFog, "Valley haze")
     layer = fog.get_component_by_class(unreal.ExponentialHeightFogComponent)
-    layer.set_editor_property("fog_density", 0.012 if cave else 0.007)
+    layer.set_editor_property("fog_density", 0.007)
     layer.set_editor_property("fog_height_falloff", 0.19)
     dome = place(levels, actors, unreal.StaticMeshActor, "Atmosphere sky dome")
     dome.set_actor_scale3d(unreal.Vector(800, 800, 800))
@@ -189,6 +176,7 @@ def generate():
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     import_meshes()
     surfaces = make_surfaces()
+    surfaces["lampflame"] = wick_material()
     output = PROJECT / "Saved/TibetSource"
     output.mkdir(parents=True, exist_ok=True)
     tiles = {}

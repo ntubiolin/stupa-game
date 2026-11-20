@@ -18,6 +18,12 @@ jobs:
       - run: npm test
       - name: Check Unreal migration inventory
         run: python3 Unreal/TibetPilgrimage/QA/test_module_inventory.py
+      - name: Check Mac game delivery paths
+        run: python3 -m unittest discover -s Unreal/TibetPilgrimage/QA -p test_mac_delivery.py
+      - name: Check Tibet cave routes and resident continuity
+        run: |
+          python3 Unreal/TibetPilgrimage/QA/test_cave_passages.py
+          python3 Unreal/TibetPilgrimage/QA/test_residents.py
       - uses: actions/upload-artifact@v4
         with:
           name: story-build

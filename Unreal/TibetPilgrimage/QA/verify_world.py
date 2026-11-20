@@ -4,8 +4,12 @@ import json
 import math
 from pathlib import Path
 import traceback
+import sys
 
 import unreal
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "Tools"))
+from tibet_passages import lanterns, passages, route_sockets
 
 
 # Points are the UE coordinates of a vertical feature at each photographed landmark.
@@ -85,6 +89,42 @@ def survey(stage):
             "clear": z is not None and clear((x, y, z + 95), (x, y, z + 96)),
         }
     paths = {name: clear((*a, 96), (*b, 96)) for name, (a, b) in legs.items()}
+    # Sample the imported collision at both edges of a capsule-width route,
+    # with clearance above each successive tread and across its leading lip.
+    for p in passages(stage):
+        samples = [(p.start + (i+.5)*p.depth, p.base+(i+1)*p.rise) for i in range(p.steps)]
+        samples += [(p.front + d, p.floor) for d in (.3, 1.4, p.landing-.55)]
+        for side in (-.52, .52):
+            last = None
+            for north, authored in samples:
+                x, y, expected = north*100, (p.east+side)*100, authored*100
+                z = floor_at(x,y,expected+42)
+                key = f"Stair {x:.0f},{y:.0f}"
+                objectives[key] = {"floor_cm": z, "expected_cm": expected, "clear": z is not None
+                    and abs(z-expected) < 3 and clear((x,y,z+95), (x,y,z+96))}
+                if last is not None:
+                    probe_z = max(expected, last[2]) + 98
+                    paths[key] = clear((last[0],last[1],probe_z), (x,y,probe_z))
+                last = (x,y,expected)
+
+    sockets = {str(a.tags[1]): a.get_actor_location().to_tuple() for a in actors
+               if "TibetPassage" in [str(t) for t in a.tags]}
+    authored = route_sockets(stage)
+    sockets_match = len(sockets) == len(authored) and all(
+        key in sockets and math.dist(sockets[key], (north*100,east*100,z*100)) < 1
+        for key, (east,north,z) in authored.items())
+    lamps = [a for a in actors if isinstance(a, unreal.SpotLight) and a.get_actor_label().startswith("Butter lamp ")]
+    sources_match = len(lamps) == len(lanterns(stage)) and all(any(
+        math.dist(l.get_actor_location().to_tuple(),(y*100,x*100,(z+1.40)*100)) < 1
+        and l.get_component_by_class(unreal.SpotLightComponent).get_editor_property("use_temperature")
+        for l in lamps) for (x,y,z),_,_ in lanterns(stage))
+    spills = [a for a in actors if isinstance(a, unreal.SpotLight) and a.get_actor_label().startswith("Wick spill ")]
+    spill_sources = all(any(math.dist(spill.get_actor_location().to_tuple(), lamp.get_actor_location().to_tuple()) < 1
+                            for lamp in lamps) for spill in spills)
+    vault_lighting = not stage.startswith("terma") or (not any(isinstance(a, (
+        unreal.DirectionalLight, unreal.SkyLight, unreal.SkyAtmosphere)) for a in actors)
+        and len(spills) == 3 and spill_sources
+        and any(isinstance(a, unreal.PostProcessVolume) and a.get_editor_property("unbound") for a in actors))
     # Trace below the vault ceiling when locating the three dungeon centrepieces.
     top = 1000 if stage.startswith("terma") else 7000
     height = floor_at(*LANDMARKS[stage], top)
@@ -93,11 +133,15 @@ def survey(stage):
         "landmark_height_cm": height,
         "objective_positions": objectives,
         "capsule_paths": paths,
+        "passage_sockets": sockets,
+        "butter_lamp_count": len(lamps),
+        "sources_match": sources_match,
+        "vault_lighting": vault_lighting,
         "passed": list(start.to_tuple()) == [-2000, 0, 100]
         and height is not None
         and height > 200
         and all(item["clear"] for item in objectives.values())
-        and all(paths.values()),
+        and all(paths.values()) and sockets_match and sources_match and vault_lighting,
     }
 
 

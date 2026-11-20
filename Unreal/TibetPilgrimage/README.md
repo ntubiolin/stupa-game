@@ -11,7 +11,7 @@ python3 Tools/tibet.py package --platform IOS --unsigned
 python3 Tools/tibet.py package --platform IOS
 ```
 
-預設 UE 安裝於 `/Users/Shared/Epic Games/UE_5.8`，可加 `--ue-root` 指定其他位置。封裝輸出至 `Builds`，可用 `--archive` 指定目錄。iPhone 版需安裝 UE iOS 平台元件。`--unsigned` 產出待簽署的 Xcode Archive。安裝到手機前須使用與專案 Bundle ID 相符的 Apple 開發團隊、憑證及描述檔。團隊設定由簽署者在本機提供。
+預設 UE 安裝於 `/Users/Shared/Epic Games/UE_5.8`，可加 `--ue-root` 指定其他位置。封裝會放進下載項目的 `TibetPilgrimage` 資料夾。Mac 遊戲是 `~/Downloads/TibetPilgrimage/Mac/TibetPilgrimage.app`，iPhone 封裝在同層的 `IOS` 目錄。使用 `--archive` 可指定其他位置。iPhone 版需安裝 UE iOS 平台元件。`--unsigned` 產出待簽署的 Xcode Archive。安裝到手機前須使用與專案 Bundle ID 相符的 Apple 開發團隊、憑證及描述檔。團隊設定由簽署者在本機提供。
 
 地圖清單位於 `Config/DefaultGame.ini`。伏藏三層各自 cook。座標以公分為單位，+X 朝北、+Y 朝東、+Z 向上。
 
@@ -22,8 +22,8 @@ python3 Tools/tibet.py package --platform IOS
 | 操作 | Mac |
 | --- | --- |
 | 移動 | WASD |
-| 轉動視角 | 按住滑鼠右鍵並拖曳。放開後視角固定，可繼續用 WASD 走動。 |
-| 交談、點燈、操作祭壇與出口 | E |
+| 轉動視角 | 走動時視角會跟到角色背後。按住 Q／E 暫時向左／右環視，放開平順回背。按住滑鼠右鍵拖曳可自由觀察。 |
+| 交談、點燈、操作祭壇與出口 | 輕按 E |
 | 吽字光彈、六字真言 | 空白鍵、R |
 | 金剛橛、金剛鈴、蓮盾、護法、上師心咒 | 1、2、3、4、T |
 | 跳躍、切換中英文 | 左 Shift、L |

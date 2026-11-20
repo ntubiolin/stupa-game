@@ -2,7 +2,10 @@
 #include "TibetCharacter.h"
 #include "TibetHUD.h"
 #include "TibetRitualEffect.h"
+#include "TibetTravelGate.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Engine/World.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/TargetPoint.h"
 #include "GameFramework/Character.h"
@@ -14,7 +17,7 @@
 namespace
 {
 enum class EObjective { Talk, Kora, Interact, Reach, Combat, Boss, Escort, Gate };
-struct FObjective { EObjective Kind; const TCHAR* En; const TCHAR* Zh; int32 Count; const TCHAR* SpeechEn; const TCHAR* SpeechZh; };
+struct FObjective { EObjective Kind; const TCHAR* En; const TCHAR* Zh; int32 Count; const TCHAR* SpeechEn; const TCHAR* SpeechZh; const TCHAR* Resident = nullptr; };
 const TMap<FString,TArray<FObjective>>& Routes()
 {
     static const TMap<FString,TArray<FObjective>> Table = {
@@ -55,6 +58,20 @@ const FRitualSkill Skills[] = {
     {TEXT("Vajra Guru Mantra"), TEXT("上師心咒"), TEXT("T"), 8, 35, 18, 1600, 6}
 };
 
+bool OnObjectiveFloor(const APawn* Pawn, const FVector& Goal)
+{
+    if (Goal.Z < 45) return true;
+    const auto* Character = Cast<ACharacter>(Pawn);
+    if (!Character) return false;
+    const double Feet = Pawn->GetActorLocation().Z - Character->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+    return FMath::Abs(Feet - Goal.Z) <= 28;
+}
+
+struct FResidentPlacement { const TCHAR* Map; const TCHAR* Id; const TCHAR* Model; FVector Home; const TCHAR* Marker = nullptr; };
+const FResidentPlacement CastPlacements[] = {
+#include "TibetResidents.inl"
+};
+const FVector MessengerDestination(1370,-65,0);
 const FVector GroveGate(-1860,-480,0);
 FVector StupaLampLocation(int32 Index)
 {
@@ -63,7 +80,7 @@ FVector StupaLampLocation(int32 Index)
 const FString Cylinder=TEXT("/Engine/BasicShapes/Cylinder.Cylinder");
 const FString Cone=TEXT("/Engine/BasicShapes/Cone.Cone");
 const FString Sphere=TEXT("/Engine/BasicShapes/Sphere.Sphere");
-const FLinearColor Gold(.87,.43,.065), Water(.04,.57,.58);
+const FLinearColor Gold(.87,.43,.065);
 }
 
 AActor* ATibetGameMode::MeshActor(const FVector& Pos, const FString& Path, const FVector& Scale,
@@ -114,6 +131,7 @@ void ATibetGameMode::StartPlay()
         UGameplayStatics::OpenLevel(this,FName(*FString::Printf(TEXT("/Game/Maps/Tibet/%s"),*Save->Map)));
         return;
     }
+    PlayerFeedback.ObjectiveTime = GetWorld()->GetTimeSeconds();
     Route=Map;
     if (Map==TEXT("chimphu") && Save->bReturnFromTerma) Route=TEXT("return");
     if (Map==TEXT("stupa") && Save->bEpilogue) Route=TEXT("ending");
@@ -125,13 +143,72 @@ void ATibetGameMode::StartPlay()
     FurthestMap = Order.IndexOfByKey(Map);
     for (int32 I = FurthestMap + 1; I < Order.Num(); ++I)
         if (Save->Steps.Contains(Order[I])) FurthestMap = I;
+    TArray<AActor*> Markers;
+    UGameplayStatics::GetAllActorsWithTag(this, TEXT("TibetPassage"), Markers);
+    for (const AActor* Marker : Markers)
+        for (FName Name : Marker->Tags)
+            if (Name != TEXT("TibetPassage")) PassageSockets.Add(Name, Marker->GetActorLocation());
     if (Map==TEXT("stupa"))
     {
-        MeshActor(GroveGate+FVector(0,0,12),Cylinder,FVector(1.8,1.8,.2),&Water);
+        if (auto* Gate = GetWorld()->SpawnActor<ATibetTravelGate>(GroveGate, FRotator::ZeroRotator))
+            Gate->SetSidePath();
     }
+    PopulateResidents();
     Store();
     Refresh();
 }
+
+void ATibetGameMode::PopulateResidents()
+{
+    UE_LOG(LogTemp, Display, TEXT("TIBET_RESIDENT_LEVEL map=%s route=%s"), *Map, *Route);
+    for (const FResidentPlacement& Resident : CastPlacements)
+    {
+        if (Map != Resident.Map) continue;
+        FVector Location = Resident.Home;
+        const bool bBearer = FCString::Strcmp(Resident.Id, TEXT("messenger")) == 0;
+        if (bBearer)
+        {
+            const int32 EscortStep = Routes().FindChecked(Route).IndexOfByPredicate(
+                [](const FObjective& O){ return O.Kind == EObjective::Escort; });
+            if (GetStep() > EscortStep) Location = MessengerDestination;
+            else if (GetStep() == EscortStep && Save->bMessengerJoined)
+            {
+                // The player resumes at the trailhead on a level load.
+                if (const APawn* Pawn = UGameplayStatics::GetPlayerPawn(this, 0))
+                    Location = FVector(Pawn->GetActorLocation().X + 85, Pawn->GetActorLocation().Y + 85, 0);
+            }
+        }
+        // Authored cave sockets own the floor elevation of the raised sanctuary.
+        const FVector* Marker = Resident.Marker ? PassageSockets.Find(FName(Resident.Marker)) : nullptr;
+        if (Marker) Location = *Marker;
+        // Some cave thresholds and shrine platforms sit above the generated ground plane.
+        FHitResult Floor;
+        const FCollisionObjectQueryParams StaticWorld(ECC_WorldStatic);
+        if (!Marker && GetWorld()->LineTraceSingleByObjectType(Floor, Location + FVector(0,0,120),
+            Location - FVector(0,0,120), StaticWorld) && Floor.ImpactNormal.Z >= .70)
+            Location.Z = Floor.ImpactPoint.Z;
+        const FString Path = FString::Printf(TEXT("/Game/Figures/%s.%s"), Resident.Model, Resident.Model);
+        AActor* Actor = MeshActor(Location, Path, FVector::OneVector);
+        if (!ensureMsgf(Actor, TEXT("Missing resident mesh %s"), *Path)) continue;
+        Actor->SetActorRotation(FRotator(0,-90,0));
+        Actor->Tags.Add(TEXT("TibetResident"));
+        Actor->Tags.Add(FName(Resident.Id));
+        Residents.Add(FName(Resident.Id), Actor);
+        if (bBearer && Save->bMessengerJoined && Objective(Route,GetStep()).Kind == EObjective::Escort)
+        {
+            Messenger = Actor;
+            bEscorting = true;
+        }
+        UE_LOG(LogTemp, Display, TEXT("TIBET_RESIDENT_READY id=%s model=%s actor=%u"), Resident.Id, Resident.Model, Actor->GetUniqueID());
+    }
+}
+
+AActor* ATibetGameMode::ActiveResident() const
+{
+    const TCHAR* Id = Objective(Route, GetStep()).Resident;
+    return Id ? Residents.FindRef(FName(Id)).Get() : nullptr;
+}
+
 int32 ATibetGameMode::GetStep() const { return Save ? Save->Steps.FindRef(Route) : 0; }
 int32 ATibetGameMode::GetStepProgress() const { return Save ? Save->Counts.FindRef(Route) : 0; }
 FName ATibetGameMode::GetObjectiveKind() const
@@ -145,6 +222,12 @@ FVector ATibetGameMode::Anchor() const
     const EObjective K=Objective(Route,GetStep()).Kind;
     const int32 Count=GetStepProgress();
     const int32 Step=GetStep();
+    if (Map == Route && !PassageSockets.IsEmpty())
+    {
+        const FName Key = K == EObjective::Gate ? FName(TEXT("Gate")) : FName(*FString::Printf(TEXT("Step%d"), Step));
+        if (const FVector* At = PassageSockets.Find(Key)) return *At;
+        if (const FVector* At = PassageSockets.Find(FName(*FString::Printf(TEXT("Step%d_%d"), Step, Count)))) return *At;
+    }
     if (Map==TEXT("grove") && K==EObjective::Interact) return FVector(1280,0,0);
     if (Map==TEXT("stupa") && K==EObjective::Interact)
         return StupaLampLocation(Count);
@@ -153,23 +236,18 @@ FVector ATibetGameMode::Anchor() const
         if(Step==2) return FVector(1250+80*Count,-760+90*Count,0);
         if(Step==4 || Step==10) return FVector(Step==4?1430:2670,-50,0);
         if(Step==5) return FVector(2690+60*(Count%3),-180+54*Count,0);
-        if(Step==6 || Step==9 || Step==12) return FVector(2760,-38,0);
-        if(Step==8 && bEscorting) return FVector(1370,-65,0);
+        if(Step==8 && bEscorting) return MessengerDestination;
     }
     if (Map==TEXT("mangyul"))
     {
-        if(Step==0) return FVector(1580,1290,0);
         if(Step==1) return FVector(-720+(Count/2)*250, (Count%2?1.:-1.)*(470+30*(Count%3)),0);
         if(Step>=2 && K!=EObjective::Gate) return FVector(1510+(Step%2)*120, -660+(Step%3)*120,0);
     }
     if (Map==TEXT("yarlung"))
     {
-        if(Step==0 || Step==1) return FVector(1490,-1040,0);
+        if(Step==0) return FVector(1490,-1040,0);
         if(Step==2 || Step==3) return FVector(1550+140*(Count%2),580+145*(Count/2),0);
     }
-    if (Map==TEXT("samye") && (Step==0 || Step==1 || Step==6 || Step==8))
-        return FVector(1420,Step%2?210:-210,0);
-    if (Map==TEXT("chimphu") && K==EObjective::Talk) return FVector(1570,-720,0);
     switch (K)
     {
     case EObjective::Talk: return {-1320,230,0};
@@ -189,7 +267,12 @@ FVector ATibetGameMode::Anchor() const
     default: return {700,0,0};
     }
 }
-FVector ATibetGameMode::GetObjectiveLocation() const { return Focus ? Focus->GetActorLocation() : Anchor(); }
+FVector ATibetGameMode::GetObjectiveLocation() const
+{
+    if (Focus) return Focus->GetActorLocation();
+    if (AActor* Resident = ActiveResident()) return Resident->GetActorLocation();
+    return Anchor();
+}
 FString ATibetGameMode::GetObjectiveText() const
 {
     if (!Save) return {};
@@ -219,11 +302,12 @@ ATibetGameMode::EInteraction ATibetGameMode::InteractionAt(const FVector& Player
 {
     if (!Save || bTravel || IsCampaignComplete()) return EInteraction::None;
     if (Map==TEXT("stupa") && FVector::Dist2D(PlayerLocation,GroveGate)<215) return EInteraction::Grove;
-    if (FVector::Dist2D(PlayerLocation,GetObjectiveLocation())>225) return EInteraction::None;
+    if (FVector::Dist2D(PlayerLocation,GetObjectiveLocation())>225 ||
+        !OnObjectiveFloor(UGameplayStatics::GetPlayerPawn(this,0), Anchor())) return EInteraction::None;
     switch (Objective(Route,GetStep()).Kind)
     {
     case EObjective::Gate: return EInteraction::Gate;
-    case EObjective::Talk: return EInteraction::Talk;
+    case EObjective::Talk: return ActiveResident() ? EInteraction::Talk : EInteraction::None;
     case EObjective::Interact: return EInteraction::Use;
     default: return EInteraction::None;
     }
@@ -260,7 +344,7 @@ FString ATibetGameMode::Status(bool bTouchControls) const
         const EInteraction Action=InteractionAt(P->GetActorLocation());
         if (Action!=EInteraction::None)
         {
-            S+=bTouchControls ? Local(TEXT("\nTap Act · "),TEXT("\n點選「互動」・")) : TEXT("\n[E] ");
+            S+=bTouchControls ? Local(TEXT("\nTap Act · "),TEXT("\n點選「互動」・")) : Local(TEXT("\nTap E · "),TEXT("\n輕按 E・"));
             S+=ActionLabel(Action);
         }
     }
@@ -298,26 +382,39 @@ void ATibetGameMode::Refresh()
     LastHitTime = -10;
     if (Focus) { Focus->Destroy(); Focus=nullptr; }
     if (Map==TEXT("stupa")) RestoreStupaFlames();
+    if (Map == TEXT("pharping"))
+    {
+        const int32 Lit = GetStep() > 5 ? 7 : (GetStep() == 5 ? GetStepProgress() : 0);
+        const FLinearColor Flame(4.0, 1.5, .15);
+        while (LitCaveLamps < Lit)
+        {
+            const FVector* Bowl = PassageSockets.Find(FName(*FString::Printf(TEXT("Step5_%d"), LitCaveLamps)));
+            if (!Bowl || !MeshActor(*Bowl + FVector(0,0,129), Cone, FVector(.14,.14,.20), &Flame)) break;
+            ++LitCaveLamps;
+        }
+    }
     if (IsCampaignComplete()) return;
     const auto K=Objective(Route,GetStep()).Kind;
     const FVector At=Anchor();
-    if (K==EObjective::Talk || (K==EObjective::Escort && !bEscorting) || K==EObjective::Combat || K==EObjective::Boss)
+    if (K==EObjective::Talk || (K==EObjective::Escort && !bEscorting))
     {
-        const bool Fight=K==EObjective::Combat || K==EObjective::Boss;
-        FString Model=Map==TEXT("chimphu") ? TEXT("Tsogyal") : TEXT("Guide");
-        if (Fight)
-        {
-            if (Map==TEXT("yarlung")) Model=TEXT("RiverYak");
-            else if (Map==TEXT("pharping")) Model=TEXT("DroughtSpirit");
-            else if (Map==TEXT("mangyul") && K==EObjective::Boss) Model=TEXT("Tenma");
-            else if (Map==TEXT("samye") && K==EObjective::Boss) Model=TEXT("Pehar");
-            else if (Map==TEXT("wild") || Map==TEXT("mangyul")) Model=TEXT("SnowKing");
-            else Model=TEXT("Guardian");
-            EnemyMaximum = K==EObjective::Boss ? 9 : 3;
-            EnemyHealth = EnemyMaximum;
-            EnemyTrailing = EnemyHealth;
-            HurtTimer=1.3f;
-        }
+        if (const AActor* Resident = ActiveResident())
+            UE_LOG(LogTemp, Display, TEXT("TIBET_RESIDENT_ACTIVE id=%s actor=%u step=%d"),
+                Objective(Route,GetStep()).Resident, Resident->GetUniqueID(), GetStep());
+    }
+    else if (K==EObjective::Combat || K==EObjective::Boss)
+    {
+        FString Model;
+        if (Map==TEXT("yarlung")) Model=TEXT("RiverYak");
+        else if (Map==TEXT("pharping")) Model=TEXT("DroughtSpirit");
+        else if (Map==TEXT("mangyul") && K==EObjective::Boss) Model=TEXT("Tenma");
+        else if (Map==TEXT("samye") && K==EObjective::Boss) Model=TEXT("Pehar");
+        else if (Map==TEXT("wild") || Map==TEXT("mangyul")) Model=TEXT("SnowKing");
+        else Model=TEXT("Guardian");
+        EnemyMaximum = K==EObjective::Boss ? 9 : 3;
+        EnemyHealth = EnemyMaximum;
+        EnemyTrailing = EnemyHealth;
+        HurtTimer=1.3f;
         const FString Path=FString::Printf(TEXT("/Game/Figures/%s.%s"),*Model,*Model);
         Focus=MeshActor(At,Path,FVector(K==EObjective::Boss?1.48:1));
         if (Focus) Focus->SetActorRotation(FRotator(0,-90,0));
@@ -327,22 +424,29 @@ void ATibetGameMode::Refresh()
         // The level supplies the visible paving and lamp. Keep the HUD/interaction target.
         Focus=GetWorld()->SpawnActor<ATargetPoint>(At,FRotator::ZeroRotator);
     }
+    else if (K==EObjective::Gate || (Route==TEXT("chimphu") && K==EObjective::Reach))
+        Focus=GetWorld()->SpawnActor<ATibetTravelGate>(At,FRotator::ZeroRotator);
+    else if ((Map==TEXT("pharping") && GetStep()==5) || (Map==TEXT("yarlung") && GetStep()==3))
+        Focus=GetWorld()->SpawnActor<ATargetPoint>(At,FRotator::ZeroRotator);
     else
-    {
-        const bool Gate=K==EObjective::Gate;
-        Focus=MeshActor(At+FVector(0,0,Gate?18:10),Cylinder,FVector(Gate?1.7:.82,Gate?1.7:.82,.16),Gate?&Water:&Gold);
-    }
+        Focus=MeshActor(At+FVector(0,0,10),Cylinder,FVector(.82,.82,.16),&Gold);
     UE_LOG(LogTemp,Display,TEXT("Tibet objective map=%s route=%s step=%d kind=%s count=%d"),
         *Map,*Route,GetStep(),*GetObjectiveKind().ToString(),GetStepProgress());
 }
 void ATibetGameMode::Advance()
 {
+    PlayerFeedback.ObjectiveTime = GetWorld()->GetTimeSeconds();
     if (++Save->Counts.FindOrAdd(Route)>=Objective(Route,GetStep()).Count)
     {
         Save->Counts[Route]=0;
         ++Save->Steps.FindOrAdd(Route);
-        bEscorting=false;
-        if (Messenger) { Messenger->Destroy(); Messenger=nullptr; }
+        if (bEscorting)
+        {
+            UE_LOG(LogTemp, Display, TEXT("TIBET_RESIDENT_DELIVERED actor=%u"), Messenger->GetUniqueID());
+            bEscorting=false;
+            Save->bMessengerJoined=false;
+            Messenger=nullptr;
+        }
         if (Route==TEXT("ending")) Save->bComplete=true;
     }
     Store();
@@ -520,13 +624,15 @@ void ATibetGameMode::Tick(float Dt)
             Messenger->SetActorRotation(FRotator(0,Delta.Rotation().Yaw+90,0));
         }
     }
-    if ((K==EObjective::Reach || K==EObjective::Kora || K==EObjective::Escort) && Dist<140)
+    if ((K==EObjective::Reach || K==EObjective::Kora || K==EObjective::Escort) && Dist<140 && OnObjectiveFloor(P,Anchor()))
     {
         if(K==EObjective::Escort && !bEscorting)
         {
-            Messenger=Focus;
-            Focus=nullptr;
+            Messenger=ActiveResident();
+            if (!Messenger) return;
             bEscorting=true;
+            Save->bMessengerJoined=true;
+            Store();
             Refresh();
         }
         else if(K==EObjective::Escort && Messenger && FVector::Dist2D(Messenger->GetActorLocation(),GetObjectiveLocation())>190)
@@ -551,7 +657,12 @@ void ATibetGameMode::Tick(float Dt)
         if(Dist<200 && HurtTimer<=0)
         {
             HurtTimer=1.5f;
-            if(Shield<=0) Health-=K==EObjective::Boss?16:8;
+            if (Shield <= 0)
+            {
+                const float Before = Health;
+                Health = FMath::Max(0.f, Health - (K == EObjective::Boss ? 16.f : 8.f));
+                PlayerFeedback.RecordHit(Now, Before, Health);
+            }
             if(Health<=0)
             {
                 P->TeleportTo(FVector(-2000,0,100),FRotator::ZeroRotator);

@@ -3,6 +3,7 @@
 #include "TibetGameMode.h"
 #include "TibetHUD.h"
 #include "Brushes/SlateColorBrush.h"
+#include "Engine/World.h"
 #include "Fonts/CompositeFont.h"
 #include "Fonts/FontMeasure.h"
 #include "Framework/Application/SlateApplication.h"
@@ -230,7 +231,13 @@ TSharedRef<SWidget> STibetPlayOverlay::Play()
 {
     auto Objective=SNew(SVerticalBox);
     Objective->AddSlot().AutoHeight()[Label(TAttribute<FText>::CreateLambda([this](){return Text(Mode->AreaName());}),19,Gold)];
-    Objective->AddSlot().AutoHeight().Padding(0,3)[Label(TAttribute<FText>::CreateLambda([this](){return Text(Mode->GetObjectiveText());}),13,Paper)];
+    Objective->AddSlot().AutoHeight().Padding(0,4)
+        [SNew(STextBlock).Font(Font(bTouch ? 17 : 20)).AutoWrapText(true)
+         .Text_Lambda([this](){return Text(Mode->GetObjectiveText());})
+         .ColorAndOpacity_Lambda([this](){
+             const float Pulse = Mode->GetPlayerFeedback().ObjectivePulse(Mode->GetWorld()->GetTimeSeconds());
+             return FSlateColor(FMath::Lerp(Paper, Gold, Pulse));
+         })];
     Objective->AddSlot().AutoHeight()[Label(TAttribute<FText>::CreateLambda([this](){return Text(Mode->Status(bTouch));}),11,Muted)];
     auto Row=SNew(SHorizontalBox);
     for (int32 I=0;I<7;++I) Row->AddSlot().FillWidth(1).Padding(1,0)[SkillSlot(I)];
@@ -289,8 +296,8 @@ TSharedRef<SWidget> STibetPlayOverlay::Controls()
     const FText Guide=bTouch
         ? Local(TEXT("Drag the left half to walk and the right half to turn. Tap Act or a ritual to use it."),
                 TEXT("左側拖曳移動，右側拖曳轉向。點選「互動」或技能即可使用。"))
-        : Local(TEXT("WASD  Move     Right mouse + drag  Look     Shift  Jump\nE  Interact     K  Skills     M  World map     Esc  Menu / return"),
-                TEXT("WASD 移動　按住滑鼠右鍵拖曳轉向　Shift 跳躍\nE 互動　K 技能　M 世界地圖　Esc 選單／返回"));
+        : Local(TEXT("WASD  Move     Right-drag  Look     Shift  Jump\nHold Q / E to orbit, release to follow     Tap E  Interact\nK  Skills     M  World map     Esc  Menu / return"),
+                TEXT("WASD 移動　按住滑鼠右鍵拖曳轉向　Shift 跳躍\n按住 Q／E 左右環視，放開回到背後　輕按 E 互動\nK 技能　M 世界地圖　Esc 選單／返回"));
     Box->AddSlot().AutoHeight().Padding(0,2,0,9)[Label(Guide,13,Paper)];
     auto* Settings=GetMutableDefault<UTibetCameraSettings>();
     auto Row=SNew(SHorizontalBox);

@@ -17,15 +17,20 @@ public:
     virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
     virtual TStatId GetStatId() const override;
     virtual void Tick(float DeltaSeconds) override;
-    virtual bool IsTickableWhenPaused() const override { return Task==TEXT("Journal"); }
+    virtual bool IsTickableWhenPaused() const override { return Task==TEXT("Journal") || Task==TEXT("CameraFollow"); }
 private:
     void Finish(bool bSuccess, const FString& Detail);
     void Journal(APlayerController& PC, ATibetGameMode& Mode);
     void Photo(APlayerController& PC);
     void Arrival(APlayerController& PC);
+    void CameraFollow(APlayerController& PC, ATibetGameMode& Mode);
+    bool SurveyGate(APlayerController& PC, const FVector& Goal);
+    int32 GateFrames = 0;
+    uint8 GatePhases = 0;
     void Play(APlayerController& PC, ATibetGameMode& Mode);
     void LearnedSkills(APlayerController& PC, ATibetGameMode& Mode);
     void SkillEncounter(APlayerController& PC, ATibetGameMode& Mode);
+    void PlayerFeedback(APlayerController& PC, ATibetGameMode& Mode);
     void Record(const FString& Line) const;
     bool FindWalkingPath(APawn& Pawn, const FVector& Goal, double Reach);
 
@@ -38,6 +43,8 @@ private:
     double Began = 0, LastFrame = 0, LastAction = 0;
     int32 SkillPhase = 0, SkillHealthBefore = 0;
     float SkillGameTime = 0;
+    int32 FeedbackPhase = 0;
+    float GuardedContact = -1.f;
     int32 Frames = 0, PreviousStep = INDEX_NONE, PreviousProgress = INDEX_NONE;
     bool bFinished = false, bMoving = false, bTestingSkills = false;
     FKey Tapped;

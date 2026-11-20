@@ -98,10 +98,10 @@ function buildSketchCanvas(img) {
 export function ensureMuralSprite(id, onLoad) {
   if (spriteCache.has(id)) {
     const entry = spriteCache.get(id);
-    if (!entry.ready && onLoad) entry.waiters.push(onLoad);
+    if (!entry.ready && !entry.failed && onLoad) entry.waiters.add(onLoad);
     return entry;
   }
-  const entry = { id, img: null, sketch: null, ready: false, waiters: onLoad ? [onLoad] : [] };
+  const entry = { id, img: null, sketch: null, ready: false, failed: false, waiters: new Set(onLoad ? [onLoad] : []) };
   spriteCache.set(id, entry);
 
   if (typeof Image !== 'undefined') {
@@ -110,10 +110,12 @@ export function ensureMuralSprite(id, onLoad) {
     img.onload = () => {
       entry.img = img;
       entry.ready = true;
-      for (const fn of entry.waiters.splice(0)) fn(entry);
+      for (const fn of entry.waiters) fn(entry);
+      entry.waiters.clear();
     };
     img.onerror = () => {
-      entry.ready = false;
+      entry.failed = true;
+      entry.waiters.clear();
     };
     img.src = `/murals/${id}.webp`;
   }
@@ -679,6 +681,16 @@ export class MuralScrollCanvas {
     this._raf = null;
     this._lastTs = 0;
     this._running = false;
+    this._assetFrame = null;
+    // Repeated draws subscribe the same canvas once per pending sprite.
+    this._onAssetReady = () => {
+      if (this._running || this._assetFrame !== null || this.canvas?.isConnected === false) return;
+      if (typeof requestAnimationFrame !== 'function') { this.renderOnce(); return; }
+      this._assetFrame = requestAnimationFrame(() => {
+        this._assetFrame = null;
+        this.renderOnce();
+      });
+    };
     this._overrideStates = null; // optional Map/object questId -> 'sketch' | 'painted' | 'active'
   }
 
@@ -694,7 +706,7 @@ export class MuralScrollCanvas {
     if (!this.mural) return;
     for (const ep of this.mural.episodes) {
       for (const s of ep.sprites || []) {
-        ensureMuralSprite(s.id, () => this.renderOnce());
+        ensureMuralSprite(s.id, this._onAssetReady);
       }
     }
   }
@@ -735,7 +747,7 @@ export class MuralScrollCanvas {
     if (!this.mural?.episodes) return true;
     for (const ep of this.mural.episodes) {
       for (const sp of ep.sprites || []) {
-        const entry = ensureMuralSprite(sp.id, () => this.renderOnce());
+        const entry = ensureMuralSprite(sp.id, this._onAssetReady);
         if (!entry.ready) return false;
       }
     }
@@ -804,6 +816,10 @@ export class MuralScrollCanvas {
 
   stop() {
     this._running = false;
+    if (this._assetFrame !== null) {
+      cancelAnimationFrame(this._assetFrame);
+      this._assetFrame = null;
+    }
     if (this._raf) {
       cancelAnimationFrame(this._raf);
       this._raf = null;
@@ -951,7 +967,7 @@ export class MuralScrollCanvas {
 
     // 7. Episodes (Sketch vs Painted vs Live Wet-Brush Coloring Reveal)
     const i18n = this.ctx?.i18n;
-    const onAsset = () => this.renderOnce();
+    const onAsset = this._onAssetReady;
 
     for (let idx = 0; idx < this.mural.episodes.length; idx++) {
       const ep = this.mural.episodes[idx];

@@ -80,7 +80,7 @@ def package_record(executable, output):
     path.write_text(json.dumps(record, indent=2))
 
 
-def capture(exe, stage, dest, name, mode, level, options, slot, size=(1440, 900)):
+def capture(exe, stage, dest, name, mode, level, options, slot, size=(1440, 900), max_fps=None):
     output = stage / name
     output.mkdir()
     target = dest / name
@@ -92,6 +92,8 @@ def capture(exe, stage, dest, name, mode, level, options, slot, size=(1440, 900)
     interactive_touch = mode == "Journal" and "-TibetTouch" in options
     rendering = [] if interactive_touch else ["-RenderOffscreen"]
     exec_commands = "r.ScreenPercentage 100,r.DynamicRes.OperationMode 0"
+    if max_fps:
+        exec_commands += f",t.MaxFPS {max_fps}"
     if interactive_touch:
         exec_commands += ",SlateDebugger.Event.Start"
     args = [exe, *map_args, "-windowed", *rendering, "-ForceRes", f"-ResX={size[0]}",
@@ -131,6 +133,30 @@ def shot_data(p, size=(1440, 900)):
 # All eleven landmark compositions put the site in the lower two thirds. A sky-only
 # frame can have a valid PNG, hash and camera record even while its scene is streaming.
 MIN_LANDMARK_DETAIL = 2.0
+
+
+def injury_edge_fraction(image):
+    """Read the paired injury strokes from the rendered frame on the delivery Mac."""
+    with tempfile.TemporaryDirectory() as temp:
+        bitmap = Path(temp) / "frame.bmp"
+        subprocess.run(["sips", "-s", "format", "bmp", str(image), "--out", str(bitmap)],
+                       stdout=subprocess.DEVNULL, check=True)
+        data = bitmap.read_bytes()
+    offset = struct.unpack_from("<I", data, 10)[0]
+    width, height = struct.unpack_from("<ii", data, 18)
+    channels = struct.unpack_from("<H", data, 28)[0] // 8
+    if channels not in (3, 4):
+        raise ValueError("Expected a 24- or 32-bit screenshot")
+    stride = (width * channels + 3) & ~3
+    red = samples = 0
+    for y in range(int(abs(height) * .50), int(abs(height) * .64), 3):
+        row = abs(height) - 1 - y if height > 0 else y
+        for x in (1, width - 2):
+            at = offset + row * stride + x * channels
+            blue, green, scarlet = data[at:at+3]
+            red += scarlet > 100 and scarlet > 1.55 * green and scarlet > 1.45 * blue
+            samples += 1
+    return red / samples
 
 
 def landmark_detail(image):
@@ -211,7 +237,7 @@ def compare(web, mac, output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["photos", "arrival", "play", "skills", "learned", "journal", "compare"])
+    parser.add_argument("action", choices=["photos", "arrival", "camera", "play", "skills", "learned", "journal", "feedback", "compare"])
     parser.add_argument("--exe", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--web", type=Path)
@@ -233,12 +259,22 @@ def main():
         (stage/"user").mkdir()
         # Unique across invocations, including packages that resolve user saves under Library.
         slot = "QA-" + stage.name
-        if args.action == "arrival":
+        if args.action in ("arrival", "camera"):
             capture(exe,stage,output,"arrival","Arrival","stupa",[],slot)
             frame = output / "arrival/arrival.png"
             shot_data(frame)
             if landmark_detail(frame) < MIN_LANDMARK_DETAIL:
                 raise ValueError("Arrival frame lacks the pilgrim and plaza")
+            if args.action == "camera":
+                for fps in (30, 60):
+                    name = f"follow-{fps}hz"
+                    events = capture(exe, stage, output, name, "CameraFollow", "stupa", [],
+                                     slot+"-"+name, max_fps=fps)
+                    samples = {row[0] for row in events}
+                    if not {"side-travel", "orbit-left", "return-left", "orbit-right"} <= samples:
+                        raise ValueError(f"Missing camera angle observations in {name}")
+                    if shot_data(output/name/"travel.png") == shot_data(output/name/"orbit.png"):
+                        raise ValueError(f"Camera views are identical in {name}")
         elif args.action == "journal":
             for name, options, size in [
                 ("desktop-zh", [], (1440, 900)),
@@ -255,6 +291,18 @@ def main():
                 if args.only and view["id"] != args.only:
                     continue
                 capture_landmark(exe,stage,output,view,slot)
+        elif args.action == "feedback":
+            for name, options, size in (("desktop", [], (1440, 900)), ("compact", ["-TibetTouch"], (884, 420))):
+                rows = capture(exe, stage, output, name, "Feedback", "terma3", options, slot+name, size)
+                for expected in (["objective-pulse"], ["ward-contact"], ["injury", "100", "84", "16"]):
+                    if expected not in rows:
+                        raise ValueError(f"{name}: missing combat observation {expected}")
+                frames = [output / name / (state + ".png") for state in ("ward", "injury", "settled")]
+                for frame in frames:
+                    shot_data(frame, size)
+                protected, injured, settled = map(injury_edge_fraction, frames)
+                if injured < .75 or injured - max(protected, settled) < .4:
+                    raise ValueError(f"{name}: injury indicator is indistinct: {protected}, {injured}, {settled}")
         elif args.action == "learned":
             # The actual last vault gate writes bReturnFromTerma; talking to Tsogyal
             # and exiting Chimphu then writes the Boudhanath epilogue checkpoint.

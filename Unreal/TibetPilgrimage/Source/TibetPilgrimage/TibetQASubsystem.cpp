@@ -3,6 +3,8 @@
 #include "TibetGameMode.h"
 #include "TibetRitualEffect.h"
 #include "EngineUtils.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "TibetHUD.h"
 #include "TibetPlayOverlay.h"
 #include "Framework/Application/SlateApplication.h"
@@ -84,9 +86,11 @@ void UTibetQASubsystem::Tick(float)
     }
     if (Task != TEXT("Campaign") && World->GetMapName() != StartMap) { Finish(false, TEXT("Unexpected map: ") + World->GetMapName()); return; }
     if (Task == TEXT("Arrival")) Arrival(*PC);
+    else if (Task == TEXT("CameraFollow")) CameraFollow(*PC,*Mode);
     else if (Task == TEXT("Journal")) Journal(*PC,*Mode);
     else if (Task == TEXT("Photo")) Photo(*PC);
-    else if (Task == TEXT("Play") || Task == TEXT("Campaign") || Task == TEXT("GroveEntry") || Task == TEXT("Skills")) Play(*PC, *Mode);
+    else if (Task == TEXT("Play") || Task == TEXT("Campaign") || Task == TEXT("GroveEntry") ||
+             Task == TEXT("Skills") || Task == TEXT("Feedback")) Play(*PC, *Mode);
     else if (Task == TEXT("LearnedSkills")) LearnedSkills(*PC, *Mode);
     else if (Task == TEXT("Resume"))
     {
@@ -285,7 +289,8 @@ void UTibetQASubsystem::Arrival(APlayerController& PC)
     }
     if (Frames == 20)
     {
-        if (!PC.GetControlRotation().Equals(HeadingBeforeDrag, .05))
+        if (!PC.GetControlRotation().Equals(HeadingBeforeDrag, .05) ||
+            !PC.PlayerCameraManager->GetCameraRotation().Equals(HeadingBeforeDrag, .05))
         { Finish(false, TEXT("Free mouse movement rotated the view")); return; }
         SendKey(PC, EKeys::RightMouseButton, true);
     }
@@ -307,9 +312,110 @@ void UTibetQASubsystem::Arrival(APlayerController& PC)
     {
         SendKey(PC, EKeys::D, false);
         Record(TEXT("released-walking\t") + PC.GetControlRotation().ToCompactString());
-        const bool bStable = PC.GetControlRotation().Equals(HeadingAfterDrag, .05);
+        // The steering basis and pitch stay fixed while the rendered yaw follows travel.
+        const bool bStable = PC.GetControlRotation().Equals(HeadingAfterDrag, .05)
+            && FMath::IsNearlyEqual(PC.PlayerCameraManager->GetCameraRotation().Pitch,HeadingAfterDrag.Pitch,.05);
         Finish(bStable && IFileManager::Get().FileSize(*Screenshot) > 0,
-            bStable ? TEXT("arrival and mouse controls") : TEXT("Released mouse or walking rotated the view"));
+            bStable ? TEXT("arrival and mouse controls") : TEXT("Free mouse changed pitch or movement steering"));
+    }
+}
+
+// Drive the real movement and E bindings. Observe the final rendered camera,
+// rather than the controller yaw retained as the player's movement reference.
+void UTibetQASubsystem::CameraFollow(APlayerController& PC,ATibetGameMode& Mode)
+{
+    const double Now=FPlatformTime::Seconds();
+    if (Now-Began>35) { Finish(false,TEXT("Camera follow timed out")); return; }
+    if (Now-Began<2.) return;
+    APawn* Pawn=PC.GetPawn();
+    const FVector Pos=Pawn->GetActorLocation(), Goal=Mode.GetObjectiveLocation();
+    const FRotator CameraView=PC.PlayerCameraManager->GetCameraRotation();
+    const auto Error=[&](double Target){return FRotator::NormalizeAxis(CameraView.Yaw-Target);};
+    const auto Next=[&](){++Frames; LastAction=Now;};
+    const auto Detail=[&](const TCHAR* Name){Record(FString::Printf(TEXT("%s\t%.2f\t%.2f\t%.2f"),
+        Name,CameraView.Yaw,Pawn->GetActorRotation().Yaw,PC.GetControlRotation().Yaw));};
+    const double Held=Now-LastAction;
+    switch (Frames)
+    {
+    case 0:
+        HeadingBeforeDrag=CameraView; ArrivalPosition=Pos;
+        SendKey(PC,EKeys::D,true); Next(); break;
+    case 1:
+        // Move the free pointer throughout the strafe. Both the walked path and
+        // the final rendered travel heading must survive these raw mouse events.
+        PC.InputKey(FInputKeyEventArgs::CreateSimulated(EKeys::MouseX,IE_Axis,15,1));
+        if (Held<1.15) break;
+        Detail(TEXT("side-travel"));
+        if (FVector::Dist2D(Pos,ArrivalPosition)<180 ||
+            FMath::Abs(FRotator::NormalizeAxis((Pos-ArrivalPosition).Rotation().Yaw-HeadingBeforeDrag.Yaw-90))>5 ||
+            FMath::Abs(Error(Pawn->GetVelocity().Rotation().Yaw))>8)
+        { Finish(false,TEXT("Held strafe curved or camera failed to follow travel")); return; }
+        SendKey(PC,EKeys::D,false);
+        FScreenshotRequest::RequestScreenshot(Output/TEXT("travel.png"),true,false,false);
+        Next(); break;
+    case 2:
+        if (Held<.5) break;
+        HeadingBeforeDrag=CameraView;
+        SendKey(PC,EKeys::Q,true); Next(); break;
+    case 3:
+        if (Held<.55) break;
+        Detail(TEXT("orbit-left"));
+        if (Error(HeadingBeforeDrag.Yaw)>-35 || Error(HeadingBeforeDrag.Yaw)<-85)
+        { Finish(false,TEXT("Q did not orbit left")); return; }
+        HeadingAfterDrag=CameraView;
+        SendKey(PC,EKeys::Q,false); Next(); break;
+    case 4:
+        if (Held<.08) break;
+        if (FMath::Abs(Error(HeadingBeforeDrag.Yaw))<3 || FMath::Abs(Error(HeadingAfterDrag.Yaw))<2)
+        { Finish(false,TEXT("Q release snapped or failed to ease")); return; }
+        Next(); break;
+    case 5:
+        if (Held<1.25) break;
+        Detail(TEXT("return-left"));
+        if (FMath::Abs(Error(Pawn->GetActorRotation().Yaw))>3)
+        { Finish(false,TEXT("Idle Q release failed to return behind actor")); return; }
+        PC.SetControlRotation((Goal-Pos).GetSafeNormal2D().Rotation());
+        SendKey(PC,EKeys::W,true); Next(); break;
+    case 6:
+        if (FVector::Dist2D(Pos,Goal)>150) break;
+        SendKey(PC,EKeys::W,false); Next(); break;
+    case 7:
+        if (Held<.5) break;
+        HeadingBeforeDrag=CameraView;
+        SendKey(PC,EKeys::E,true); Next(); break;
+    case 8:
+        if (Held<.72) break;
+        Detail(TEXT("orbit-right"));
+        if (Error(HeadingBeforeDrag.Yaw)<35 || Mode.GetStep()!=0)
+        { Finish(false,TEXT("Held E did not orbit right or activated dialogue")); return; }
+        FScreenshotRequest::RequestScreenshot(Output/TEXT("orbit.png"),true,false,false);
+        SendKey(PC,EKeys::E,false); Next(); break;
+    case 9:
+        if (Held<1.5) break;
+        if (FMath::Abs(Error(Pawn->GetActorRotation().Yaw))>3 || Mode.GetStep()!=0)
+        { Finish(false,TEXT("E release failed to return or triggered interaction")); return; }
+        HeadingBeforeDrag=CameraView;
+        SendKey(PC,EKeys::E,true); Next(); break;
+    case 10:
+        SendKey(PC,EKeys::M,true); Next(); break;
+    case 11:
+        if (Held<.20) break;
+        if (!PC.IsPaused() || Mode.GetStep()!=0) { Finish(false,TEXT("Menu did not cancel pending E interaction")); return; }
+        SendKey(PC,EKeys::M,false); SendKey(PC,EKeys::E,false); SendKey(PC,EKeys::Q,true);
+        PC.InputKey(FInputKeyEventArgs::CreateSimulated(EKeys::MouseX,IE_Axis,20,1)); Next(); break;
+    case 12:
+        if (Held<.25) break;
+        if (!CameraView.Equals(HeadingBeforeDrag,.15)) { Finish(false,TEXT("Menu allowed camera input")); return; }
+        SendKey(PC,EKeys::Q,false); SendKey(PC,EKeys::Escape,true); Next(); break;
+    case 13:
+        if (Held<.20) break;
+        if (PC.IsPaused() || Mode.GetStep()!=0) { Finish(false,TEXT("Return from menu leaked interaction")); return; }
+        SendKey(PC,EKeys::Escape,false); SendKey(PC,EKeys::E,true); Next(); break;
+    case 14:
+        SendKey(PC,EKeys::E,false); Next(); break;
+    default:
+        if (Held<.25 || FScreenshotRequest::IsScreenshotRequested()) break;
+        Finish(Mode.GetStep()==1,TEXT("Camera follow and contextual tap")); break;
     }
 }
 
@@ -332,7 +438,7 @@ bool UTibetQASubsystem::FindWalkingPath(APawn& Pawn, const FVector& Goal, double
     {
         const FIntPoint Key=Queue[I];
         const FVector From=Points[Key];
-        if (FVector::Dist2D(From,Goal)<Reach)
+        if (FVector::Dist2D(From,Goal)<Reach && (Goal.Z<45 || FMath::Abs(From.Z-Goal.Z-88)<26))
         {
             for (FIntPoint At=Key; At!=FIntPoint::ZeroValue; At=Parent[At]) Waypoints.Add(Points[At]);
             return !Waypoints.IsEmpty();
@@ -366,6 +472,18 @@ void UTibetQASubsystem::Play(APlayerController& PC, ATibetGameMode& Mode)
     const FVector Goal = Task == TEXT("GroveEntry") ? FVector(-1860,-480,0) : Mode.GetObjectiveLocation();
     if (Step != PreviousStep || Progress != PreviousProgress)
     {
+        if (Step != PreviousStep)
+        {
+            TArray<AActor*> Cast;
+            UGameplayStatics::GetAllActorsWithTag(GetWorld(), TEXT("TibetResident"), Cast);
+            UE_LOG(LogTemp, Display, TEXT("TIBET_CAST_SNAPSHOT step=%d"), Step);
+            for (AActor* Actor : Cast)
+            {
+                const auto* Body = CastChecked<UStaticMeshComponent>(Actor->GetRootComponent());
+                if (Actor->IsHidden() || !Body->IsVisible() || !Body->IsRegistered() || !Body->GetStaticMesh()) continue;
+                UE_LOG(LogTemp, Display, TEXT("TIBET_CAST_VISIBLE actor=%u model=%s"), Actor->GetUniqueID(), *Body->GetStaticMesh()->GetName());
+            }
+        }
         if (GetWorld()->GetMapName() == TEXT("stupa") && (Kind == TEXT("Interact") || Step == 3))
         {
             TArray<AActor*> Flames;
@@ -406,6 +524,11 @@ void UTibetQASubsystem::Play(APlayerController& PC, ATibetGameMode& Mode)
     if (Mode.IsCampaignComplete() && Task == TEXT("Campaign"))
     { Finish(true,TEXT("campaign completed")); return; }
 
+    if (Task == TEXT("Feedback") && Kind == TEXT("Boss"))
+    {
+        PlayerFeedback(PC, Mode);
+        return;
+    }
     if (Task == TEXT("Skills") && (bTestingSkills || Kind == TEXT("Boss")))
     {
         bTestingSkills = true;
@@ -414,10 +537,14 @@ void UTibetQASubsystem::Play(APlayerController& PC, ATibetGameMode& Mode)
     }
     const bool bFight = Kind == TEXT("Combat") || Kind == TEXT("Boss");
     const double Reach = bFight ? 320 : ((Kind == TEXT("Kora") || Kind == TEXT("Escort") || Kind == TEXT("Reach")) ? 105 : 170);
-    if (FVector::Dist2D(Pos,Goal)<Reach) Waypoints.Reset();
+    if (FParse::Param(FCommandLine::Get(),TEXT("TibetQAGateEvidence")) &&
+        (Kind == TEXT("Gate") || (StartMap == TEXT("chimphu") && Kind == TEXT("Reach"))) &&
+        SurveyGate(PC, Goal)) return;
+    const bool OnFloor = Goal.Z < 45 || FMath::Abs(Pos.Z-Goal.Z-88)<26;
+    if (OnFloor && FVector::Dist2D(Pos,Goal)<Reach) Waypoints.Reset();
     if (Now-LastNavCheck>1.5)
     {
-        if (bMoving && FVector::Dist2D(LastNavPosition,Pos)<22 && FVector::Dist2D(Pos,Goal)>Reach)
+        if (bMoving && FVector::Dist2D(LastNavPosition,Pos)<22 && (!OnFloor || FVector::Dist2D(Pos,Goal)>Reach))
         {
             Waypoints.Reset();
             FindWalkingPath(*PC.GetPawn(),Goal,Reach);
@@ -430,16 +557,85 @@ void UTibetQASubsystem::Play(APlayerController& PC, ATibetGameMode& Mode)
     FVector Offset = (Waypoints.IsEmpty() ? Goal : Waypoints.Last())-Pos;
     Offset.Z = 0;
     if (!Offset.IsNearlyZero()) PC.SetControlRotation(Offset.Rotation());
-    const bool bWalk = !Waypoints.IsEmpty() || Offset.Size2D() > Reach;
+    const bool bWalk = !Waypoints.IsEmpty() || Offset.Size2D() > Reach || !OnFloor;
     if (bWalk != bMoving) { SendKey(PC,EKeys::W,bWalk); bMoving=bWalk; }
     if (!bWalk && Now - LastAction >= 0.26 && !FScreenshotRequest::IsScreenshotRequested())
     {
+        if (Kind == TEXT("Gate") && FParse::Param(FCommandLine::Get(),TEXT("TibetQAGateEvidence")))
+            Record(FString::Printf(TEXT("enter\t%.1f\t%.1f\t%.1f"), Pos.Z-88, Goal.Z, FVector::Dist2D(Pos,Goal)));
         Tapped = bFight ? EKeys::SpaceBar : EKeys::E;
         SendKey(PC,Tapped,true);
         LastAction=Now;
     }
 }
 
+
+void UTibetQASubsystem::PlayerFeedback(APlayerController& PC, ATibetGameMode& Mode)
+{
+    const float Now = GetWorld()->GetTimeSeconds();
+    const auto& Cue = Mode.GetPlayerFeedback();
+    APawn* Pawn = PC.GetPawn();
+    const FVector Towards = Mode.GetObjectiveLocation() - Pawn->GetActorLocation();
+    if (FeedbackPhase == 0)
+    {
+        if (bMoving) { SendKey(PC,EKeys::W,false); bMoving=false; }
+        if (Cue.ObjectivePulse(Now) < .65f || Cue.HurtOpacity(Now) != 0.f)
+        { Finish(false,TEXT("Expected a new objective pulse and an unhurt player")); return; }
+        Record(TEXT("objective-pulse"));
+        Tapped = EKeys::Three;
+        SendKey(PC,Tapped,true);
+        FeedbackPhase = 1;
+        return;
+    }
+    if (Towards.Size2D() > 153.f)
+    {
+        PC.SetControlRotation(Towards.Rotation());
+        Pawn->AddMovementInput(Towards.GetSafeNormal2D());
+    }
+    if (FeedbackPhase == 1)
+    {
+        if (Mode.GetSkillState(4).ActiveRemaining <= 0.f)
+        {
+            if (GuardedContact < 0.f) { Finish(false,TEXT("Ward never protected contact")); return; }
+            FeedbackPhase = 2;
+            return;
+        }
+        if (Mode.GetHealth() != 100.f || Cue.HurtOpacity(Now) != 0.f)
+        { Finish(false,TEXT("Ward incorrectly signalled a player injury")); return; }
+        if (Towards.Size2D() < 180.f)
+        {
+            if (GuardedContact < 0.f) GuardedContact = Now;
+            if (Now - GuardedContact > 1.6f && Screenshot.IsEmpty())
+            {
+                Record(TEXT("ward-contact"));
+                Screenshot = Output / TEXT("ward.png");
+                FScreenshotRequest::RequestScreenshot(Screenshot,true,false,false);
+            }
+        }
+        return;
+    }
+    if (FeedbackPhase == 2 && Mode.GetHealth() < 100.f)
+    {
+        if (Cue.Loss != 16 || Mode.GetHealth() != 84.f || Cue.HurtOpacity(Now) < .8f)
+        { Finish(false,TEXT("Unshielded boss hit did not match actual player health loss")); return; }
+        const auto* Figure = FindObject<USceneComponent>(Pawn,TEXT("Pilgrim"));
+        if (!Figure || FMath::Abs(Figure->GetRelativeRotation().Pitch) < 3.f) return;
+        Record(TEXT("injury\t100\t84\t16"));
+        FScreenshotRequest::RequestScreenshot(Output / TEXT("injury.png"),true,false,false);
+        FeedbackPhase = 3;
+        return;
+    }
+    if (FeedbackPhase == 3 && Cue.HurtOpacity(Now) == 0.f && !FScreenshotRequest::IsScreenshotRequested())
+    {
+        if (Cue.Flinch(Now) != 0.f || Cue.ObjectivePulse(Now) != 0.f)
+        { Finish(false,TEXT("Injury or objective kept pulsing")); return; }
+        FScreenshotRequest::RequestScreenshot(Output / TEXT("settled.png"),true,false,false);
+        FeedbackPhase = 4;
+        return;
+    }
+    if (FeedbackPhase == 4 && !FScreenshotRequest::IsScreenshotRequested())
+        Finish(true,TEXT("ward, injury, recovery and objective"));
+}
 
 // Each invocation walks a fresh vault and casts into the same living guardian.
 void UTibetQASubsystem::SkillEncounter(APlayerController& PC, ATibetGameMode& Mode)

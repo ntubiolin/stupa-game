@@ -189,3 +189,45 @@ test('createStoryMuralScroll mounts story-mural-scroll banner for chapters 1-5 a
   banner.dispose();
   assert.equal(banner.element.removed, true);
 });
+
+test('cold mural sprites repaint each static canvas once per frame after repeated real draws', async t => {
+  const { MuralScrollCanvas } = await import('../src/ui/mural/scroll.js?cold-sprite-test');
+  const images = [], frames = new Map(), calls = [];
+  let frameId = 0;
+  globalThis.Image = class { constructor() { images.push(this); } };
+  globalThis.document = { createElement: tag => new MockElement(tag, calls) };
+  globalThis.requestAnimationFrame = fn => { frames.set(++frameId, fn); return frameId; };
+  globalThis.cancelAnimationFrame = id => frames.delete(id);
+  t.after(() => {
+    delete globalThis.Image;
+    delete globalThis.document;
+    delete globalThis.requestAnimationFrame;
+    delete globalThis.cancelAnimationFrame;
+  });
+  const murals = [0, 1].map(() => new MuralScrollCanvas(new MockElement('canvas', calls), { chapterId: 'pharping' }));
+  const draws = murals.map(scroll => t.mock.method(scroll, 'draw'));
+  for (let frame = 0; frame < 4; frame++) {
+    for (const scroll of murals) {
+      scroll.areAllSpritesReady();
+      scroll.draw();
+    }
+  }
+  assert.ok(images.length > 3);
+  for (const draw of draws) draw.mock.resetCalls();
+  // Several images finish before the next paint, while other sprites are still downloading.
+  for (const img of images.slice(0, 3)) img.onload();
+  assert.deepEqual(draws.map(draw => draw.mock.callCount()), [0, 0]);
+  assert.equal(frames.size, 2);
+  const flush = () => {
+    const batch = [...frames.values()];
+    frames.clear();
+    for (const fn of batch) fn();
+  };
+  flush();
+  assert.deepEqual(draws.map(draw => draw.mock.callCount()), [1, 1]);
+  for (const img of images.slice(3)) img.onload();
+  murals[0].stop();
+  flush();
+  assert.deepEqual(draws.map(draw => draw.mock.callCount()), [1, 2]);
+  assert.ok(murals.every(scroll => scroll.areAllSpritesReady()));
+});
