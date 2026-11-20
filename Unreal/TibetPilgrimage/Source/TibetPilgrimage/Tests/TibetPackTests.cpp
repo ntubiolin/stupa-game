@@ -59,4 +59,25 @@ bool FTibetLampQuestTest::RunTest(const FString&)
     TestEqual(TEXT("Reloading the migrated count does not manufacture a second wick"),int32(Legacy->ButterLampMask),5);
     return true;
 }
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTibetTravelDetourTest, "Tibet.Journal.FastTravelDetours",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FTibetTravelDetourTest::RunTest(const FString&)
+{
+    auto* Save = NewObject<UTibetSave>();
+    Save->Steps.Add(TEXT("terma3"), 2);
+    Save->ResolveReturnOnArrival(TEXT("chimphu"));
+    TestFalse(TEXT("An unfinished vault does not start the return"), Save->bReturnFromTerma);
+    Save->Steps.Add(TEXT("terma3"), 3);
+    Save->ResolveReturnOnArrival(TEXT("grove"));
+    Save->ResolveReturnOnArrival(TEXT("chimphu"));
+    TestTrue(TEXT("Returning after visiting the grove still unlocks Yeshe's report"), Save->bReturnFromTerma);
+    Save->ResolveReturnOnArrival(TEXT("stupa"));
+    TestFalse(TEXT("The epilogue requires Yeshe's report"), Save->bEpilogue);
+    Save->Steps.Add(TEXT("return"), 1);
+    Save->ResolveReturnOnArrival(TEXT("samye"));
+    Save->ResolveReturnOnArrival(TEXT("stupa"));
+    TestTrue(TEXT("Returning via Samye still unlocks the epilogue"), Save->bEpilogue);
+    return true;
+}
 #endif

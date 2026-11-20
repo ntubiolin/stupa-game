@@ -145,6 +145,7 @@ void ATibetGameMode::StartPlay()
     Health = MaxHealth();
     Mana = MaxMana();
     PlayerFeedback.ObjectiveTime = GetWorld()->GetTimeSeconds();
+    Save->ResolveReturnOnArrival(Map);
     Route=Map;
     if (Map==TEXT("chimphu") && Save->bReturnFromTerma) Route=TEXT("return");
     if (Map==TEXT("stupa") && Save->bEpilogue) Route=TEXT("ending");
@@ -347,21 +348,12 @@ bool ATibetGameMode::TravelToMap(const FString& Destination)
     if (!Save || bTravel || !Order.Contains(Destination)) return false;
     const FString PreviousMap = Save->Map;
     const int32 PreviousCharges = Save->PillCharges;
-    const bool WasReturning = Save->bReturnFromTerma;
-    const bool WasEpilogue = Save->bEpilogue;
     Save->Map = Destination;
     if (Destination == TEXT("stupa")) Save->PillCharges = 4;
-    if (Objective(Route, GetStep()).Kind == EObjective::Gate)
-    {
-        if (Map == TEXT("terma3") && Destination == TEXT("chimphu")) Save->bReturnFromTerma = true;
-        if (Route == TEXT("return") && Destination == TEXT("stupa")) Save->bEpilogue = true;
-    }
     if (!Store())
     {
         Save->Map = PreviousMap;
         Save->PillCharges = PreviousCharges;
-        Save->bReturnFromTerma = WasReturning;
-        Save->bEpilogue = WasEpilogue;
         return false;
     }
     bTravel = true;
@@ -478,6 +470,15 @@ bool ATibetGameMode::Store()
     UE_LOG(LogTemp,Error,TEXT("Tibet: checkpoint write failed in %s"),*Map);
     return false;
 }
+void UTibetSave::ResolveReturnOnArrival(const FString& Destination)
+{
+    // The journal allows a detour between finishing a chapter and reporting back.
+    if (Destination == TEXT("chimphu") && Steps.FindRef(TEXT("terma3")) >= Routes().FindChecked(TEXT("terma3")).Num())
+        bReturnFromTerma = true;
+    if (Destination == TEXT("stupa") && Steps.FindRef(TEXT("return")) >= Routes().FindChecked(TEXT("return")).Num())
+        bEpilogue = true;
+}
+
 int32 UTibetSave::NextUnlitLamp() const
 {
     for (int32 I=0; I<SouthLampTable; ++I)

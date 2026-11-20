@@ -35,6 +35,7 @@ public:
     UPROPERTY(SaveGame) uint8 ButterLampMask = 0;
     UPROPERTY(SaveGame) bool bUsesDistinctLamps = false;
     bool ReconcileLampQuest();
+    void ResolveReturnOnArrival(const FString& Destination);
     int32 NextUnlitLamp() const;
     UPROPERTY(SaveGame) TArray<FTibetDedication> Dedications;
     UPROPERTY(SaveGame) int32 MonkeysFed = 0;
