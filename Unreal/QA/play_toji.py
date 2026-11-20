@@ -59,6 +59,9 @@ def launch(exe, stage, output, run, extra, timeout, profile=False):
                                check=True, timeout=timeout)
     finally:
         copy_evidence(stage, output, run)
+        profiler_output = next((stage / "user").rglob("Profiling/CSV"), None) if profile else None
+        if profiler_output:
+            shutil.copytree(profiler_output, output / "engine-csv")
     if b"TOJI_PLAYTEST_COMPLETE" not in log.read_bytes():
         raise RuntimeError(f"The playtest did not complete. See {log}")
 
@@ -77,16 +80,17 @@ def summarize_engine_csv(output):
     windows = []
     # The first capture starts before map load. The repeated chunks represent steady-state play.
     for path in paths[1:]:
-        with path.open(encoding="utf-8-sig", errors="replace", newline="") as stream:
-            rows = [row for row in csv.reader(stream) if row]
-        if len(rows) < 4 or "[HasHeaderRowAtEnd]" not in rows[-1] or rows[-2][0] != "EVENTS":
+        # Unreal sanitizes commas in events but writes quotes and long event cells literally.
+        lines = path.read_text(encoding="utf-8-sig", errors="replace").splitlines()
+        rows = [line.split(",") for line in lines if line]
+        if len(rows) < 4 or rows[-2][0] != "EVENTS":
             continue
+        footer = {key.lower(): value for key, value in zip(rows[-1][::2], rows[-1][1::2])}
+        if footer.get("[hasheaderrowatend]") != "1" or footer.get("[csvmaxfilebytesreached]") == "1":
+            continue
+        if "[captureduration]" in footer:
+            windows.append(float(footer["[captureduration]"]))
         column_map = {key: index for index, key in enumerate(rows[-2]) if key in samples}
-        footer = dict(zip(rows[-1][::2], rows[-1][1::2]))
-        if footer.get("[CsvMaxFileBytesReached]") == "1":
-            continue
-        if "[CaptureDuration]" in footer:
-            windows.append(float(footer["[CaptureDuration]"]))
         complete_chunks += 1
         for row in rows[1:-2]:
             for key, index in column_map.items():
@@ -184,7 +188,10 @@ def main():
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--seconds", type=int, help="Minimum active-play measurement in seconds")
     mode.add_argument("--video", action="store_true", help="Encode silent gameplay captures with FFmpeg")
+    parser.add_argument("--offscreen", action="store_true", help="Render without a display window during measurement")
     args = parser.parse_args()
+    if args.offscreen and args.seconds is None:
+        parser.error("--offscreen requires --seconds")
     exe = args.executable.resolve(strict=True)
     if not exe.is_file() or exe.name.lower().startswith("unrealeditor"):
         parser.error("Select the executable inside the packaged build")
@@ -201,12 +208,12 @@ def main():
         (stage / "user").mkdir()
         if args.seconds is not None:
             profiler_flags = ["-csvCaptureFrames=1800", "-csvRepeat=-1", "-csvCompression=0"]
+            if args.offscreen:
+                profiler_flags.append("-RenderOffScreen")
             launch(exe, stage, output, "gameplay", [f"-TojiPlaytestSeconds={args.seconds}", *profiler_flags],
                    args.seconds + 180, profile=True)
-            profiler_output = next((stage / "user").rglob("Profiling/CSV"), None)
-            if profiler_output:
-                shutil.copytree(profiler_output, output / "engine-csv")
             summary = summarize_performance(output, args.seconds)
+            summary["offscreenRequested"] = args.offscreen
             (output / "performance.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
         else:
             launch(exe, stage, output, "gameplay", ["-TojiPlaytestRecord"] if args.video else [], 300)
