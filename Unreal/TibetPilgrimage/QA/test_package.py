@@ -236,7 +236,7 @@ def compare(web, mac, output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["photos", "arrival", "camera", "play", "skills", "learned", "journal", "pack", "feedback", "compare"])
+    parser.add_argument("action", choices=["photos", "arrival", "camera", "play", "skills", "learned", "journal", "pack", "feedback", "score", "compare"])
     parser.add_argument("--exe", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--web", type=Path)
@@ -258,6 +258,17 @@ def main():
         (stage/"user").mkdir()
         # Unique across invocations, including packages that resolve user saves under Library.
         slot = "QA-" + stage.name
+        if args.action == "score":
+            for level, expected in (("stupa", ["stupa", "stupa_night"]), ("wild", ["wild"]),
+                                    ("terma1", ["terma"])):
+                events = capture(exe, stage, output, level, "ScoreMix", level, [], slot + level)
+                log = (output / level / "game.log").read_text(errors="replace")
+                cues = re.findall(r"TIBET_SCORE cue=(\w+) loop=1 playing=1", log, flags=re.I)
+                if [cue.lower() for cue in cues] != expected:
+                    raise ValueError(f"{level}: expected {expected}, heard {cues}")
+                if sum(row[0] == "scoreMix" for row in events) != len(expected):
+                    raise ValueError(f"{level}: incomplete audio mixer measurements")
+            return
         if args.action in ("arrival", "camera"):
             capture(exe,stage,output,"arrival","Arrival","stupa",[],slot)
             frame = output / "arrival/arrival.png"
