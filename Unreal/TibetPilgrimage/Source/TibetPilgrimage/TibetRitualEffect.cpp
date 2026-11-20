@@ -98,8 +98,8 @@ struct FSurface
 void Hum(FSurface& Body, FSurface& Rim)
 {
     // A pointed comet with two tapered spiral streamers, travelling along local +X.
-    Body.Leaf({-88,0,0}, {24,0,0}, {0,14,0}, {0,0,15});
-    Body.Leaf({-77,0,0}, {24,0,0}, {0,0,13}, {0,-13,0});
+    Body.Leaf({-88,0,0}, {31,0,0}, {0,23,0}, {0,0,22});
+    Body.Leaf({-77,0,0}, {31,0,0}, {0,0,22}, {0,-21,0});
     for (int32 J = 0; J < 2; ++J)
     {
         FVector Last(-110,0,0);
@@ -186,22 +186,55 @@ void Guru(FSurface& Body, FSurface& Rim)
         const FVector R = Radial(J * UE_TWO_PI / 8);
         Rim.Leaf(R * 65, R * 125 + Up * 16, (Up ^ R) * 12, Up * 8);
     }
+    for (int32 J = 0; J < 6; ++J)
+    {
+        const FVector R = Radial(J * UE_TWO_PI / 6);
+        Body.Leaf(R * 52 + Up * 6, R * 125 + Up * 191, (Up ^ R) * 15, R * 21);
+    }
     for (int32 J = 0; J < 3; ++J)
     {
-        FVector Last = Radial(J * UE_TWO_PI / 3) * 67;
+        FVector Last = Radial(J * UE_TWO_PI / 3) * 93;
         for (int32 I = 1; I <= 28; ++I)
         {
             const double T = I / 28.;
-            const FVector Next = Radial(J * UE_TWO_PI / 3 + 5 * T) * (67 - 57 * T) + Up * (T * 252);
-            Body.Stroke(Last, Next, 4.5 - 2 * T);
+            const FVector Next = Radial(J * UE_TWO_PI / 3 + 5 * T) * (93 - 75 * T) + Up * (T * 308);
+            Body.Stroke(Last, Next, 7 - 3 * T);
             Last = Next;
         }
     }
-    Rim.Profile({{0,6},{8,79},{3,173},{8,203},{0,251}}, 6);
+    Rim.Profile({{0,258},{14,289},{6,309},{0,331}}, 6);
 }
 
-void Impact(FSurface& Body, FSurface& Rim)
+const FLinearColor Fill[] = {{.004f,.37f,.62f},{.96f,.30f,.015f},{.035f,.055f,.63f},
+    {.84f,.36f,.035f},{.72f,.055f,.29f},{.035f,.44f,.23f},{.26f,.022f,.65f}};
+const FLinearColor Edge[] = {{.12f,1.05f,1.12f},{1.40f,.81f,.17f},{1.04f,.50f,.08f},
+    {1.40f,1.03f,.42f},{1.17f,.36f,.59f},{1.20f,.89f,.35f},{1.05f,.22f,.55f}};
+
+void Impact(FSurface& Body, FSurface& Rim, int32 SourceSlot)
 {
+    if (SourceSlot == 0)
+    {
+        // Two broken turquoise ripples, broadside to the incoming seed bolt.
+        for (int32 I = 0; I < 3; ++I)
+        {
+            const double A = I * UE_TWO_PI / 3;
+            Body.Hoop(FVector::ZeroVector, FVector::RightVector, Up, 39, 4, A + .12, A + 1.65);
+            Rim.Hoop(FVector::ZeroVector, FVector::RightVector, Up, 51, 2, A + .43, A + 1.67);
+        }
+        return;
+    }
+    if (SourceSlot == 2)
+    {
+        // The triangular-faced dagger stamps a three-point seal.
+        for (int32 I = 0; I < 3; ++I)
+        {
+            const double A = I * UE_TWO_PI / 3;
+            const FVector R(0,FMath::Sin(A),FMath::Cos(A)), S(0,R.Z,-R.Y);
+            Body.Leaf(R * 11, R * 73, S * 9, FVector(-9,0,0));
+            Rim.Stroke(R * 33, FVector(0,FMath::Sin(A+UE_TWO_PI/3),FMath::Cos(A+UE_TWO_PI/3)) * 33, 3);
+        }
+        return;
+    }
     for (int32 I = 0; I < 9; ++I)
     {
         const double A = I * UE_TWO_PI / 9;
@@ -229,16 +262,16 @@ void ATibetRitualEffect::Start(int32 SkillSlot, const FVector& From, const FVect
     Slot = SkillSlot; Origin = From; Target = To; Source = Caster;
     Facing = (To - From).GetSafeNormal2D().Rotation();
     const FVector Side = FRotationMatrix(Facing).GetUnitAxis(EAxis::Y);
-    const float Lifetimes[] = {.56f,.90f,.95f,.90f,6.f,1.65f,1.28f};
-    const FLinearColor Fill[] = {{.025f,.64f,.76f},{.96f,.37f,.025f},{.065f,.15f,.64f},
-        {.84f,.36f,.035f},{.74f,.105f,.32f},{.06f,.53f,.32f},{.39f,.10f,.83f}};
-    const FLinearColor Edge[] = {{.64f,1.25f,1.35f},{1.45f,.90f,.30f},{1.12f,.63f,.13f},
-        {1.40f,1.03f,.42f},{1.3f,.55f,.65f},{1.20f,.89f,.35f},{1.5f,.88f,.24f}};
+    const float Lifetimes[] = {.79f,.90f,1.12f,.90f,6.f,1.65f,1.38f};
     Duration = Lifetimes[Slot];
     FSurface Body, Rim;
     switch (Slot)
     {
-    case 0: Hum(Body, Rim); Origin += Side * 33; break;
+    case 0:
+        Hum(Body, Rim);
+        Origin += Side * 54 + Up * 22;
+        BuildBoltTrail(Material);
+        break;
     case 1: Chant(Body, Rim); Origin = Caster->GetActorLocation() - Up * 78; break;
     case 2: Phurba(Body, Rim); break;
     case 3: Bell(Body, Rim); Origin += Side * 58; break;
@@ -266,16 +299,53 @@ void ATibetRitualEffect::Start(int32 SkillSlot, const FVector& From, const FVect
     Animate();
 }
 
-void ATibetRitualEffect::StartImpact(const FVector& Position, const FVector& Outward, bool bFinal,
+FVector ATibetRitualEffect::BoltPoint(double T) const
+{
+    const FVector Side = FRotationMatrix(Facing).GetUnitAxis(EAxis::Y);
+    // An unbroken shoulder-high arc stays legible from the normal rear camera.
+    const double Arch = FMath::Sin(UE_PI * T);
+    return FMath::Lerp(Origin,Target,T) + Side * (117 * Arch) + Up * (87 * Arch);
+}
+
+void ATibetRitualEffect::BuildBoltTrail(UMaterialInterface* Material)
+{
+    BoltTrail = NewObject<UProceduralMeshComponent>(this);
+    BoltTrail->SetupAttachment(Motif);
+    BoltTrail->SetAbsolute(true,true,true);
+    BoltTrail->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    BoltTrail->SetCanEverAffectNavigation(false);
+    BoltTrail->SetCastShadow(false);
+    BoltTrail->RegisterComponent();
+    BoltTrail->SetWorldLocation(Origin);
+    auto* Ink = UMaterialInstanceDynamic::Create(Material,this);
+    if (Ink) Ink->SetVectorParameterValue(TEXT("Color"), Fill[0]);
+    // Reveal the arc behind the moving tip, then withdraw it from the hand.
+    for (int32 Part = 0; Part < 8; ++Part)
+    {
+        FSurface Ribbon;
+        for (int32 J = 0; J < 3; ++J)
+        {
+            const double A = (Part * 3 + J) / 24., B = A + 1. / 24;
+            const FVector P = BoltPoint(A) - Origin, Q = BoltPoint(B) - Origin;
+            Ribbon.Stroke(P,Q,3.3 + 2.7 * FMath::Sin(UE_PI*A));
+            Ribbon.Stroke(P + Up * (10 + 7 * FMath::Sin(A * 13)),
+                          Q + Up * (10 + 7 * FMath::Sin(B * 13)),1.75);
+        }
+        BoltTrail->CreateMeshSection(Part,Ribbon.Points,Ribbon.Indices,Ribbon.Normals,{}, {}, {},false);
+        BoltTrail->SetMaterial(Part,Ink);
+    }
+}
+
+void ATibetRitualEffect::StartImpact(const FVector& Position, const FVector& Outward, int32 SourceSlot, bool bFinal,
     UMaterialInterface* Material)
 {
     Slot = 7; Origin = Position; Facing = Outward.GetSafeNormal2D().Rotation();
     bFinisher = bFinal;
     Duration = bFinal ? .62f : .43f;
     FSurface Body, Rim;
-    Impact(Body, Rim);
-    Body.Install(Motif, 0, Material, FLinearColor(1.6f,.82f,.18f));
-    Rim.Install(Motif, 1, Material, FLinearColor(1.50f,1.32f,.87f));
+    Impact(Body, Rim, SourceSlot);
+    Body.Install(Motif, 0, Material, Fill[SourceSlot]);
+    Rim.Install(Motif, 1, Material, Edge[SourceSlot]);
     SetLifeSpan(Duration);
     Animate();
 }
@@ -298,20 +368,31 @@ void ATibetRitualEffect::Animate()
     switch (Slot)
     {
     case 0:
-        At = FMath::Lerp(Origin, Target, double(FMath::Clamp(Rise * 1.25f, 0.f, 1.f)));
-        Rotation = (Target - Origin).Rotation();
-        Scale = FVector(.75 + .38 * Rise, Fade, Fade);
+    {
+        const double Travel = FMath::Min(double(T) / .60, 1.);
+        At = BoltPoint(Travel);
+        Rotation = (BoltPoint(FMath::Min(Travel+.015,1.)) - BoltPoint(FMath::Max(0.,Travel-.015))).Rotation();
+        Scale = FVector(.83 + .27 * Rise, Fade, Fade);
+        if (BoltTrail)
+            for (int32 Part = 0; Part < 8; ++Part)
+                BoltTrail->SetMeshSectionVisible(Part, Part < FMath::CeilToInt(Travel * 8) &&
+                    T < .60f + .40f * (Part+1) / 8);
         break;
+    }
     case 1:
         Rotation.Yaw += 25 * Rise;
         Scale = FVector(.32 + 1.15 * Rise) * (.55 + .45 * Fade);
         At.Z += 7 * Rise;
         break;
     case 2:
-        At = Target + Up * (26 + 118 * FMath::Square(1 - FMath::Min(T * 2,1.f)));
-        Rotation.Yaw += 48 * Rise;
-        Rotation.Pitch = -13;
-        Scale = FVector(.70 + .30 * Fade, .70 + .30 * Fade, .35 + .65 * Fade);
+        {
+            const float Drop = 1 - FMath::SmoothStep(.09f,.54f,T);
+            const FVector Side = FRotationMatrix(Facing).GetUnitAxis(EAxis::Y);
+            At = Target + Side * (44 + 64 * Drop) + Up * (52 + 109 * Drop);
+            Rotation.Roll = 27 + 16 * Drop;
+            Rotation.Pitch = -9;
+            Scale = FVector(1.33,1.33,1.22) * (.50 + .50 * Fade);
+        }
         break;
     case 3:
         At = FMath::Lerp(Origin, Target, double(.12f + .75f * Rise));
@@ -328,9 +409,9 @@ void ATibetRitualEffect::Animate()
         Scale = FVector(.74 + .28 * FMath::Sin(T * UE_PI)) * (.60 + .40 * Fade);
         break;
     case 6:
-        At = Target - Up * 88;
+        At = Target - Up * 109;
         Rotation.Yaw += 80 * Rise;
-        Scale = FVector(.67 + .43 * Rise, .67 + .43 * Rise, .5 + .60 * Rise) * (.45 + .55 * Fade);
+        Scale = FVector(1.06 + .46 * Rise, 1.06 + .46 * Rise, 1.02 + .38 * Rise) * (.45 + .55 * Fade);
         break;
     case 7:
         Scale = FVector((bFinisher ? 1.35 : 1.) * (.35 + 1.08 * Rise) * (.35 + .65 * Fade));

@@ -2,6 +2,7 @@
 #include "TibetGameMode.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/Canvas.h"
+#include "CanvasItem.h"
 #include "Engine/Engine.h"
 #include "GameFramework/PlayerController.h"
 #include "Fonts/CompositeFont.h"
@@ -107,7 +108,7 @@ void ATibetHUD::DrawHUD()
     if (HasEnemy && PC->ProjectWorldLocationToScreen(Meter.Anchor, At, true) &&
         At.X > 0 && At.X < Canvas->SizeX && At.Y < Canvas->SizeY - 8)
     {
-        const float Width = 96 * HScale, Height = 7 * HScale;
+        const float Width = 117 * HScale, Height = 10 * HScale;
         const float X = FMath::Clamp(float(At.X) - Width * .5f, 6.f, Canvas->SizeX - Width - 6.f);
         const float Y = FMath::Clamp(float(At.Y), 18.f, Canvas->SizeY - 20.f);
         const FLinearColor Frame(.095f,.066f,.069f,.94f);
@@ -126,10 +127,15 @@ void ATibetHUD::DrawHUD()
         const float Alpha = 1 - FMath::SmoothStep(.58f,1.f,T);
         const float X = At.X + (9 + 18 * T) * HScale;
         const float Y = FMath::Max(3.f, float(At.Y) - (29 + 47 * T) * HScale);
-        const float Size = HScale * (1.22f + .18f * (1 - T));
+        const float Size = HScale * (1.80f + .28f * (1 - T));
         const FString Loss = FString::Printf(TEXT("-%d"), Cue.Amount);
-        DrawText(Loss, FLinearColor(.08f,.03f,.025f,Alpha), X + 2, Y + 2, GEngine->GetMediumFont(), Size);
-        DrawText(Loss, FLinearColor(1,.86f,.49f,Alpha), X, Y, GEngine->GetMediumFont(), Size);
+        FCanvasTextItem Numeral(FVector2D(X,Y), FText::FromString(Loss),
+            GEngine->GetMediumFont(), FLinearColor(1,.90f,.63f,Alpha));
+        Numeral.Scale = FVector2D(Size);
+        Numeral.bOutlined = true;
+        Numeral.OutlineColor = FLinearColor(.045f,.016f,.012f,Alpha);
+        Numeral.EnableShadow(FLinearColor(.045f,.016f,.012f,Alpha),FVector2D(2,3));
+        Canvas->DrawItem(Numeral);
     }
     const FVector Target=M->GetObjectiveLocation()+FVector(0,0,130);
     FVector2D Point;
