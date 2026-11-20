@@ -23,7 +23,7 @@ MAPS = (
     "terma2",
     "terma3",
 )
-FLAG_COLORS = ("blue", "lime", "red", "green", "yellow")
+FLAG_COLORS = ("indigoCloth", "whiteCloth", "redCloth", "greenCloth", "yellowCloth")
 TAU = 2 * math.pi
 
 
@@ -39,7 +39,8 @@ def flags(s, a, b, count, sag):
         end = location((i + 0.85) / count)
         length = min(0.88, math.dist(p, q) * 1.25)
         fold = (end[0] + 0.12, end[1] + 0.17, end[2] - length * 0.85)
-        s.face(FLAG_COLORS[i % 5], [p, end, fold, (p[0] + 0.08, p[1] + 0.24, p[2] - length)])
+        s.face(FLAG_COLORS[i % 5], [p, end, fold, (p[0] + 0.08, p[1] + 0.24, p[2] - length)],
+               uvs=[(0, 0), (1, 0), (1, 1), (0, 1)])
 
 
 def slope_roof(s, x, y, z, w, d, h):

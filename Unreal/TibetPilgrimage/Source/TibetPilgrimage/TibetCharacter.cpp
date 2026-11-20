@@ -234,10 +234,13 @@ void ATibetCharacter::Tick(float Dt)
 void ATibetCharacter::SetupPlayerInputComponent(UInputComponent* Input)
 {
     Super::SetupPlayerInputComponent(Input);
+    Input->BindKey(EKeys::F,IE_Pressed,this,&ATibetCharacter::FeedMonkey);
     Input->BindKey(EKeys::E,IE_Pressed,this,&ATibetCharacter::PressInteract);
     Input->BindKey(EKeys::E,IE_Released,this,&ATibetCharacter::ReleaseInteract);
     Input->BindKey(EKeys::L,IE_Pressed,this,&ATibetCharacter::Language);
     Input->BindKey(EKeys::M,IE_Pressed,this,&ATibetCharacter::OpenMap).bExecuteWhenPaused=true;
+    Input->BindKey(EKeys::I,IE_Pressed,this,&ATibetCharacter::OpenPack).bExecuteWhenPaused=true;
+    Input->BindKey(EKeys::X,IE_Pressed,this,&ATibetCharacter::UseQuickSlot);
     Input->BindKey(EKeys::K,IE_Pressed,this,&ATibetCharacter::OpenSkills).bExecuteWhenPaused=true;
     Input->BindKey(EKeys::Escape,IE_Pressed,this,&ATibetCharacter::ToggleMenu).bExecuteWhenPaused=true;
     Input->BindKey(EKeys::LeftShift,IE_Pressed,this,&ATibetCharacter::TryJump);
@@ -268,7 +271,8 @@ bool ATibetCharacter::JournalOpen() const
 {
     const auto* PC=Cast<APlayerController>(Controller);
     const auto* HUD=PC ? Cast<ATibetHUD>(PC->GetHUD()) : nullptr;
-    return HUD && HUD->IsJournalOpen();
+    const auto* Mode=GetWorld()->GetAuthGameMode<ATibetGameMode>();
+    return (HUD && HUD->IsJournalOpen()) || (Mode && Mode->FeedingPanel()!=0);
 }
 void ATibetCharacter::CancelGameplayInput()
 {
@@ -285,14 +289,26 @@ void ATibetCharacter::CancelGameplayInput()
 }
 void ATibetCharacter::OpenMap()
 {
+    if(auto* M=GetWorld()->GetAuthGameMode<ATibetGameMode>(); M && M->FeedingPanel()) return;
     if (auto* HUD=Cast<ATibetHUD>(GetController<APlayerController>()->GetHUD())) HUD->ToggleJournal(ETibetPage::Map);
+}
+void ATibetCharacter::OpenPack()
+{
+    if (auto* HUD=Cast<ATibetHUD>(GetController<APlayerController>()->GetHUD())) HUD->ToggleJournal(ETibetPage::Pack);
+}
+void ATibetCharacter::UseQuickSlot()
+{
+    if (auto* HUD=Cast<ATibetHUD>(GetController<APlayerController>()->GetHUD())) HUD->UseQuickSlot();
 }
 void ATibetCharacter::OpenSkills()
 {
+    if(auto* M=GetWorld()->GetAuthGameMode<ATibetGameMode>(); M && M->FeedingPanel()) return;
     if (auto* HUD=Cast<ATibetHUD>(GetController<APlayerController>()->GetHUD())) HUD->ToggleJournal(ETibetPage::Skills);
 }
 void ATibetCharacter::ToggleMenu()
 {
+    auto* M=GetWorld()->GetAuthGameMode<ATibetGameMode>();
+    if(M && M->FeedingPanel()!=0) { M->CloseFeeding(); return; }
     if (auto* HUD=Cast<ATibetHUD>(GetController<APlayerController>()->GetHUD()))
     {
         if (HUD->IsJournalOpen()) HUD->CloseJournal();
@@ -303,6 +319,13 @@ void ATibetCharacter::TryJump()
 {
     if (!JournalOpen()) Jump();
 }
+void ATibetCharacter::FeedMonkey()
+{
+    auto* PC=GetController<APlayerController>();
+    auto* HUD=PC?Cast<ATibetHUD>(PC->GetHUD()):nullptr;
+    auto* Mode=GetWorld()->GetAuthGameMode<ATibetGameMode>();
+    if(Mode && HUD && !HUD->IsJournalOpen()) Mode->BeginFeeding();
+}
 void ATibetCharacter::DoInteract()
 {
     auto* Mode=GetWorld()->GetAuthGameMode<ATibetGameMode>();
@@ -311,6 +334,7 @@ void ATibetCharacter::DoInteract()
 void ATibetCharacter::DoCast(int32 Slot)
 {
     auto* Mode=GetWorld()->GetAuthGameMode<ATibetGameMode>();
+    if(Mode && Mode->FeedingPanel()==2 && Slot>=2 && Slot<=4) { Mode->PickFruit(Slot-2); return; }
     if (Mode && !JournalOpen()) Mode->CastSkill(Slot);
 }
 void ATibetCharacter::Language()

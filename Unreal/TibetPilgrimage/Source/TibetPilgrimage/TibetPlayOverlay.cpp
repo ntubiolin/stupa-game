@@ -1,4 +1,5 @@
 #include "TibetPlayOverlay.h"
+#include "TibetAtlas.h"
 #include "TibetCameraSettings.h"
 #include "TibetGameMode.h"
 #include "TibetHUD.h"
@@ -78,6 +79,21 @@ public:
         case 5: // Guardian mask
             Stroke({{3,3},{8,7},{16,7},{21,3},{19,15},{16,19},{12,22},{8,19},{5,15},{3,3}});
             Stroke({{7,10},{10,12}}); Stroke({{17,10},{14,12}}); Stroke({{9,17},{12,15},{15,17}}); break;
+        case 7: // Pill pouch, neck cord and golden pill
+            Stroke({{8,3},{16,3},{14,7},{18,11},{20,17},{18,21},{6,21},{4,17},{6,11},{10,7},{8,3}});
+            Stroke({{8,7},{16,7},{18,9}}); Stroke({{10,14},{12,12},{14,14},{12,16},{10,14}}); break;
+        case 8: // Symmetric vajra and its knotted central grip
+            Stroke({{12,2},{12,22}}); Stroke({{7,2},{6,5},{8,8},{12,10},{16,8},{18,5},{17,2}});
+            Stroke({{7,22},{6,19},{8,16},{12,14},{16,16},{18,19},{17,22}}); Stroke({{9,11},{15,11},{15,13},{9,13},{9,11}}); break;
+        case 9: // Bronze bell and clapper
+            Stroke({{8,15},{9,8},{11,7},{12,3},{13,7},{15,8},{16,15},{19,18},{5,18},{8,15}});
+            Stroke({{10,20},{12,21},{14,20}}); break;
+        case 10: // Cross-over robe
+            Stroke({{8,3},{4,5},{2,12},{6,14},{8,10},{7,21},{17,21},{16,10},{18,14},{22,12},{20,5},{16,3},{12,6},{8,3}});
+            Stroke({{15,4},{9,13},{15,14}}); break;
+        case 11: // Folded pilgrim's route
+            Stroke({{2,5},{8,2},{16,5},{22,2},{22,19},{16,22},{8,19},{2,22},{2,5}});
+            Stroke({{8,2},{8,19}}); Stroke({{16,5},{16,22}}); break;
         case 6: // Eight-spoked wheel
             { TArray<FVector2f> Ring;
               for (int32 I=0;I<=8;++I) {const float A=I*UE_PI/4; FVector2f P(12+9*FMath::Cos(A),12+9*FMath::Sin(A)); Ring.Add(P); if (I<8) Stroke({{12,12},P});}
@@ -90,57 +106,7 @@ private:
     TAttribute<FLinearColor> Color;
 };
 
-class SRouteChart final : public SLeafWidget
-{
-public:
-    SLATE_BEGIN_ARGS(SRouteChart) {} SLATE_ARGUMENT(ATibetGameMode*, Mode) SLATE_ARGUMENT(FSlateFontInfo, Font) SLATE_ATTRIBUTE(float, RowSpacing) SLATE_END_ARGS()
-    void Construct(const FArguments& A) { Mode=A._Mode; Font=A._Font; RowSpacing=A._RowSpacing; }
-    virtual FVector2D ComputeDesiredSize(float) const override { return {300,4*RowSpacing.Get()}; }
-    virtual int32 OnPaint(const FPaintArgs&,const FGeometry& G,const FSlateRect&,FSlateWindowElementList& Out,
-        int32 Layer,const FWidgetStyle&,bool) const override
-    {
-        if (!Mode.IsValid()) return Layer;
-        // South branch to the grove, followed by the main pilgrimage in travel order.
-        const FIntPoint Cells[]={{1,0},{0,0},{2,0},{2,1},{1,1},{0,1},{0,2},{1,2},{2,2},{2,3},{1,3}};
-        const FVector2f Size=G.GetLocalSize();
-        auto Pos=[&](int32 I){return FVector2f((Cells[I].X+.5f)*Size.X/3,10+Cells[I].Y*RowSpacing.Get());};
-        auto Line=[&](int32 Z,TArray<FVector2f> P,FLinearColor C,float W){
-            FSlateDrawElement::MakeLines(Out,Z,G.ToPaintGeometry(),P,ESlateDrawEffect::None,C,true,W);
-        };
-        for (int32 I=1;I<UE_ARRAY_COUNT(Cells);++I)
-        {
-            const int32 Previous=I==2 ? 0 : I-1;
-            const FVector2f A=Pos(Previous),B=Pos(I);
-            const FLinearColor Color=Mode->HasVisitedArea(I) && Mode->HasVisitedArea(Previous) ? Gold : FLinearColor(FColor(99,114,105));
-            // Elbow the vertical connectors around labels beneath the waypoints.
-            if (A.X==B.X) {const float Offset=Size.X*.12f*(Cells[I].X==0?-1:1); Line(Layer,{A,{A.X+Offset,A.Y},{B.X+Offset,B.Y},B},Color,1.4f);}
-            else Line(Layer,{A,B},Color,1.4f);
-        }
-        auto Measure=FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
-        for (int32 I=0;I<UE_ARRAY_COUNT(Cells);++I)
-        {
-            const bool Here=I==Mode->CurrentAreaIndex(), Visited=Mode->HasVisitedArea(I);
-            const FVector2f P=Pos(I);
-            const float R=Here?6:4;
-            const FLinearColor C=Here?Jade:(Visited?Gold:Muted);
-            Line(Layer+1,{{P.X,P.Y-R},{P.X+R,P.Y},{P.X,P.Y+R},{P.X-R,P.Y},{P.X,P.Y-R}},C,Here?3:2);
-            if (Here) Line(Layer+1,{{P.X-2,P.Y},{P.X+2,P.Y}},C,3);
-            const FString Name=Mode->AreaName(I);
-            auto F=Font;
-            FVector2D Extent=Measure->Measure(Name,F);
-            while (Extent.X>Size.X/3-5 && F.Size>8) { --F.Size; Extent=Measure->Measure(Name,F); }
-            const FVector2f Top(P.X-Extent.X/2,P.Y+8);
-            const auto Bounds=G.ToPaintGeometry(FVector2f(Extent),FSlateLayoutTransform(Top));
-            FSlateDrawElement::MakeBox(Out,Layer+2,Bounds,Tile(),ESlateDrawEffect::None,Card);
-            FSlateDrawElement::MakeText(Out,Layer+3,Bounds,Name,F,ESlateDrawEffect::None,C);
-        }
-        return Layer+3;
-    }
-private:
-    TWeakObjectPtr<ATibetGameMode> Mode;
-    FSlateFontInfo Font;
-    TAttribute<float> RowSpacing;
-};
+
 }
 
 void STibetPlayOverlay::Construct(const FArguments& A)
@@ -170,6 +136,7 @@ FReply STibetPlayOverlay::OnKeyDown(const FGeometry&,const FKeyEvent& Event)
         const FKey Key=Event.GetKey();
         if (Key==EKeys::Escape) HUD->CloseJournal();
         else if (Key==EKeys::M) HUD->ToggleJournal(ETibetPage::Map);
+        else if (Key==EKeys::I) HUD->ToggleJournal(ETibetPage::Pack);
         else if (Key==EKeys::K) HUD->ToggleJournal(ETibetPage::Skills);
     }
     return FReply::Handled();
@@ -241,31 +208,52 @@ TSharedRef<SWidget> STibetPlayOverlay::Play()
     Objective->AddSlot().AutoHeight()[Label(TAttribute<FText>::CreateLambda([this](){return Text(Mode->Status(bTouch));}),11,Muted)];
     auto Row=SNew(SHorizontalBox);
     for (int32 I=0;I<7;++I) Row->AddSlot().FillWidth(1).Padding(1,0)[SkillSlot(I)];
+    Row->AddSlot().FillWidth(1).Padding(5,0,0,0)[QuickSlot()];
     auto Bar=SNew(SVerticalBox);
     auto Mana=SNew(SHorizontalBox);
     Mana->AddSlot().AutoWidth().Padding(2,0,9,0)[SNew(STextBlock).Font(Font(10)).ColorAndOpacity(Jade)
-        .Text_Lambda([this](){return Text(FString::Printf(TEXT("%s  %d / 100"),*Mode->Local(TEXT("Mantra"),TEXT("法力")),FMath::FloorToInt(Mode->GetMana())));})];
+        .Text_Lambda([this](){return Text(FString::Printf(TEXT("%s  %d / %d"),*Mode->Local(TEXT("Mantra"),TEXT("法力")),FMath::FloorToInt(Mode->GetMana()),int(Mode->MaxMana())));})];
     Mana->AddSlot().VAlign(VAlign_Center)[SNew(SBox).HeightOverride(4)
-        [SNew(SProgressBar).Style(&ManaStyle()).Percent_Lambda([this](){return TOptional<float>(Mode->GetMana()/100.f);}).FillColorAndOpacity(Jade).BorderPadding(FVector2D::ZeroVector)]];
+        [SNew(SProgressBar).Style(&ManaStyle()).Percent_Lambda([this](){return TOptional<float>(Mode->GetMana()/Mode->MaxMana());}).FillColorAndOpacity(Jade).BorderPadding(FVector2D::ZeroVector)]];
     Bar->AddSlot().AutoHeight().Padding(3,0,3,3)[Mana];
     Bar->AddSlot().AutoHeight()[Row];
     auto Nav=SNew(SVerticalBox);
+    Nav->AddSlot().AutoHeight().Padding(0,0,0,4)[CourtyardControls()];
     Nav->AddSlot().AutoHeight()[Button(TAttribute<FText>::CreateLambda([this](){return bTouch?Local(TEXT("World map"),TEXT("世界地圖")):Local(TEXT("M  World map"),TEXT("M  世界地圖"));}),
         FSimpleDelegate::CreateLambda([this](){HUD->ToggleJournal(ETibetPage::Map);}),true,TEXT("TibetOpenMap"))];
     Nav->AddSlot().AutoHeight().Padding(0,3,0,0)[Button(TAttribute<FText>::CreateLambda([this](){return bTouch?Local(TEXT("Menu"),TEXT("選單")):Local(TEXT("Esc  Menu"),TEXT("Esc  選單"));}),
         FSimpleDelegate::CreateLambda([this](){HUD->ToggleJournal(ETibetPage::Controls);}))];
+    Nav->AddSlot().AutoHeight().Padding(0,3,0,0)[Button(TAttribute<FText>::CreateLambda([this](){return bTouch?Local(TEXT("Pack"),TEXT("行囊")):Local(TEXT("I  Pack"),TEXT("I  行囊"));}),
+        FSimpleDelegate::CreateLambda([this](){HUD->ToggleJournal(ETibetPage::Pack);}),false,TEXT("TibetPack"))];
     auto Root=SNew(SOverlay).Visibility(EVisibility::SelfHitTestInvisible);
     Root->AddSlot().HAlign(HAlign_Left).VAlign(VAlign_Top).Padding(12)
         [SNew(SBox).WidthOverride_Lambda([this](){return FOptionalSize(FMath::Clamp(Width()*.46f,180.f,390.f));})
          [SNew(SBorder).Visibility(EVisibility::HitTestInvisible).BorderImage(Tile()).BorderBackgroundColor(Ink).Padding(FMargin(12,8))[Objective]]];
     Root->AddSlot().HAlign(HAlign_Right).VAlign(VAlign_Top).Padding(12)[Nav];
-    Root->AddSlot().HAlign(bTouch?HAlign_Right:HAlign_Center).VAlign(VAlign_Bottom).Padding(8)
-        [SNew(SBox).WidthOverride_Lambda([this](){return FOptionalSize(FMath::Min(Width()-32.f,bTouch?455.f:700.f));})
+    auto Lower = SNew(SVerticalBox).Visibility(EVisibility::SelfHitTestInvisible);
+    auto DialogueCard = SNew(SVerticalBox);
+    DialogueCard->AddSlot().AutoHeight()[SNew(STextBlock).Font(Font(bTouch ? 13 : 16)).ColorAndOpacity(Gold)
+        .Text_Lambda([this] { return Text(Mode->DialogueSpeaker()); })];
+    DialogueCard->AddSlot().AutoHeight().Padding(0,3,0,0)[SNew(STextBlock).Font(Font(bTouch ? 16 : 20))
+        .ColorAndOpacity(Paper).AutoWrapText(true).Text_Lambda([this] { return Text(Mode->DialoguePage()); })];
+    auto DialogueRow = SNew(SHorizontalBox);
+    DialogueRow->AddSlot().FillWidth(1)[DialogueCard];
+    DialogueRow->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(7,0,0,0)
+        [Button(TAttribute<FText>::CreateLambda([this]{return Local(TEXT("Skip"),TEXT("略過"));}),
+            FSimpleDelegate::CreateLambda([this]{Mode->StopDialogue();}))];
+    Lower->AddSlot().AutoHeight().HAlign(HAlign_Center).Padding(0,0,0,6)
+        [SNew(SBox).Visibility_Lambda([this]{return Mode->DialogueSpeaker().IsEmpty() ? EVisibility::Collapsed : EVisibility::SelfHitTestInvisible;})
+         .WidthOverride_Lambda([this]{return FOptionalSize(FMath::Clamp(Width()-(bTouch?165.f:32.f),150.f,680.f));})
+         [SNew(SBorder).Tag(TEXT("TibetDialogue")).BorderImage(Tile()).BorderBackgroundColor(Ink).Padding(FMargin(13,8))[DialogueRow]]];
+    Lower->AddSlot().AutoHeight().HAlign(bTouch?HAlign_Right:HAlign_Center)
+        [SNew(SBox).Tag(TEXT("TibetRitualBar")).WidthOverride_Lambda([this](){return FOptionalSize(FMath::Min(Width()-32.f,bTouch?455.f:700.f));})
          [SNew(SBorder).BorderImage(Tile()).BorderBackgroundColor(Ink).Padding(5)[Bar]]];
+    Root->AddSlot().HAlign(HAlign_Fill).VAlign(VAlign_Bottom).Padding(8)[Lower];
     if (bTouch)
         Root->AddSlot().HAlign(HAlign_Right).VAlign(VAlign_Bottom).Padding(0,0,12,108)
             [Button(TAttribute<FText>::CreateLambda([this](){return Local(TEXT("Act"),TEXT("互動"));}),
                     FSimpleDelegate::CreateLambda([this](){Mode->Interact();}),true)];
+    Root->AddSlot()[FeedingMenu()];
     return Root;
 }
 
@@ -290,14 +278,74 @@ TSharedRef<SWidget> STibetPlayOverlay::Skills()
     }
     return List;
 }
+TSharedRef<SWidget> STibetPlayOverlay::QuickSlot()
+{
+    const bool Pills=Mode->QuickItem()==ETibetItem::Amrita;
+    const auto Stack=SNew(SVerticalBox);
+    Stack->AddSlot().AutoHeight()[SNew(SSkillGlyph).Slot(Pills?7:11).Ink(Gold)];
+    Stack->AddSlot().AutoHeight().HAlign(HAlign_Center)[Label(Pills?Local(TEXT("Amrita"),TEXT("甘露丸")):Local(TEXT("Map"),TEXT("朝聖圖")),bTouch?12:14,Paper)];
+    Stack->AddSlot().AutoHeight().HAlign(HAlign_Center)[Label(TAttribute<FText>::CreateLambda([this,Pills](){
+        const FString Key=bTouch?FString():TEXT("X  ");
+        return Text(Key + (Pills ? FString::Printf(TEXT("%d / 4"),Mode->Pills()) : Mode->Local(TEXT("Open"),TEXT("展開"))));
+    }),11,Gold)];
+    return SNew(SButton).Tag(TEXT("TibetQuickItem")).ButtonStyle(&FlatButton()).IsFocusable(false)
+        .HAlign(HAlign_Center).ButtonColorAndOpacity(FLinearColor(FColor(87,61,43))).ContentPadding(FMargin(2,3))
+        .OnClicked_Lambda([this](){HUD->UseQuickSlot(); return FReply::Handled();})[Stack];
+}
+
+TSharedRef<SWidget> STibetPlayOverlay::Pack()
+{
+    const auto List=SNew(SVerticalBox);
+    const auto Quick=Mode->QuickItem();
+    const auto& Active=TibetItemInfo(Quick);
+    List->AddSlot().AutoHeight().Padding(0,1,0,6)[Label(Text(FString::Printf(TEXT("%s  %s    ·    %s %d/%d"),
+        *Mode->Local(TEXT("Quick item"),TEXT("快捷道具")),*Mode->Local(Active.NameEn,Active.NameZh),
+        *Mode->Local(TEXT("Life"),TEXT("體力")),FMath::CeilToInt(Mode->GetHealth()),int(Mode->MaxHealth()))),16,Gold)];
+    TArray<ETibetItem> Ordered;
+    for (const bool Owned : {true,false})
+        for (ETibetItem Item : {ETibetItem::Amrita,ETibetItem::Map,ETibetItem::Vajra,ETibetItem::Bell,ETibetItem::Robe})
+            if (Mode->OwnsItem(Item)==Owned) Ordered.Add(Item);
+    for (const auto Item : Ordered)
+    {
+        const int32 I=int32(Item);
+        const auto& Info=TibetItemInfo(Item);
+        const bool Owned=Mode->OwnsItem(Item), Equipment=Item>=ETibetItem::Vajra && Item<=ETibetItem::Robe;
+        const auto Row=SNew(SHorizontalBox);
+        Row->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(1,0,10,0)[SNew(SSkillGlyph).Slot(7+I).Ink(Owned?Gold:Faded)];
+        const auto Copy=SNew(SVerticalBox);
+        FString Title=Mode->Local(Info.NameEn,Info.NameZh);
+        if (Item==ETibetItem::Amrita) Title+=FString::Printf(TEXT("   %d/4"),Mode->Pills());
+        if (Mode->IsEquipped(Item)) Title+=Mode->Local(TEXT("   · Equipped"),TEXT("   ・已裝備"));
+        Copy->AddSlot().AutoHeight()[Label(Text(Title),15,Owned?Paper:Muted)];
+        Copy->AddSlot().AutoHeight()[Label(Text(Owned?Mode->Local(Info.EffectEn,Info.EffectZh):Mode->Local(Info.SourceEn,Info.SourceZh)),12,Muted)];
+        Row->AddSlot().FillWidth(1)[Copy];
+        if (Owned)
+        {
+            const bool Selected=Equipment?Mode->IsEquipped(Item):Item==Quick;
+            if (!Equipment && Selected)
+                Row->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(7,0)[Label(Local(TEXT("Quick slot"),TEXT("快捷中")),12,Jade)];
+            else
+            {
+                const auto Action=Equipment ? (Selected?Local(TEXT("Remove"),TEXT("卸下")):Local(TEXT("Equip"),TEXT("裝備"))) : Local(TEXT("Set quick"),TEXT("設為快捷"));
+                Row->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(5,0)[Button(Action,FSimpleDelegate::CreateLambda([this,Item,Equipment](){
+                    if (Equipment) Mode->ToggleEquipment(Item);
+                    else Mode->SetQuickItem(Item);
+                    Show(ETibetPage::Pack);
+                }),false,FName(*FString::Printf(TEXT("TibetPackAction%d"),I)))];
+            }
+        }
+        List->AddSlot().AutoHeight().Padding(0,2)[SNew(SBorder).BorderImage(Tile()).BorderBackgroundColor(Owned?Card:Ink).Padding(7)[Row]];
+    }
+    return List;
+}
 TSharedRef<SWidget> STibetPlayOverlay::Controls()
 {
     auto Box=SNew(SVerticalBox);
     const FText Guide=bTouch
         ? Local(TEXT("Drag the left half to walk and the right half to turn. Tap Act or a ritual to use it."),
                 TEXT("左側拖曳移動，右側拖曳轉向。點選「互動」或技能即可使用。"))
-        : Local(TEXT("WASD  Move     Right-drag  Look     Shift  Jump\nHold Q / E to orbit, release to follow     Tap E  Interact\nK  Skills     M  World map     Esc  Menu / return"),
-                TEXT("WASD 移動　按住滑鼠右鍵拖曳轉向　Shift 跳躍\n按住 Q／E 左右環視，放開回到背後　輕按 E 互動\nK 技能　M 世界地圖　Esc 選單／返回"));
+        : Local(TEXT("WASD  Move     Right-drag  Look     Shift  Jump\nHold Q / E to orbit, release to follow     Tap E  Interact\nI  Pack     X  Quick item     K  Skills     M  World map     Esc  Menu / return"),
+                TEXT("WASD 移動　按住滑鼠右鍵拖曳轉向　Shift 跳躍\n按住 Q／E 左右環視，放開回到背後　輕按 E 互動\nI 行囊　X 快捷道具　K 技能　M 世界地圖　Esc 選單／返回"));
     Box->AddSlot().AutoHeight().Padding(0,2,0,9)[Label(Guide,13,Paper)];
     auto* Settings=GetMutableDefault<UTibetCameraSettings>();
     auto Row=SNew(SHorizontalBox);
@@ -341,30 +389,25 @@ TSharedRef<SWidget> STibetPlayOverlay::Journal()
     };
     Tab(ETibetPage::Map,Local(TEXT("World map"),TEXT("世界地圖")));
     Tab(ETibetPage::Skills,Local(TEXT("Ritual skills"),TEXT("法術技能")));
+    Tab(ETibetPage::Pack,Local(TEXT("Pack"),TEXT("行囊")));
     Tab(ETibetPage::Controls,Local(TEXT("Controls"),TEXT("操作設定")));
     Panel->AddSlot().AutoHeight().Padding(0,8)[Tabs];
     auto Body=SNew(SVerticalBox);
     if (Page==ETibetPage::Map)
     {
         Body->AddSlot().AutoHeight()[Label(Text(Mode->Local(TEXT("Here  ·  "),TEXT("目前位置・"))+Mode->AreaName()),17,Jade)];
-        Body->AddSlot().AutoHeight().Padding(0,3,0,9)[Label(Text(Mode->GetObjectiveText()),13,Paper)];
-        Body->AddSlot().AutoHeight()[SNew(SBorder).BorderImage(Tile()).BorderBackgroundColor(Card).Padding(4,5)
-            [SNew(SRouteChart).Mode(Mode.Get()).Font(Font(12))
-                .RowSpacing_Lambda([this](){return Height()<480.f ? 35.f : 50.f;})]];
-        auto Legend=SNew(SHorizontalBox);
-        Legend->AddSlot().AutoWidth().Padding(0,0,15,0)[Label(Local(TEXT("◆  Here"),TEXT("◆  所在地")),12,Jade)];
-        Legend->AddSlot().AutoWidth().Padding(0,0,15,0)[Label(Local(TEXT("◇  Visited"),TEXT("◇  已到訪")),12,Gold)];
-        Legend->AddSlot().AutoWidth()[Label(Local(TEXT("◇  Unvisited"),TEXT("◇  尚未到訪")),12,Muted)];
-        Body->AddSlot().AutoHeight().Padding(0,7)[Legend];
-        Body->AddSlot().AutoHeight()[Label(Local(TEXT("The grove branches south from Boudhanath. After Sky Terma, return through Chimphu to the stupa."),
-            TEXT("行者塔林位於博達哈南側支線。完成虛空伏藏後，經青浦返回博達哈。")),12,Muted)];
+        const bool CompactAtlas=bTouch || Height()<500.f;
+        if (!CompactAtlas)
+            Body->AddSlot().AutoHeight().Padding(0,3,0,9)[Label(Text(Mode->GetObjectiveText()),13,Paper)];
+        Body->AddSlot().AutoHeight()[SNew(STibetAtlas).Mode(Mode.Get()).Font(Font(14)).Compact(CompactAtlas)
+            .Width(FMath::Min(Width()-68.f,1090.f)).Height(FMath::Clamp(Height()-(CompactAtlas?218.f:195.f),105.f,422.f))];
     }
-    else Body->AddSlot().AutoHeight()[Page==ETibetPage::Skills?Skills():Controls()];
+    else Body->AddSlot().AutoHeight()[Page==ETibetPage::Skills?Skills():Page==ETibetPage::Pack?Pack():Controls()];
     Panel->AddSlot().FillHeight(1)[SNew(SScrollBox)+SScrollBox::Slot()[Body]];
     return SNew(SBorder).BorderImage(Tile()).BorderBackgroundColor(FLinearColor(0.008,0.012,0.012,.62))
         .HAlign(HAlign_Center).VAlign(VAlign_Center).Padding(8)
         .OnMouseButtonDown_Lambda([](const FGeometry&,const FPointerEvent&){return FReply::Handled();})
-        [SNew(SBox).WidthOverride_Lambda([this](){return FOptionalSize(FMath::Clamp(Width()-36.f,250.f,670.f));})
-            .HeightOverride_Lambda([this](){return FOptionalSize(FMath::Clamp(Height()-36.f,185.f,Page==ETibetPage::Skills?570.f:485.f));})
+        [SNew(SBox).WidthOverride_Lambda([this](){return FOptionalSize(FMath::Clamp(Width()-36.f,250.f,Page==ETibetPage::Map?1120.f:705.f));})
+            .HeightOverride_Lambda([this](){return FOptionalSize(FMath::Clamp(Height()-36.f,185.f,Page==ETibetPage::Map?630.f:Page==ETibetPage::Skills?570.f:510.f));})
             [SNew(SBorder).BorderImage(Tile()).BorderBackgroundColor(Ink).Padding(14)[Panel]]];
 }

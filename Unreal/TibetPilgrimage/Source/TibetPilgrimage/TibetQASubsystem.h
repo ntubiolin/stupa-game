@@ -17,14 +17,24 @@ public:
     virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
     virtual TStatId GetStatId() const override;
     virtual void Tick(float DeltaSeconds) override;
-    virtual bool IsTickableWhenPaused() const override { return Task==TEXT("Journal") || Task==TEXT("CameraFollow"); }
+    virtual bool IsTickableWhenPaused() const override { return Task==TEXT("Dialogue") || Task==TEXT("Journal") || Task==TEXT("CameraFollow") || Task.StartsWith(TEXT("Pack")); }
 private:
     void Finish(bool bSuccess, const FString& Detail);
+    void DialogueTest(APlayerController& PC, ATibetGameMode& Mode);
+    int32 DialoguePhase = 0;
+    void PackJourney(APlayerController& PC, ATibetGameMode& Mode);
     void Journal(APlayerController& PC, ATibetGameMode& Mode);
     void Photo(APlayerController& PC);
     void Arrival(APlayerController& PC);
+    void Courtyard(APlayerController& PC, ATibetGameMode& Mode);
+    bool TapPlayControl(FName Tag, float XFraction=.5f);
+    int32 CourtyardStep=0;
+    float CheckedPhase=0, CheckedFlame=0, ClockStarted=0;
+    double CourtyardSince=0;
     void CameraFollow(APlayerController& PC, ATibetGameMode& Mode);
     bool SurveyGate(APlayerController& PC, const FVector& Goal);
+    bool CaptureEncounter(APlayerController& PC, ATibetGameMode& Mode);
+    TSet<FName> SeenEncounters;
     int32 GateFrames = 0;
     uint8 GatePhases = 0;
     void Play(APlayerController& PC, ATibetGameMode& Mode);

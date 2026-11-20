@@ -765,6 +765,8 @@ preserved.
 
 `ATibetGameMode` 讀取 `Tools/export_route.mjs` 從原作任務轉出的雙語路線表，由 `ATibetCharacter` 和 `ATibetHUD` 共用同一組互動與技能入口。原生存檔 `UTibetSave` 的預設槽為 `TibetPilgrimage-v1`，記錄各段任務、數量、目前地圖、終章與語言。跨圖於進入前先存檔。QA 使用獨立的具名槽測試關閉重開、主支線和技能。
 
+室外的 ATibetSkyClock 讀取 UTibetSave 中的時刻與倍率。原生一日 240 秒，起始 07:12，玩家可暫停、選 1× 或 4×，或拖動時刻。伏藏三層保留獨立的燭光曝光。博達哈供燈以位元記錄三個燈位，舊存檔從原任務進度復原。ATibetButterFlame 建立會擺動的燈芯，每個已供養的博達哈燈位最多帶一盞局部光源。布旗沿用原織紋與上緣固定點，以材質變形表現風勢。ATibetMacaques 以共享的關節網格繪製五隻獼猴，原始模型可用 Tools/export_macaque.mjs --check 與網頁版逐位元比對。餵食次數、五輪配對最高分及遊玩次數同存於 UTibetSave。
+
 `ATibetCharacter` 以實際水平速度決定跟隨朝向。鏡頭偏移由 `GetViewRotation()` 提供給攝影機與彈簧臂，持續移動時則以控制器朝向換算 WASD 或觸控方向，讓鏡頭回正時角色仍走直線。玩家可用滑鼠右鍵或觸控拖曳自由觀察，按住 Q／E 暫時左右環視，放開平順回背。輕按 E 與觸控「互動」共用既有任務入口。`UTibetCameraBoom` 處理建築碰撞與回復距離。`UTibetCameraSettings` 將靈敏度和垂直反轉寫入裝置的 GameUserSettings。玩法與輸入的依據見[第三人稱鏡頭](Unreal/TibetPilgrimage/Camera.md)。
 
 `STibetPlayOverlay` 透過 `ATibetHUD` 切換遊戲、世界地圖、技能及操作設定，開啟手記時暫停單人遊戲。地圖依原生任務進度標記到訪情形。七格技能列與正式施法共用 `ATibetGameMode` 的技能資料。傷害依實際扣除的生命值發出，HUD 取怪物位置繪製血條、扣血拖尾與傷害數字。`ATibetRitualEffect` 負責招式和受擊的幾何動畫。
@@ -772,3 +774,7 @@ preserved.
 主角實際扣血與任務推進時，`ATibetGameMode` 以遊戲時間記錄 `FTibetPlayerFeedback`。角色模型的受擊後仰、HUD 扣血提示與任務標記依該時間顯示並消退。
 
 網頁與 UE 各功能的對應、已驗證的操作與尚缺的模組列於[西藏 UE 移植驗收](Unreal/TibetPilgrimage/QA/Module-audit.md)。
+
+原生手記的唐卡世界地圖由 `Tools/export_atlas.mjs` 讀取網頁 `WORLD_ROUTE_NODES`、雙語說明及長卷繪製器輸出。九個可選站點對應十一張關卡，伏藏三層共用一站。匯入後的 UI 貼圖隨 `/Game/Journal` 封裝，路線及目前位置由 Slate 依實際旅程繪製。
+
+原生行囊透過 `ATibetGameMode` 讀取任務進度，依序開放序章主手法器、北郊首次調伏的副手鈴、尋回的朝聖地圖及桑耶守夜法衣。裝備套用於傷害與體力／法力上限，快捷位可使用甘露丸或展開已取得的地圖。`UTibetSave` 保存裝備、快捷選擇與丸數，既有存檔會從原本的路線進度取得對應道具。

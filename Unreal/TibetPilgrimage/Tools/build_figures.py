@@ -279,7 +279,6 @@ def build():
     skin=surface("Skin",(.335,.172,.096),.65)
     leather=surface("Leather",(.069,.036,.023),.67)
     pearl=surface("Horn",(.59,.48,.33))
-    snow=surface("SnowFur",(.58,.55,.49))
     slate=surface("Slate",(.12,.12,.115))
     amber=surface("Amber",(.72,.38,.04),.3)
     sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -296,8 +295,9 @@ def build():
     for side in (-1,1):
         pieces+=tall_boot(.12*side,umber,leather)+arm(side,slate,amber,skin)
     export(combine("Guardian",pieces))
-    export(combine("SnowKing",beast(False,snow,slate,leather,pearl,amber)))
     export(combine("RiverYak",beast(True,umber,dark,leather,pearl,amber)))
+    from build_wilderness import build as build_wilderness
+    build_wilderness()
 
 
 def export(obj):

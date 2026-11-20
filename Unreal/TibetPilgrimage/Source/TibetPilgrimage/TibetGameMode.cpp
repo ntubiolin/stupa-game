@@ -1,8 +1,14 @@
 #include "TibetGameMode.h"
 #include "TibetCharacter.h"
 #include "TibetHUD.h"
+#include "TibetVoice.h"
+#include "Async/Async.h"
+#include "Misc/App.h"
+#include "GameFramework/PlayerController.h"
+#include "TibetBossHalo.h"
 #include "TibetRitualEffect.h"
 #include "TibetTravelGate.h"
+#include "TibetButterFlame.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
@@ -17,7 +23,7 @@
 namespace
 {
 enum class EObjective { Talk, Kora, Interact, Reach, Combat, Boss, Escort, Gate };
-struct FObjective { EObjective Kind; const TCHAR* En; const TCHAR* Zh; int32 Count; const TCHAR* SpeechEn; const TCHAR* SpeechZh; const TCHAR* Resident = nullptr; };
+struct FObjective { EObjective Kind; const TCHAR* En; const TCHAR* Zh; int32 Count; const TCHAR* SpeechEn; const TCHAR* SpeechZh; const TCHAR* Resident = nullptr; const TCHAR* SpeakerEn = nullptr; const TCHAR* SpeakerZh = nullptr; };
 const TMap<FString,TArray<FObjective>>& Routes()
 {
     static const TMap<FString,TArray<FObjective>> Table = {
@@ -78,7 +84,6 @@ FVector StupaLampLocation(int32 Index)
     return FVector(1430+70*Index,-360+320*Index,0);
 }
 const FString Cylinder=TEXT("/Engine/BasicShapes/Cylinder.Cylinder");
-const FString Cone=TEXT("/Engine/BasicShapes/Cone.Cone");
 const FString Sphere=TEXT("/Engine/BasicShapes/Sphere.Sphere");
 const FLinearColor Gold(.87,.43,.065);
 }
@@ -131,6 +136,8 @@ void ATibetGameMode::StartPlay()
         UGameplayStatics::OpenLevel(this,FName(*FString::Printf(TEXT("/Game/Maps/Tibet/%s"),*Save->Map)));
         return;
     }
+    Health = MaxHealth();
+    Mana = MaxMana();
     PlayerFeedback.ObjectiveTime = GetWorld()->GetTimeSeconds();
     Route=Map;
     if (Map==TEXT("chimphu") && Save->bReturnFromTerma) Route=TEXT("return");
@@ -151,8 +158,12 @@ void ATibetGameMode::StartPlay()
     if (Map==TEXT("stupa"))
     {
         if (auto* Gate = GetWorld()->SpawnActor<ATibetTravelGate>(GroveGate, FRotator::ZeroRotator))
+        {
             Gate->SetSidePath();
+            SideGate = Gate;
+        }
     }
+    StartCourtyard();
     PopulateResidents();
     Store();
     Refresh();
@@ -301,16 +312,54 @@ bool ATibetGameMode::HasVisitedArea(int32 Index) const
 ATibetGameMode::EInteraction ATibetGameMode::InteractionAt(const FVector& PlayerLocation) const
 {
     if (!Save || bTravel || IsCampaignComplete()) return EInteraction::None;
-    if (Map==TEXT("stupa") && FVector::Dist2D(PlayerLocation,GroveGate)<215) return EInteraction::Grove;
-    if (FVector::Dist2D(PlayerLocation,GetObjectiveLocation())>225 ||
+    const APawn* Pawn = UGameplayStatics::GetPlayerPawn(this,0);
+    if (!Pawn) return EInteraction::None;
+    const double Feet = PlayerLocation.Z - Pawn->GetSimpleCollisionHalfHeight();
+    if (SideGate && FMath::Abs(Feet - GroveGate.Z) < 110 && FVector::Dist2D(PlayerLocation,GroveGate)<215 &&
+        ClearSight(Pawn->GetPawnViewLocation(), GroveGate + FVector(0,0,135), SideGate))
+        return EInteraction::Grove;
+    if (FMath::Abs(Feet - GetObjectiveLocation().Z) > 110 || FVector::Dist2D(PlayerLocation,GetObjectiveLocation())>225 ||
         !OnObjectiveFloor(UGameplayStatics::GetPlayerPawn(this,0), Anchor())) return EInteraction::None;
     switch (Objective(Route,GetStep()).Kind)
     {
-    case EObjective::Gate: return EInteraction::Gate;
-    case EObjective::Talk: return ActiveResident() ? EInteraction::Talk : EInteraction::None;
+    case EObjective::Gate:
+        return Focus && ClearSight(Pawn->GetPawnViewLocation(), GetObjectiveLocation() + FVector(0,0,135), Focus)
+            ? EInteraction::Gate : EInteraction::None;
+    case EObjective::Talk:
+        if (auto* Target = ActiveResident())
+        {
+            FVector Center, Extent;
+            Target->GetActorBounds(false, Center, Extent);
+            if (ClearSight(Pawn->GetPawnViewLocation(), Center + FVector(0,0,.5 * Extent.Z), Target)) return EInteraction::Talk;
+        }
+        return EInteraction::None;
     case EObjective::Interact: return EInteraction::Use;
     default: return EInteraction::None;
     }
+}
+bool ATibetGameMode::ClearSight(const FVector& From, const FVector& To, const AActor* Target) const
+{
+    FCollisionQueryParams Query(SCENE_QUERY_STAT(TibetInteraction), false, Target);
+    Query.AddIgnoredActor(UGameplayStatics::GetPlayerPawn(this,0));
+    return !GetWorld()->LineTraceTestByChannel(From, To, ECC_Visibility, Query);
+}
+
+bool ATibetGameMode::GetInteractionCue(FVector& WorldAnchor) const
+{
+    const auto* PC = GetWorld()->GetFirstPlayerController();
+    if (!PC || !PC->GetPawn()) return false;
+    const EInteraction Action = InteractionAt(PC->GetPawn()->GetActorLocation());
+    const AActor* Target = nullptr;
+    if (Action == EInteraction::Talk) Target = ActiveResident();
+    else if (Action == EInteraction::Grove) Target = SideGate;
+    else if (Action == EInteraction::Gate) Target = Focus;
+    if (!Target) return false;
+    FVector Center, Extent, Eye;
+    FRotator View;
+    Target->GetActorBounds(false, Center, Extent);
+    WorldAnchor = Center + FVector(0, 0, Extent.Z + 14);
+    PC->GetPlayerViewPoint(Eye, View);
+    return ClearSight(Eye, Center + FVector(0,0,.5 * Extent.Z), Target) && ClearSight(Eye, WorldAnchor, Target);
 }
 FString ATibetGameMode::ActionLabel(EInteraction Action) const
 {
@@ -338,17 +387,25 @@ FString ATibetGameMode::Status(bool bTouchControls) const
     const int32 Meters=P ? FMath::RoundToInt(FVector::Dist2D(P->GetActorLocation(),GetObjectiveLocation())/100.) : 0;
     const auto K=Objective(Route,GetStep()).Kind;
     FString S=FString::Printf(TEXT("%s %d   ·   %d m"),*Local(TEXT("Life"),TEXT("體力")),FMath::CeilToInt(Health),Meters);
-    if (K==EObjective::Boss || K==EObjective::Combat) S+=FString::Printf(TEXT("   ·   %s %d"),*Local(TEXT("Spirit"),TEXT("靈障")),EnemyHealth);
+    if (K==EObjective::Boss || K==EObjective::Combat) S+=FString::Printf(TEXT("   ·   %s %d"),*EnemyLabel(),EnemyHealth);
     if (P)
     {
         const EInteraction Action=InteractionAt(P->GetActorLocation());
-        if (Action!=EInteraction::None)
+        if (Action==EInteraction::Use)
         {
             S+=bTouchControls ? Local(TEXT("\nTap Act · "),TEXT("\n點選「互動」・")) : Local(TEXT("\nTap E · "),TEXT("\n輕按 E・"));
             S+=ActionLabel(Action);
         }
+        else if(NearestButterLamp(P->GetActorLocation())!=INDEX_NONE)
+            S+=bTouchControls ? Local(TEXT("\nTap Act · Offer butter"),TEXT("\n點選「互動」・供酥油")) :
+                              Local(TEXT("\nE · Offer butter"),TEXT("\nE・供酥油"));
     }
     if (GetWorld()->GetTimeSeconds()<NoticeUntil) S+=TEXT("\n")+Notice;
+    if (LastPackReward!=ETibetItem::Count && GetWorld()->GetTimeSeconds()<PackRewardUntil)
+    {
+        const auto& Item=TibetItemInfo(LastPackReward);
+        S+=Local(TEXT("\nAdded to your pack · "),TEXT("\n收入行囊・"))+Local(Item.NameEn,Item.NameZh);
+    }
     return S;
 }
 void ATibetGameMode::Store()
@@ -363,21 +420,41 @@ void ATibetGameMode::RestoreStupaFlames()
     const int32 LampStep=Stupa.IndexOfByPredicate([](const FObjective& O){ return O.Kind==EObjective::Interact; });
     if (LampStep==INDEX_NONE) return;
     const int32 Step=Save->Steps.FindRef(Map);
-    if (Step<LampStep) return;
-    const int32 Count=Stupa[LampStep].Count;
-    const int32 Lit=Step>LampStep ? Count : FMath::Clamp(Save->Counts.FindRef(Map),0,Count);
-    const FLinearColor Flame(4.0,1.5,0.15);
-    for (; LitStupaLamps<Lit; ++LitStupaLamps)
+    const int32 Lit=Step>LampStep ? 3 : (Step==LampStep ? FMath::Clamp(Save->Counts.FindRef(Map),0,3) : 0);
+    // Existing saves only have the ordered quest count.
+    Save->ButterLampMask |= (1u << Lit)-1;
+    for (int32 I=0; I<3; ++I)
     {
-        // The cone is centred on its origin. Its base meets the wick at 116.5 cm.
-        AActor* WickFlame=MeshActor(StupaLampLocation(LitStupaLamps)+FVector(0,0,126.5),
-            Cone,FVector(.13,.13,.20),&Flame);
-        if (!WickFlame) break;
-        WickFlame->Tags.Add(TEXT("StupaLampFlame"));
+        const uint8 Bit=1u<<I;
+        if (!(Save->ButterLampMask & Bit) || (SpawnedLampMask & Bit)) continue;
+        auto* Flame=GetWorld()->SpawnActor<ATibetButterFlame>(StupaLampLocation(I)+FVector(0,0,126.5),FRotator::ZeroRotator);
+        if (!Flame) continue;
+        Flame->LightCourtyardBowl();
+        Flame->Tags.Add(TEXT("StupaLampFlame"));
+        SpawnedLampMask |= Bit;
     }
+}
+int32 ATibetGameMode::NearestButterLamp(const FVector& Where) const
+{
+    int32 Result=INDEX_NONE;
+    double Best=220;
+    if (Map==TEXT("stupa"))
+        for(int32 I=0;I<3;++I)
+        {
+            const double D=FVector::Dist2D(Where,StupaLampLocation(I));
+            if(D<Best) { Best=D; Result=I; }
+        }
+    return Result;
 }
 void ATibetGameMode::Refresh()
 {
+    const auto K=Objective(Route,GetStep()).Kind;
+    if (Map==TEXT("wild") && K==EObjective::Combat && !IsCampaignComplete())
+    {
+        RefreshWilderness(Objective(Route, GetStep()).Count - GetStepProgress());
+        return;
+    }
+    if (!WildernessPack.IsEmpty()) RefreshWilderness(0);
     EnemyMaximum = 0;
     LastHitTime = -10;
     if (Focus) { Focus->Destroy(); Focus=nullptr; }
@@ -385,16 +462,14 @@ void ATibetGameMode::Refresh()
     if (Map == TEXT("pharping"))
     {
         const int32 Lit = GetStep() > 5 ? 7 : (GetStep() == 5 ? GetStepProgress() : 0);
-        const FLinearColor Flame(4.0, 1.5, .15);
         while (LitCaveLamps < Lit)
         {
             const FVector* Bowl = PassageSockets.Find(FName(*FString::Printf(TEXT("Step5_%d"), LitCaveLamps)));
-            if (!Bowl || !MeshActor(*Bowl + FVector(0,0,129), Cone, FVector(.14,.14,.20), &Flame)) break;
+            if (!Bowl || !GetWorld()->SpawnActor<ATibetButterFlame>(*Bowl + FVector(0,0,129),FRotator::ZeroRotator)) break;
             ++LitCaveLamps;
         }
     }
     if (IsCampaignComplete()) return;
-    const auto K=Objective(Route,GetStep()).Kind;
     const FVector At=Anchor();
     if (K==EObjective::Talk || (K==EObjective::Escort && !bEscorting))
     {
@@ -418,6 +493,13 @@ void ATibetGameMode::Refresh()
         const FString Path=FString::Printf(TEXT("/Game/Figures/%s.%s"),*Model,*Model);
         Focus=MeshActor(At,Path,FVector(K==EObjective::Boss?1.48:1));
         if (Focus) Focus->SetActorRotation(FRotator(0,-90,0));
+        if (Focus && K==EObjective::Boss)
+        {
+            FActorSpawnParameters Spawn;
+            Spawn.Owner=Focus;
+            if (auto* Halo=GetWorld()->SpawnActor<ATibetBossHalo>(At+FVector(0,0,6), FRotator::ZeroRotator, Spawn))
+                Halo->AttachToActor(Focus,FAttachmentTransformRules::KeepWorldTransform);
+        }
     }
     else if (Map==TEXT("stupa") && (K==EObjective::Kora || K==EObjective::Interact))
     {
@@ -436,6 +518,9 @@ void ATibetGameMode::Refresh()
 void ATibetGameMode::Advance()
 {
     PlayerFeedback.ObjectiveTime = GetWorld()->GetTimeSeconds();
+    const ETibetItem Rewards[] = {ETibetItem::Vajra, ETibetItem::Bell, ETibetItem::Map, ETibetItem::Robe};
+    bool WasOwned[UE_ARRAY_COUNT(Rewards)];
+    for (int32 I = 0; I < UE_ARRAY_COUNT(Rewards); ++I) WasOwned[I] = OwnsItem(Rewards[I]);
     if (++Save->Counts.FindOrAdd(Route)>=Objective(Route,GetStep()).Count)
     {
         Save->Counts[Route]=0;
@@ -448,6 +533,14 @@ void ATibetGameMode::Advance()
             Messenger=nullptr;
         }
         if (Route==TEXT("ending")) Save->bComplete=true;
+    }
+    for (int32 I = 0; I < UE_ARRAY_COUNT(Rewards); ++I)
+    {
+        if (!WasOwned[I] && OwnsItem(Rewards[I]))
+        {
+            LastPackReward = Rewards[I];
+            PackRewardUntil = GetWorld()->GetTimeSeconds() + 5.f;
+        }
     }
     Store();
     Refresh();
@@ -462,6 +555,7 @@ void ATibetGameMode::MoveToNextMap()
     else if(Map==TEXT("terma3")) {Dest=TEXT("chimphu"); Save->bReturnFromTerma=true;}
     else if(Order.IsValidIndex(Id+1)) Dest=Order[Id+1];
     if(Dest.IsEmpty()) return;
+    if (Dest==TEXT("stupa")) Save->PillCharges=4;
     Save->Map=Dest;
     Store();
     bTravel=true;
@@ -472,6 +566,21 @@ void ATibetGameMode::Interact()
     const auto* P=UGameplayStatics::GetPlayerPawn(this,0);
     if (!P) return;
     const EInteraction Action=InteractionAt(P->GetActorLocation());
+    if (Action==EInteraction::None && Save && !bTravel)
+    {
+        const int32 Lamp=NearestButterLamp(P->GetActorLocation());
+        if (Lamp!=INDEX_NONE)
+        {
+            const bool WasLit=(Save->ButterLampMask & (1u<<Lamp))!=0;
+            Save->ButterLampMask |= 1u<<Lamp;
+            RestoreStupaFlames();
+            Mana=FMath::Min(100.f,Mana+10);
+            SetNotice(WasLit ? Local(TEXT("The wick burns steadily in fresh butter."),TEXT("添入酥油，燈芯安穩地燃燒。")) :
+                               Local(TEXT("The butter lamp is lit."),TEXT("酥油燈亮起。")));
+            Store();
+            return;
+        }
+    }
     if (Action==EInteraction::Grove)
     {
         Save->Map=TEXT("grove"); Store(); bTravel=true;
@@ -484,13 +593,116 @@ void ATibetGameMode::Interact()
         Pulse(GetObjectiveLocation()+FVector(0,0,80),Gold,.6);
         if(Action==EInteraction::Talk)
         {
-            const auto& O=Objective(Route,GetStep());
-            SetNotice(Local(O.SpeechEn,O.SpeechZh));
-            NoticeUntil=GetWorld()->GetTimeSeconds()+12;
+            BeginDialogue(GetStep());
         }
         Advance();
     }
 }
+void ATibetGameMode::BeginDialogue(int32 ObjectiveIndex)
+{
+    StopDialogue();
+    DialogueIndex = ObjectiveIndex;
+    const auto& Line = Objective(Route, ObjectiveIndex);
+    Speaker = Local(Line.SpeakerEn, Line.SpeakerZh);
+    Dialogue = Local(Line.SpeechEn, Line.SpeechZh);
+    const int32 Limit = IsEnglish() ? 82 : 32;
+    for (int32 Start = 0; Start < Dialogue.Len();)
+    {
+        PageStarts.Add(Start);
+        int32 End = FMath::Min(Start + Limit, Dialogue.Len());
+        if (End < Dialogue.Len())
+        {
+            // Keep English words and short phrases together, including their closing punctuation.
+            int32 Space = 0;
+            for (int32 I = End - 1; I > Start + Limit / 3; --I)
+            {
+                if (FChar::IsWhitespace(Dialogue[I]) && !Space) Space = I + 1;
+                if (FCString::Strchr(TEXT("，。！？、；：,.!?;:—"), Dialogue[I])) { End = I + 1; Space = 0; break; }
+            }
+            if (Space) End = Space;
+            while (End < Dialogue.Len() && FCString::Strchr(TEXT("」』）”"), Dialogue[End])) ++End;
+        }
+        Start = End;
+    }
+    bVoicePending = true;
+    PageDeadline = GetWorld()->GetTimeSeconds() + 1.0 + DialoguePage().Len() / (IsEnglish() ? 14. : 4.);
+    if (!bDialoguePaused) StartDialogueVoice();
+}
+
+void ATibetGameMode::StartDialogueVoice()
+{
+    bVoicePending = false;
+    // Existing automated campaigns run unattended. Only the audio QA scenario opts into audible playback.
+    if (FParse::Param(FCommandLine::Get(), TEXT("nosound")) ||
+        (FApp::IsUnattended() && !FParse::Param(FCommandLine::Get(), TEXT("TibetQAVoice")))) return;
+    bVoiceRequested = true;
+    const auto Owner = TWeakObjectPtr<ATibetGameMode>(this);
+    const uint32 Generation = VoiceGeneration;
+    TibetVoice::Speak(TCHAR_TO_UTF8(*Dialogue), IsEnglish(), [Owner, Generation](int Offset) {
+        AsyncTask(ENamedThreads::GameThread, [Owner, Generation, Offset] {
+            if (Owner.IsValid() && Owner->VoiceGeneration == Generation) Owner->SetDialogueWord(Offset);
+        });
+    }, [Owner, Generation] {
+        AsyncTask(ENamedThreads::GameThread, [Owner, Generation] {
+            if (!Owner.IsValid() || Owner->VoiceGeneration != Generation) return;
+            Owner->PageIndex = Owner->PageStarts.Num() - 1;
+            Owner->PageDeadline = Owner->GetWorld()->GetTimeSeconds() + 1.4;
+        });
+    });
+}
+
+FString ATibetGameMode::DialoguePage() const
+{
+    if (!PageStarts.IsValidIndex(PageIndex)) return {};
+    const int32 Start = PageStarts[PageIndex];
+    const int32 End = PageStarts.IsValidIndex(PageIndex + 1) ? PageStarts[PageIndex + 1] : Dialogue.Len();
+    return Dialogue.Mid(Start, End - Start).TrimStartAndEnd();
+}
+
+void ATibetGameMode::SetDialogueWord(int32 Offset)
+{
+    if (!bSpokenWord)
+        UE_LOG(LogTemp, Display, TEXT("TIBET_VOICE playing language=%s speaker=%s"), IsEnglish() ? TEXT("en-US") : TEXT("zh-TW"), *Speaker);
+    bSpokenWord = true;
+    while (PageStarts.IsValidIndex(PageIndex + 1) && Offset >= PageStarts[PageIndex + 1]) ++PageIndex;
+    // Allow a missing device finish callback to recover after its longest remaining clause.
+    PageDeadline = GetWorld()->GetTimeSeconds() + 4. + (Dialogue.Len() - Offset) / (IsEnglish() ? 9. : 2.5);
+}
+
+void ATibetGameMode::TickDialogue()
+{
+    if (DialogueIndex == INDEX_NONE || bDialoguePaused || GetWorld()->GetTimeSeconds() < PageDeadline) return;
+    if (bSpokenWord || !PageStarts.IsValidIndex(PageIndex + 1)) { StopDialogue(); return; }
+    ++PageIndex;
+    PageDeadline = GetWorld()->GetTimeSeconds() + 1.0 + DialoguePage().Len() / (IsEnglish() ? 14. : 4.);
+}
+void ATibetGameMode::PauseDialogue(bool Paused)
+{
+    bDialoguePaused = Paused;
+    if (DialogueIndex == INDEX_NONE) return;
+    if (!Paused && bVoicePending) StartDialogueVoice();
+    else if (bVoiceRequested) TibetVoice::Pause(Paused);
+}
+void ATibetGameMode::StopDialogue()
+{
+    if (bVoiceRequested) TibetVoice::Stop();
+    bVoiceRequested = false;
+    ++VoiceGeneration;
+    DialogueIndex = INDEX_NONE;
+    PageStarts.Reset();
+    Dialogue.Reset();
+    Speaker.Reset();
+    PageIndex = 0;
+    bVoicePending = false;
+    bSpokenWord = false;
+}
+void ATibetGameMode::EndPlay(const EEndPlayReason::Type Reason)
+{
+    StopDialogue();
+    if (Save && !bTravel && !SlotName.IsEmpty()) Store();
+    Super::EndPlay(Reason);
+}
+
 void ATibetGameMode::SetNotice(const FString& Line)
 {
     Notice=Line; NoticeUntil=GetWorld()->GetTimeSeconds()+3.f;
@@ -558,6 +770,7 @@ void ATibetGameMode::CastSkill(int32 Slot)
     Cooldown[Slot]=Skill.Recovery; Mana-=Skill.Cost;
     if (Slot == 4) Shield = 6;
     const FVector Player = P->GetActorLocation();
+    if (!WildernessPack.IsEmpty()) UpdateWilderness(Player,0.f);
     const bool Hit = EnemyMaximum > 0 && Focus && Skill.Power > 0 &&
         FVector::Dist2D(Player, GetObjectiveLocation()) < Skill.Range;
     const FVector From = Player + FVector(0,0,30);
@@ -577,13 +790,20 @@ void ATibetGameMode::CastSkill(int32 Slot)
     if (Effect) Effect->Start(Slot, From, To, P, RitualMaterial);
 
     const int32 Before = EnemyMaximum > 0 ? EnemyHealth : 0;
-    const int32 Damage = Hit ? FMath::Min(Before, Skill.Power) : 0;
+    const int32 Damage = Hit ? FMath::Min(Before, Skill.Power + int(IsEquipped(ETibetItem::Vajra))) : 0;
     // Snapshot actual loss before advancing the route or replacing a defeated actor.
     const int32 After = Before - Damage;
     UE_LOG(LogTemp, Display,
         TEXT("TIBET_CAST slot=%d map=%s hit=%d mp=%.1f shield=%.1f before=%d after=%d damage=%d effect=%d"),
         Slot, *Map, Hit ? 1 : 0, Mana, Shield, Before, After, Damage, Effect ? 1 : 0);
     if (Damage == 0) return;
+    if (!WildernessPack.IsEmpty())
+    {
+        const auto* Body = Focus->FindComponentByClass<UStaticMeshComponent>();
+        if (Body && Body->GetStaticMesh())
+            UE_LOG(LogTemp,Display,TEXT("TIBET_WILD_HIT model=%s before=%d after=%d loss=%d"),
+                *Body->GetStaticMesh()->GetName(),Before,After,Damage);
+    }
     EnemyHealth = After;
     LastHitTime = GetWorld()->GetTimeSeconds();
     if (Slot == 2 || Slot == 3) Stun = 2;
@@ -602,6 +822,8 @@ void ATibetGameMode::CastSkill(int32 Slot)
 void ATibetGameMode::Tick(float Dt)
 {
     Super::Tick(Dt);
+    TickDialogue();
+    if(Save && !bTravel) UpdateClock(Dt);
     const float Now = GetWorld()->GetTimeSeconds();
     DamageCues.RemoveAll([Now](const FTibetDamageCue& Cue) { return Now - Cue.SpawnTime >= 1.05f; });
     if (Now - LastHitTime > .22f)
@@ -609,10 +831,12 @@ void ATibetGameMode::Tick(float Dt)
     if (!Save || bTravel || IsCampaignComplete()) return;
     auto* P=UGameplayStatics::GetPlayerPawn(this,0);
     if (!P) return;
-    Mana=FMath::Min(100.f,Mana+Dt*5);
+    UpdatePills(Now);
+    Mana=FMath::Min(MaxMana(),Mana+Dt*5);
     for(float& T:Cooldown) T=FMath::Max(0.f,T-Dt);
     Shield=FMath::Max(0.f,Shield-Dt); Stun=FMath::Max(0.f,Stun-Dt);
     const auto K=Objective(Route,GetStep()).Kind;
+    if (!WildernessPack.IsEmpty()) UpdateWilderness(P->GetActorLocation(),Dt);
     const FVector ToPlayer=P->GetActorLocation()-GetObjectiveLocation();
     const double Dist=ToPlayer.Size2D();
     if (bEscorting && Messenger)
@@ -652,7 +876,7 @@ void ATibetGameMode::Tick(float Dt)
     if ((K==EObjective::Combat || K==EObjective::Boss) && Focus && Stun<=0 && Dist<1600)
     {
         const FVector Dir=ToPlayer.GetSafeNormal2D();
-        if(Dist>124) Focus->AddActorWorldOffset(Dir*FMath::Min<double>(Dt*(K==EObjective::Boss?165:115),Dist-120));
+        if(Dist>124) Focus->AddActorWorldOffset(Dir*FMath::Min<double>(Dt*PursuitSpeed(K==EObjective::Boss),Dist-120));
         HurtTimer-=Dt;
         if(Dist<200 && HurtTimer<=0)
         {
@@ -666,16 +890,17 @@ void ATibetGameMode::Tick(float Dt)
             if(Health<=0)
             {
                 P->TeleportTo(FVector(-2000,0,100),FRotator::ZeroRotator);
-                Health=100; Mana=100; Refresh();
+                Health=MaxHealth(); Mana=MaxMana(); HealTicks.Reset(); Refresh();
                 SetNotice(Local(TEXT("Restored at the trailhead."),TEXT("已在登山口恢復。")));
             }
         }
     }
-    else Health=FMath::Min(100.f,Health+Dt*2);
+    else Health=FMath::Min(MaxHealth(),Health+Dt*2);
 }
 void ATibetGameMode::ChangeLanguage()
 {
     if (!Save) return;
     Save->bEnglish=!Save->bEnglish;
+    if (DialogueIndex != INDEX_NONE) BeginDialogue(DialogueIndex);
     Store();
 }

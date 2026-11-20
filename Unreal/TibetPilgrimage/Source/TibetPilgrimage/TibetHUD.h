@@ -13,6 +13,8 @@ class TIBETPILGRIMAGE_API ATibetHUD : public AHUD
 public:
     void ToggleJournal(ETibetPage Page);
     void CloseJournal();
+    bool HasDrawnInteractionCue() const { return bDrewInteraction; }
+    void UseQuickSlot();
     bool IsJournalOpen() const;
     ETibetPage GetJournalPage() const { return Page; }
 protected:
@@ -23,5 +25,6 @@ private:
     TSharedPtr<STibetPlayOverlay> Overlay;
     ETibetPage Page{};
     bool bCursorBeforeJournal = false;
+    bool bDrewInteraction = false;
     bool bPausedByJournal = false;
 };
