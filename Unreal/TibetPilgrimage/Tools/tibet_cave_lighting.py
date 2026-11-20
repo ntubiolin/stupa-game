@@ -14,19 +14,28 @@ def dress_passages(levels, actors, place, stage):
         marker = place(levels, actors, unreal.TargetPoint, f"Cave socket {name}", ue(at))
         marker.set_editor_property("tags", [unreal.Name("TibetPassage"), unreal.Name(name)])
 
+    def lamp_beam(label, wick, yaw, pitch, reach, intensity, temperature):
+        actor = place(levels, actors, unreal.SpotLight, label, ue(wick), unreal.Rotator(pitch=pitch, yaw=yaw))
+        light = actor.get_component_by_class(unreal.SpotLightComponent)
+        light.set_editor_property("mobility", unreal.ComponentMobility.MOVABLE)
+        light.set_editor_property("intensity_units", unreal.LightUnits.CANDELAS)
+        light.set_editor_property("intensity", intensity)
+        light.set_editor_property("use_temperature", True)
+        light.set_editor_property("temperature", temperature)
+        light.set_editor_property("attenuation_radius", reach * 100)
+        light.set_editor_property("inner_cone_angle", 30)
+        light.set_editor_property("outer_cone_angle", 80)
+        light.set_editor_property("cast_shadows", False)
+
     for i, ((x, y, z), yaw, reach) in enumerate(lanterns(stage)):
-        actor = place(levels, actors, unreal.SpotLight, f"Butter lamp {i + 1}",
-                      ue((x, y, z + 1.40)), unreal.Rotator(pitch=-4, yaw=yaw))
-        lamp = actor.get_component_by_class(unreal.SpotLightComponent)
-        lamp.set_editor_property("mobility", unreal.ComponentMobility.MOVABLE)
-        lamp.set_editor_property("intensity_units", unreal.LightUnits.CANDELAS)
-        lamp.set_editor_property("intensity", 1100 if stage.startswith("terma") else 1900)
-        lamp.set_editor_property("use_temperature", True)
-        lamp.set_editor_property("temperature", 2750 if i % 2 else 2450)
-        lamp.set_editor_property("attenuation_radius", reach * 100)
-        lamp.set_editor_property("inner_cone_angle", 38)
-        lamp.set_editor_property("outer_cone_angle", 78)
-        lamp.set_editor_property("cast_shadows", False)
+        wick = (x, y, z + 1.40)
+        temperature = 2750 if i % 2 else 2450
+        lamp_beam(f"Butter lamp {i + 1}", wick, yaw, 2, reach,
+                  990 if stage.startswith("terma") else 1900, temperature)
+        # Three spaced lamps also throw a dimmer lobe up their own rock wall.
+        # The small radius keeps this out of the opposite aisle and the vault crown.
+        if stage.startswith("terma") and i in (1, 4, 6):
+            lamp_beam(f"Wick spill {i + 1}", wick, yaw + 180, 29, 10.5, 210, temperature)
 
     if stage.startswith("terma"):
         volume = place(levels, actors, unreal.PostProcessVolume, "Candlelit vault exposure")

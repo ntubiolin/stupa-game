@@ -118,8 +118,12 @@ def survey(stage):
         math.dist(l.get_actor_location().to_tuple(),(y*100,x*100,(z+1.40)*100)) < 1
         and l.get_component_by_class(unreal.SpotLightComponent).get_editor_property("use_temperature")
         for l in lamps) for (x,y,z),_,_ in lanterns(stage))
+    spills = [a for a in actors if isinstance(a, unreal.SpotLight) and a.get_actor_label().startswith("Wick spill ")]
+    spill_sources = all(any(math.dist(spill.get_actor_location().to_tuple(), lamp.get_actor_location().to_tuple()) < 1
+                            for lamp in lamps) for spill in spills)
     vault_lighting = not stage.startswith("terma") or (not any(isinstance(a, (
         unreal.DirectionalLight, unreal.SkyLight, unreal.SkyAtmosphere)) for a in actors)
+        and len(spills) == 3 and spill_sources
         and any(isinstance(a, unreal.PostProcessVolume) and a.get_editor_property("unbound") for a in actors))
     # Trace below the vault ceiling when locating the three dungeon centrepieces.
     top = 1000 if stage.startswith("terma") else 7000
