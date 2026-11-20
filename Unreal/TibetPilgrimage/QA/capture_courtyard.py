@@ -47,6 +47,60 @@ def visible_offering(path):
     return peel
 
 
+def clock_contrast(directory, size):
+    frames=[bitmap(directory/f"clock-{rate}x.png") for rate in (1,4)]
+    if any((w,h)!=size for w,h,_ in frames):
+        raise ValueError("Clock screenshots do not match the requested viewport")
+    width,height=size
+    one,four=[frame[2] for frame in frames]
+
+    def gold(rgb):
+        r,g,b=rgb
+        return r>200 and 150<g<230 and 55<b<155 and r-g>25
+
+    def cream(rgb):
+        r,g,b=rgb
+        return r>200 and g>180 and b>148
+
+    def luma(rgb):
+        channels=[((v/255+.055)/1.055)**2.4 if v>10 else v/3294.6 for v in rgb]
+        return sum(c*k for c,k in zip(channels,(.2126,.7152,.0722)))
+
+    boxes=[]
+    ratios=[]
+    for chosen,other in ((one,four),(four,one)):
+        fill=[(x,y) for y in range(5,min(130,height//3)) for x in range(width-230,width-4)
+              if gold(chosen(x,y)) and max(other(x,y))<98]
+        if len(fill)<250:
+            raise ValueError("Selected clock rate lacks a distinct gold control background")
+        left,right=min(x for x,_ in fill),max(x for x,_ in fill)
+        top,bottom=min(y for _,y in fill),max(y for _,y in fill)
+        boxes.append((left,right,top,bottom))
+        ink=[luma(chosen(x,y)) for y in range(top+3,bottom-2) for x in range(left+5,right-4)
+             if max(chosen(x,y))<100 and cream(other(x,y))]
+        if len(ink)<6:
+            raise ValueError("The selected rate numeral is not visible on its button")
+        ratio=(median(luma(chosen(x,y)) for x,y in fill)+.05)/(median(ink)+.05)
+        if ratio<4.5:
+            raise ValueError(f"Clock button contrast is {ratio:.2f}:1")
+        ratios.append(round(ratio,2))
+    l1,r1,top,bottom=boxes[0]
+    l4,r4,_,_=boxes[1]
+    stride=l4-l1
+    if not (l1<r1<l4<r4):
+        raise ValueError("Selected backgrounds do not follow 1× then 4×")
+    panel_left=l1-stride
+    # Across this fixed HUD, the complete period and time must occupy one line.
+    title_rows=[y for y in range(10,top) if
+                sum(cream(one(x,y)) for x in range(panel_left,r4+1))>=3]
+    if not title_rows or title_rows[-1]-title_rows[0]+1>(bottom-top)*.78:
+        raise ValueError("Clock time and day period do not fit on one line")
+    pause=[x for x in range(panel_left,l1-1) for y in range(top+3,bottom-2) if cream(one(x,y))]
+    if not pause or min(pause)-panel_left<3 or l1-1-max(pause)<3:
+        raise ValueError("Pause glyph is missing or clipped")
+    return {"selectedContrastRatios":ratios,"timeTextHeight":title_rows[-1]-title_rows[0]+1}
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--exe",type=Path,required=True)
@@ -69,6 +123,11 @@ def main():
         peel=visible_offering(output/"play/feeding-banana.png")
         motion=compare_light_and_wind(*(output/"play"/(s+".png") for s in ("flags-a","flags-b","night")))
         capture(exe,root,output,"resume","CourtyardResume","stupa",[],slot)
+        controls={}
+        for label,size,options in (("wide",(1440,900),[]),("compact",(884,420),["-TibetTouch"])):
+            name="clock-"+label
+            capture(exe,root,output,name,"Courtyard","stupa",["-TibetQAClockOnly",*options],slot+label,size=size)
+            controls[label]=clock_contrast(output/name,size)
         view=next(v for v in VIEWS if v["id"]=="terma1")
         options=["-TibetQAEye="+vector(view["ueEye"]),"-TibetQALook="+vector(view["ueLook"])]
         vault={}
@@ -78,7 +137,7 @@ def main():
             vault[phase]=candlelight(output/name/"capture.png")
         if abs(vault["day"]["floorMedian"]-vault["night"]["floorMedian"])>8:
             raise ValueError(f"Outdoor clock changed the underground illumination: {vault}")
-        (output/"courtyard.json").write_text(json.dumps({"images":hashes,"motion":motion,"vault":vault,"bananaPixels":peel},indent=2))
+        (output/"courtyard.json").write_text(json.dumps({"images":hashes,"motion":motion,"vault":vault,"bananaPixels":peel,"clockControls":controls},indent=2))
 
 
 if __name__=="__main__":

@@ -38,6 +38,23 @@ void UTibetQASubsystem::Courtyard(APlayerController& PC,ATibetGameMode& Mode)
     TArray<AActor*> Lamps;
     UGameplayStatics::GetAllActorsWithTag(GetWorld(),TEXT("StupaLampFlame"),Lamps);
     ATibetButterFlame* Lamp=Lamps.IsEmpty()?nullptr:Cast<ATibetButterFlame>(Lamps[0]);
+    if(FParse::Param(FCommandLine::Get(),TEXT("TibetQAClockOnly")))
+    {
+        if(CourtyardStep==0)
+        {
+            Mode.SetClockRate(1);
+            Next();
+        }
+        else if(Now-CourtyardSince>.3)
+        {
+            if(CourtyardStep==1) Shot(TEXT("clock-1x"),true);
+            if(CourtyardStep==2) Mode.SetClockRate(4);
+            if(CourtyardStep==3) Shot(TEXT("clock-4x"),true);
+            if(CourtyardStep==4) {Finish(true,TEXT("clock 1x and 4x drawn")); return;}
+            Next();
+        }
+        return;
+    }
     if(Task==TEXT("CourtyardResume"))
     {
         Finish(Mode.ClockRate()==0 && Mode.SolarPhase()>.81f && Mode.SolarPhase()<.96f &&
