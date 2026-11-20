@@ -24,6 +24,11 @@ jobs:
         run: |
           python3 Unreal/TibetPilgrimage/QA/test_cave_passages.py
           python3 Unreal/TibetPilgrimage/QA/test_residents.py
+      - name: Check native dialogue data, pilgrimage atlas and wilderness figures
+        run: |
+          python3 Unreal/TibetPilgrimage/QA/test_dialogue.py
+          python3 Unreal/TibetPilgrimage/QA/test_atlas_parity.py
+          python3 Unreal/TibetPilgrimage/QA/test_wilderness.py
       - uses: actions/upload-artifact@v4
         with:
           name: story-build
