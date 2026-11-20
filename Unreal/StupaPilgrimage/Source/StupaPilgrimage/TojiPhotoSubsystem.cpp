@@ -62,8 +62,8 @@ void UTojiPhotoSubsystem::Tick(float)
         const TCHAR* Args = FCommandLine::Get();
         FVector Eye, Look;
         FParse::Value(Args, TEXT("TojiPhotoDir="), Dir);
-        FParse::Value(Args, TEXT("TojiEye="), EyeText);
-        FParse::Value(Args, TEXT("TojiLook="), LookText);
+        FParse::Value(Args, TEXT("TojiEye="), EyeText, false);
+        FParse::Value(Args, TEXT("TojiLook="), LookText, false);
         if (!Eye.InitFromString(EyeText) || !Look.InitFromString(LookText) || Eye.Equals(Look)) {
             Fail(TEXT("Invalid photograph coordinates")); return;
         }
@@ -74,7 +74,7 @@ void UTojiPhotoSubsystem::Tick(float)
         }
         auto* Pawn = PC->GetPawn();
         FString SubjectText;
-        if (FParse::Value(Args, TEXT("TojiSubject="), SubjectText))
+        if (FParse::Value(Args, TEXT("TojiSubject="), SubjectText, false))
         {
             FVector Ground;
             auto* Character = Cast<ACharacter>(Pawn);
