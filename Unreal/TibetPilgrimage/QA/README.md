@@ -50,3 +50,5 @@ python3 Tools/tibet.py package --platform IOS --archive "$PWD/Builds/Signed"
 ```
 
 UE 5.8 的通常輸出為 Builds/Signed/IOS/TibetPilgrimage.app。將連接裝置的啟動、橫向觸控、讀檔及關卡轉場結果另行記錄。
+
+[西藏 UE 模組移植驗收](Module-audit.md) 逐項對照網頁客戶端、伺服器與原生遊戲。執行 `python3 -m unittest discover -s QA` 可核對每個原始模組都有且只有一個盤點項目。
