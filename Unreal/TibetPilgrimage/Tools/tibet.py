@@ -1,5 +1,6 @@
 """Build, generate, play or archive the Tibet campaign on an Apple Silicon Mac."""
 import argparse
+import json
 import os
 import plistlib
 import re
@@ -24,6 +25,10 @@ def check_maps(maps):
     missing = [m for m in maps if not (ROOT / "Content" / (m[6:] + ".umap")).is_file()]
     if missing:
         raise SystemExit(f"Generate the campaign first. Missing maps: {missing}")
+    manifest = ROOT / "Saved/TibetMusic/cues.json"
+    if not manifest.is_file() or not all((ROOT / "Content/Music" / (name + ".uasset")).is_file()
+                                         for name in json.loads(manifest.read_text())):
+        raise SystemExit("Regenerate the campaign to include its music before packaging.")
 
 
 def check_ios_app(app, unsigned):
@@ -79,6 +84,7 @@ def main():
         run(batch / "Mac/Build.sh", "TibetPilgrimageEditor", "Mac", "Development",
             f"-Project={PROJECT}", "-WaitMutex")
     elif args.command == "generate":
+        run("node", ROOT / "Tools/export_music.mjs")
         LOG.parent.mkdir(parents=True, exist_ok=True)
         LOG.unlink(missing_ok=True)
         run(editor, PROJECT, "-unattended", "-nosplash", "-nop4",

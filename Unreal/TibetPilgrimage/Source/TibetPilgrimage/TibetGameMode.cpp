@@ -4,6 +4,7 @@
 #include "TibetVoice.h"
 #include "Async/Async.h"
 #include "Misc/App.h"
+#include "TimerManager.h"
 #include "GameFramework/PlayerController.h"
 #include "TibetBossHalo.h"
 #include "TibetRitualEffect.h"
@@ -164,6 +165,7 @@ void ATibetGameMode::StartPlay()
         }
     }
     StartCourtyard();
+    GetWorldTimerManager().SetTimer(ScoreTimer, this, &ATibetGameMode::RefreshScore, .5f, true, .01f);
     PopulateResidents();
     Store();
     Refresh();
@@ -698,6 +700,7 @@ void ATibetGameMode::StopDialogue()
 }
 void ATibetGameMode::EndPlay(const EEndPlayReason::Type Reason)
 {
+    GetWorldTimerManager().ClearTimer(ScoreTimer);
     StopDialogue();
     if (Save && !bTravel && !SlotName.IsEmpty()) Store();
     Super::EndPlay(Reason);
