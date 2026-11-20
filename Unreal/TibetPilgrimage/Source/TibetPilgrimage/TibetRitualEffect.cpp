@@ -384,13 +384,13 @@ void ATibetRitualEffect::StartEnemyAttack(AActor& Attacker, bool bStrike, bool b
         for (int32 J = 0; J < 2; ++J)
         {
             FSurface& Arc = J == 0 ? Body : Rim;
-            const auto Edge = [Radius, J](int32 Step, double Sign) {
+            const auto ClawEdge = [Radius, J](int32 Step, double Sign) {
                 const double T = Step / 12.;
                 return Radial((T - .5) * 2.65) * (Radius - 12 * J) +
                     Up * (48 + 62 * T + 22 * J + Sign * (1 + 9 * FMath::Sin(T * UE_PI)));
             };
             for (int32 I = 0; I < 12; ++I)
-                Arc.Quad(Edge(I, -1), Edge(I + 1, -1), Edge(I + 1, 1), Edge(I, 1));
+                Arc.Quad(ClawEdge(I, -1), ClawEdge(I + 1, -1), ClawEdge(I + 1, 1), ClawEdge(I, 1));
         }
     }
     Body.Install(Motif, 0, Material, FLinearColor(1.65f,.025f,.035f));
