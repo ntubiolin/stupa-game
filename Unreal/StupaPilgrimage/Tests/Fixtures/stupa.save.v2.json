@@ -1,0 +1,24 @@
+{
+  "sections": {
+    "settings": {
+      "lang": "zh",
+      "volume": 0.6
+    },
+    "japanCampaign": {
+      "version": 1,
+      "completedSteps": [
+        "initiation",
+        "sankosho",
+        "eastwardVow",
+        "kukaiToji",
+        "yakushi"
+      ]
+    },
+    "merit": {
+      "lamp": 12,
+      "points": 96
+    }
+  },
+  "version": 2,
+  "savedAt": 1795151119540
+}
