@@ -3,10 +3,12 @@ import argparse
 import hashlib
 import html
 import json
+import os
 import plistlib
 import platform
 import re
 import shutil
+import signal
 import struct
 import subprocess
 import tempfile
@@ -16,6 +18,18 @@ from urllib.parse import quote
 
 QA = Path(__file__).resolve().parent
 VIEWS = json.loads((QA / "views.json").read_text())
+
+
+def stop_timed_out_launch(executable, unique_argument):
+    # open -W waits for a separate app process. Match both its path and unique QA run.
+    for line in subprocess.check_output(["ps", "-axo", "pid=,command="], text=True).splitlines():
+        fields = line.strip().split(maxsplit=1)
+        if (len(fields) == 2 and fields[1].startswith(str(executable) + " ")
+                and " " + unique_argument + " " in " " + fields[1] + " "):
+            try:
+                os.kill(int(fields[0]), signal.SIGTERM)
+            except ProcessLookupError:
+                pass
 
 
 def temporary_root(executable):
@@ -29,12 +43,14 @@ def temporary_root(executable):
         raise ValueError("Unexpected bundle identifier")
     root = Path.home() / "Library/Containers" / bundle_id / "Data/tmp"
     if not root.is_dir():
-        args = [executable, "-unattended", "-RenderOffscreen", "-nosound", "-ExecCmds=quit",
-                "-TibetSaveSlot=QA-bootstrap-" + uuid4().hex]
+        slot_argument = "-TibetSaveSlot=QA-bootstrap-" + uuid4().hex
+        args = ["open", "-n", "-W", "-a", str(bundle), "--args", "-unattended", "-RenderOffscreen",
+                "-nosound", "-ExecCmds=quit", slot_argument]
         try:
             subprocess.run(args, cwd=executable.parent, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                            check=True, timeout=30)
         except subprocess.TimeoutExpired:
+            stop_timed_out_launch(executable, slot_argument)
             if not root.is_dir():
                 raise
     if not root.is_dir():
@@ -75,9 +91,14 @@ def capture(exe, stage, dest, name, mode, level, options, slot):
             "-ExecCmds=r.ScreenPercentage 100,r.DynamicRes.OperationMode 0", f"-abslog={output / 'game.log'}", *options]
     print(name, flush=True)
     try:
+        # Use LaunchServices, as Finder does when the player opens the app bundle.
+        cmd = ["open", "-n", "-W", "-a", str(exe.parents[2]), "--args", *args[1:]]
         with (target / "launch.log").open("w") as log:
-            subprocess.run(args, cwd=exe.parent, stdout=log, stderr=subprocess.STDOUT,
-                           check=True, timeout=1800 if mode == "Campaign" else 300)
+            subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT, check=True,
+                           timeout=1800 if mode == "Campaign" else 300)
+    except subprocess.TimeoutExpired:
+        stop_timed_out_launch(exe, f"-TibetQAOutput={output}")
+        raise
     finally:
         shutil.copytree(output, target, dirs_exist_ok=True)
     events = [s.split("\t") for s in (target / "events.tsv").read_text().splitlines()]
@@ -98,7 +119,6 @@ def shot_data(p):
 
 
 def compare(web, mac, output):
-    import os
     output.mkdir()
     web_report = json.loads((web / "report.json").read_text())
     indexed = {v["id"]: v for v in web_report["views"]}
