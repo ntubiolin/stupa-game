@@ -133,6 +133,30 @@ def shot_data(p, size=(1440, 900)):
 MIN_LANDMARK_DETAIL = 2.0
 
 
+def injury_edge_fraction(image):
+    """Read the paired injury strokes from the rendered frame on the delivery Mac."""
+    with tempfile.TemporaryDirectory() as temp:
+        bitmap = Path(temp) / "frame.bmp"
+        subprocess.run(["sips", "-s", "format", "bmp", str(image), "--out", str(bitmap)],
+                       stdout=subprocess.DEVNULL, check=True)
+        data = bitmap.read_bytes()
+    offset = struct.unpack_from("<I", data, 10)[0]
+    width, height = struct.unpack_from("<ii", data, 18)
+    channels = struct.unpack_from("<H", data, 28)[0] // 8
+    if channels not in (3, 4):
+        raise ValueError("Expected a 24- or 32-bit screenshot")
+    stride = (width * channels + 3) & ~3
+    red = samples = 0
+    for y in range(int(abs(height) * .50), int(abs(height) * .64), 3):
+        row = abs(height) - 1 - y if height > 0 else y
+        for x in (1, width - 2):
+            at = offset + row * stride + x * channels
+            blue, green, scarlet = data[at:at+3]
+            red += scarlet > 100 and scarlet > 1.55 * green and scarlet > 1.45 * blue
+            samples += 1
+    return red / samples
+
+
 def landmark_detail(image):
     with tempfile.TemporaryDirectory() as tmp:
         bitmap = Path(tmp) / "sample.bmp"
@@ -211,7 +235,7 @@ def compare(web, mac, output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["photos", "arrival", "play", "skills", "learned", "journal", "compare"])
+    parser.add_argument("action", choices=["photos", "arrival", "play", "skills", "learned", "journal", "feedback", "compare"])
     parser.add_argument("--exe", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--web", type=Path)
@@ -255,6 +279,18 @@ def main():
                 if args.only and view["id"] != args.only:
                     continue
                 capture_landmark(exe,stage,output,view,slot)
+        elif args.action == "feedback":
+            for name, options, size in (("desktop", [], (1440, 900)), ("compact", ["-TibetTouch"], (884, 420))):
+                rows = capture(exe, stage, output, name, "Feedback", "terma3", options, slot+name, size)
+                for expected in (["objective-pulse"], ["ward-contact"], ["injury", "100", "84", "16"]):
+                    if expected not in rows:
+                        raise ValueError(f"{name}: missing combat observation {expected}")
+                frames = [output / name / (state + ".png") for state in ("ward", "injury", "settled")]
+                for frame in frames:
+                    shot_data(frame, size)
+                protected, injured, settled = map(injury_edge_fraction, frames)
+                if injured < .75 or injured - max(protected, settled) < .4:
+                    raise ValueError(f"{name}: injury indicator is indistinct: {protected}, {injured}, {settled}")
         elif args.action == "learned":
             # The actual last vault gate writes bReturnFromTerma; talking to Tsogyal
             # and exiting Chimphu then writes the Boudhanath epilogue checkpoint.

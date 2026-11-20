@@ -114,6 +114,7 @@ void ATibetGameMode::StartPlay()
         UGameplayStatics::OpenLevel(this,FName(*FString::Printf(TEXT("/Game/Maps/Tibet/%s"),*Save->Map)));
         return;
     }
+    PlayerFeedback.ObjectiveTime = GetWorld()->GetTimeSeconds();
     Route=Map;
     if (Map==TEXT("chimphu") && Save->bReturnFromTerma) Route=TEXT("return");
     if (Map==TEXT("stupa") && Save->bEpilogue) Route=TEXT("ending");
@@ -337,6 +338,7 @@ void ATibetGameMode::Refresh()
 }
 void ATibetGameMode::Advance()
 {
+    PlayerFeedback.ObjectiveTime = GetWorld()->GetTimeSeconds();
     if (++Save->Counts.FindOrAdd(Route)>=Objective(Route,GetStep()).Count)
     {
         Save->Counts[Route]=0;
@@ -551,7 +553,12 @@ void ATibetGameMode::Tick(float Dt)
         if(Dist<200 && HurtTimer<=0)
         {
             HurtTimer=1.5f;
-            if(Shield<=0) Health-=K==EObjective::Boss?16:8;
+            if (Shield <= 0)
+            {
+                const float Before = Health;
+                Health = FMath::Max(0.f, Health - (K == EObjective::Boss ? 16.f : 8.f));
+                PlayerFeedback.RecordHit(Now, Before, Health);
+            }
             if(Health<=0)
             {
                 P->TeleportTo(FVector(-2000,0,100),FRotator::ZeroRotator);

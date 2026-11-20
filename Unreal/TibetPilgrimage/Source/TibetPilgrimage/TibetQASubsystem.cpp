@@ -86,7 +86,8 @@ void UTibetQASubsystem::Tick(float)
     if (Task == TEXT("Arrival")) Arrival(*PC);
     else if (Task == TEXT("Journal")) Journal(*PC,*Mode);
     else if (Task == TEXT("Photo")) Photo(*PC);
-    else if (Task == TEXT("Play") || Task == TEXT("Campaign") || Task == TEXT("GroveEntry") || Task == TEXT("Skills")) Play(*PC, *Mode);
+    else if (Task == TEXT("Play") || Task == TEXT("Campaign") || Task == TEXT("GroveEntry") ||
+             Task == TEXT("Skills") || Task == TEXT("Feedback")) Play(*PC, *Mode);
     else if (Task == TEXT("LearnedSkills")) LearnedSkills(*PC, *Mode);
     else if (Task == TEXT("Resume"))
     {
@@ -406,6 +407,11 @@ void UTibetQASubsystem::Play(APlayerController& PC, ATibetGameMode& Mode)
     if (Mode.IsCampaignComplete() && Task == TEXT("Campaign"))
     { Finish(true,TEXT("campaign completed")); return; }
 
+    if (Task == TEXT("Feedback") && Kind == TEXT("Boss"))
+    {
+        PlayerFeedback(PC, Mode);
+        return;
+    }
     if (Task == TEXT("Skills") && (bTestingSkills || Kind == TEXT("Boss")))
     {
         bTestingSkills = true;
@@ -440,6 +446,73 @@ void UTibetQASubsystem::Play(APlayerController& PC, ATibetGameMode& Mode)
     }
 }
 
+
+void UTibetQASubsystem::PlayerFeedback(APlayerController& PC, ATibetGameMode& Mode)
+{
+    const float Now = GetWorld()->GetTimeSeconds();
+    const auto& Cue = Mode.GetPlayerFeedback();
+    APawn* Pawn = PC.GetPawn();
+    const FVector Towards = Mode.GetObjectiveLocation() - Pawn->GetActorLocation();
+    if (FeedbackPhase == 0)
+    {
+        if (bMoving) { SendKey(PC,EKeys::W,false); bMoving=false; }
+        if (Cue.ObjectivePulse(Now) < .65f || Cue.HurtOpacity(Now) != 0.f)
+        { Finish(false,TEXT("Expected a new objective pulse and an unhurt player")); return; }
+        Record(TEXT("objective-pulse"));
+        Tapped = EKeys::Three;
+        SendKey(PC,Tapped,true);
+        FeedbackPhase = 1;
+        return;
+    }
+    if (Towards.Size2D() > 153.f)
+    {
+        PC.SetControlRotation(Towards.Rotation());
+        Pawn->AddMovementInput(Towards.GetSafeNormal2D());
+    }
+    if (FeedbackPhase == 1)
+    {
+        if (Mode.GetSkillState(4).ActiveRemaining <= 0.f)
+        {
+            if (GuardedContact < 0.f) { Finish(false,TEXT("Ward never protected contact")); return; }
+            FeedbackPhase = 2;
+            return;
+        }
+        if (Mode.GetHealth() != 100.f || Cue.HurtOpacity(Now) != 0.f)
+        { Finish(false,TEXT("Ward incorrectly signalled a player injury")); return; }
+        if (Towards.Size2D() < 180.f)
+        {
+            if (GuardedContact < 0.f) GuardedContact = Now;
+            if (Now - GuardedContact > 1.6f && Screenshot.IsEmpty())
+            {
+                Record(TEXT("ward-contact"));
+                Screenshot = Output / TEXT("ward.png");
+                FScreenshotRequest::RequestScreenshot(Screenshot,true,false,false);
+            }
+        }
+        return;
+    }
+    if (FeedbackPhase == 2 && Mode.GetHealth() < 100.f)
+    {
+        if (Cue.Loss != 16 || Mode.GetHealth() != 84.f || Cue.HurtOpacity(Now) < .8f)
+        { Finish(false,TEXT("Unshielded boss hit did not match actual player health loss")); return; }
+        const auto* Figure = FindObject<USceneComponent>(Pawn,TEXT("Pilgrim"));
+        if (!Figure || FMath::Abs(Figure->GetRelativeRotation().Pitch) < 3.f) return;
+        Record(TEXT("injury\t100\t84\t16"));
+        FScreenshotRequest::RequestScreenshot(Output / TEXT("injury.png"),true,false,false);
+        FeedbackPhase = 3;
+        return;
+    }
+    if (FeedbackPhase == 3 && Cue.HurtOpacity(Now) == 0.f && !FScreenshotRequest::IsScreenshotRequested())
+    {
+        if (Cue.Flinch(Now) != 0.f || Cue.ObjectivePulse(Now) != 0.f)
+        { Finish(false,TEXT("Injury or objective kept pulsing")); return; }
+        FScreenshotRequest::RequestScreenshot(Output / TEXT("settled.png"),true,false,false);
+        FeedbackPhase = 4;
+        return;
+    }
+    if (FeedbackPhase == 4 && !FScreenshotRequest::IsScreenshotRequested())
+        Finish(true,TEXT("ward, injury, recovery and objective"));
+}
 
 // Each invocation walks a fresh vault and casts into the same living guardian.
 void UTibetQASubsystem::SkillEncounter(APlayerController& PC, ATibetGameMode& Mode)

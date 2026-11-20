@@ -148,6 +148,12 @@ void ATibetCharacter::Tick(float Dt)
     }
     const float Speed=GetVelocity().Size2D();
     WalkPhase += Dt*Speed*.025;
+    if (const auto* Mode = GetWorld()->GetAuthGameMode<ATibetGameMode>())
+    {
+        const float Recoil = Mode->GetPlayerFeedback().Flinch(GetWorld()->GetTimeSeconds());
+        // Move the figure within its capsule. The camera and collision stay steady.
+        Figure->SetRelativeRotation(FRotator(-22.f * Recoil, 0.f, 9.f * Recoil));
+    }
     for (int32 i=0; i<Joints.Num(); ++i)
     {
         const float Sign = (i == 0 || i == 3) ? 1 : -1;

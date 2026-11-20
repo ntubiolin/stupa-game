@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/SaveGame.h"
+#include "TibetPlayerFeedback.h"
 #include "TibetGameMode.generated.h"
 
 UCLASS()
@@ -61,6 +62,7 @@ public:
     const TArray<FTibetDamageCue>& GetDamageCues() const { return DamageCues; }
     float GetMana() const { return Mana; }
     float GetHealth() const { return Health; }
+    const FTibetPlayerFeedback& GetPlayerFeedback() const { return PlayerFeedback; }
     void ChangeLanguage();
     FString AreaName() const;
     int32 CurrentAreaIndex() const;
@@ -84,6 +86,7 @@ private:
     int32 EnemyHealth = 0, EnemyMaximum = 0;
     float EnemyTrailing = 0, LastHitTime = -10, FinishTime = -10;
     FTibetEnemyMeter FinishingMeter;
+    FTibetPlayerFeedback PlayerFeedback;
     TArray<FTibetDamageCue> DamageCues;
     float Health = 100, Mana = 100, HurtTimer = 0, Stun = 0, Shield = 0, NoticeUntil = 0;
     float Cooldown[7]{};

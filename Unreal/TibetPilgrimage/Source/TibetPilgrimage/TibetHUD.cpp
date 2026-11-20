@@ -89,6 +89,31 @@ void ATibetHUD::DrawHUD()
             DrawRect(Frame, X + Width * I / Meter.Maximum, Y + Height * .59f, HScale, Height * .41f);
     }
     const float Now = GetWorld()->GetTimeSeconds();
+    const auto& Feedback = M->GetPlayerFeedback();
+    const float Hurt = Feedback.HurtOpacity(Now);
+    if (Hurt > 0)
+    {
+        const float Age = Now - Feedback.HitTime;
+        FVector2D Shoulder;
+        const FVector Anchor = PC->GetPawn()->GetActorLocation() + FVector(0, 0, 82);
+        if (PC->ProjectWorldLocationToScreen(Anchor, Shoulder, true))
+        {
+            const FVector2D Position(
+                FMath::Clamp(Shoulder.X + 44.f * HScale, 4., double(Canvas->SizeX) - 80. * HScale),
+                FMath::Clamp(Shoulder.Y - (8.f + 30.f * Age) * HScale, 8., double(Canvas->SizeY) * .84));
+            FCanvasTextItem Damage(Position, FText::AsNumber(-Feedback.Loss), GEngine->GetMediumFont(),
+                FLinearColor(1.f, .38f, .30f, Hurt));
+            Damage.Scale = FVector2D(2.15f * HScale);
+            Damage.bOutlined = true;
+            Damage.OutlineColor = FLinearColor(.065f, .012f, .014f, Hurt);
+            Damage.EnableShadow(Damage.OutlineColor, FVector2D(2, 2));
+            Canvas->DrawItem(Damage);
+        }
+        // Narrow peripheral strokes remain visible against both daylight and cave walls.
+        const float Long = Canvas->SizeY * .19f, Thick = 4.f * HScale;
+        for (const float X : {0.f, float(Canvas->SizeX) - Thick})
+            DrawRect(FLinearColor(.86f, .11f, .08f, Hurt * .82f), X, Canvas->SizeY * .48f, Thick, Long);
+    }
     for (const FTibetDamageCue& Cue : M->GetDamageCues())
     {
         const float T = FMath::Clamp((Now - Cue.SpawnTime) / 1.05f, 0.f, 1.f);
@@ -110,7 +135,13 @@ void ATibetHUD::DrawHUD()
     FVector2D Point;
     const bool InFront=PC->ProjectWorldLocationToScreen(Target,Point,true);
     const float W=Canvas->SizeX,H=Canvas->SizeY;
-    const FLinearColor Gold(.98,.67,.19,.95);
+    const float Pulse = Feedback.ObjectivePulse(Now);
+    const FLinearColor Gold(1.f,.69f+.17f*Pulse,.23f+.18f*Pulse,1.f);
+    auto MarkerStroke = [this,&Gold,HScale](const FVector2D& A, const FVector2D& B)
+    {
+        DrawLine(A.X,A.Y,B.X,B.Y,FLinearColor(.045f,.031f,.016f,.95f),5.f*HScale);
+        DrawLine(A.X,A.Y,B.X,B.Y,Gold,2.6f*HScale);
+    };
     if(!InFront)
     {
         FVector Eye;
@@ -121,20 +152,21 @@ void ATibetHUD::DrawHUD()
     }
     const FVector2D Marker(FMath::Clamp(Point.X,32.,double(W)-32),
         FMath::Clamp(Point.Y,double(H)*.19,double(H)*.78));
-    const float R=FMath::Clamp(H*.009f,4.f,10.f);
+    const float R=FMath::Clamp(H*.016f,9.f,19.f) * (1.f+.27f*Pulse);
     const float X=Marker.X,Y=Marker.Y;
     if (!Point.Equals(Marker,1.))
     {
         const FVector2D Direction=(Point-Marker).GetSafeNormal();
         const FVector2D Side(-Direction.Y,Direction.X);
         const FVector2D Tip=Marker+Direction*R, Base=Marker-Direction*R;
-        DrawLine(Base.X+Side.X*R,Base.Y+Side.Y*R,Tip.X,Tip.Y,Gold,2);
-        DrawLine(Base.X-Side.X*R,Base.Y-Side.Y*R,Tip.X,Tip.Y,Gold,2);
+        MarkerStroke(Base + Side*R, Tip);
+        MarkerStroke(Base - Side*R, Tip);
         return;
     }
     if (HasEnemy && Meter.Health > 0) return;
-    DrawLine(X,Y-R,X+R,Y,Gold,2); DrawLine(X+R,Y,X,Y+R,Gold,2);
-    DrawLine(X,Y+R,X-R,Y,Gold,2); DrawLine(X-R,Y,X,Y-R,Gold,2);
+    const FVector2D Top(X,Y-R), Right(X+R,Y), Bottom(X,Y+R), Left(X-R,Y);
+    MarkerStroke(Top,Right); MarkerStroke(Right,Bottom);
+    MarkerStroke(Bottom,Left); MarkerStroke(Left,Top);
 }
 void ATibetHUD::EndPlay(const EEndPlayReason::Type Reason)
 {

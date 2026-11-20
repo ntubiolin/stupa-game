@@ -3,6 +3,7 @@
 #include "TibetGameMode.h"
 #include "TibetHUD.h"
 #include "Brushes/SlateColorBrush.h"
+#include "Engine/World.h"
 #include "Fonts/CompositeFont.h"
 #include "Fonts/FontMeasure.h"
 #include "Framework/Application/SlateApplication.h"
@@ -230,7 +231,13 @@ TSharedRef<SWidget> STibetPlayOverlay::Play()
 {
     auto Objective=SNew(SVerticalBox);
     Objective->AddSlot().AutoHeight()[Label(TAttribute<FText>::CreateLambda([this](){return Text(Mode->AreaName());}),19,Gold)];
-    Objective->AddSlot().AutoHeight().Padding(0,3)[Label(TAttribute<FText>::CreateLambda([this](){return Text(Mode->GetObjectiveText());}),13,Paper)];
+    Objective->AddSlot().AutoHeight().Padding(0,4)
+        [SNew(STextBlock).Font(Font(bTouch ? 17 : 20)).AutoWrapText(true)
+         .Text_Lambda([this](){return Text(Mode->GetObjectiveText());})
+         .ColorAndOpacity_Lambda([this](){
+             const float Pulse = Mode->GetPlayerFeedback().ObjectivePulse(Mode->GetWorld()->GetTimeSeconds());
+             return FSlateColor(FMath::Lerp(Paper, Gold, Pulse));
+         })];
     Objective->AddSlot().AutoHeight()[Label(TAttribute<FText>::CreateLambda([this](){return Text(Mode->Status(bTouch));}),11,Muted)];
     auto Row=SNew(SHorizontalBox);
     for (int32 I=0;I<7;++I) Row->AddSlot().FillWidth(1).Padding(1,0)[SkillSlot(I)];

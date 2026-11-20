@@ -769,4 +769,6 @@ preserved.
 
 `STibetPlayOverlay` 透過 `ATibetHUD` 切換遊戲、世界地圖、技能及操作設定，開啟手記時暫停單人遊戲。地圖依原生任務進度標記到訪情形。七格技能列與正式施法共用 `ATibetGameMode` 的技能資料。傷害依實際扣除的生命值發出，HUD 取怪物位置繪製血條、扣血拖尾與傷害數字。`ATibetRitualEffect` 負責招式和受擊的幾何動畫。
 
+主角實際扣血與任務推進時，`ATibetGameMode` 以遊戲時間記錄 `FTibetPlayerFeedback`。角色模型的受擊後仰、HUD 扣血提示與任務標記依該時間顯示並消退。
+
 網頁與 UE 各功能的對應、已驗證的操作與尚缺的模組列於[西藏 UE 移植驗收](Unreal/TibetPilgrimage/QA/Module-audit.md)。
