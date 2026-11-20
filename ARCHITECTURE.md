@@ -765,7 +765,7 @@ preserved.
 
 `ATibetGameMode` 讀取 `Tools/export_route.mjs` 從原作任務轉出的雙語路線表，由 `ATibetCharacter` 和 `ATibetHUD` 共用同一組互動與技能入口。原生存檔 `UTibetSave` 的預設槽為 `TibetPilgrimage-v1`，記錄各段任務、數量、目前地圖、終章與語言。跨圖於進入前先存檔。QA 使用獨立的具名槽測試關閉重開、主支線和技能。
 
-桌面探索由 `ATibetCharacter` 讀取按住右鍵時的滑鼠位移，`UTibetCameraBoom` 處理建築碰撞與回復距離。`UTibetCameraSettings` 將靈敏度和垂直反轉寫入裝置的 GameUserSettings。玩法與輸入的依據見[第三人稱鏡頭](Unreal/TibetPilgrimage/Camera.md)。
+`ATibetCharacter` 以實際水平速度決定跟隨朝向。鏡頭偏移由 `GetViewRotation()` 提供給攝影機與彈簧臂，持續移動時則以控制器朝向換算 WASD 或觸控方向，讓鏡頭回正時角色仍走直線。玩家可用滑鼠右鍵或觸控拖曳自由觀察，按住 Q／E 暫時左右環視，放開平順回背。輕按 E 與觸控「互動」共用既有任務入口。`UTibetCameraBoom` 處理建築碰撞與回復距離。`UTibetCameraSettings` 將靈敏度和垂直反轉寫入裝置的 GameUserSettings。玩法與輸入的依據見[第三人稱鏡頭](Unreal/TibetPilgrimage/Camera.md)。
 
 `STibetPlayOverlay` 透過 `ATibetHUD` 切換遊戲、世界地圖、技能及操作設定，開啟手記時暫停單人遊戲。地圖依原生任務進度標記到訪情形。七格技能列與正式施法共用 `ATibetGameMode` 的技能資料。傷害依實際扣除的生命值發出，HUD 取怪物位置繪製血條、扣血拖尾與傷害數字。`ATibetRitualEffect` 負責招式和受擊的幾何動畫。
 
