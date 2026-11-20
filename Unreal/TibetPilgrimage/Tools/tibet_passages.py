@@ -69,7 +69,7 @@ def lanterns(stage):
     """Position of the bronze stand, azimuth (UE yaw) and finite reach in metres."""
     if stage.startswith("terma"):
         return [((side * 4.7, north, 0), -side * 90 + 13, 15)
-                for side, north in [(-1, -23), (1, -15), (-1, -7), (1, 1), (-1, 9), (1, 12), (-1, 21), (1, 29)]]
+                for side, north in [(-1, -23), (1, -15), (-1, -7), (1, 1), (-1, 9), (1, 10), (-1, 21), (1, 29)]]
     return [(p.at(p.landing - 1, -p.width / 2 + .67), 94, 7.5) for p in passages(stage)]
 
 
@@ -108,7 +108,7 @@ def threshold(s, p, open_back):
     s.box("shale", p.east, p.front + p.landing / 2, p.floor + 3.87,
           p.width + .95, p.landing + .52, .85)
     if not open_back:
-        s.box("shale", p.east, p.front + p.landing, p.floor, p.width + .55, .55, 4.0)
+        s.box("shale", p.east, p.front + p.landing + .40, p.floor, p.width + .55, .80, 4.0)
 
 
 def build_passages(s, stage):
