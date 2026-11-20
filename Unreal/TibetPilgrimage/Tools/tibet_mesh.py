@@ -282,6 +282,9 @@ class Scene:
 
         for group, parts in self.meshes.items():
             prims = []
+            # UE joins the glTF primitives into one mesh. Supply neutral vertex
+            # colors on its other sections whenever any section uses tint.
+            has_vertex_colors = any(v[3] != 1 for stream in parts.values() for v in stream)
             for mat, stream in parts.items():
                 verts = list(dict.fromkeys(stream))
                 indices = {v: i for i, v in enumerate(verts)}
@@ -291,7 +294,7 @@ class Scene:
                     "NORMAL": accessor(normals, "3f", "VEC3", 5126, 34962),
                     "TEXCOORD_0": accessor(uvs, "2f", "VEC2", 5126, 34962),
                 }
-                if any(c != 1 for c in colors):
+                if has_vertex_colors:
                     attrs["COLOR_0"] = accessor([(c, c, c) for c in colors], "3f", "VEC3", 5126, 34962)
                 idx = accessor([(indices[v],) for v in stream], "I", "SCALAR", 5125, 34963)
                 prims.append(dict(attributes=attrs, indices=idx, material=material(mat)))
