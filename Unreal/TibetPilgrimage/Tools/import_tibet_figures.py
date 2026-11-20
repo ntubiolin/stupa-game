@@ -29,8 +29,8 @@ def import_meshes():
         options.static_mesh_import_data.auto_generate_collision = False
         task.options = options
         tasks.append(task)
-    if len(tasks) != 13:
-        raise RuntimeError(f"Expected thirteen generated figure meshes in {source}, found {len(tasks)}")
+    if {Path(task.filename).stem for task in tasks} != set(counts):
+        raise RuntimeError(f"Figure mesh files do not match {source / 'triangle-counts.json'}")
     assets.import_asset_tasks(tasks)
     for task in tasks:
         mesh = unreal.load_asset("/Game/Figures/" + Path(task.filename).stem)

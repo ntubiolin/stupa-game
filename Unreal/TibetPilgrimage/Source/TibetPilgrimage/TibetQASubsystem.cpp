@@ -3,6 +3,8 @@
 #include "TibetGameMode.h"
 #include "TibetRitualEffect.h"
 #include "EngineUtils.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "TibetHUD.h"
 #include "TibetPlayOverlay.h"
 #include "Framework/Application/SlateApplication.h"
@@ -470,6 +472,18 @@ void UTibetQASubsystem::Play(APlayerController& PC, ATibetGameMode& Mode)
     const FVector Goal = Task == TEXT("GroveEntry") ? FVector(-1860,-480,0) : Mode.GetObjectiveLocation();
     if (Step != PreviousStep || Progress != PreviousProgress)
     {
+        if (Step != PreviousStep)
+        {
+            TArray<AActor*> Cast;
+            UGameplayStatics::GetAllActorsWithTag(GetWorld(), TEXT("TibetResident"), Cast);
+            UE_LOG(LogTemp, Display, TEXT("TIBET_CAST_SNAPSHOT step=%d"), Step);
+            for (AActor* Actor : Cast)
+            {
+                const auto* Body = CastChecked<UStaticMeshComponent>(Actor->GetRootComponent());
+                if (Actor->IsHidden() || !Body->IsVisible() || !Body->IsRegistered() || !Body->GetStaticMesh()) continue;
+                UE_LOG(LogTemp, Display, TEXT("TIBET_CAST_VISIBLE actor=%u model=%s"), Actor->GetUniqueID(), *Body->GetStaticMesh()->GetName());
+            }
+        }
         if (GetWorld()->GetMapName() == TEXT("stupa") && (Kind == TEXT("Interact") || Step == 3))
         {
             TArray<AActor*> Flames;
