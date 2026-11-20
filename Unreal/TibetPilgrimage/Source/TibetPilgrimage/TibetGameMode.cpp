@@ -35,6 +35,25 @@ const TCHAR* EnglishNames[]={TEXT("Boudhanath Stupa"),TEXT("Pilgrim Stupa Grove"
 const TCHAR* ChineseNames[]={TEXT("博達哈大佛塔"),TEXT("行者塔林"),TEXT("北郊原野"),TEXT("帕平・揚列雪"),
     TEXT("芒域・吉隆山口"),TEXT("雅礱河谷"),TEXT("桑耶寺"),TEXT("青浦修行地"),TEXT("伏藏・地窟"),TEXT("伏藏・水晶"),TEXT("伏藏・虛空")};
 
+struct FRitualSkill
+{
+    const TCHAR* En;
+    const TCHAR* Zh;
+    const TCHAR* Binding;
+    int32 UnlockMap;
+    float Cost, Recovery, Range;
+    int32 Power;
+};
+const FRitualSkill Skills[] = {
+    {TEXT("Hūṃ Bolt"), TEXT("吽字光彈"), TEXT("Space"), 0, 0, .35f, 1400, 1},
+    {TEXT("Six-Syllable Mantra"), TEXT("六字真言"), TEXT("R"), 0, 15, .85f, 750, 2},
+    {TEXT("Vajra Phurba"), TEXT("金剛橛"), TEXT("1"), 4, 14, 6, 950, 3},
+    {TEXT("Vajra Bell"), TEXT("金剛鈴"), TEXT("2"), 5, 18, 9, 900, 3},
+    {TEXT("Lotus Ward"), TEXT("蓮花護盾"), TEXT("3"), 6, 16, 8, 0, 0},
+    {TEXT("Guardian Invocation"), TEXT("護法召喚"), TEXT("4"), 7, 22, 12, 1150, 4},
+    {TEXT("Vajra Guru Mantra"), TEXT("上師心咒"), TEXT("T"), 8, 35, 18, 1600, 6}
+};
+
 const FVector GroveGate(-1860,-480,0);
 FVector StupaLampLocation(int32 Index)
 {
@@ -362,26 +381,38 @@ void ATibetGameMode::Pulse(const FVector& At,const FLinearColor& Color,float Mag
             Bead->SetLifeSpan(.32f);
     }
 }
+FTibetSkillState ATibetGameMode::GetSkillState(int32 Slot) const
+{
+    FTibetSkillState State;
+    if (Slot < 0 || Slot >= UE_ARRAY_COUNT(Skills)) return State;
+    const FRitualSkill& Skill = Skills[Slot];
+    State.Name = Local(Skill.En, Skill.Zh);
+    State.Binding = Slot == 0 ? Local(TEXT("Space"), TEXT("空白鍵")) : FString(Skill.Binding);
+    State.bUnlocked = Save && Order.IndexOfByKey(Map) >= Skill.UnlockMap;
+    State.Cost = Skill.Cost;
+    State.CooldownDuration = Skill.Recovery;
+    State.CooldownRemaining = Cooldown[Slot];
+    State.ActiveRemaining = Slot == 4 ? Shield : 0;
+    return State;
+}
+
 void ATibetGameMode::CastSkill(int32 Slot)
 {
-    if (!Save || bTravel || IsCampaignComplete() || Slot<0 || Slot>6) return;
+    if (!Save || bTravel || IsCampaignComplete() || Slot<0 || Slot>=UE_ARRAY_COUNT(Skills)) return;
     auto* P=UGameplayStatics::GetPlayerPawn(this,0);
     if (!P) return;
-    const int32 Unlock[]={0,0,4,5,6,7,8};
-    if(Order.IndexOfByKey(Map)<Unlock[Slot])
+    const FRitualSkill& Skill = Skills[Slot];
+    if(Order.IndexOfByKey(Map)<Skill.UnlockMap)
     {
         SetNotice(Local(TEXT("Continue the pilgrimage to learn this skill."),TEXT("完成後續章節即可習得此法。"))); return;
     }
-    const float Costs[]={0,15,14,18,16,22,35}, Recovery[]={.35f,.85f,6,9,8,12,18};
-    if(Cooldown[Slot]>0 || Mana<Costs[Slot]) return;
-    Cooldown[Slot]=Recovery[Slot]; Mana-=Costs[Slot];
+    if(Cooldown[Slot]>0 || Mana<Skill.Cost) return;
+    Cooldown[Slot]=Skill.Recovery; Mana-=Skill.Cost;
     const FLinearColor Colors[]={Water,Gold,{.15,.35,.95},{.95,.63,.12},{.90,.22,.50},{.38,.7,.25},{.71,.30,.85}};
     const auto K=Objective(Route,GetStep()).Kind;
     if(Slot==4) Shield=6;
-    const float Ranges[]={1400,750,950,900,0,1150,1600};
-    const int32 Power[]={1,2,3,3,0,4,6};
     const bool Hit=(K==EObjective::Boss || K==EObjective::Combat) && Slot!=4 &&
-        FVector::Dist2D(P->GetActorLocation(),GetObjectiveLocation())<Ranges[Slot];
+        FVector::Dist2D(P->GetActorLocation(),GetObjectiveLocation())<Skill.Range;
     UE_LOG(LogTemp,Display,TEXT("TIBET_CAST slot=%d map=%s hit=%d mp=%.1f shield=%.1f"),
         Slot,*Map,Hit?1:0,Mana,Shield);
     const FVector From=P->GetActorLocation()+FVector(0,0,25);
@@ -438,7 +469,7 @@ void ATibetGameMode::CastSkill(int32 Slot)
     Pulse(Slot==4?From:To,Colors[Slot],Slot==1 || Slot==6?2.f:1.f);
     if (!Hit) return;
     if(Slot==2 || Slot==3) Stun=2;
-    EnemyHealth-=Power[Slot];
+    EnemyHealth-=Skill.Power;
     if(EnemyHealth<=0)
     {
         Pulse(To,FLinearColor(.88,.48,.72),2);
