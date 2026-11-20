@@ -4,6 +4,8 @@
 #include "Camera/CameraComponent.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Engine/Engine.h"
+#include "CollisionQueryParams.h"
+#include "CollisionShape.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
 #include "GameFramework/HUD.h"
@@ -139,6 +141,47 @@ void SendKey(APlayerController& PC, FKey Key, bool bDown)
 }
 }
 
+// Search a local walkable grid only after the direct keyboard approach stalls. The
+// pawn still moves through normal character collision between every waypoint.
+bool UTibetQASubsystem::FindWalkingPath(APawn& Pawn, const FVector& Goal, double Reach)
+{
+    UWorld* World = GetWorld();
+    const FVector Start = Pawn.GetActorLocation();
+    const FCollisionQueryParams Query(SCENE_QUERY_STAT(TibetQAWalk),false,&Pawn);
+    const FCollisionShape Body = FCollisionShape::MakeCapsule(38,65);
+    const FIntPoint Directions[] = {{1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1}};
+    const double Spacing = 88;
+    const FVector2D Limit(FMath::Abs(Goal.X-Start.X)/Spacing+15,FMath::Abs(Goal.Y-Start.Y)/Spacing+15);
+    TMap<FIntPoint,FIntPoint> Parent;
+    TMap<FIntPoint,FVector> Points;
+    TArray<FIntPoint> Queue = {FIntPoint::ZeroValue};
+    Points.Add(Queue[0],Start);
+    for (int32 I=0; I<Queue.Num() && I<9000; ++I)
+    {
+        const FIntPoint Key=Queue[I];
+        const FVector From=Points[Key];
+        if (FVector::Dist2D(From,Goal)<Reach)
+        {
+            for (FIntPoint At=Key; At!=FIntPoint::ZeroValue; At=Parent[At]) Waypoints.Add(Points[At]);
+            return !Waypoints.IsEmpty();
+        }
+        for (FIntPoint Direction : Directions)
+        {
+            const FIntPoint Next=Key+Direction;
+            if (FMath::Abs(Next.X)>Limit.X || FMath::Abs(Next.Y)>Limit.Y || Points.Contains(Next)) continue;
+            FVector To(Start.X+Next.X*Spacing,Start.Y+Next.Y*Spacing,From.Z);
+            FHitResult Floor;
+            if (!World->LineTraceSingleByChannel(Floor,To+FVector(0,0,25),To-FVector(0,0,220),ECC_Visibility,Query)
+                || Floor.ImpactNormal.Z<0.66) continue;
+            To.Z=Floor.ImpactPoint.Z+89;
+            if (FMath::Abs(To.Z-From.Z)>46) continue;
+            if (World->SweepTestByChannel(From,To,FQuat::Identity,ECC_Pawn,Body,Query)) continue;
+            Parent.Add(Next,Key); Points.Add(Next,To); Queue.Add(Next);
+        }
+    }
+    return false;
+}
+
 void UTibetQASubsystem::Play(APlayerController& PC, ATibetGameMode& Mode)
 {
     const double Now = FPlatformTime::Seconds();
@@ -161,6 +204,7 @@ void UTibetQASubsystem::Play(APlayerController& PC, ATibetGameMode& Mode)
             FScreenshotRequest::RequestScreenshot(File,true,false,false);
         }
         PreviousStep = Step; PreviousProgress = Progress;
+        Waypoints.Reset(); LastNavCheck=Now; LastNavPosition=Pos;
     }
     int32 StopStep = INDEX_NONE;
     FParse::Value(FCommandLine::Get(),TEXT("TibetQAStopStep="),StopStep);
@@ -186,10 +230,24 @@ void UTibetQASubsystem::Play(APlayerController& PC, ATibetGameMode& Mode)
         return;
     }
     const bool bFight = Kind == TEXT("Combat") || Kind == TEXT("Boss");
-    FVector Offset = Goal-Pos;
+    const double Reach = bFight ? 320 : ((Kind == TEXT("Kora") || Kind == TEXT("Escort") || Kind == TEXT("Reach")) ? 105 : 170);
+    if (FVector::Dist2D(Pos,Goal)<Reach) Waypoints.Reset();
+    if (Now-LastNavCheck>1.5)
+    {
+        if (bMoving && FVector::Dist2D(LastNavPosition,Pos)<22 && FVector::Dist2D(Pos,Goal)>Reach)
+        {
+            Waypoints.Reset();
+            FindWalkingPath(*PC.GetPawn(),Goal,Reach);
+            Record(FString::Printf(TEXT("detour\t%s\t%d\t%s\t%s\t%d"),
+                *GetWorld()->GetMapName(),Step,*Pos.ToCompactString(),*Goal.ToCompactString(),Waypoints.Num()));
+        }
+        LastNavCheck=Now; LastNavPosition=Pos;
+    }
+    while (!Waypoints.IsEmpty() && FVector::Dist2D(Waypoints.Last(),Pos)<38) Waypoints.Pop();
+    FVector Offset = (Waypoints.IsEmpty() ? Goal : Waypoints.Last())-Pos;
     Offset.Z = 0;
     if (!Offset.IsNearlyZero()) PC.SetControlRotation(Offset.Rotation());
-    const bool bWalk = Offset.Size2D() > (bFight ? 320.0 : 65.0);
+    const bool bWalk = !Waypoints.IsEmpty() || Offset.Size2D() > Reach;
     if (bWalk != bMoving) { SendKey(PC,EKeys::W,bWalk); bMoving=bWalk; }
     if (!bWalk && Now - LastAction >= 0.26 && !FScreenshotRequest::IsScreenshotRequested())
     {
