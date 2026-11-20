@@ -426,6 +426,7 @@ bool UTibetQASubsystem::TapPlayControl(FName Tag,float XFraction)
         const FWidgetPath Path(Window->GetHittestGrid().GetBubblePath(Down,0,false,0));
         if (!Path.ContainsWidget(Widget.Get())) return false;
         const TSet<FKey> Pressed{EKeys::LeftMouseButton}, Released;
+        App.RoutePointerMoveEvent(Path,FPointerEvent(0,Down,App.GetCursorPos(),Released,EKeys::Invalid,0,FModifierKeysState()),false);
         App.RoutePointerDownEvent(Path,FPointerEvent(0,Down,Down,Pressed,EKeys::LeftMouseButton,0,FModifierKeysState()));
         if (bSlider) App.RoutePointerMoveEvent(Path,FPointerEvent(0,At,Down,Pressed,EKeys::Invalid,0,FModifierKeysState()),false);
         App.RoutePointerUpEvent(Path,FPointerEvent(0,At,At,Released,EKeys::LeftMouseButton,0,FModifierKeysState()));
