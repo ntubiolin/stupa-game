@@ -203,7 +203,7 @@ def compare(web, mac, output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["photos", "arrival", "play", "skills", "journal", "compare"])
+    parser.add_argument("action", choices=["photos", "arrival", "play", "skills", "learned", "journal", "compare"])
     parser.add_argument("--exe", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--web", type=Path)
@@ -247,6 +247,18 @@ def main():
                 if args.only and view["id"] != args.only:
                     continue
                 capture_landmark(exe,stage,output,view,slot)
+        elif args.action == "learned":
+            # The actual last vault gate writes bReturnFromTerma; talking to Tsogyal
+            # and exiting Chimphu then writes the Boudhanath epilogue checkpoint.
+            for level, destination in (("terma3", "chimphu"), ("chimphu", "stupa")):
+                rows = capture(exe, stage, output, level, "Play", level, [], slot)
+                if rows[-1] != ["pass", "transition", destination]:
+                    raise ValueError(f"Expected {level} return gate to lead to {destination}")
+            for name, save, learned in (("return", slot, 127), ("fresh", slot + "-new", 3)):
+                rows = capture(exe, stage, output, name, "LearnedSkills", "stupa",
+                               [f"-TibetQALearnedMask={learned}"], save)
+                if ["learned", str(learned), "1" if name == "return" else "0"] not in rows:
+                    raise ValueError(f"Missing real spell input on the {name} save")
         elif args.action == "skills":
             results = output / "skills"
             results.mkdir()

@@ -87,6 +87,7 @@ void UTibetQASubsystem::Tick(float)
     else if (Task == TEXT("Journal")) Journal(*PC,*Mode);
     else if (Task == TEXT("Photo")) Photo(*PC);
     else if (Task == TEXT("Play") || Task == TEXT("Campaign") || Task == TEXT("GroveEntry") || Task == TEXT("Skills")) Play(*PC, *Mode);
+    else if (Task == TEXT("LearnedSkills")) LearnedSkills(*PC, *Mode);
     else if (Task == TEXT("Resume"))
     {
         int32 Expected = INDEX_NONE;
@@ -528,4 +529,38 @@ void UTibetQASubsystem::SkillEncounter(APlayerController& PC, ATibetGameMode& Mo
         return;
     }
     Finish(true,TEXT("skill feedback"));
+}
+
+void UTibetQASubsystem::LearnedSkills(APlayerController& PC, ATibetGameMode& Mode)
+{
+    int32 Expected = 0;
+    FParse::Value(FCommandLine::Get(), TEXT("TibetQALearnedMask="), Expected);
+    int32 Learned = 0;
+    for (int32 I = 0; I < 7; ++I)
+        if (Mode.GetSkillState(I).bUnlocked) Learned |= 1 << I;
+    if (Learned != Expected) { Finish(false, FString::Printf(TEXT("Expected learned mask %d, got %d"), Expected, Learned)); return; }
+    const float Now = GetWorld()->GetTimeSeconds();
+    if (SkillPhase == 0)
+    {
+        if (Now < 1.f) return;
+        SendKey(PC,EKeys::T,true);
+        SkillGameTime = Now;
+        SkillPhase = 1;
+        return;
+    }
+    if (SkillPhase == 1)
+    {
+        SendKey(PC,EKeys::T,false);
+        SkillPhase = 2;
+    }
+    if (Now - SkillGameTime < .18f) return;
+    const bool ShouldCast = (Expected & (1 << 6)) != 0;
+    bool FoundEffect = false;
+    for (TActorIterator<ATibetRitualEffect> Effect(GetWorld()); Effect; ++Effect)
+        FoundEffect |= Effect->GetEffectSlot() == 6;
+    if (FoundEffect != ShouldCast || (Mode.GetSkillState(6).CooldownRemaining > 0) != ShouldCast ||
+        (Mode.GetMana() < 100) != ShouldCast || !Mode.GetDamageCues().IsEmpty())
+    { Finish(false,TEXT("Actual Guru cast disagrees with learned state")); return; }
+    Record(FString::Printf(TEXT("learned\t%d\t%d"), Learned, ShouldCast ? 1 : 0));
+    Finish(true, TEXT("learned skills"));
 }

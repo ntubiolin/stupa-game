@@ -24,6 +24,7 @@ private:
     void Photo(APlayerController& PC);
     void Arrival(APlayerController& PC);
     void Play(APlayerController& PC, ATibetGameMode& Mode);
+    void LearnedSkills(APlayerController& PC, ATibetGameMode& Mode);
     void SkillEncounter(APlayerController& PC, ATibetGameMode& Mode);
     void Record(const FString& Line) const;
     bool FindWalkingPath(APawn& Pawn, const FVector& Goal, double Reach);

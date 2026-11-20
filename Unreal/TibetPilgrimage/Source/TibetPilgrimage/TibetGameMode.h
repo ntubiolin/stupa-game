@@ -79,6 +79,8 @@ private:
     UPROPERTY() TObjectPtr<AActor> Messenger;
     FString Map, Route, SlotName;
     int32 LitStupaLamps = 0;
+    int32 FurthestMap = INDEX_NONE;
+    bool HasLearnedSkill(int32 Slot) const;
     int32 EnemyHealth = 0, EnemyMaximum = 0;
     float EnemyTrailing = 0, LastHitTime = -10, FinishTime = -10;
     FTibetEnemyMeter FinishingMeter;

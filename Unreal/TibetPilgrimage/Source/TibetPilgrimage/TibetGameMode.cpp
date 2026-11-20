@@ -120,6 +120,11 @@ void ATibetGameMode::StartPlay()
     Save->Map=Map;
     Save->Steps.FindOrAdd(Route)=FMath::Clamp(GetStep(),0,Routes().FindChecked(Route).Num());
     Save->Counts.FindOrAdd(Route)=FMath::Clamp(GetStepProgress(),0,Objective(Route,GetStep()).Count-1);
+    // A zero-step checkpoint also records a visit. Read old save slots without
+    // a schema change, including the first frame of a direct level launch.
+    FurthestMap = Order.IndexOfByKey(Map);
+    for (int32 I = FurthestMap + 1; I < Order.Num(); ++I)
+        if (Save->Steps.Contains(Order[I])) FurthestMap = I;
     if (Map==TEXT("stupa"))
     {
         MeshActor(GroveGate+FVector(0,0,12),Cylinder,FVector(1.8,1.8,.2),&Water);
@@ -396,6 +401,11 @@ void ATibetGameMode::Pulse(const FVector& At,const FLinearColor& Color,float Mag
             Bead->SetLifeSpan(.32f);
     }
 }
+bool ATibetGameMode::HasLearnedSkill(int32 Slot) const
+{
+    return Save && Slot >= 0 && Slot < UE_ARRAY_COUNT(Skills) && FurthestMap >= Skills[Slot].UnlockMap;
+}
+
 FTibetSkillState ATibetGameMode::GetSkillState(int32 Slot) const
 {
     FTibetSkillState State;
@@ -403,7 +413,7 @@ FTibetSkillState ATibetGameMode::GetSkillState(int32 Slot) const
     const FRitualSkill& Skill = Skills[Slot];
     State.Name = Local(Skill.En, Skill.Zh);
     State.Binding = Slot == 0 ? Local(TEXT("Space"), TEXT("空白鍵")) : FString(Skill.Binding);
-    State.bUnlocked = Save && Order.IndexOfByKey(Map) >= Skill.UnlockMap;
+    State.bUnlocked = HasLearnedSkill(Slot);
     State.Cost = Skill.Cost;
     State.CooldownDuration = Skill.Recovery;
     State.CooldownRemaining = Cooldown[Slot];
@@ -436,7 +446,7 @@ void ATibetGameMode::CastSkill(int32 Slot)
     auto* P=UGameplayStatics::GetPlayerPawn(this,0);
     if (!P) return;
     const FRitualSkill& Skill = Skills[Slot];
-    if(Order.IndexOfByKey(Map)<Skill.UnlockMap)
+    if(!HasLearnedSkill(Slot))
     {
         SetNotice(Local(TEXT("Continue the pilgrimage to learn this skill."),TEXT("完成後續章節即可習得此法。"))); return;
     }
