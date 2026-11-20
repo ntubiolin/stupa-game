@@ -128,14 +128,17 @@ def main():
                 raise ValueError("First gameplay objective was not reached")
             capture(exe,stage,output,"resume","Resume","stupa",["-TibetQAExpected=1"],slot)
             campaign = capture(exe,stage,output,"campaign","Campaign","stupa",[],slot)
-            # Grove is an optional side trip.
-            required = {v["id"] for v in VIEWS} - {"grove"}
+            required = {v["id"] for v in VIEWS}
             reached = {row[1] for row in campaign if row[0]=="step"}
             if required-reached or campaign[-1] != ["pass","campaign completed"]:
                 raise ValueError(f"Incomplete route, missing {required-reached}")
-            grove = capture(exe,stage,output,"grove","Play","grove",[],slot+"-side")
-            if grove[-1] != ["pass", "transition", "stupa"] or not any(row[0]=="step" for row in grove):
-                raise ValueError("Grove side trip or return failed")
+            route = []
+            for row in campaign:
+                if row[0]=="step" and (not route or route[-1]!=row[1]):
+                    route.append(row[1])
+            expected = [v["id"] for v in VIEWS] + ["chimphu","stupa"]
+            if route != expected:
+                raise ValueError(f"Unexpected journey sequence: {route}")
 
 
 if __name__ == "__main__":
