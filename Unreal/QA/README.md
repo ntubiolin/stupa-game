@@ -20,3 +20,25 @@ python3 Unreal/QA/compare_toji.py \
 ```
 
 完成後開啟輸出的 `index.html`。每張圖可點選放大，JSON 包含圖片 SHA-256、建置／GPU 資訊、投影與幀間隔。腳本會檢查原始 PNG 尺寸、雜湊和相機設定，將缺失的拍攝結果視為錯誤。每個固定鏡位的短取樣與 15 分鐘遊玩效能驗收屬於不同的量測。
+
+## 打包版遊玩、存檔與效能
+
+以同一台機器、同一份 Development 打包版的可執行檔執行。Mac 請傳入
+`StupaPilgrimage.app/Contents/MacOS/StupaPilgrimage`，Windows 請傳入打包版
+`StupaPilgrimage/Binaries/Win64/StupaPilgrimage.exe`。測試使用獨立存檔，並透過遊戲的按鍵綁定完成朝聖。
+
+```sh
+python3 Unreal/QA/play_toji.py --executable '/path/to/packaged/executable' \
+  --output artifacts/unreal-toji/native-play --video
+python3 Unreal/QA/play_toji.py --executable '/path/to/packaged/executable' \
+  --output artifacts/unreal-toji/native-perf --seconds 900
+```
+
+第一個指令驗證完整任務和重新啟動後的存檔，並保留 HUD 截圖、各檢查點的座標、
+日誌和存檔。可省略 `--video`。影片需要 PATH 上的 FFmpeg，採用實際遊戲畫面
+擷取，移動時每秒約四張，輸出為無聲短片。
+
+效能測試在同一場遊戲完成任務後繼續繞行庭院，以實際經過時間取樣。請先結束其他
+GPU 工作。輸出 `performance.json` 及原始 `gameplay/frames.csv`，取樣期間不擷取
+畫面。幀間隔包含整幀開銷。另存引擎 CSV 的遊戲執行緒、渲染執行緒和 GPU 時間，
+並記錄取樣涵蓋範圍及引擎初始化時間。若平台未回報有效的時間，該欄位留空。

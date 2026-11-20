@@ -5,8 +5,12 @@ import html
 import json
 import math
 from pathlib import Path
+import plistlib
+import re
+import shutil
 import struct
 import subprocess
+import sys
 import tempfile
 
 VIEWS = json.loads(Path(__file__).with_name("toji-views.json").read_text())
@@ -34,21 +38,53 @@ def percentile(values, p):
     return sorted(values)[math.ceil(p * len(values)) - 1]
 
 
+def capture_workspace(exe):
+    if sys.platform != "darwin" or exe.parent.name != "MacOS" or exe.parent.parent.name != "Contents":
+        return None
+    bundle = exe.parent.parent.parent
+    signature = subprocess.run(["codesign", "-d", "--entitlements", "-", "--xml", str(bundle)],
+                               capture_output=True, check=False)
+    if not signature.stdout or not plistlib.loads(signature.stdout).get("com.apple.security.app-sandbox"):
+        return None
+    info = plistlib.loads((bundle / "Contents" / "Info.plist").read_bytes())
+    identifier = info.get("CFBundleIdentifier", "")
+    if not re.fullmatch(r"[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+", identifier):
+        raise ValueError(f"Invalid application bundle identifier: {identifier!r}")
+    workspace = Path.home() / "Library" / "Containers" / identifier / "Data" / "tmp"
+    if not workspace.is_dir():
+        # macOS creates the sandbox container at the first launch.
+        subprocess.run([str(exe), "-unattended", "-nosplash", "-ExecCmds=quit"],
+                       cwd=exe.parent, check=True, timeout=120)
+    if not workspace.is_dir():
+        raise RuntimeError(f"Application sandbox temporary directory is unavailable: {workspace}")
+    return workspace
+
+
 def capture(exe, output):
+    workspace = capture_workspace(exe)
     for view in VIEWS:
         shot = output / view["id"]
         shot.mkdir()
-        with tempfile.TemporaryDirectory(prefix="stupa-photo-") as user_dir:
+        with tempfile.TemporaryDirectory(prefix="stupa-photo-", dir=workspace) as run_dir:
+            stage = Path(run_dir)
+            user_dir = stage / "user"
+            user_dir.mkdir()
             args = [str(exe), "-windowed", "-ForceRes", "-ResX=1920", "-ResY=1080",
                     "-unattended", "-nosplash", "-NoVSync", "-SaveToUserDir", f"-UserDir={user_dir}", f"-TojiSaveDir={user_dir}/Toji",
                     "-ExecCmds=r.ScreenPercentage 100,r.DynamicRes.OperationMode 0",
-                    f"-abslog={shot / 'runtime.log'}", f"-TojiPhotoDir={shot}",
+                    f"-abslog={stage / 'runtime.log'}", f"-TojiPhotoDir={stage}",
                     f"-TojiTime={view['light']}", f"-TojiEye={unreal_vector(view['from'])}",
                     f"-TojiLook={unreal_vector(view['at'])}"]
             if "player" in view:
                 x, z = view["player"]
                 args.append(f"-TojiSubject={unreal_vector([x, 0, z])}")
-            subprocess.run(args, cwd=exe.parent, check=True, timeout=300)
+            try:
+                subprocess.run(args, cwd=exe.parent, check=True, timeout=300)
+            finally:
+                for filename in ("capture.png", "measurement.json", "runtime.log"):
+                    if (stage / filename).is_file():
+                        shutil.copyfile(stage / filename, shot / filename)
+                shutil.copytree(user_dir, shot / "user")
         image_bytes(shot / "capture.png")
         if not (shot / "measurement.json").is_file():
             raise RuntimeError(f"No runtime measurements for {shot}")
