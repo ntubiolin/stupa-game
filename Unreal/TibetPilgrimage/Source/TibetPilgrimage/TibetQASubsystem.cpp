@@ -73,7 +73,7 @@ void UTibetQASubsystem::Tick(float)
     }
     if (Task != TEXT("Campaign") && World->GetMapName() != StartMap) { Finish(false, TEXT("Unexpected map: ") + World->GetMapName()); return; }
     if (Task == TEXT("Photo")) Photo(*PC);
-    else if (Task == TEXT("Play") || Task == TEXT("Campaign") || Task == TEXT("GroveEntry")) Play(*PC, *Mode);
+    else if (Task == TEXT("Play") || Task == TEXT("Campaign") || Task == TEXT("GroveEntry") || Task == TEXT("Skills")) Play(*PC, *Mode);
     else if (Task == TEXT("Resume"))
     {
         int32 Expected = INDEX_NONE;
@@ -169,6 +169,22 @@ void UTibetQASubsystem::Play(APlayerController& PC, ATibetGameMode& Mode)
     if (Mode.IsCampaignComplete() && Task == TEXT("Campaign"))
     { Finish(true,TEXT("campaign completed")); return; }
 
+    if (Task == TEXT("Skills") && (bTestingSkills || (Kind == TEXT("Boss") && FVector::Dist2D(Pos,Goal)<900)))
+    {
+        bTestingSkills = true;
+        if (bMoving) { SendKey(PC,EKeys::W,false); bMoving=false; }
+        if (Now - LastAction < 2.5 || FScreenshotRequest::IsScreenshotRequested()) return;
+        const FKey Keys[] = {EKeys::SpaceBar,EKeys::R,EKeys::One,EKeys::Two,EKeys::Three,EKeys::Four,EKeys::T};
+        if (NextSkill == UE_ARRAY_COUNT(Keys)) { Finish(true,TEXT("skill inputs")); return; }
+        Tapped = Keys[NextSkill];
+        PC.SetControlRotation((Goal-Pos).Rotation());
+        SendKey(PC,Tapped,true);
+        FScreenshotRequest::RequestScreenshot(Output / FString::Printf(TEXT("skill-%d.png"),NextSkill),true,false,false);
+        Record(FString::Printf(TEXT("skillKey\t%d\t%s"),NextSkill,*Tapped.ToString()));
+        LastAction = Now;
+        ++NextSkill;
+        return;
+    }
     const bool bFight = Kind == TEXT("Combat") || Kind == TEXT("Boss");
     FVector Offset = Goal-Pos;
     Offset.Z = 0;
