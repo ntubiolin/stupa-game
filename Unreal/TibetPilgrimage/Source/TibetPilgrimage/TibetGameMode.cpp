@@ -1,6 +1,7 @@
 #include "TibetGameMode.h"
 #include "TibetCharacter.h"
 #include "TibetHUD.h"
+#include "TibetRitualEffect.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/TargetPoint.h"
@@ -34,6 +35,25 @@ const TCHAR* EnglishNames[]={TEXT("Boudhanath Stupa"),TEXT("Pilgrim Stupa Grove"
     TEXT("Chimphu Hermitage"),TEXT("Terma · Earth"),TEXT("Terma · Crystal"),TEXT("Terma · Sky")};
 const TCHAR* ChineseNames[]={TEXT("博達哈大佛塔"),TEXT("行者塔林"),TEXT("北郊原野"),TEXT("帕平・揚列雪"),
     TEXT("芒域・吉隆山口"),TEXT("雅礱河谷"),TEXT("桑耶寺"),TEXT("青浦修行地"),TEXT("伏藏・地窟"),TEXT("伏藏・水晶"),TEXT("伏藏・虛空")};
+
+struct FRitualSkill
+{
+    const TCHAR* En;
+    const TCHAR* Zh;
+    const TCHAR* Binding;
+    int32 UnlockMap;
+    float Cost, Recovery, Range;
+    int32 Power;
+};
+const FRitualSkill Skills[] = {
+    {TEXT("Hūṃ Bolt"), TEXT("吽字光彈"), TEXT("Space"), 0, 0, .35f, 1400, 1},
+    {TEXT("Six-Syllable Mantra"), TEXT("六字真言"), TEXT("R"), 0, 15, .85f, 750, 2},
+    {TEXT("Vajra Phurba"), TEXT("金剛橛"), TEXT("1"), 4, 14, 6, 950, 3},
+    {TEXT("Vajra Bell"), TEXT("金剛鈴"), TEXT("2"), 5, 18, 9, 900, 3},
+    {TEXT("Lotus Ward"), TEXT("蓮花護盾"), TEXT("3"), 6, 16, 8, 0, 0},
+    {TEXT("Guardian Invocation"), TEXT("護法召喚"), TEXT("4"), 7, 22, 12, 1150, 4},
+    {TEXT("Vajra Guru Mantra"), TEXT("上師心咒"), TEXT("T"), 8, 35, 18, 1600, 6}
+};
 
 const FVector GroveGate(-1860,-480,0);
 FVector StupaLampLocation(int32 Index)
@@ -100,6 +120,11 @@ void ATibetGameMode::StartPlay()
     Save->Map=Map;
     Save->Steps.FindOrAdd(Route)=FMath::Clamp(GetStep(),0,Routes().FindChecked(Route).Num());
     Save->Counts.FindOrAdd(Route)=FMath::Clamp(GetStepProgress(),0,Objective(Route,GetStep()).Count-1);
+    // A zero-step checkpoint also records a visit. Read old save slots without
+    // a schema change, including the first frame of a direct level launch.
+    FurthestMap = Order.IndexOfByKey(Map);
+    for (int32 I = FurthestMap + 1; I < Order.Num(); ++I)
+        if (Save->Steps.Contains(Order[I])) FurthestMap = I;
     if (Map==TEXT("stupa"))
     {
         MeshActor(GroveGate+FVector(0,0,12),Cylinder,FVector(1.8,1.8,.2),&Water);
@@ -259,6 +284,8 @@ void ATibetGameMode::RestoreStupaFlames()
 }
 void ATibetGameMode::Refresh()
 {
+    EnemyMaximum = 0;
+    LastHitTime = -10;
     if (Focus) { Focus->Destroy(); Focus=nullptr; }
     if (Map==TEXT("stupa")) RestoreStupaFlames();
     if (IsCampaignComplete()) return;
@@ -276,7 +303,9 @@ void ATibetGameMode::Refresh()
             else if (Map==TEXT("samye") && K==EObjective::Boss) Model=TEXT("Pehar");
             else if (Map==TEXT("wild") || Map==TEXT("mangyul")) Model=TEXT("SnowKing");
             else Model=TEXT("Guardian");
-            EnemyHealth=K==EObjective::Boss ? 9 : 3;
+            EnemyMaximum = K==EObjective::Boss ? 9 : 3;
+            EnemyHealth = EnemyMaximum;
+            EnemyTrailing = EnemyHealth;
             HurtTimer=1.3f;
         }
         const FString Path=FString::Printf(TEXT("/Game/Figures/%s.%s"),*Model,*Model);
@@ -362,92 +391,107 @@ void ATibetGameMode::Pulse(const FVector& At,const FLinearColor& Color,float Mag
             Bead->SetLifeSpan(.32f);
     }
 }
+bool ATibetGameMode::HasLearnedSkill(int32 Slot) const
+{
+    return Save && Slot >= 0 && Slot < UE_ARRAY_COUNT(Skills) && FurthestMap >= Skills[Slot].UnlockMap;
+}
+
+FTibetSkillState ATibetGameMode::GetSkillState(int32 Slot) const
+{
+    FTibetSkillState State;
+    if (Slot < 0 || Slot >= UE_ARRAY_COUNT(Skills)) return State;
+    const FRitualSkill& Skill = Skills[Slot];
+    State.Name = Local(Skill.En, Skill.Zh);
+    State.Binding = Slot == 0 ? Local(TEXT("Space"), TEXT("空白鍵")) : FString(Skill.Binding);
+    State.bUnlocked = HasLearnedSkill(Slot);
+    State.Cost = Skill.Cost;
+    State.CooldownDuration = Skill.Recovery;
+    State.CooldownRemaining = Cooldown[Slot];
+    State.ActiveRemaining = Slot == 4 ? Shield : 0;
+    return State;
+}
+
+bool ATibetGameMode::GetEnemyMeter(FTibetEnemyMeter& Meter) const
+{
+    if (EnemyMaximum > 0 && Focus)
+    {
+        FVector Center, Extent;
+        Focus->GetActorBounds(false, Center, Extent);
+        Meter.Anchor = Center + FVector(0, 0, Extent.Z + 23);
+        Meter.Health = EnemyHealth;
+        Meter.Maximum = EnemyMaximum;
+        Meter.Trailing = EnemyTrailing;
+        return true;
+    }
+    const float Elapsed = GetWorld()->GetTimeSeconds() - FinishTime;
+    if (Elapsed >= .76f || FinishingMeter.Maximum == 0) return false;
+    Meter = FinishingMeter;
+    Meter.Trailing *= 1 - FMath::SmoothStep(.14f, .65f, Elapsed);
+    return true;
+}
+
 void ATibetGameMode::CastSkill(int32 Slot)
 {
-    if (!Save || bTravel || IsCampaignComplete() || Slot<0 || Slot>6) return;
+    if (!Save || bTravel || IsCampaignComplete() || Slot<0 || Slot>=UE_ARRAY_COUNT(Skills)) return;
     auto* P=UGameplayStatics::GetPlayerPawn(this,0);
     if (!P) return;
-    const int32 Unlock[]={0,0,4,5,6,7,8};
-    if(Order.IndexOfByKey(Map)<Unlock[Slot])
+    const FRitualSkill& Skill = Skills[Slot];
+    if(!HasLearnedSkill(Slot))
     {
         SetNotice(Local(TEXT("Continue the pilgrimage to learn this skill."),TEXT("完成後續章節即可習得此法。"))); return;
     }
-    const float Costs[]={0,15,14,18,16,22,35}, Recovery[]={.35f,.85f,6,9,8,12,18};
-    if(Cooldown[Slot]>0 || Mana<Costs[Slot]) return;
-    Cooldown[Slot]=Recovery[Slot]; Mana-=Costs[Slot];
-    const FLinearColor Colors[]={Water,Gold,{.15,.35,.95},{.95,.63,.12},{.90,.22,.50},{.38,.7,.25},{.71,.30,.85}};
-    const auto K=Objective(Route,GetStep()).Kind;
-    if(Slot==4) Shield=6;
-    const float Ranges[]={1400,750,950,900,0,1150,1600};
-    const int32 Power[]={1,2,3,3,0,4,6};
-    const bool Hit=(K==EObjective::Boss || K==EObjective::Combat) && Slot!=4 &&
-        FVector::Dist2D(P->GetActorLocation(),GetObjectiveLocation())<Ranges[Slot];
-    UE_LOG(LogTemp,Display,TEXT("TIBET_CAST slot=%d map=%s hit=%d mp=%.1f shield=%.1f"),
-        Slot,*Map,Hit?1:0,Mana,Shield);
-    const FVector From=P->GetActorLocation()+FVector(0,0,25);
-    const FVector To=Hit ? GetObjectiveLocation()+FVector(0,0,105) : From+P->GetActorForwardVector()*300;
-    if (Slot==0)
+    if(Cooldown[Slot]>0 || Mana<Skill.Cost) return;
+    Cooldown[Slot]=Skill.Recovery; Mana-=Skill.Cost;
+    if (Slot == 4) Shield = 6;
+    const FVector Player = P->GetActorLocation();
+    const bool Hit = EnemyMaximum > 0 && Focus && Skill.Power > 0 &&
+        FVector::Dist2D(Player, GetObjectiveLocation()) < Skill.Range;
+    const FVector From = Player + FVector(0,0,30);
+    FVector To = From + P->GetActorForwardVector() * 340;
+    if (Hit)
     {
-        // A strand of turquoise seed beads travels along the arm-to-target line.
-        for (int32 j=1;j<=5;++j)
-            if(auto* Dot=MeshActor(FMath::Lerp(From,To,j/5.),Sphere,FVector(.10+j*.018),&Colors[Slot]))
-                Dot->SetLifeSpan(.18f);
+        FVector Center, Extent;
+        Focus->GetActorBounds(false,Center,Extent);
+        const FVector Outward = (Player - Center).GetSafeNormal2D();
+        To = Center + Outward * FMath::Max(Extent.X,Extent.Y) * .84 + FVector(0,0,.16 * Extent.Z);
     }
-    else if(Slot==2)
+    // The web spell system turns the pilgrim toward the acquired target for
+    // bolts, phurbas and bells. Keep the player's independent camera heading.
+    if (Hit && (Slot == 0 || Slot == 2 || Slot == 3))
+        P->SetActorRotation((To - From).GetSafeNormal2D().Rotation());
+    auto* Effect = GetWorld()->SpawnActor<ATibetRitualEffect>();
+    if (Effect) Effect->Start(Slot, From, To, P, RitualMaterial);
+
+    const int32 Before = EnemyMaximum > 0 ? EnemyHealth : 0;
+    const int32 Damage = Hit ? FMath::Min(Before, Skill.Power) : 0;
+    // Snapshot actual loss before advancing the route or replacing a defeated actor.
+    const int32 After = Before - Damage;
+    UE_LOG(LogTemp, Display,
+        TEXT("TIBET_CAST slot=%d map=%s hit=%d mp=%.1f shield=%.1f before=%d after=%d damage=%d effect=%d"),
+        Slot, *Map, Hit ? 1 : 0, Mana, Shield, Before, After, Damage, Effect ? 1 : 0);
+    if (Damage == 0) return;
+    EnemyHealth = After;
+    LastHitTime = GetWorld()->GetTimeSeconds();
+    if (Slot == 2 || Slot == 3) Stun = 2;
+    FTibetEnemyMeter Meter;
+    GetEnemyMeter(Meter);
+    DamageCues.Add({Meter.Anchor, Damage, LastHitTime});
+    if (auto* Impact = GetWorld()->SpawnActor<ATibetRitualEffect>())
+        Impact->StartImpact(To + (Player - To).GetSafeNormal2D() * 5, Player - To, Slot, After == 0, RitualMaterial);
+    if (After == 0)
     {
-        // Three-sided silhouette, bound hilt and three bronze prongs.
-        if(auto* Pin=MeshActor(To+FVector(0,0,12),Cone,{.23,.23,1.15},&Colors[Slot]))
-        {
-            Pin->SetActorRotation(FRotator(180,0,0)); Pin->SetLifeSpan(.7f);
-        }
-        for(int32 j=0;j<3;++j)
-        {
-            const double A=j*UE_TWO_PI/3;
-            if(auto* Prong=MeshActor(To+FVector(10*FMath::Cos(A),10*FMath::Sin(A),73),
-                Sphere,{.06,.06,.32},&Gold)) Prong->SetLifeSpan(.7f);
-        }
-    }
-    else if(Slot==4 || Slot==1 || Slot==3 || Slot==6)
-    {
-        const int32 N=Slot==4?8:16;
-        const FVector Center=Slot==4 || Slot==1 ? From : To;
-        for(int32 j=0;j<N;++j)
-        {
-            const double A=j*UE_TWO_PI/N;
-            const FVector Radial(FMath::Cos(A),FMath::Sin(A),0);
-            const bool Petal=Slot==4;
-            auto* Piece=MeshActor(Center+Radial*(Petal?74.:106.)+FVector(0,0,Petal?4:-54),
-                Sphere,Petal?FVector(.18,.42,.74):FVector(.11,.46,.07),&Colors[Slot]);
-            if(Piece)
-            {
-                Piece->SetActorRotation(FRotator(Petal?32:0,FMath::RadiansToDegrees(A),0));
-                if(Petal) Piece->AttachToActor(P,FAttachmentTransformRules::KeepWorldTransform);
-                Piece->SetLifeSpan(Petal?Shield:.55f);
-            }
-        }
-    }
-    else if(Slot==5)
-    {
-        const FString Guardian=TEXT("/Game/Figures/Tenma.Tenma");
-        if(auto* Protector=MeshActor(From+P->GetActorRightVector()*140-FVector(0,0,115),Guardian,FVector(1.08)))
-        {
-            Protector->SetActorRotation(FRotator(0,(To-From).Rotation().Yaw+90,0));
-            Protector->SetLifeSpan(1.25f);
-        }
-    }
-    Pulse(Slot==4?From:To,Colors[Slot],Slot==1 || Slot==6?2.f:1.f);
-    if (!Hit) return;
-    if(Slot==2 || Slot==3) Stun=2;
-    EnemyHealth-=Power[Slot];
-    if(EnemyHealth<=0)
-    {
-        Pulse(To,FLinearColor(.88,.48,.72),2);
+        FinishingMeter = Meter;
+        FinishTime = LastHitTime;
         Advance();
     }
 }
 void ATibetGameMode::Tick(float Dt)
 {
     Super::Tick(Dt);
+    const float Now = GetWorld()->GetTimeSeconds();
+    DamageCues.RemoveAll([Now](const FTibetDamageCue& Cue) { return Now - Cue.SpawnTime >= 1.05f; });
+    if (Now - LastHitTime > .22f)
+        EnemyTrailing = FMath::FInterpConstantTo(EnemyTrailing, EnemyHealth, Dt, FMath::Max(4.f, EnemyMaximum * 1.7f));
     if (!Save || bTravel || IsCampaignComplete()) return;
     auto* P=UGameplayStatics::GetPlayerPawn(this,0);
     if (!P) return;
@@ -481,10 +525,17 @@ void ATibetGameMode::Tick(float Dt)
         }
         else Advance();
     }
+    if (EnemyMaximum > 0 && Focus)
+    {
+        FRotator Pose = Focus->GetActorRotation();
+        if (Stun <= 0 && Dist < 1600) Pose.Yaw = ToPlayer.Rotation().Yaw + 90;
+        const float Phase = FMath::Clamp((Now - LastHitTime) / .32f, 0.f, 1.f);
+        Pose.Roll = -18 * FMath::Sin(Phase * UE_PI) * (1 - Phase);
+        Focus->SetActorRotation(Pose);
+    }
     if ((K==EObjective::Combat || K==EObjective::Boss) && Focus && Stun<=0 && Dist<1600)
     {
         const FVector Dir=ToPlayer.GetSafeNormal2D();
-        Focus->SetActorRotation(FRotator(0,Dir.Rotation().Yaw+90,0));
         if(Dist>124) Focus->AddActorWorldOffset(Dir*FMath::Min<double>(Dt*(K==EObjective::Boss?165:115),Dist-120));
         HurtTimer-=Dt;
         if(Dist<200 && HurtTimer<=0)

@@ -203,7 +203,7 @@ def compare(web, mac, output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["photos", "arrival", "play", "skills", "compare"])
+    parser.add_argument("action", choices=["photos", "arrival", "play", "skills", "learned", "compare"])
     parser.add_argument("--exe", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--web", type=Path)
@@ -236,14 +236,44 @@ def main():
                 if args.only and view["id"] != args.only:
                     continue
                 capture_landmark(exe,stage,output,view,slot)
+        elif args.action == "learned":
+            # The actual last vault gate writes bReturnFromTerma; talking to Tsogyal
+            # and exiting Chimphu then writes the Boudhanath epilogue checkpoint.
+            for level, destination in (("terma3", "chimphu"), ("chimphu", "stupa")):
+                rows = capture(exe, stage, output, level, "Play", level, [], slot)
+                if rows[-1] != ["pass", "transition", destination]:
+                    raise ValueError(f"Expected {level} return gate to lead to {destination}")
+            for name, save, learned in (("return", slot, 127), ("fresh", slot + "-new", 3)):
+                rows = capture(exe, stage, output, name, "LearnedSkills", "stupa",
+                               [f"-TibetQALearnedMask={learned}"], save)
+                if ["learned", str(learned), "1" if name == "return" else "0"] not in rows:
+                    raise ValueError(f"Missing real spell input on the {name} save")
         elif args.action == "skills":
-            capture(exe,stage,output,"skills","Skills","terma3",[],slot)
-            game_log = (output / "skills/game.log").read_text(errors="replace")
-            slots = [int(n) for n in re.findall(r"TIBET_CAST slot=(\d+)", game_log)]
-            if slots != list(range(7)):
-                raise ValueError(f"Expected seven accepted game casts; got {slots}")
-            for n in slots:
-                shot_data(output / f"skills/skill-{n}.png")
+            results = output / "skills"
+            results.mkdir()
+            # Isolated saves preserve a live target for the later, harder-hitting spells.
+            for probe, skill in [(f"slot-{i}", i) for i in range(7)] + [("miss", 1)]:
+                options = [f"-TibetQASkillSlot={skill}"]
+                if probe == "miss":
+                    options.append("-TibetQAMiss")
+                if skill == 6:
+                    options.append("-TibetQAFinisher")
+                events = capture(exe, stage, results, probe, "Skills", "terma3", options, slot + "-" + probe)
+                game_log = (results / probe / "game.log").read_text(errors="replace")
+                casts = [int(n) for n in re.findall(r"TIBET_CAST slot=(\d+)", game_log)]
+                if casts != ([6, 5] if skill == 6 else [skill]):
+                    raise ValueError(f"{probe}: unexpected accepted casts {casts}")
+                measured = next(row for row in events if row[0] == "combat")
+                before, after, loss = map(int, measured[2:5])
+                expected = 0 if probe == "miss" else [1, 2, 3, 3, 0, 4, 6][skill]
+                if before != 9 or after != before - expected or loss != expected:
+                    raise ValueError(f"{probe}: incorrect measured health or loss: {measured}")
+                if skill == 6 and ["finisher", "3", "0", "3"] not in events:
+                    raise ValueError("Finishing hit failed to clamp damage to remaining health")
+                frame = results / probe / f"skill-{skill}.png"
+                shot_data(frame)
+                if probe != "miss":
+                    shutil.copy2(frame, results / frame.name)
         else:
             checkpoint = capture(exe,stage,output,"checkpoint","Play","stupa",["-TibetQAStopStep=1"],slot)
             if not any(row[:3]==["step","stupa","1"] for row in checkpoint):
