@@ -217,13 +217,24 @@ void UTibetQASubsystem::Play(APlayerController& PC, ATibetGameMode& Mode)
     {
         bTestingSkills = true;
         if (bMoving) { SendKey(PC,EKeys::W,false); bMoving=false; }
+        // InputKey queues the bound action. Photograph after PlayerInput and the renderer
+        // have processed it, while the short-lived spell meshes are still present.
+        if (PendingSkillPhoto != INDEX_NONE)
+        {
+            if (Now-LastAction >= 0.12 && !FScreenshotRequest::IsScreenshotRequested())
+            {
+                FScreenshotRequest::RequestScreenshot(Output / FString::Printf(TEXT("skill-%d.png"),PendingSkillPhoto),true,false,false);
+                PendingSkillPhoto=INDEX_NONE;
+            }
+            return;
+        }
         if (Now - LastAction < 2.5 || FScreenshotRequest::IsScreenshotRequested()) return;
         const FKey Keys[] = {EKeys::SpaceBar,EKeys::R,EKeys::One,EKeys::Two,EKeys::Three,EKeys::Four,EKeys::T};
         if (NextSkill == UE_ARRAY_COUNT(Keys)) { Finish(true,TEXT("skill inputs")); return; }
         Tapped = Keys[NextSkill];
         PC.SetControlRotation((Goal-Pos).Rotation());
         SendKey(PC,Tapped,true);
-        FScreenshotRequest::RequestScreenshot(Output / FString::Printf(TEXT("skill-%d.png"),NextSkill),true,false,false);
+        PendingSkillPhoto=NextSkill;
         Record(FString::Printf(TEXT("skillKey\t%d\t%s"),NextSkill,*Tapped.ToString()));
         LastAction = Now;
         ++NextSkill;

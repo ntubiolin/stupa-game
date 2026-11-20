@@ -28,7 +28,7 @@ private:
     FString Output, Task, StartMap, Screenshot;
     TArray<double> FrameMs;
     double Began = 0, LastFrame = 0, LastAction = 0;
-    int32 NextSkill = 0;
+    int32 NextSkill = 0, PendingSkillPhoto = INDEX_NONE;
     int32 Frames = 0, PreviousStep = INDEX_NONE, PreviousProgress = INDEX_NONE;
     bool bFinished = false, bMoving = false, bTestingSkills = false;
     FKey Tapped;
