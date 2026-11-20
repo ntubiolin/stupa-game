@@ -29,8 +29,16 @@ def temporary_root(executable):
         raise ValueError("Unexpected bundle identifier")
     root = Path.home() / "Library/Containers" / bundle_id / "Data/tmp"
     if not root.is_dir():
-        subprocess.run([executable, "-unattended", "-ExecCmds=quit", "-TibetSaveSlot=QA-bootstrap-" + uuid4().hex],
-                       cwd=executable.parent, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=100)
+        args = [executable, "-unattended", "-RenderOffscreen", "-nosound", "-ExecCmds=quit",
+                "-TibetSaveSlot=QA-bootstrap-" + uuid4().hex]
+        try:
+            subprocess.run(args, cwd=executable.parent, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           check=True, timeout=30)
+        except subprocess.TimeoutExpired:
+            if not root.is_dir():
+                raise
+    if not root.is_dir():
+        raise RuntimeError(f"macOS did not initialize the app container at {root}")
     return root
 
 
