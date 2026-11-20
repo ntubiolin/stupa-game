@@ -652,6 +652,7 @@ void UTibetQASubsystem::Play(APlayerController& PC, ATibetGameMode& Mode)
     if (bWalk != bMoving) { SendKey(PC,EKeys::W,bWalk); bMoving=bWalk; }
     if (!bWalk && Now - LastAction >= 0.26 && !FScreenshotRequest::IsScreenshotRequested())
     {
+        if (FParse::Param(FCommandLine::Get(),TEXT("TibetQAEncounters")) && CaptureEncounter(PC,Mode)) return;
         if (Kind == TEXT("Gate") && FParse::Param(FCommandLine::Get(),TEXT("TibetQAGateEvidence")))
             Record(FString::Printf(TEXT("enter\t%.1f\t%.1f\t%.1f"), Pos.Z-88, Goal.Z, FVector::Dist2D(Pos,Goal)));
         Tapped = bFight ? EKeys::SpaceBar : EKeys::E;

@@ -27,6 +27,8 @@ private:
     void Arrival(APlayerController& PC);
     void CameraFollow(APlayerController& PC, ATibetGameMode& Mode);
     bool SurveyGate(APlayerController& PC, const FVector& Goal);
+    bool CaptureEncounter(APlayerController& PC, ATibetGameMode& Mode);
+    TSet<FName> SeenEncounters;
     int32 GateFrames = 0;
     uint8 GatePhases = 0;
     void Play(APlayerController& PC, ATibetGameMode& Mode);

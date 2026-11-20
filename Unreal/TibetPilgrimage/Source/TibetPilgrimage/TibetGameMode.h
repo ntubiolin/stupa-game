@@ -42,6 +42,14 @@ struct FTibetSkillState
     bool bUnlocked = false;
 };
 
+struct FTibetWildEnemy
+{
+    TWeakObjectPtr<AActor> Actor;
+    int32 Kind = 0;
+    int32 Health = 3;
+    float StunnedUntil = 0.f;
+};
+
 UCLASS()
 class TIBETPILGRIMAGE_API ATibetGameMode : public AGameModeBase
 {
@@ -97,6 +105,11 @@ private:
     int32 EnemyHealth = 0, EnemyMaximum = 0;
     float EnemyTrailing = 0, LastHitTime = -10, FinishTime = -10;
     FTibetEnemyMeter FinishingMeter;
+    TArray<FTibetWildEnemy> WildernessPack;
+    void RefreshWilderness(int32 Remaining);
+    void UpdateWilderness(const FVector& Player, float Dt);
+    FString EnemyLabel() const;
+    float PursuitSpeed(bool bBoss) const;
     FTibetPlayerFeedback PlayerFeedback;
     TArray<FTibetDamageCue> DamageCues;
     float Health = 100, Mana = 100, HurtTimer = 0, Stun = 0, Shield = 0, NoticeUntil = 0;

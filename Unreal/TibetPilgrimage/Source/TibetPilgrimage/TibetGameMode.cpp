@@ -5,6 +5,7 @@
 #include "Async/Async.h"
 #include "Misc/App.h"
 #include "GameFramework/PlayerController.h"
+#include "TibetBossHalo.h"
 #include "TibetRitualEffect.h"
 #include "TibetTravelGate.h"
 #include "Components/CapsuleComponent.h"
@@ -383,7 +384,7 @@ FString ATibetGameMode::Status(bool bTouchControls) const
     const int32 Meters=P ? FMath::RoundToInt(FVector::Dist2D(P->GetActorLocation(),GetObjectiveLocation())/100.) : 0;
     const auto K=Objective(Route,GetStep()).Kind;
     FString S=FString::Printf(TEXT("%s %d   ·   %d m"),*Local(TEXT("Life"),TEXT("體力")),FMath::CeilToInt(Health),Meters);
-    if (K==EObjective::Boss || K==EObjective::Combat) S+=FString::Printf(TEXT("   ·   %s %d"),*Local(TEXT("Spirit"),TEXT("靈障")),EnemyHealth);
+    if (K==EObjective::Boss || K==EObjective::Combat) S+=FString::Printf(TEXT("   ·   %s %d"),*EnemyLabel(),EnemyHealth);
     if (P)
     {
         const EInteraction Action=InteractionAt(P->GetActorLocation());
@@ -423,6 +424,13 @@ void ATibetGameMode::RestoreStupaFlames()
 }
 void ATibetGameMode::Refresh()
 {
+    const auto K=Objective(Route,GetStep()).Kind;
+    if (Map==TEXT("wild") && K==EObjective::Combat && !IsCampaignComplete())
+    {
+        RefreshWilderness(Objective(Route, GetStep()).Count - GetStepProgress());
+        return;
+    }
+    if (!WildernessPack.IsEmpty()) RefreshWilderness(0);
     EnemyMaximum = 0;
     LastHitTime = -10;
     if (Focus) { Focus->Destroy(); Focus=nullptr; }
@@ -439,7 +447,6 @@ void ATibetGameMode::Refresh()
         }
     }
     if (IsCampaignComplete()) return;
-    const auto K=Objective(Route,GetStep()).Kind;
     const FVector At=Anchor();
     if (K==EObjective::Talk || (K==EObjective::Escort && !bEscorting))
     {
@@ -463,6 +470,13 @@ void ATibetGameMode::Refresh()
         const FString Path=FString::Printf(TEXT("/Game/Figures/%s.%s"),*Model,*Model);
         Focus=MeshActor(At,Path,FVector(K==EObjective::Boss?1.48:1));
         if (Focus) Focus->SetActorRotation(FRotator(0,-90,0));
+        if (Focus && K==EObjective::Boss)
+        {
+            FActorSpawnParameters Spawn;
+            Spawn.Owner=Focus;
+            if (auto* Halo=GetWorld()->SpawnActor<ATibetBossHalo>(At+FVector(0,0,6), FRotator::ZeroRotator, Spawn))
+                Halo->AttachToActor(Focus,FAttachmentTransformRules::KeepWorldTransform);
+        }
     }
     else if (Map==TEXT("stupa") && (K==EObjective::Kora || K==EObjective::Interact))
     {
@@ -705,6 +719,7 @@ void ATibetGameMode::CastSkill(int32 Slot)
     Cooldown[Slot]=Skill.Recovery; Mana-=Skill.Cost;
     if (Slot == 4) Shield = 6;
     const FVector Player = P->GetActorLocation();
+    if (!WildernessPack.IsEmpty()) UpdateWilderness(Player,0.f);
     const bool Hit = EnemyMaximum > 0 && Focus && Skill.Power > 0 &&
         FVector::Dist2D(Player, GetObjectiveLocation()) < Skill.Range;
     const FVector From = Player + FVector(0,0,30);
@@ -731,6 +746,13 @@ void ATibetGameMode::CastSkill(int32 Slot)
         TEXT("TIBET_CAST slot=%d map=%s hit=%d mp=%.1f shield=%.1f before=%d after=%d damage=%d effect=%d"),
         Slot, *Map, Hit ? 1 : 0, Mana, Shield, Before, After, Damage, Effect ? 1 : 0);
     if (Damage == 0) return;
+    if (!WildernessPack.IsEmpty())
+    {
+        const auto* Body = Focus->FindComponentByClass<UStaticMeshComponent>();
+        if (Body && Body->GetStaticMesh())
+            UE_LOG(LogTemp,Display,TEXT("TIBET_WILD_HIT model=%s before=%d after=%d loss=%d"),
+                *Body->GetStaticMesh()->GetName(),Before,After,Damage);
+    }
     EnemyHealth = After;
     LastHitTime = GetWorld()->GetTimeSeconds();
     if (Slot == 2 || Slot == 3) Stun = 2;
@@ -761,6 +783,7 @@ void ATibetGameMode::Tick(float Dt)
     for(float& T:Cooldown) T=FMath::Max(0.f,T-Dt);
     Shield=FMath::Max(0.f,Shield-Dt); Stun=FMath::Max(0.f,Stun-Dt);
     const auto K=Objective(Route,GetStep()).Kind;
+    if (!WildernessPack.IsEmpty()) UpdateWilderness(P->GetActorLocation(),Dt);
     const FVector ToPlayer=P->GetActorLocation()-GetObjectiveLocation();
     const double Dist=ToPlayer.Size2D();
     if (bEscorting && Messenger)
@@ -800,7 +823,7 @@ void ATibetGameMode::Tick(float Dt)
     if ((K==EObjective::Combat || K==EObjective::Boss) && Focus && Stun<=0 && Dist<1600)
     {
         const FVector Dir=ToPlayer.GetSafeNormal2D();
-        if(Dist>124) Focus->AddActorWorldOffset(Dir*FMath::Min<double>(Dt*(K==EObjective::Boss?165:115),Dist-120));
+        if(Dist>124) Focus->AddActorWorldOffset(Dir*FMath::Min<double>(Dt*PursuitSpeed(K==EObjective::Boss),Dist-120));
         HurtTimer-=Dt;
         if(Dist<200 && HurtTimer<=0)
         {

@@ -74,3 +74,7 @@ UE 5.8 的通常輸出為 Builds/Signed/IOS/TibetPilgrimage.app。將連接裝�
 `python3 QA/test_dialogue.py --voices` 會核對全部 22 個對話目標的雙語台詞及角色名，並在 Mac 以遊戲使用的 AVFoundation 音色將洛桑第一句中英文各合成一次，檢查有效取樣數、時長及音量。Mac 與 iOS 遊戲使用裝置上的臺灣國語或美式英文語音，遊戲內切換語言即同步切換配音。玩家可用「略過」中止，打開選單會暫停，關閉後續播。系統以目前裝置的音量輸出。[Apple AVSpeechSynthesizer](https://developer.apple.com/documentation/avfaudio/avspeechsynthesizer/)
 
 `python3 QA/test_dialogue.py --exe /path/to/TibetPilgrimage.app/Contents/MacOS/TibetPilgrimage --output /path/to/new/dialogue` 使用獨立存檔，在繁中桌面和英文觸控版面操作洛桑與塔林側門，會短暫播放聲音。驗收覆蓋遠距離、隔牆、交談後提示消失、開啟選單暫停、略過、字幕與技能列的幾何範圍，以及傳送門錨點。每個版面輸出三張含 HUD 的截圖及 events.tsv。可在正常遊戲與洛桑談話時確認發音與字幕換句，按 M 暫停、關閉後續聽，再點「略過」。
+
+### 北郊原野遭遇與雪人王
+
+以封裝的 Mac 執行檔運行 `python3 QA/test_wilderness.py --exe /path/to/TibetPilgrimage.app/Contents/MacOS/TibetPilgrimage --output /tmp/tibet-wilderness-proof`。測試先解脫一隻怪物，重新啟動同一存檔，再完成十隻與首領。結果包含餓鬼靈球、贊騎、雪人與雪人王四張實機截圖、逐擊生命數值，以及首領腳下光環在畫面的取樣位置。輸出目錄須為新的路徑。
