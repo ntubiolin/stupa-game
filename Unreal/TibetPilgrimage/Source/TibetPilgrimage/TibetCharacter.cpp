@@ -1,6 +1,7 @@
 #include "TibetCharacter.h"
 #include "TibetGameMode.h"
 #include "Camera/CameraComponent.h"
+#include "Camera/PlayerCameraManager.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/InputComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -23,13 +24,46 @@ ATibetCharacter::ATibetCharacter()
     Figure->SetRelativeLocation(FVector(0,0,-88));
     auto* Arm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArm"));
     Arm->SetupAttachment(GetRootComponent());
-    Arm->TargetArmLength = 390;
-    Arm->SetRelativeLocation(FVector(0,0,57));
+    Arm->TargetArmLength = 465;
+    Arm->SetRelativeLocation(FVector(0,0,80));
     Arm->SocketOffset = FVector(0,45,22);
     Arm->bUsePawnControlRotation = true;
     auto* Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
     Camera->SetupAttachment(Arm, USpringArmComponent::SocketName);
     Camera->FieldOfView = 79;
+}
+
+void ATibetCharacter::SetPlayerDefaults()
+{
+    Super::SetPlayerDefaults();
+    auto* Player = Cast<APlayerController>(GetController());
+    if (!Player || !Player->PlayerCameraManager) return;
+
+    Player->PlayerCameraManager->ViewPitchMin = -55.f;
+    Player->PlayerCameraManager->ViewPitchMax = 19.f;
+    // The player start faces the approach. Frame its skyline once, when spawning.
+    Player->SetControlRotation(FRotator(5.f, Player->GetControlRotation().Yaw, 0.f));
+}
+
+void ATibetCharacter::UpdateMouseLook(APlayerController& Player)
+{
+    if (!Player.IsInputKeyDown(EKeys::RightMouseButton))
+    {
+        bAwaitingDragMotion = true;
+        return;
+    }
+
+    float DeltaX, DeltaY;
+    Player.GetInputMouseDelta(DeltaX, DeltaY);
+    if (DeltaX == 0.f && DeltaY == 0.f) return;
+    // Capturing the mouse can warp the pointer. The first motion establishes the drag origin.
+    if (bAwaitingDragMotion || Player.WasInputKeyJustPressed(EKeys::RightMouseButton))
+    {
+        bAwaitingDragMotion = false;
+        return;
+    }
+    Player.AddYawInput(DeltaX);
+    Player.AddPitchInput(-DeltaY);
 }
 
 void ATibetCharacter::BeginPlay()
@@ -59,6 +93,7 @@ void ATibetCharacter::Tick(float Dt)
     Super::Tick(Dt);
     auto* PC = Cast<APlayerController>(Controller);
     if (!PC) return;
+    UpdateMouseLook(*PC);
     const FRotator Yaw(0,PC->GetControlRotation().Yaw,0);
     const FRotationMatrix Axes(Yaw);
     FVector2D Axis(PC->IsInputKeyDown(EKeys::D)-PC->IsInputKeyDown(EKeys::A),
@@ -106,8 +141,6 @@ void ATibetCharacter::Tick(float Dt)
 void ATibetCharacter::SetupPlayerInputComponent(UInputComponent* Input)
 {
     Super::SetupPlayerInputComponent(Input);
-    Input->BindAxisKey(EKeys::MouseX,this,&APawn::AddControllerYawInput);
-    Input->BindAxisKey(EKeys::MouseY,this,&APawn::AddControllerPitchInput);
     Input->BindKey(EKeys::E,IE_Pressed,this,&ATibetCharacter::DoInteract);
     Input->BindKey(EKeys::L,IE_Pressed,this,&ATibetCharacter::Language);
     Input->BindKey(EKeys::Escape,IE_Pressed,this,&ATibetCharacter::Quit);

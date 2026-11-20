@@ -37,15 +37,19 @@ public:
     void CastSkill(int32 Slot = 0);
     void ChangeLanguage();
     FString AreaName() const;
-    FString Status() const;
+    FString Status(bool bTouchControls) const;
     bool IsEnglish() const { return Save && Save->bEnglish; }
     FString Local(const TCHAR* En, const TCHAR* Zh) const { return IsEnglish() ? En : Zh; }
 private:
+    enum class EInteraction { None, Grove, Gate, Talk, Use };
+    EInteraction InteractionAt(const FVector& PlayerLocation) const;
+    FString ActionLabel(EInteraction Action) const;
     UPROPERTY() TObjectPtr<class UMaterialInterface> RitualMaterial;
     UPROPERTY() TObjectPtr<UTibetSave> Save;
     UPROPERTY() TObjectPtr<AActor> Focus;
     UPROPERTY() TObjectPtr<AActor> Messenger;
     FString Map, Route, SlotName;
+    int32 LitStupaLamps = 0;
     int32 EnemyHealth = 0;
     float Health = 100, Mana = 100, HurtTimer = 0, Stun = 0, Shield = 0, NoticeUntil = 0;
     float Cooldown[7]{};
@@ -54,6 +58,7 @@ private:
     AActor* MeshActor(const FVector& Position, const FString& MeshPath, const FVector& Scale,
         const FLinearColor* Color = nullptr);
     FVector Anchor() const;
+    void RestoreStupaFlames();
     void Refresh();
     void Advance();
     void Store();

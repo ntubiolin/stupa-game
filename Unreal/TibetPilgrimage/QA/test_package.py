@@ -85,7 +85,9 @@ def capture(exe, stage, dest, name, mode, level, options, slot):
     output.mkdir()
     target = dest / name
     target.mkdir()
-    args = [exe, "/Game/Maps/Tibet/" + level, "-windowed", "-RenderOffscreen", "-ForceRes", "-ResX=1440",
+    # Arrival exercises the default launch map and leaves the pawn camera untouched.
+    map_args = [] if mode == "Arrival" else ["/Game/Maps/Tibet/" + level]
+    args = [exe, *map_args, "-windowed", "-RenderOffscreen", "-ForceRes", "-ResX=1440",
             "-ResY=900", "-unattended", "-nosplash", "-NoVSync", "-SaveToUserDir", f"-UserDir={stage / 'user'}",
             f"-TibetSaveSlot={slot}", f"-TibetQAStart={level}", f"-TibetQAOutput={output}", f"-TibetQA={mode}",
             "-ExecCmds=r.ScreenPercentage 100,r.DynamicRes.OperationMode 0", f"-abslog={output / 'game.log'}", *options]
@@ -201,7 +203,7 @@ def compare(web, mac, output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["photos", "play", "skills", "compare"])
+    parser.add_argument("action", choices=["photos", "arrival", "play", "skills", "compare"])
     parser.add_argument("--exe", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--web", type=Path)
@@ -223,7 +225,13 @@ def main():
         (stage/"user").mkdir()
         # Unique across invocations, including packages that resolve user saves under Library.
         slot = "QA-" + stage.name
-        if args.action == "photos":
+        if args.action == "arrival":
+            capture(exe,stage,output,"arrival","Arrival","stupa",[],slot)
+            frame = output / "arrival/arrival.png"
+            shot_data(frame)
+            if landmark_detail(frame) < MIN_LANDMARK_DETAIL:
+                raise ValueError("Arrival frame lacks the pilgrim and plaza")
+        elif args.action == "photos":
             for view in VIEWS:
                 if args.only and view["id"] != args.only:
                     continue
@@ -241,7 +249,13 @@ def main():
             if not any(row[:3]==["step","stupa","1"] for row in checkpoint):
                 raise ValueError("First gameplay objective was not reached")
             capture(exe,stage,output,"resume","Resume","stupa",["-TibetQAExpected=1"],slot)
+            lamps = capture(exe,stage,output,"first-lamp","Play","stupa",
+                            ["-TibetQAStopStep=2","-TibetQAStopProgress=1"],slot)
+            if lamps[-2][:5] != ["step","stupa","2","1","Interact"]:
+                raise ValueError("The first lamp was not lit after the kora")
             campaign = capture(exe,stage,output,"campaign","Campaign","stupa",[],slot)
+            if campaign[0][:5] != ["step","stupa","2","1","Interact"]:
+                raise ValueError("The first offering was lost on restart")
             required = {v["id"] for v in VIEWS} - {"grove"}
             reached = {row[1] for row in campaign if row[0]=="step"}
             if required-reached or campaign[-1] != ["pass","campaign completed"]:

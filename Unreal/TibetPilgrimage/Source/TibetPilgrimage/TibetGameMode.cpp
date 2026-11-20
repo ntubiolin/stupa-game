@@ -3,6 +3,7 @@
 #include "TibetHUD.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/TargetPoint.h"
 #include "GameFramework/Character.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -35,6 +36,10 @@ const TCHAR* ChineseNames[]={TEXT("博達哈大佛塔"),TEXT("行者塔林"),TEX
     TEXT("芒域・吉隆山口"),TEXT("雅礱河谷"),TEXT("桑耶寺"),TEXT("青浦修行地"),TEXT("伏藏・地窟"),TEXT("伏藏・水晶"),TEXT("伏藏・虛空")};
 
 const FVector GroveGate(-1860,-480,0);
+FVector StupaLampLocation(int32 Index)
+{
+    return FVector(1430+70*Index,-360+320*Index,0);
+}
 const FString Cylinder=TEXT("/Engine/BasicShapes/Cylinder.Cylinder");
 const FString Cone=TEXT("/Engine/BasicShapes/Cone.Cone");
 const FString Sphere=TEXT("/Engine/BasicShapes/Sphere.Sphere");
@@ -117,7 +122,7 @@ FVector ATibetGameMode::Anchor() const
     const int32 Step=GetStep();
     if (Map==TEXT("grove") && K==EObjective::Interact) return FVector(1280,0,0);
     if (Map==TEXT("stupa") && K==EObjective::Interact)
-        return FVector(1430+70*Count,-360+320*Count,0);
+        return StupaLampLocation(Count);
     if (Map==TEXT("pharping"))
     {
         if(Step==2) return FVector(1250+80*Count,-760+90*Count,0);
@@ -174,7 +179,39 @@ FString ATibetGameMode::AreaName() const
     const int32 i=Order.IndexOfByKey(Map);
     return Order.IsValidIndex(i) ? Local(EnglishNames[i],ChineseNames[i]) : FString();
 }
-FString ATibetGameMode::Status() const
+ATibetGameMode::EInteraction ATibetGameMode::InteractionAt(const FVector& PlayerLocation) const
+{
+    if (!Save || bTravel || IsCampaignComplete()) return EInteraction::None;
+    if (Map==TEXT("stupa") && FVector::Dist2D(PlayerLocation,GroveGate)<215) return EInteraction::Grove;
+    if (FVector::Dist2D(PlayerLocation,GetObjectiveLocation())>225) return EInteraction::None;
+    switch (Objective(Route,GetStep()).Kind)
+    {
+    case EObjective::Gate: return EInteraction::Gate;
+    case EObjective::Talk: return EInteraction::Talk;
+    case EObjective::Interact: return EInteraction::Use;
+    default: return EInteraction::None;
+    }
+}
+FString ATibetGameMode::ActionLabel(EInteraction Action) const
+{
+    switch (Action)
+    {
+    case EInteraction::Grove: return Local(TEXT("Visit the votive grove"),TEXT("前往行者塔林"));
+    case EInteraction::Gate:
+        if (Map==TEXT("stupa")) return Local(TEXT("Enter the northern wilderness"),TEXT("前往北郊原野"));
+        if (Map==TEXT("grove")) return Local(TEXT("Return to Boudhanath"),TEXT("返回博達哈大佛塔"));
+        return Local(TEXT("Cross the threshold"),TEXT("前往下一區"));
+    case EInteraction::Talk:
+        if (Map==TEXT("stupa")) return Local(TEXT("Talk to Lobsang"),TEXT("與洛桑交談"));
+        return Local(TEXT("Talk"),TEXT("交談"));
+    case EInteraction::Use:
+        if (Map==TEXT("stupa")) return Local(TEXT("Light the butter lamp"),TEXT("點亮酥油燈"));
+        if (Map==TEXT("grove")) return Local(TEXT("Consecrate the votive stupa"),TEXT("為小佛塔裝藏開光"));
+        return Local(TEXT("Interact"),TEXT("操作"));
+    default: return {};
+    }
+}
+FString ATibetGameMode::Status(bool bTouchControls) const
 {
     if (!Save) return {};
     const auto* P=UGameplayStatics::GetPlayerPawn(this,0);
@@ -183,8 +220,15 @@ FString ATibetGameMode::Status() const
     FString S=FString::Printf(TEXT("%s %d   %s %d   ·   %d m"),*Local(TEXT("Life"),TEXT("體力")),FMath::CeilToInt(Health),
        *Local(TEXT("Mantra"),TEXT("法力")),FMath::FloorToInt(Mana),Meters);
     if (K==EObjective::Boss || K==EObjective::Combat) S+=FString::Printf(TEXT("   ·   %s %d"),*Local(TEXT("Spirit"),TEXT("靈障")),EnemyHealth);
-    if(P && Map==TEXT("stupa") && FVector::Dist2D(P->GetActorLocation(),GroveGate)<280)
-        S+=Local(TEXT("\nE · Visit the votive grove"),TEXT("\n互動・前往行者塔林"));
+    if (P)
+    {
+        const EInteraction Action=InteractionAt(P->GetActorLocation());
+        if (Action!=EInteraction::None)
+        {
+            S+=bTouchControls ? Local(TEXT("\nTap Act · "),TEXT("\n點選「互動」・")) : TEXT("\n[E] ");
+            S+=ActionLabel(Action);
+        }
+    }
     if (GetWorld()->GetTimeSeconds()<NoticeUntil) S+=TEXT("\n")+Notice;
     return S;
 }
@@ -193,9 +237,30 @@ void ATibetGameMode::Store()
     if (!UGameplayStatics::SaveGameToSlot(Save,SlotName,0))
         UE_LOG(LogTemp,Error,TEXT("Tibet: checkpoint write failed in %s"),*Map);
 }
+void ATibetGameMode::RestoreStupaFlames()
+{
+    // The epilogue uses a different active route, so read the original stupa checkpoint.
+    const auto& Stupa=Routes().FindChecked(Map);
+    const int32 LampStep=Stupa.IndexOfByPredicate([](const FObjective& O){ return O.Kind==EObjective::Interact; });
+    if (LampStep==INDEX_NONE) return;
+    const int32 Step=Save->Steps.FindRef(Map);
+    if (Step<LampStep) return;
+    const int32 Count=Stupa[LampStep].Count;
+    const int32 Lit=Step>LampStep ? Count : FMath::Clamp(Save->Counts.FindRef(Map),0,Count);
+    const FLinearColor Flame(4.0,1.5,0.15);
+    for (; LitStupaLamps<Lit; ++LitStupaLamps)
+    {
+        // The cone is centred on its origin. Its base meets the wick at 116.5 cm.
+        AActor* WickFlame=MeshActor(StupaLampLocation(LitStupaLamps)+FVector(0,0,126.5),
+            Cone,FVector(.13,.13,.20),&Flame);
+        if (!WickFlame) break;
+        WickFlame->Tags.Add(TEXT("StupaLampFlame"));
+    }
+}
 void ATibetGameMode::Refresh()
 {
     if (Focus) { Focus->Destroy(); Focus=nullptr; }
+    if (Map==TEXT("stupa")) RestoreStupaFlames();
     if (IsCampaignComplete()) return;
     const auto K=Objective(Route,GetStep()).Kind;
     const FVector At=Anchor();
@@ -217,6 +282,11 @@ void ATibetGameMode::Refresh()
         const FString Path=FString::Printf(TEXT("/Game/Figures/%s.%s"),*Model,*Model);
         Focus=MeshActor(At,Path,FVector(K==EObjective::Boss?1.48:1));
         if (Focus) Focus->SetActorRotation(FRotator(0,-90,0));
+    }
+    else if (Map==TEXT("stupa") && (K==EObjective::Kora || K==EObjective::Interact))
+    {
+        // The level supplies the visible paving and lamp. Keep the HUD/interaction target.
+        Focus=GetWorld()->SpawnActor<ATargetPoint>(At,FRotator::ZeroRotator);
     }
     else
     {
@@ -256,22 +326,20 @@ void ATibetGameMode::MoveToNextMap()
 }
 void ATibetGameMode::Interact()
 {
-    if (!Save || bTravel || IsCampaignComplete()) return;
     const auto* P=UGameplayStatics::GetPlayerPawn(this,0);
     if (!P) return;
-    if (Map==TEXT("stupa") && FVector::Dist2D(P->GetActorLocation(),GroveGate)<215)
+    const EInteraction Action=InteractionAt(P->GetActorLocation());
+    if (Action==EInteraction::Grove)
     {
         Save->Map=TEXT("grove"); Store(); bTravel=true;
         UGameplayStatics::OpenLevel(this,FName(TEXT("/Game/Maps/Tibet/grove")));
         return;
     }
-    if (FVector::Dist2D(P->GetActorLocation(),GetObjectiveLocation())>225) return;
-    const auto K=Objective(Route,GetStep()).Kind;
-    if(K==EObjective::Gate) MoveToNextMap();
-    if(K==EObjective::Talk || K==EObjective::Interact)
+    if(Action==EInteraction::Gate) MoveToNextMap();
+    if(Action==EInteraction::Talk || Action==EInteraction::Use)
     {
         Pulse(GetObjectiveLocation()+FVector(0,0,80),Gold,.6);
-        if(K==EObjective::Talk)
+        if(Action==EInteraction::Talk)
         {
             const auto& O=Objective(Route,GetStep());
             SetNotice(Local(O.SpeechEn,O.SpeechZh));
