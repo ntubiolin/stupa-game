@@ -1,6 +1,8 @@
 #include "TibetHUD.h"
 #include "TibetGameMode.h"
 #include "Engine/GameViewportClient.h"
+#include "Engine/Canvas.h"
+#include "GameFramework/PlayerController.h"
 #include "Fonts/CompositeFont.h"
 #include "Misc/Paths.h"
 #include "Misc/CommandLine.h"
@@ -79,6 +81,30 @@ void ATibetHUD::BeginPlay()
     }
     Overlay=SNew(SSafeZone).Visibility(EVisibility::SelfHitTestInvisible)[Layout];
     Viewport->AddViewportWidgetContent(Overlay.ToSharedRef());
+}
+void ATibetHUD::DrawHUD()
+{
+    Super::DrawHUD();
+    const auto* M=GetWorld()->GetAuthGameMode<ATibetGameMode>();
+    const auto* PC=GetOwningPlayerController();
+    if(!Overlay || !Canvas || !PC || !PC->GetPawn() || !M || M->IsCampaignComplete()) return;
+    const FVector Target=M->GetObjectiveLocation()+FVector(0,0,130);
+    FVector2D Point;
+    const bool Visible=PC->ProjectWorldLocationToScreen(Target,Point,true);
+    const float W=Canvas->SizeX,H=Canvas->SizeY;
+    const FLinearColor Gold(.98,.67,.19,.95);
+    if(!Visible)
+    {
+        const float Relative=FRotator::NormalizeAxis((Target-PC->GetPawn()->GetActorLocation()).Rotation().Yaw-
+            PC->GetControlRotation().Yaw);
+        Point={Relative<0?32.:W-32.,H*.54};
+    }
+    Point.X=FMath::Clamp(Point.X,32.,double(W)-32);
+    Point.Y=FMath::Clamp(Point.Y,double(H)*.19,double(H)*.78);
+    const float R=FMath::Clamp(H*.009f,4.f,10.f);
+    const float X=Point.X,Y=Point.Y;
+    DrawLine(X,Y-R,X+R,Y,Gold,2); DrawLine(X+R,Y,X,Y+R,Gold,2);
+    DrawLine(X,Y+R,X-R,Y,Gold,2); DrawLine(X-R,Y,X,Y-R,Gold,2);
 }
 void ATibetHUD::EndPlay(const EEndPlayReason::Type Reason)
 {

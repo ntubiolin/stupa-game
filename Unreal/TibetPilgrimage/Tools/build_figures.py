@@ -1,5 +1,6 @@
 """Model original figures for the Nepal–Tibet pilgrimage. Blender units are meters."""
 from array import array
+import json
 from math import cos, exp, pi, sin, tau
 from pathlib import Path
 import sys
@@ -313,6 +314,11 @@ def export(obj):
     bpy.ops.object.select_all(action="DESELECT")
     obj.select_set(True)
     bpy.context.view_layer.objects.active=obj
+    obj.data.calc_loop_triangles()
+    counts_file = OUT / "triangle-counts.json"
+    counts = json.loads(counts_file.read_text()) if counts_file.exists() else {}
+    counts[obj.name] = len(obj.data.loop_triangles)
+    counts_file.write_text(json.dumps(counts,indent=2,sort_keys=True)+"\n")
     bpy.ops.export_scene.fbx(filepath=str(OUT/(obj.name+".fbx")),use_selection=True,
         object_types={"MESH"},axis_forward="-Y",axis_up="Z",apply_unit_scale=True,
         bake_space_transform=True,add_leaf_bones=False,mesh_smooth_type="FACE")

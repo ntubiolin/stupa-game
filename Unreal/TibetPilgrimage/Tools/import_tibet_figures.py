@@ -1,9 +1,12 @@
 """Import original Blender figures before cooking the pilgrimage maps."""
+import json
 from pathlib import Path
 import unreal
 
 def import_meshes():
     source = Path(__file__).resolve().parents[1] / "Assets" / "Figures"
+    counts = json.loads((source / "triangle-counts.json").read_text())
+    mesh_editor = unreal.get_editor_subsystem(unreal.StaticMeshEditorSubsystem)
     assets = unreal.AssetToolsHelpers.get_asset_tools()
     tasks = []
     for filename in sorted(source.glob("*.fbx")):
@@ -29,6 +32,18 @@ def import_meshes():
         mesh = unreal.load_asset("/Game/Figures/" + Path(task.filename).stem)
         if not isinstance(mesh, unreal.StaticMesh):
             raise RuntimeError(f"Static mesh failed import: {task.filename}")
+        before = mesh.get_num_triangles(0)
+        settings = mesh_editor.get_nanite_settings(mesh)
+        previous_nanite = settings.get_editor_property("enabled")
+        settings.set_editor_property("enabled", False)
+        settings.set_editor_property("fallback_relative_error", 0.0)
+        settings.set_editor_property("fallback_percent_triangles", 1.0)
+        mesh_editor.set_nanite_settings(mesh, settings, True)
+        after = mesh.get_num_triangles(0)
+        expected = counts[Path(task.filename).stem]
+        unreal.log(f"TIBET_FIGURE {mesh.get_name()} Blender={expected} import={before} Nanite={previous_nanite} retained={after}")
+        if after < expected * 0.95:
+            raise RuntimeError(f"Figure {mesh.get_name()} lost detail: {after}/{expected}")
     unreal.EditorAssetLibrary.save_directory("/Game/Figures")
 
 if __name__ == "__main__":
