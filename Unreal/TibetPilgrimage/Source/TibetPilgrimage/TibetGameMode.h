@@ -33,6 +33,9 @@ public:
     UPROPERTY(SaveGame) float SolarPhase = .30f;
     UPROPERTY(SaveGame) int32 ClockRate = 1;
     UPROPERTY(SaveGame) uint8 ButterLampMask = 0;
+    UPROPERTY(SaveGame) bool bUsesDistinctLamps = false;
+    bool ReconcileLampQuest();
+    int32 NextUnlitLamp() const;
     UPROPERTY(SaveGame) TArray<FTibetDedication> Dedications;
     UPROPERTY(SaveGame) int32 MonkeysFed = 0;
     UPROPERTY(SaveGame) int32 FeedingBest = 0;

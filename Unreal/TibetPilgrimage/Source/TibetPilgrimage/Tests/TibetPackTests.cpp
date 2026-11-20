@@ -24,4 +24,39 @@ bool FTibetLegacyPackTest::RunTest(const FString&)
     TestFalse(TEXT("Quick item defaults to amrita"), Save->bQuickMap);
     return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTibetLampQuestTest, "Tibet.Courtyard.DistinctLamps",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FTibetLampQuestTest::RunTest(const FString&)
+{
+    const FString Stupa=TEXT("stupa");
+    constexpr int32 LampStep=2;
+    auto* Save=NewObject<UTibetSave>();
+    Save->ReconcileLampQuest();
+    Save->ButterLampMask=4; // third bowl offered before the quest
+    Save->Steps.Add(Stupa,LampStep);
+    Save->ReconcileLampQuest();
+    TestEqual(TEXT("Pre-quest offering counts"),Save->Counts.FindRef(Stupa),1);
+    TestEqual(TEXT("Guide points to an unlit bowl"),Save->NextUnlitLamp(),0);
+    TestFalse(TEXT("Refilling the same wick earns no extra progress"),Save->ReconcileLampQuest());
+    Save->ButterLampMask|=2;
+    Save->ReconcileLampQuest();
+    TestEqual(TEXT("Two distinct bowls"),Save->Counts.FindRef(Stupa),2);
+    TestEqual(TEXT("Out-of-order offerings do not light the first bowl"),int32(Save->ButterLampMask),6);
+    Save->ButterLampMask|=1;
+    Save->ReconcileLampQuest();
+    TestEqual(TEXT("Three reverse-order offerings complete the quest"),Save->Steps.FindRef(Stupa),LampStep+1);
+    TestEqual(TEXT("Next objective starts at zero"),Save->Counts.FindRef(Stupa),0);
+    auto* Legacy=NewObject<UTibetSave>();
+    Legacy->Steps.Add(Stupa,LampStep);
+    Legacy->Counts.Add(Stupa,1);
+    Legacy->ButterLampMask=4;
+    Legacy->ReconcileLampQuest();
+    TestEqual(TEXT("Legacy ordered progress and later free lamp survive"),int32(Legacy->ButterLampMask),5);
+    TestEqual(TEXT("Old slot has one unlit lamp"),Legacy->NextUnlitLamp(),1);
+    Legacy->ReconcileLampQuest();
+    TestEqual(TEXT("Reloading the migrated count does not manufacture a second wick"),int32(Legacy->ButterLampMask),5);
+    return true;
+}
 #endif

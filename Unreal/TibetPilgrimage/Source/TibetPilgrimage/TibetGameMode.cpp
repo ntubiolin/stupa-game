@@ -150,6 +150,7 @@ void ATibetGameMode::StartPlay()
     Save->Map=Map;
     Save->Steps.FindOrAdd(Route)=FMath::Clamp(GetStep(),0,Routes().FindChecked(Route).Num());
     Save->Counts.FindOrAdd(Route)=FMath::Clamp(GetStepProgress(),0,Objective(Route,GetStep()).Count-1);
+    if (Map==TEXT("stupa")) Save->ReconcileLampQuest();
     // A zero-step checkpoint also records a visit. Read old save slots without
     // a schema change, including the first frame of a direct level launch.
     FurthestMap = Order.IndexOfByKey(Map);
@@ -246,7 +247,7 @@ FVector ATibetGameMode::Anchor() const
     }
     if (Map==TEXT("grove") && K==EObjective::Interact) return FVector(1280,0,0);
     if (Map==TEXT("stupa") && K==EObjective::Interact)
-        return StupaLampLocation(Count);
+        return StupaLampLocation(Save->NextUnlitLamp());
     if (Map==TEXT("pharping"))
     {
         if(Step==2) return FVector(1250+80*Count,-760+90*Count,0);
@@ -421,16 +422,43 @@ bool ATibetGameMode::Store()
     UE_LOG(LogTemp,Error,TEXT("Tibet: checkpoint write failed in %s"),*Map);
     return false;
 }
+int32 UTibetSave::NextUnlitLamp() const
+{
+    for (int32 I=0; I<SouthLampTable; ++I)
+        if (!(ButterLampMask & (1u<<I))) return I;
+    return INDEX_NONE;
+}
+
+bool UTibetSave::ReconcileLampQuest()
+{
+    const FString Stupa=TEXT("stupa");
+    static const int32 LampStep=Routes().FindChecked(Stupa).IndexOfByPredicate(
+        [](const FObjective& O){ return O.Kind==EObjective::Interact; });
+    if (LampStep==INDEX_NONE) return false;
+    const int32 Step=Steps.FindRef(Stupa), Count=Counts.FindRef(Stupa);
+    if (!bUsesDistinctLamps)
+    {
+        // Older checkpoints counted bowls in order. Free offerings may have
+        // lit other bowls as well. Convert that ordered prefix exactly once.
+        const int32 Ordered=Step>LampStep ? 3 : (Step==LampStep ? FMath::Clamp(Count,0,3) : 0);
+        ButterLampMask|=(1u<<Ordered)-1;
+        bUsesDistinctLamps=true;
+    }
+    if (Step!=LampStep) return false;
+    const int32 Lit=FMath::CountBits(uint32(ButterLampMask & 7u));
+    if (Lit==3)
+    {
+        Steps.Add(Stupa,LampStep+1);
+        Counts.Add(Stupa,0);
+        return true;
+    }
+    if (Lit==Count) return false;
+    Counts.Add(Stupa,Lit);
+    return true;
+}
+
 void ATibetGameMode::RestoreStupaFlames()
 {
-    // The epilogue uses a different active route, so read the original stupa checkpoint.
-    const auto& Stupa=Routes().FindChecked(Map);
-    const int32 LampStep=Stupa.IndexOfByPredicate([](const FObjective& O){ return O.Kind==EObjective::Interact; });
-    if (LampStep==INDEX_NONE) return;
-    const int32 Step=Save->Steps.FindRef(Map);
-    const int32 Lit=Step>LampStep ? 3 : (Step==LampStep ? FMath::Clamp(Save->Counts.FindRef(Map),0,3) : 0);
-    // Existing saves only have the ordered quest count.
-    Save->ButterLampMask |= (1u << Lit)-1;
     for (int32 I=0; I<3; ++I)
     {
         const uint8 Bit=1u<<I;
@@ -542,6 +570,7 @@ void ATibetGameMode::Advance()
         }
         if (Route==TEXT("ending")) Save->bComplete=true;
     }
+    if (Route==TEXT("stupa")) Save->ReconcileLampQuest();
     for (int32 I = 0; I < UE_ARRAY_COUNT(Rewards); ++I)
     {
         if (!WasOwned[I] && OwnsItem(Rewards[I]))
@@ -601,7 +630,7 @@ void ATibetGameMode::OfferButter(int32 Lamp,bool bOpenDedication)
     const bool bLit=bTable || (Save->ButterLampMask & (1u<<Lamp));
     // A held or repeated key must not refill a lamp every frame.
     const float Now=GetWorld()->GetTimeSeconds();
-    if (Now-LastButterOffer>=.6f)
+    if (!bLit || Now-LastButterOffer>=.6f)
     {
         LastButterOffer=Now;
         if (!bTable) Save->ButterLampMask |= 1u<<Lamp;
@@ -609,9 +638,12 @@ void ATibetGameMode::OfferButter(int32 Lamp,bool bOpenDedication)
         Mana=FMath::Min(MaxMana(),Mana+15.f);
         SetNotice(bLit ? Local(TEXT("Fresh butter feeds the flame."),TEXT("添入酥油，燈火明亮。")) :
             Local(TEXT("The butter lamp is lit."),TEXT("酥油燈亮起。")));
-        if (Route==TEXT("stupa") && Objective(Route,GetStep()).Kind==EObjective::Interact && Lamp==GetStepProgress())
-            Advance();
-        else Store();
+        if (Save->ReconcileLampQuest())
+        {
+            PlayerFeedback.ObjectiveTime=Now;
+            Refresh();
+        }
+        Store();
     }
     if (bOpenDedication)
     {
