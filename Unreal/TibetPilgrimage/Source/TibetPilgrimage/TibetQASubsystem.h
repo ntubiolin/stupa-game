@@ -22,6 +22,7 @@ private:
     void Photo(APlayerController& PC);
     void Play(APlayerController& PC, ATibetGameMode& Mode);
     void Record(const FString& Line) const;
+    bool FindWalkingPath(APawn& Pawn, const FVector& Goal, double Reach);
 
     UPROPERTY() TObjectPtr<ACameraActor> Camera;
     FString Output, Task, StartMap, Screenshot;
@@ -31,4 +32,7 @@ private:
     int32 Frames = 0, PreviousStep = INDEX_NONE, PreviousProgress = INDEX_NONE;
     bool bFinished = false, bMoving = false, bTestingSkills = false;
     FKey Tapped;
+    TArray<FVector> Waypoints;
+    FVector LastNavPosition = FVector::ZeroVector;
+    double LastNavCheck = 0;
 };
