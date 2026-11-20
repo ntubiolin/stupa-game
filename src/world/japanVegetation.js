@@ -325,6 +325,7 @@ export function addJapanTrees(parent, trees, { name, species, canopyMaterial, di
 
   const model = cedar ? cedarModel(false) : deciduousModel(species);
   const distantModel = cedar ? cedarModel(true) : null;
+  const crownMeshes = [];
   const batches = new Map();
   for (const tree of trees) {
     const ix = cedar ? Math.floor(tree.x / CEDAR_CHUNK_SIZE) : 0;
@@ -370,6 +371,7 @@ export function addJapanTrees(parent, trees, { name, species, canopyMaterial, di
       crown.castShadow = isNear;
       crown.receiveShadow = isNear;
       level.add(trunk, crown);
+      if (!cedar && isNear) crownMeshes.push(crown);
       resources.push(trunk, crown);
       return [trunk, crown];
     }
@@ -408,6 +410,7 @@ export function addJapanTrees(parent, trees, { name, species, canopyMaterial, di
 
   disposables.push(...resources);
   return {
+    crownMeshes,
     setSeason(season) {
       foliageMaterial.map = (season === 'winter' && frost)
         || (season === 'spring' && blossoms)
