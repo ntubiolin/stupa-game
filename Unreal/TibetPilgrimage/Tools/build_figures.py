@@ -275,37 +275,27 @@ def build():
     OUT.mkdir(parents=True, exist_ok=True)
     red=surface("Madder",(.29,.040,.026))
     umber=surface("Wool",(.088,.056,.037))
-    yellow=surface("Saffron",(.58,.29,.041))
     dark=surface("DarkHair",(.033,.02,.015))
     skin=surface("Skin",(.335,.172,.096),.65)
     leather=surface("Leather",(.069,.036,.023),.67)
-    teal=surface("Turquoise",(.034,.23,.219))
     pearl=surface("Horn",(.59,.48,.33))
     snow=surface("SnowFur",(.58,.55,.49))
     slate=surface("Slate",(.12,.12,.115))
     amber=surface("Amber",(.72,.38,.04),.3)
-    def person(name,body,sash,hood,split):
-        pieces=torso(body,red,sash,True)+head(skin,dark)
-        pieces.extend([oval("Felt crown",(0,-.018,1.66),(.102,.091,.078),hood),
-                       loft("Hat band",[(1.636,.101,.090,0,-.014),(1.656,.107,.095,0,-.014),
-                            (1.669,.101,.093,0,-.014)],sash,36)])
-        for j in range(23):
-            a=j*pi/22
-            pieces.append(oval("Prayer bead",(.083*cos(a),.088+.057*sin(a),1.416-.143*sin(a)),
-                (.006,.006,.006),leather))
-        if split:
-            pieces.append(oval("Satchel",(-.13,-.139,1.04),(.113,.061,.11),leather))
-            pieces.append(cord("Leather sling",[(.129,-.08,1.36),(.112,.065,1.388),
-                  (.05,.144,1.28),(-.138,.124,1.03),(-.179,-.09,1.0)],.015,leather))
-        for label,side in (("Left",-1),("Right",1)):
-            for suffix,parts in [("Leg",tall_boot(.12*side,umber,leather)),("Sleeve",arm(side,body,sash,skin))]:
-                if split:
-                    export(combine(name+label+suffix,parts,JOINTS["Pilgrim"+label+suffix]))
-                else: pieces.extend(parts)
-        export(combine(name,pieces))
-    person("Pilgrim",umber,teal,dark,True)
-    person("Guide",red,yellow,red,False)
-    person("Guardian",slate,amber,pearl,False)
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from build_people import build_people
+    build_people()
+    pieces=torso(slate,red,amber,True)+head(skin,dark)
+    pieces.extend([oval("Felt crown",(0,-.018,1.66),(.102,.091,.078),pearl),
+                   loft("Hat band",[(1.636,.101,.090,0,-.014),(1.656,.107,.095,0,-.014),
+                        (1.669,.101,.093,0,-.014)],amber,36)])
+    for j in range(23):
+        a=j*pi/22
+        pieces.append(oval("Prayer bead",(.083*cos(a),.088+.057*sin(a),1.416-.143*sin(a)),
+            (.006,.006,.006),leather))
+    for side in (-1,1):
+        pieces+=tall_boot(.12*side,umber,leather)+arm(side,slate,amber,skin)
+    export(combine("Guardian",pieces))
     export(combine("SnowKing",beast(False,snow,slate,leather,pearl,amber)))
     export(combine("RiverYak",beast(True,umber,dark,leather,pearl,amber)))
 

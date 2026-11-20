@@ -17,6 +17,7 @@ public:
     UPROPERTY(SaveGame) bool bReturnFromTerma = false;
     UPROPERTY(SaveGame) bool bEpilogue = false;
     UPROPERTY(SaveGame) bool bComplete = false;
+    UPROPERTY(SaveGame) bool bMessengerJoined = false;
 };
 
 struct FTibetDamageCue
@@ -77,6 +78,7 @@ private:
     UPROPERTY() TObjectPtr<UTibetSave> Save;
     UPROPERTY() TObjectPtr<AActor> Focus;
     UPROPERTY() TObjectPtr<AActor> Messenger;
+    UPROPERTY() TMap<FName, TObjectPtr<AActor>> Residents;
     FString Map, Route, SlotName;
     int32 LitStupaLamps = 0;
     int32 FurthestMap = INDEX_NONE;
@@ -92,6 +94,8 @@ private:
     AActor* MeshActor(const FVector& Position, const FString& MeshPath, const FVector& Scale,
         const FLinearColor* Color = nullptr);
     FVector Anchor() const;
+    void PopulateResidents();
+    AActor* ActiveResident() const;
     void RestoreStupaFlames();
     void Refresh();
     void Advance();
