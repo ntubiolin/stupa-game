@@ -154,7 +154,12 @@ void UTibetQASubsystem::Play(APlayerController& PC, ATibetGameMode& Mode)
         Record(FString::Printf(TEXT("step\t%s\t%d\t%d\t%s\t%s\t%s"),*GetWorld()->GetMapName(),Step,Progress,*Kind.ToString(),
             *Pos.ToCompactString(),*Goal.ToCompactString()));
         if (Step != PreviousStep)
-            FScreenshotRequest::RequestScreenshot(Output / FString::Printf(TEXT("%s-%03d.png"),*GetWorld()->GetMapName(),Step),true,false,false);
+            {
+            FString File = Output / FString::Printf(TEXT("%s-%03d.png"),*GetWorld()->GetMapName(),Step);
+            if (FPaths::FileExists(File))
+                File = Output / FString::Printf(TEXT("%s-return-%03d.png"),*GetWorld()->GetMapName(),Step);
+            FScreenshotRequest::RequestScreenshot(File,true,false,false);
+        }
         PreviousStep = Step; PreviousProgress = Progress;
     }
     int32 StopStep = INDEX_NONE;
