@@ -44,7 +44,7 @@ def populate(unreal, import_scene, actor_editor, yaw):
         if not mesh or any(not component.get_material(i) for i in range(component.get_num_materials())):
             raise RuntimeError(f"Figure {part} did not import all material slots")
         offset = index*330, 0, -2000
-        transform = unreal.MathLibrary.make_transform(
+        transform = unreal.Transform(
             unreal.Vector(*offset), unreal.Rotator(yaw=yaw), unreal.Vector(1, 1, 1)
         )
         if not actor_editor.set_actor_transform(

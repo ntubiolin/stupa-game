@@ -110,7 +110,7 @@ def import_scene(source, destination, level, actor_editor):
 
 
 def place_scene(actors, actor_editor, yaw, offset, scale):
-    placement = unreal.MathLibrary.make_transform(
+    placement = unreal.Transform(
         unreal.Vector(*offset), unreal.Rotator(yaw=yaw), unreal.Vector(scale, scale, scale)
     )
     imported_paths = {actor.get_path_name() for actor in actors}

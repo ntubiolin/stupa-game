@@ -17,6 +17,12 @@ def run(executable, *args):
     subprocess.run([str(executable), *map(str, args)], cwd=PROJECT_DIR, check=True)
 
 
+def generated_map_ready():
+    return MAP_FILE.is_file() and GENERATION_LOG.is_file() and (
+        "TOJI_GENERATION_COMPLETE" in GENERATION_LOG.read_text(encoding="utf-8", errors="replace")
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ue-root", type=Path, required=True, help="UE 5.8 installation containing Engine/")
@@ -47,22 +53,24 @@ def main():
             f"-abslog={GENERATION_LOG}",
             f"-ExecutePythonScript={PROJECT_DIR / 'Tools/generate_toji.py'}",
         )
-        if not MAP_FILE.is_file() or not GENERATION_LOG.is_file() or (
-            "TOJI_GENERATION_COMPLETE" not in GENERATION_LOG.read_text(encoding="utf-8", errors="replace")
-        ):
+        if not generated_map_ready():
             raise SystemExit(f"Generation did not complete. Open {GENERATION_LOG}.")
     else:
-        if not MAP_FILE.is_file():
-            raise SystemExit("Run generate before launching or packaging Toji.")
+        if not generated_map_ready():
+            raise SystemExit("Run generate successfully before launching or packaging Toji.")
         if args.command == "play":
             run(editor, PROJECT, MAP, "-game", "-log", "-windowed", "-ResX=1600", "-ResY=900")
         else:
             run(
                 uat, "BuildCookRun", f"-project={PROJECT}", f"-platform={platform}",
                 "-clientconfig=Development", f"-map={MAP}", "-unattended", "-nop4",
-                "-build", "-cook", "-stage", "-pak", "-archive",
+                "-build", "-cook", "-stage", "-pak", "-package", "-archive",
                 f"-archivedirectory={PROJECT_DIR / 'Builds'}",
             )
+            if platform == "Mac":
+                bundle = PROJECT_DIR / "Builds/Mac/StupaPilgrimage.app"
+                if not any(bundle.rglob("*.pak")):
+                    raise SystemExit(f"Unreal archive is missing cooked game content: {bundle}")
 
 
 if __name__ == "__main__":

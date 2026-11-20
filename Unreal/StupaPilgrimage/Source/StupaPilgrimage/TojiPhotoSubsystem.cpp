@@ -72,7 +72,7 @@ void UTojiPhotoSubsystem::Tick(float)
         if (FPaths::IsRelative(ImagePath) || FPaths::FileExists(ImagePath) || FPaths::FileExists(MetadataPath)) {
             Fail(TEXT("Expected a fresh absolute output directory")); return;
         }
-        auto* Pawn = PC->GetPawn();
+        APawn* Pawn = PC->GetPawn();
         FString SubjectText;
         if (FParse::Value(Args, TEXT("TojiSubject="), SubjectText, false))
         {
@@ -134,7 +134,7 @@ void UTojiPhotoSubsystem::SaveMeasurement()
     Result->SetStringField(TEXT("gpu"), FPlatformMisc::GetPrimaryGPUBrand());
     auto* PC = GetWorld()->GetFirstPlayerController();
     const auto* Mode = GetWorld()->GetAuthGameMode<ATojiGameMode>();
-    const auto* View = PC->PlayerCameraManager;
+    const APlayerCameraManager* View = PC->PlayerCameraManager;
     if (!Mode || PC->GetViewTarget() != Camera) { Fail(TEXT("Unexpected active camera or mode")); return; }
     const auto SaveVector = [&Result](const TCHAR* Key, const FVector& V)
     {

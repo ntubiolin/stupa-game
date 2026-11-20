@@ -1,5 +1,10 @@
 /Binaries/
 /Builds/
+/Build/Mac/*.PackageVersionCounter
+/Build/Mac/FileOpenOrder/*.log
+/Build/Mac/Resources/Info.Template.plist
+/Build/Mac/Resources/Sandbox.NoNet.entitlements
+/Build/Mac/Resources/Sandbox.Server.entitlements
 /Content/
 /DerivedDataCache/
 /Intermediate/
