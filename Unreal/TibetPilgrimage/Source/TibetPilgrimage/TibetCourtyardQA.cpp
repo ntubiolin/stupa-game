@@ -94,13 +94,6 @@ void UTibetQASubsystem::Courtyard(APlayerController& PC,ATibetGameMode& Mode)
         if(Mode.SolarPhase()<.40 || Mode.SolarPhase()>.53) {Finish(false,TEXT("Time slider did not set day"));return;}
         if(Move(Monkeys->Location(2),310))
         {
-            // Leave the time slider before capturing the player's action prompts.
-            if (!bTouch)
-            {
-                int32 Width, Height;
-                PC.GetViewportSize(Width,Height);
-                PC.SetMouseLocation(Width/2,Height/2);
-            }
             const float Yaw=(Monkeys->Location(2)-PC.GetPawn()->GetActorLocation()).Rotation().Yaw;
             PC.SetControlRotation(FRotator(-11,Yaw-15,0));
             Next();

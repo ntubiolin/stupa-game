@@ -46,7 +46,7 @@ TSharedRef<SWidget> STibetPlayOverlay::CourtyardControls()
     Content->AddSlot().AutoHeight().Padding(5,2)
         [SNew(SSlider).Tag(TEXT("TibetClockSlider")).StepSize(.002f)
          .Value_Lambda([this](){return Mode->SolarPhase();})
-         .ToolTipText(Local(TEXT("Time of day"),TEXT("市區時刻")))
+         .AccessibleText(Local(TEXT("Time of day"),TEXT("市區時刻")))
          .OnValueChanged_Lambda([this](float V){Mode->SetSolarPhase(V,false);})
          .OnMouseCaptureEnd_Lambda([this](){Mode->SetSolarPhase(Mode->SolarPhase());})
          .OnControllerCaptureEnd_Lambda([this](){Mode->SetSolarPhase(Mode->SolarPhase());})];
