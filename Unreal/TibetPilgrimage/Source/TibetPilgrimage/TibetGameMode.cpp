@@ -1,9 +1,11 @@
 #include "TibetGameMode.h"
 #include "TibetCharacter.h"
 #include "TibetHUD.h"
+#include "TibetPlayOverlay.h"
 #include "TibetVoice.h"
 #include "Async/Async.h"
 #include "Misc/App.h"
+#include "TimerManager.h"
 #include "GameFramework/PlayerController.h"
 #include "TibetBossHalo.h"
 #include "TibetRitualEffect.h"
@@ -79,8 +81,12 @@ const FResidentPlacement CastPlacements[] = {
 };
 const FVector MessengerDestination(1370,-65,0);
 const FVector GroveGate(-1860,-480,0);
+// The three quest bowls have individual wicks. The bronze table on the
+// southern approach already has lit lamps in the plaza mesh.
+constexpr int32 SouthLampTable = 3;
 FVector StupaLampLocation(int32 Index)
 {
+    if (Index==SouthLampTable) return FVector(-1080,615,0);
     return FVector(1430+70*Index,-360+320*Index,0);
 }
 const FString Cylinder=TEXT("/Engine/BasicShapes/Cylinder.Cylinder");
@@ -145,6 +151,7 @@ void ATibetGameMode::StartPlay()
     Save->Map=Map;
     Save->Steps.FindOrAdd(Route)=FMath::Clamp(GetStep(),0,Routes().FindChecked(Route).Num());
     Save->Counts.FindOrAdd(Route)=FMath::Clamp(GetStepProgress(),0,Objective(Route,GetStep()).Count-1);
+    if (Map==TEXT("stupa")) Save->ReconcileLampQuest();
     // A zero-step checkpoint also records a visit. Read old save slots without
     // a schema change, including the first frame of a direct level launch.
     FurthestMap = Order.IndexOfByKey(Map);
@@ -164,6 +171,7 @@ void ATibetGameMode::StartPlay()
         }
     }
     StartCourtyard();
+    GetWorldTimerManager().SetTimer(ScoreTimer, this, &ATibetGameMode::RefreshScore, .5f, true, .01f);
     PopulateResidents();
     Store();
     Refresh();
@@ -241,7 +249,7 @@ FVector ATibetGameMode::Anchor() const
     }
     if (Map==TEXT("grove") && K==EObjective::Interact) return FVector(1280,0,0);
     if (Map==TEXT("stupa") && K==EObjective::Interact)
-        return StupaLampLocation(Count);
+        return StupaLampLocation(Save->NextUnlitLamp());
     if (Map==TEXT("pharping"))
     {
         if(Step==2) return FVector(1250+80*Count,-760+90*Count,0);
@@ -391,14 +399,16 @@ FString ATibetGameMode::Status(bool bTouchControls) const
     if (P)
     {
         const EInteraction Action=InteractionAt(P->GetActorLocation());
-        if (Action==EInteraction::Use)
+        if (AtButterLamp() && (Action==EInteraction::Use || Action==EInteraction::None))
+        {
+            S+=bTouchControls ? Local(TEXT("\nOffer a lamp or dedicate a prayer"),TEXT("\n可供燈或回向")) :
+                Local(TEXT("\nE  Light & dedicate    F  Quick offering"),TEXT("\nE 點燈回向　F 快速供燈"));
+        }
+        else if (Action==EInteraction::Use)
         {
             S+=bTouchControls ? Local(TEXT("\nTap Act · "),TEXT("\n點選「互動」・")) : Local(TEXT("\nTap E · "),TEXT("\n輕按 E・"));
             S+=ActionLabel(Action);
         }
-        else if(NearestButterLamp(P->GetActorLocation())!=INDEX_NONE)
-            S+=bTouchControls ? Local(TEXT("\nTap Act · Offer butter"),TEXT("\n點選「互動」・供酥油")) :
-                              Local(TEXT("\nE · Offer butter"),TEXT("\nE・供酥油"));
     }
     if (GetWorld()->GetTimeSeconds()<NoticeUntil) S+=TEXT("\n")+Notice;
     if (LastPackReward!=ETibetItem::Count && GetWorld()->GetTimeSeconds()<PackRewardUntil)
@@ -408,21 +418,49 @@ FString ATibetGameMode::Status(bool bTouchControls) const
     }
     return S;
 }
-void ATibetGameMode::Store()
+bool ATibetGameMode::Store()
 {
-    if (!UGameplayStatics::SaveGameToSlot(Save,SlotName,0))
-        UE_LOG(LogTemp,Error,TEXT("Tibet: checkpoint write failed in %s"),*Map);
+    if (UGameplayStatics::SaveGameToSlot(Save,SlotName,0)) return true;
+    UE_LOG(LogTemp,Error,TEXT("Tibet: checkpoint write failed in %s"),*Map);
+    return false;
 }
+int32 UTibetSave::NextUnlitLamp() const
+{
+    for (int32 I=0; I<SouthLampTable; ++I)
+        if (!(ButterLampMask & (1u<<I))) return I;
+    return INDEX_NONE;
+}
+
+bool UTibetSave::ReconcileLampQuest()
+{
+    const FString Stupa=TEXT("stupa");
+    static const int32 LampStep=Routes().FindChecked(Stupa).IndexOfByPredicate(
+        [](const FObjective& O){ return O.Kind==EObjective::Interact; });
+    if (LampStep==INDEX_NONE) return false;
+    const int32 Step=Steps.FindRef(Stupa), Count=Counts.FindRef(Stupa);
+    if (!bUsesDistinctLamps)
+    {
+        // Older checkpoints counted bowls in order. Free offerings may have
+        // lit other bowls as well. Convert that ordered prefix exactly once.
+        const int32 Ordered=Step>LampStep ? 3 : (Step==LampStep ? FMath::Clamp(Count,0,3) : 0);
+        ButterLampMask|=(1u<<Ordered)-1;
+        bUsesDistinctLamps=true;
+    }
+    if (Step!=LampStep) return false;
+    const int32 Lit=FMath::CountBits(uint32(ButterLampMask & 7u));
+    if (Lit==3)
+    {
+        Steps.Add(Stupa,LampStep+1);
+        Counts.Add(Stupa,0);
+        return true;
+    }
+    if (Lit==Count) return false;
+    Counts.Add(Stupa,Lit);
+    return true;
+}
+
 void ATibetGameMode::RestoreStupaFlames()
 {
-    // The epilogue uses a different active route, so read the original stupa checkpoint.
-    const auto& Stupa=Routes().FindChecked(Map);
-    const int32 LampStep=Stupa.IndexOfByPredicate([](const FObjective& O){ return O.Kind==EObjective::Interact; });
-    if (LampStep==INDEX_NONE) return;
-    const int32 Step=Save->Steps.FindRef(Map);
-    const int32 Lit=Step>LampStep ? 3 : (Step==LampStep ? FMath::Clamp(Save->Counts.FindRef(Map),0,3) : 0);
-    // Existing saves only have the ordered quest count.
-    Save->ButterLampMask |= (1u << Lit)-1;
     for (int32 I=0; I<3; ++I)
     {
         const uint8 Bit=1u<<I;
@@ -439,7 +477,7 @@ int32 ATibetGameMode::NearestButterLamp(const FVector& Where) const
     int32 Result=INDEX_NONE;
     double Best=220;
     if (Map==TEXT("stupa"))
-        for(int32 I=0;I<3;++I)
+        for(int32 I=0;I<=SouthLampTable;++I)
         {
             const double D=FVector::Dist2D(Where,StupaLampLocation(I));
             if(D<Best) { Best=D; Result=I; }
@@ -448,6 +486,7 @@ int32 ATibetGameMode::NearestButterLamp(const FVector& Where) const
 }
 void ATibetGameMode::Refresh()
 {
+    CancelEnemyWindup();
     const auto K=Objective(Route,GetStep()).Kind;
     if (Map==TEXT("wild") && K==EObjective::Combat && !IsCampaignComplete())
     {
@@ -534,6 +573,7 @@ void ATibetGameMode::Advance()
         }
         if (Route==TEXT("ending")) Save->bComplete=true;
     }
+    if (Route==TEXT("stupa")) Save->ReconcileLampQuest();
     for (int32 I = 0; I < UE_ARRAY_COUNT(Rewards); ++I)
     {
         if (!WasOwned[I] && OwnsItem(Rewards[I]))
@@ -561,25 +601,76 @@ void ATibetGameMode::MoveToNextMap()
     bTravel=true;
     UGameplayStatics::OpenLevel(this,FName(*FString::Printf(TEXT("/Game/Maps/Tibet/%s"),*Dest)));
 }
+bool ATibetGameMode::AtButterLamp() const
+{
+    const auto* Pawn=UGameplayStatics::GetPlayerPawn(this,0);
+    return Pawn && NearestButterLamp(Pawn->GetActorLocation())!=INDEX_NONE;
+}
+
+void ATibetGameMode::OfferNearbyLamp()
+{
+    const auto* Pawn=UGameplayStatics::GetPlayerPawn(this,0);
+    if (!Pawn) return;
+    const int32 Lamp=NearestButterLamp(Pawn->GetActorLocation());
+    if (Lamp!=INDEX_NONE) OfferButter(Lamp,true);
+}
+
+void ATibetGameMode::QuickPractice()
+{
+    if (!Save || bTravel) return;
+    if (FeedingPanel()) { CloseFeeding(); return; }
+    const auto* Pawn=UGameplayStatics::GetPlayerPawn(this,0);
+    if (!Pawn) return;
+    const int32 Lamp=NearestButterLamp(Pawn->GetActorLocation());
+    if (Lamp!=INDEX_NONE) OfferButter(Lamp,false);
+    else BeginFeeding();
+}
+
+void ATibetGameMode::OfferButter(int32 Lamp,bool bOpenDedication)
+{
+    if (!Save || bTravel) return;
+    const bool bTable=Lamp==SouthLampTable;
+    const bool bLit=bTable || (Save->ButterLampMask & (1u<<Lamp));
+    // A held or repeated key must not refill a lamp every frame.
+    const float Now=GetWorld()->GetTimeSeconds();
+    if (!bLit || Now-LastButterOffer>=.6f)
+    {
+        LastButterOffer=Now;
+        if (!bTable) Save->ButterLampMask |= 1u<<Lamp;
+        RestoreStupaFlames();
+        Mana=FMath::Min(MaxMana(),Mana+15.f);
+        SetNotice(bLit ? Local(TEXT("Fresh butter feeds the flame."),TEXT("添入酥油，燈火明亮。")) :
+            Local(TEXT("The butter lamp is lit."),TEXT("酥油燈亮起。")));
+        if (Save->ReconcileLampQuest())
+        {
+            PlayerFeedback.ObjectiveTime=Now;
+            Refresh();
+        }
+        Store();
+    }
+    if (bOpenDedication)
+    {
+        auto* PC=GetWorld()->GetFirstPlayerController();
+        if (auto* HUD=PC?PC->GetHUD<ATibetHUD>():nullptr) HUD->ToggleJournal(ETibetPage::Dedication);
+    }
+}
+
 void ATibetGameMode::Interact()
 {
     const auto* P=UGameplayStatics::GetPlayerPawn(this,0);
     if (!P) return;
     const EInteraction Action=InteractionAt(P->GetActorLocation());
-    if (Action==EInteraction::None && Save && !bTravel)
+    if (Action==EInteraction::Use || Action==EInteraction::None)
     {
         const int32 Lamp=NearestButterLamp(P->GetActorLocation());
         if (Lamp!=INDEX_NONE)
         {
-            const bool WasLit=(Save->ButterLampMask & (1u<<Lamp))!=0;
-            Save->ButterLampMask |= 1u<<Lamp;
-            RestoreStupaFlames();
-            Mana=FMath::Min(100.f,Mana+10);
-            SetNotice(WasLit ? Local(TEXT("The wick burns steadily in fresh butter."),TEXT("添入酥油，燈芯安穩地燃燒。")) :
-                               Local(TEXT("The butter lamp is lit."),TEXT("酥油燈亮起。")));
-            Store();
+            OfferButter(Lamp,true);
             return;
         }
+        // The quest uses the same bowl and distance as quick offerings.
+        if (Map==TEXT("stupa") && Action==EInteraction::Use) return;
+        if (CanFeed() && Action==EInteraction::None) { BeginFeeding(); return; }
     }
     if (Action==EInteraction::Grove)
     {
@@ -698,6 +789,7 @@ void ATibetGameMode::StopDialogue()
 }
 void ATibetGameMode::EndPlay(const EEndPlayReason::Type Reason)
 {
+    GetWorldTimerManager().ClearTimer(ScoreTimer);
     StopDialogue();
     if (Save && !bTravel && !SlotName.IsEmpty()) Store();
     Super::EndPlay(Reason);
@@ -806,7 +898,11 @@ void ATibetGameMode::CastSkill(int32 Slot)
     }
     EnemyHealth = After;
     LastHitTime = GetWorld()->GetTimeSeconds();
-    if (Slot == 2 || Slot == 3) Stun = 2;
+    if (Slot == 2 || Slot == 3)
+    {
+        Stun = 2;
+        CancelEnemyWindup();
+    }
     FTibetEnemyMeter Meter;
     GetEnemyMeter(Meter);
     DamageCues.Add({Meter.Anchor, Damage, LastHitTime});
@@ -868,35 +964,69 @@ void ATibetGameMode::Tick(float Dt)
     if (EnemyMaximum > 0 && Focus)
     {
         FRotator Pose = Focus->GetActorRotation();
-        if (Stun <= 0 && Dist < 1600) Pose.Yaw = ToPlayer.Rotation().Yaw + 90;
+        if (!bEnemyWindingUp && Stun <= 0 && Dist < 1600) Pose.Yaw = ToPlayer.Rotation().Yaw + 90;
         const float Phase = FMath::Clamp((Now - LastHitTime) / .32f, 0.f, 1.f);
         Pose.Roll = -18 * FMath::Sin(Phase * UE_PI) * (1 - Phase);
         Focus->SetActorRotation(Pose);
     }
     if ((K==EObjective::Combat || K==EObjective::Boss) && Focus && Stun<=0 && Dist<1600)
+        UpdateEnemyAttack(*P, K == EObjective::Boss, Dt);
+    else
     {
-        const FVector Dir=ToPlayer.GetSafeNormal2D();
-        if(Dist>124) Focus->AddActorWorldOffset(Dir*FMath::Min<double>(Dt*PursuitSpeed(K==EObjective::Boss),Dist-120));
-        HurtTimer-=Dt;
-        if(Dist<200 && HurtTimer<=0)
-        {
-            HurtTimer=1.5f;
-            if (Shield <= 0)
-            {
-                const float Before = Health;
-                Health = FMath::Max(0.f, Health - (K == EObjective::Boss ? 16.f : 8.f));
-                PlayerFeedback.RecordHit(Now, Before, Health);
-            }
-            if(Health<=0)
-            {
-                P->TeleportTo(FVector(-2000,0,100),FRotator::ZeroRotator);
-                Health=MaxHealth(); Mana=MaxMana(); HealTicks.Reset(); Refresh();
-                SetNotice(Local(TEXT("Restored at the trailhead."),TEXT("已在登山口恢復。")));
-            }
-        }
+        CancelEnemyWindup();
+        Health=FMath::Min(MaxHealth(),Health+Dt*2);
     }
-    else Health=FMath::Min(MaxHealth(),Health+Dt*2);
 }
+
+void ATibetGameMode::CancelEnemyWindup()
+{
+    if (auto* Effect = WindupEffect.Get()) Effect->Destroy();
+    WindupEffect.Reset();
+    bEnemyWindingUp = false;
+}
+
+void ATibetGameMode::UpdateEnemyAttack(APawn& Player, bool bBoss, float Dt)
+{
+    constexpr float Radius = 200.f;
+    constexpr float Windup = .5f;
+    constexpr float Interval = 1.5f;
+    const FVector Offset = Player.GetActorLocation() - Focus->GetActorLocation();
+    const double Distance = Offset.Size2D();
+    HurtTimer -= Dt;
+    if (!bEnemyWindingUp)
+    {
+        if (Distance > 124)
+            Focus->AddActorWorldOffset(Offset.GetSafeNormal2D() *
+                FMath::Min<double>(Dt * PursuitSpeed(bBoss), Distance - 120));
+        if (Distance >= Radius || HurtTimer > Windup) return;
+
+        HurtTimer = Windup;
+        bEnemyWindingUp = true;
+        WindupEffect = GetWorld()->SpawnActor<ATibetRitualEffect>();
+        if (auto* Effect = WindupEffect.Get())
+            Effect->StartEnemyAttack(*Focus, false, bBoss, Radius, Windup, RitualMaterial);
+        return;
+    }
+    if (HurtTimer > 0) return;
+
+    // The attacker plants its feet through the tell. Check range again at release
+    // so stepping outside the ring avoids damage and shielding only blocks injury.
+    CancelEnemyWindup();
+    HurtTimer = Interval;
+    if (auto* Effect = GetWorld()->SpawnActor<ATibetRitualEffect>())
+        Effect->StartEnemyAttack(*Focus, true, bBoss, Radius, Windup, RitualMaterial);
+    if (Distance >= Radius || Shield > 0) return;
+    const float Before = Health;
+    Health = FMath::Max(0.f, Health - (bBoss ? 16.f : 8.f));
+    PlayerFeedback.RecordHit(GetWorld()->GetTimeSeconds(), Before, Health);
+    if (Health <= 0)
+    {
+        Player.TeleportTo(FVector(-2000,0,100),FRotator::ZeroRotator);
+        Health=MaxHealth(); Mana=MaxMana(); HealTicks.Reset(); Refresh();
+        SetNotice(Local(TEXT("Restored at the trailhead."),TEXT("已在登山口恢復。")));
+    }
+}
+
 void ATibetGameMode::ChangeLanguage()
 {
     if (!Save) return;

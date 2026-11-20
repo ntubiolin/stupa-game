@@ -87,14 +87,13 @@ def capture(exe, stage, dest, name, mode, level, options, slot, size=(1440, 900)
     target.mkdir()
     # Arrival exercises the default launch map and leaves the pawn camera untouched.
     map_args = [] if mode == "Arrival" else ["/Game/Maps/Tibet/" + level]
-    # Touch emulation uses Slate's native-window hit test. A packaged
-    # Mac offscreen window is invisible to the desktop window search.
-    interactive_touch = mode in ("Journal", "Courtyard") and "-TibetTouch" in options
-    rendering = [] if interactive_touch else ["-RenderOffscreen"]
+    # Native pointer dispatch must hit the real package window on the desktop.
+    interactive_window = mode in ("Journal", "Courtyard")
+    rendering = [] if interactive_window else ["-RenderOffscreen"]
     exec_commands = "r.ScreenPercentage 100,r.DynamicRes.OperationMode 0"
     if max_fps:
         exec_commands += f",t.MaxFPS {max_fps}"
-    if interactive_touch:
+    if interactive_window:
         exec_commands += ",SlateDebugger.Event.Start"
     args = [exe, *map_args, "-windowed", *rendering, "-ForceRes", f"-ResX={size[0]}",
             f"-ResY={size[1]}", "-unattended", "-nosplash", "-NoVSync", "-SaveToUserDir", f"-UserDir={stage / 'user'}",
@@ -103,7 +102,7 @@ def capture(exe, stage, dest, name, mode, level, options, slot, size=(1440, 900)
     print(name, flush=True)
     try:
         # Use LaunchServices, as Finder does when the player opens the app bundle.
-        foreground = [] if interactive_touch else ["-g"]
+        foreground = [] if interactive_window else ["-g"]
         cmd = ["open", "-n", "-W", *foreground, "-a", str(exe.parents[2]), "--args", *args[1:]]
         with (target / "launch.log").open("w") as log:
             subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT, check=True,
@@ -237,7 +236,7 @@ def compare(web, mac, output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["photos", "arrival", "camera", "play", "skills", "learned", "journal", "pack", "feedback", "compare"])
+    parser.add_argument("action", choices=["photos", "arrival", "camera", "play", "skills", "learned", "journal", "pack", "feedback", "score", "compare"])
     parser.add_argument("--exe", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--web", type=Path)
@@ -259,6 +258,17 @@ def main():
         (stage/"user").mkdir()
         # Unique across invocations, including packages that resolve user saves under Library.
         slot = "QA-" + stage.name
+        if args.action == "score":
+            for level, expected in (("stupa", ["stupa", "stupa_night"]), ("wild", ["wild"]),
+                                    ("terma1", ["terma"])):
+                events = capture(exe, stage, output, level, "ScoreMix", level, [], slot + level)
+                log = (output / level / "game.log").read_text(errors="replace")
+                cues = re.findall(r"TIBET_SCORE cue=(\w+) loop=1 playing=1", log, flags=re.I)
+                if [cue.lower() for cue in cues] != expected:
+                    raise ValueError(f"{level}: expected {expected}, heard {cues}")
+                if sum(row[0] == "scoreMix" for row in events) != len(expected):
+                    raise ValueError(f"{level}: incomplete audio mixer measurements")
+            return
         if args.action in ("arrival", "camera"):
             capture(exe,stage,output,"arrival","Arrival","stupa",[],slot)
             frame = output / "arrival/arrival.png"
@@ -303,9 +313,11 @@ def main():
         elif args.action == "feedback":
             for name, options, size in (("desktop", [], (1440, 900)), ("compact", ["-TibetTouch"], (884, 420))):
                 rows = capture(exe, stage, output, name, "Feedback", "terma3", options, slot+name, size)
-                for expected in (["objective-pulse"], ["ward-contact"], ["injury", "100", "84", "16"]):
+                for expected in (["objective-pulse"], ["enemy-windup"], ["enemy-strike"], ["enemy-interrupted"], ["enemy-dodged"], ["ward-contact"], ["injury", "100", "84", "16"]):
                     if expected not in rows:
                         raise ValueError(f"{name}: missing combat observation {expected}")
+                phases = [shot_data(output/name/(phase+".png"), size) for phase in ("enemy-windup", "enemy-strike")]
+                if phases[0] == phases[1]: raise ValueError(f"{name}: identical enemy attack phases")
                 frames = [output / name / (state + ".png") for state in ("ward", "injury", "settled")]
                 for frame in frames:
                     shot_data(frame, size)

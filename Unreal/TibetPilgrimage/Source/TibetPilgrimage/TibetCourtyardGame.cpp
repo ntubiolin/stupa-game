@@ -1,5 +1,7 @@
 #include "TibetGameMode.h"
 #include "TibetCharacter.h"
+#include "TibetHUD.h"
+#include "GameFramework/PlayerController.h"
 #include "TibetMacaques.h"
 #include "TibetSkyClock.h"
 #include "Engine/World.h"
@@ -70,11 +72,15 @@ void ATibetGameMode::BeginFeeding()
     Macaques->Attend(FeedTarget);
     if(auto* Pilgrim=Cast<ATibetCharacter>(P)) Pilgrim->CancelGameplayInput();
     bFedThisSession=false; FeedPanel=1;
+    if (auto* PC=GetWorld()->GetFirstPlayerController())
+        if (auto* HUD=PC->GetHUD<ATibetHUD>()) HUD->RefreshInputMode();
 }
 void ATibetGameMode::CloseFeeding()
 {
     if(Macaques) Macaques->Attend(INDEX_NONE);
     FeedPanel=0; FeedTarget=INDEX_NONE;
+    if (auto* PC=GetWorld()->GetFirstPlayerController())
+        if (auto* HUD=PC->GetHUD<ATibetHUD>()) HUD->RefreshInputMode();
 }
 void ATibetGameMode::RewardFeeding()
 {
@@ -122,4 +128,18 @@ FString ATibetGameMode::FeedingText() const
         FString::Printf(TEXT("答對 %d / 5・親密 %d・最佳 %d / 5"),FruitScore,FruitAffection,BestFeedingScore());
     const FString Feedback=FruitRound ? (LastFruitMatched?Local(TEXT("It liked that!  "),TEXT("牠很喜歡！　")):Local(TEXT("Try another.  "),TEXT("試試另一種。　"))) : FString();
     return Feedback+FString::Printf(TEXT("%d / 5 · "),FruitRound+1)+Local(TEXT("The macaque wants "),TEXT("獼猴想吃"))+FruitName(FruitRequest);
+}
+
+
+bool ATibetGameMode::InscribeDedication(const FString& Pilgrim,const FString& Prayer)
+{
+    if (!Save || bTravel) return false;
+    FTibetDedication Offering;
+    Offering.Pilgrim=Pilgrim.TrimStartAndEnd();
+    Offering.Prayer=Prayer.TrimStartAndEnd();
+    if (Offering.Prayer.IsEmpty() || Offering.Prayer.Len()>120 || Offering.Pilgrim.Len()>24) return false;
+    Save->Dedications.Add(MoveTemp(Offering));
+    if (Store()) return true;
+    Save->Dedications.Pop();
+    return false;
 }

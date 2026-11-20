@@ -98,6 +98,7 @@ void UTibetQASubsystem::Tick(float)
     else if (Task == TEXT("Photo")) Photo(*PC);
     else if (Task == TEXT("Play") || Task == TEXT("Campaign") || Task == TEXT("GroveEntry") ||
              Task == TEXT("Skills") || Task == TEXT("Feedback")) Play(*PC, *Mode);
+    else if (Task == TEXT("ScoreMix")) ScoreMix(*Mode);
     else if (Task == TEXT("LearnedSkills")) LearnedSkills(*PC, *Mode);
     else if (Task == TEXT("Resume"))
     {
@@ -175,6 +176,24 @@ TSharedPtr<SWidget> FindJournalButton(const TSharedRef<SWidget>& Root,FName Tag)
         if (auto Match=FindJournalButton(Children->GetChildAt(I),Tag)) return Match;
     }
     return nullptr;
+}
+
+bool HoverJournalButton(FName Tag)
+{
+    const auto Window=GEngine->GameViewport->GetWindow();
+    if (!Window) return false;
+    const auto Button=FindJournalButton(Window.ToSharedRef(),Tag);
+    if (!Button) return false;
+    const auto Geometry=Button->GetCachedGeometry();
+    const FVector2D Center=Geometry.LocalToAbsolute(Geometry.GetLocalSize()*.5);
+    auto& Slate=FSlateApplication::Get();
+    // Use the platform cursor and normal Slate dispatch, including viewport capture and hit testing.
+    const FVector2D Previous=Slate.GetCursorPos();
+    Slate.SetCursorPos(Center);
+    const FVector2D At=Slate.GetCursorPos();
+    const TSet<FKey> NoButtons;
+    Slate.ProcessMouseMoveEvent(FPointerEvent(Slate.GetUserIndexForMouse(),FSlateApplication::CursorPointerIndex,At,Previous,NoButtons,EKeys::Invalid,0,FModifierKeysState()));
+    return At.Equals(Center,2.) && Button->IsHovered();
 }
 
 bool TapJournalButton(FName Tag)
@@ -421,6 +440,42 @@ bool UTibetQASubsystem::TapPlayControl(FName Tag,float XFraction)
     auto& Map=IPlatformInputDeviceMapper::Get();
     const bool bSlider=Tag==TEXT("TibetClockSlider");
     const auto Down=bSlider ? Geometry.LocalToAbsolute(FVector2D(Size.X*.15,Size.Y*.5)) : At;
+    if (!FParse::Param(FCommandLine::Get(),TEXT("TibetTouch")))
+    {
+        if (!FParse::Param(FCommandLine::Get(),TEXT("RenderOffscreen")))
+        {
+            auto MoveCursor=[&App](const FVector2D& To,const TSet<FKey>& Buttons){
+                const FVector2D Previous=App.GetCursorPos();
+                App.SetCursorPos(To);
+                const FVector2D Actual=App.GetCursorPos();
+                App.ProcessMouseMoveEvent(FPointerEvent(App.GetUserIndexForMouse(),FSlateApplication::CursorPointerIndex,
+                    Actual,Previous,Buttons,EKeys::Invalid,0,FModifierKeysState()));
+            };
+            const TSet<FKey> Released, Pressed{EKeys::LeftMouseButton};
+            if (HoveredCourtyardControl!=Tag)
+            {
+                MoveCursor(Down,Released);
+                HoveredCourtyardControl=Tag;
+                return false;
+            }
+            HoveredCourtyardControl=NAME_None;
+            const FVector2D Actual=App.GetCursorPos();
+            const auto Path=App.LocateWindowUnderMouse(Actual,App.GetInteractiveTopLevelWindows());
+            if (!Actual.Equals(Down,2.) || !Path.ContainsWidget(Widget.Get())) return false;
+            App.OnMouseDown(Window->GetNativeWindow(),EMouseButtons::Left);
+            if (bSlider) MoveCursor(At,Pressed);
+            App.OnMouseUp(EMouseButtons::Left);
+            return true;
+        }
+        const FWidgetPath Path(Window->GetHittestGrid().GetBubblePath(Down,0,false,0));
+        if (!Path.ContainsWidget(Widget.Get())) return false;
+        const TSet<FKey> Pressed{EKeys::LeftMouseButton}, Released;
+        App.RoutePointerMoveEvent(Path,FPointerEvent(0,Down,App.GetCursorPos(),Released,EKeys::Invalid,0,FModifierKeysState()),false);
+        App.RoutePointerDownEvent(Path,FPointerEvent(0,Down,Down,Pressed,EKeys::LeftMouseButton,0,FModifierKeysState()));
+        if (bSlider) App.RoutePointerMoveEvent(Path,FPointerEvent(0,At,Down,Pressed,EKeys::Invalid,0,FModifierKeysState()),false);
+        App.RoutePointerUpEvent(Path,FPointerEvent(0,At,At,Released,EKeys::LeftMouseButton,0,FModifierKeysState()));
+        return true;
+    }
     App.OnTouchStarted(Window->GetNativeWindow(),Down,1,0,Map.GetPrimaryPlatformUser(),Map.GetDefaultInputDevice());
     if(bSlider) App.OnTouchMoved(At,1,0,Map.GetPrimaryPlatformUser(),Map.GetDefaultInputDevice());
     App.OnTouchEnded(At,0,Map.GetPrimaryPlatformUser(),Map.GetDefaultInputDevice());
@@ -439,7 +494,16 @@ void UTibetQASubsystem::Journal(APlayerController& PC,ATibetGameMode& Mode)
         FScreenshotRequest::RequestScreenshot(Screenshot,true,false,false);
     };
     if (!Screenshot.IsEmpty() && IFileManager::Get().FileSize(*Screenshot)<=0) return;
-    auto Tap=[&](FKey Key){SendKey(PC,Key,true);};
+    auto Tap=[&](FKey Key){
+        if (HUD->IsJournalOpen())
+        {
+            const FKeyEvent Event(Key,FModifierKeysState(),0,false,0,0);
+            auto& Slate=FSlateApplication::Get();
+            Slate.ProcessKeyDownEvent(Event);
+            Slate.ProcessKeyUpEvent(Event);
+        }
+        else SendKey(PC,Key,true);
+    };
     const bool Touch=FParse::Param(FCommandLine::Get(),TEXT("TibetTouch"));
     switch (Frames++)
     {
@@ -465,26 +529,53 @@ void UTibetQASubsystem::Journal(APlayerController& PC,ATibetGameMode& Mode)
         if (!PC.GetPawn()->GetActorLocation().Equals(ArrivalPosition,.1) || !PC.GetControlRotation().Equals(HeadingBeforeDrag,.01)
             || Mode.GetSkillState(1).CooldownRemaining>0 || Mode.GetMana()!=100) { Finish(false,TEXT("Gameplay input crossed journal")); return; }
         SendKey(PC,EKeys::W,false); SendKey(PC,EKeys::R,false); SendKey(PC,EKeys::RightMouseButton,false);
-        Tap(EKeys::K); break;
+        if (!Touch)
+        {
+            auto* Viewport=GetWorld()->GetGameViewport();
+            if (!PC.bShowMouseCursor || Viewport->GetMouseCaptureMode()!=EMouseCaptureMode::NoCapture ||
+                Viewport->GetMouseLockMode()!=EMouseLockMode::DoNotLock || !HoverJournalButton(TEXT("TibetPackTab")))
+            { Finish(false,TEXT("Cursor could not reach the Pack tab")); return; }
+        }
+        else Tap(EKeys::I);
+        break;
     case 6:
+        if (!Touch)
+        {
+            const auto Window=GEngine->GameViewport->GetWindow();
+            const auto Button=FindJournalButton(Window.ToSharedRef(),TEXT("TibetPackTab"));
+            auto& Slate=FSlateApplication::Get();
+            const FVector2D At=Slate.GetCursorPos();
+            const auto Path=Slate.LocateWindowUnderMouse(At,Slate.GetInteractiveTopLevelWindows());
+            if (!Button || !Path.ContainsWidget(Button.Get())) { Finish(false,TEXT("System cursor did not stay over Pack")); return; }
+            const bool Down=Slate.OnMouseDown(Window->GetNativeWindow(),EMouseButtons::Left);
+            const bool Captured=Button->HasMouseCapture(), Hovered=Button->IsHovered();
+            const bool Up=Slate.OnMouseUp(EMouseButtons::Left);
+            Record(FString::Printf(TEXT("pack-click\t%s\t%d\t%d\t%d\t%d"),*At.ToString(),Down,Captured,Hovered,Up));
+        }
+        break;
+    case 7:
+        if (HUD->GetJournalPage()!=ETibetPage::Pack) { Finish(false,TEXT("Map to Pack failed")); return; }
+        Tap(EKeys::K); break;
+    case 8:
         SendKey(PC,EKeys::K,false);
         if (HUD->GetJournalPage()!=ETibetPage::Skills) { Finish(false,TEXT("Skills toggle failed")); return; }
         Shot(TEXT("skills")); break;
-    case 7: Tap(EKeys::Escape); break;
-    case 8:
-        SendKey(PC,EKeys::Escape,false);
-        if (HUD->IsJournalOpen() || PC.IsPaused()) { Finish(false,TEXT("Esc did not restore play")); return; }
-        break;
     case 9: Tap(EKeys::Escape); break;
     case 10:
         SendKey(PC,EKeys::Escape,false);
+        if (HUD->IsJournalOpen() || PC.IsPaused() || GetWorld()->GetGameViewport()->GetMouseCaptureMode()!=EMouseCaptureMode::CaptureDuringRightMouseDown)
+        { Finish(false,TEXT("Esc did not restore play and right-drag capture")); return; }
+        break;
+    case 11: Tap(EKeys::Escape); break;
+    case 12:
+        SendKey(PC,EKeys::Escape,false);
         if (HUD->GetJournalPage()!=ETibetPage::Controls) { Finish(false,TEXT("Menu did not reopen")); return; }
         Shot(TEXT("controls")); break;
-    case 11:
+    case 13:
         if (Touch) { if (!TapJournalButton(TEXT("TibetCloseJournal"))) { Finish(false,TEXT("Return touch target missing")); return; } }
         else Tap(EKeys::Escape);
         break;
-    case 12:
+    case 14:
         SendKey(PC,EKeys::Escape,false);
         if (HUD->IsJournalOpen() || PC.IsPaused() || !PC.GetPawn()->GetActorLocation().Equals(ArrivalPosition,.1)
             || Mode.GetMana()!=100) { Finish(false,TEXT("Return leaked input")); return; }
@@ -570,10 +661,12 @@ void UTibetQASubsystem::CameraFollow(APlayerController& PC,ATibetGameMode& Mode)
     const FVector Pos=Pawn->GetActorLocation(), Goal=Mode.GetObjectiveLocation();
     const FRotator CameraView=PC.PlayerCameraManager->GetCameraRotation();
     const auto Error=[&](double Target){return FRotator::NormalizeAxis(CameraView.Yaw-Target);};
-    const auto Next=[&](){++Frames; LastAction=Now;};
+    // Measure motion in simulation time. Screenshot encoding can stall a rendered frame.
+    const double MotionTime=GetWorld()->GetUnpausedTimeSeconds();
+    const auto Next=[&](){++Frames; LastAction=MotionTime;};
     const auto Detail=[&](const TCHAR* Name){Record(FString::Printf(TEXT("%s\t%.2f\t%.2f\t%.2f"),
         Name,CameraView.Yaw,Pawn->GetActorRotation().Yaw,PC.GetControlRotation().Yaw));};
-    const double Held=Now-LastAction;
+    const double Held=MotionTime-LastAction;
     switch (Frames)
     {
     case 0:
@@ -581,76 +674,98 @@ void UTibetQASubsystem::CameraFollow(APlayerController& PC,ATibetGameMode& Mode)
         SendKey(PC,EKeys::D,true); Next(); break;
     case 1:
         // Move the free pointer throughout the strafe. Both the walked path and
-        // the final rendered travel heading must survive these raw mouse events.
+        // the final rendered camera heading must survive these raw mouse events.
         PC.InputKey(FInputKeyEventArgs::CreateSimulated(EKeys::MouseX,IE_Axis,15,1));
         if (Held<1.15) break;
         Detail(TEXT("side-travel"));
         if (FVector::Dist2D(Pos,ArrivalPosition)<180 ||
             FMath::Abs(FRotator::NormalizeAxis((Pos-ArrivalPosition).Rotation().Yaw-HeadingBeforeDrag.Yaw-90))>5 ||
-            FMath::Abs(Error(Pawn->GetVelocity().Rotation().Yaw))>8)
-        { Finish(false,TEXT("Held strafe curved or camera failed to follow travel")); return; }
+            FMath::Abs(Error(HeadingBeforeDrag.Yaw))>.15)
+        { Finish(false,TEXT("Right strafe curved or rotated the camera")); return; }
         SendKey(PC,EKeys::D,false);
         FScreenshotRequest::RequestScreenshot(Output/TEXT("travel.png"),true,false,false);
-        Next(); break;
+        ArrivalPosition=Pos;
+        SendKey(PC,EKeys::A,true); Next(); break;
     case 2:
+    case 3:
+    {
+        // Changing direction must first brake the previous movement. Observe the actual
+        // displacement along the requested input axis while checking yaw on every frame.
+        const bool Reversing=Frames==2;
+        const FVector Direction=FRotator(0,HeadingBeforeDrag.Yaw+(Reversing?-90.:180.),0).Vector();
+        const double Displacement=FVector::DotProduct(Pos-ArrivalPosition,Direction);
+        if (FMath::Abs(Error(HeadingBeforeDrag.Yaw))>.15 || Held>2.)
+        {
+            Finish(false,FString::Printf(TEXT("Unstable strafe/backing at phase %d: displacement %.1f cm, yaw change %.2f"),
+                Frames,Displacement,Error(HeadingBeforeDrag.Yaw)));
+            return;
+        }
+        if (Displacement<120.) break;
+        Detail(Reversing?TEXT("reverse-strafe"):TEXT("backward"));
+        SendKey(PC,Reversing?EKeys::A:EKeys::S,false);
+        if (Reversing) SendKey(PC,EKeys::S,true);
+        ArrivalPosition=Pos; Next(); break;
+    }
+    case 4:
         if (Held<.5) break;
         HeadingBeforeDrag=CameraView;
         SendKey(PC,EKeys::Q,true); Next(); break;
-    case 3:
+    case 5:
         if (Held<.55) break;
         Detail(TEXT("orbit-left"));
         if (Error(HeadingBeforeDrag.Yaw)>-35 || Error(HeadingBeforeDrag.Yaw)<-85)
         { Finish(false,TEXT("Q did not orbit left")); return; }
         HeadingAfterDrag=CameraView;
         SendKey(PC,EKeys::Q,false); Next(); break;
-    case 4:
+    case 6:
         if (Held<.08) break;
         if (FMath::Abs(Error(HeadingBeforeDrag.Yaw))<3 || FMath::Abs(Error(HeadingAfterDrag.Yaw))<2)
         { Finish(false,TEXT("Q release snapped or failed to ease")); return; }
         Next(); break;
-    case 5:
+    case 7:
         if (Held<1.25) break;
         Detail(TEXT("return-left"));
-        if (FMath::Abs(Error(Pawn->GetActorRotation().Yaw))>3)
-        { Finish(false,TEXT("Idle Q release failed to return behind actor")); return; }
+        if (FMath::Abs(Error(HeadingBeforeDrag.Yaw))>3)
+        { Finish(false,TEXT("Q release failed to restore the chosen heading")); return; }
         PC.SetControlRotation((Goal-Pos).GetSafeNormal2D().Rotation());
         SendKey(PC,EKeys::W,true); Next(); break;
-    case 6:
+    case 8:
         if (FVector::Dist2D(Pos,Goal)>150) break;
         SendKey(PC,EKeys::W,false); Next(); break;
-    case 7:
+    case 9:
         if (Held<.5) break;
         HeadingBeforeDrag=CameraView;
         SendKey(PC,EKeys::E,true); Next(); break;
-    case 8:
+    case 10:
         if (Held<.72) break;
         Detail(TEXT("orbit-right"));
         if (Error(HeadingBeforeDrag.Yaw)<35 || Mode.GetStep()!=0)
         { Finish(false,TEXT("Held E did not orbit right or activated dialogue")); return; }
         FScreenshotRequest::RequestScreenshot(Output/TEXT("orbit.png"),true,false,false);
         SendKey(PC,EKeys::E,false); Next(); break;
-    case 9:
+    case 11:
         if (Held<1.5) break;
-        if (FMath::Abs(Error(Pawn->GetActorRotation().Yaw))>3 || Mode.GetStep()!=0)
+        Detail(TEXT("return-right"));
+        if (FMath::Abs(Error(HeadingBeforeDrag.Yaw))>3 || Mode.GetStep()!=0)
         { Finish(false,TEXT("E release failed to return or triggered interaction")); return; }
         HeadingBeforeDrag=CameraView;
         SendKey(PC,EKeys::E,true); Next(); break;
-    case 10:
+    case 12:
         SendKey(PC,EKeys::M,true); Next(); break;
-    case 11:
+    case 13:
         if (Held<.20) break;
         if (!PC.IsPaused() || Mode.GetStep()!=0) { Finish(false,TEXT("Menu did not cancel pending E interaction")); return; }
         SendKey(PC,EKeys::M,false); SendKey(PC,EKeys::E,false); SendKey(PC,EKeys::Q,true);
         PC.InputKey(FInputKeyEventArgs::CreateSimulated(EKeys::MouseX,IE_Axis,20,1)); Next(); break;
-    case 12:
+    case 14:
         if (Held<.25) break;
         if (!CameraView.Equals(HeadingBeforeDrag,.15)) { Finish(false,TEXT("Menu allowed camera input")); return; }
         SendKey(PC,EKeys::Q,false); SendKey(PC,EKeys::Escape,true); Next(); break;
-    case 13:
+    case 15:
         if (Held<.20) break;
         if (PC.IsPaused() || Mode.GetStep()!=0) { Finish(false,TEXT("Return from menu leaked interaction")); return; }
         SendKey(PC,EKeys::Escape,false); SendKey(PC,EKeys::E,true); Next(); break;
-    case 14:
+    case 16:
         SendKey(PC,EKeys::E,false); Next(); break;
     default:
         if (Held<.25 || FScreenshotRequest::IsScreenshotRequested()) break;
@@ -775,7 +890,8 @@ void UTibetQASubsystem::Play(APlayerController& PC, ATibetGameMode& Mode)
         return;
     }
     const bool bFight = Kind == TEXT("Combat") || Kind == TEXT("Boss");
-    const double Reach = bFight ? 320 : ((Kind == TEXT("Kora") || Kind == TEXT("Escort") || Kind == TEXT("Reach")) ? 105 : 170);
+    const bool bQuestLamp=GetWorld()->GetMapName()==TEXT("stupa") && Kind==TEXT("Interact");
+    const double Reach = bFight ? 320 : ((bQuestLamp || Kind == TEXT("Kora") || Kind == TEXT("Escort") || Kind == TEXT("Reach")) ? 105 : 170);
     if (FParse::Param(FCommandLine::Get(),TEXT("TibetQAGateEvidence")) &&
         (Kind == TEXT("Gate") || (StartMap == TEXT("chimphu") && Kind == TEXT("Reach"))) &&
         SurveyGate(PC, Goal)) return;
@@ -803,7 +919,7 @@ void UTibetQASubsystem::Play(APlayerController& PC, ATibetGameMode& Mode)
         if (FParse::Param(FCommandLine::Get(),TEXT("TibetQAEncounters")) && CaptureEncounter(PC,Mode)) return;
         if (Kind == TEXT("Gate") && FParse::Param(FCommandLine::Get(),TEXT("TibetQAGateEvidence")))
             Record(FString::Printf(TEXT("enter\t%.1f\t%.1f\t%.1f"), Pos.Z-88, Goal.Z, FVector::Dist2D(Pos,Goal)));
-        Tapped = bFight ? EKeys::SpaceBar : EKeys::E;
+        Tapped = bFight ? EKeys::SpaceBar : (bQuestLamp ? EKeys::F : EKeys::E);
         SendKey(PC,Tapped,true);
         LastAction=Now;
     }
@@ -827,7 +943,7 @@ void UTibetQASubsystem::PlayerFeedback(APlayerController& PC, ATibetGameMode& Mo
         FeedbackPhase = 1;
         return;
     }
-    if (Towards.Size2D() > 153.f)
+    if (FeedbackPhase < 7 && Towards.Size2D() > 153.f)
     {
         PC.SetControlRotation(Towards.Rotation());
         Pawn->AddMovementInput(Towards.GetSafeNormal2D());
@@ -836,7 +952,8 @@ void UTibetQASubsystem::PlayerFeedback(APlayerController& PC, ATibetGameMode& Mo
     {
         if (Mode.GetSkillState(4).ActiveRemaining <= 0.f)
         {
-            if (GuardedContact < 0.f) { Finish(false,TEXT("Ward never protected contact")); return; }
+            if (GuardedContact < 0.f || !SawEnemyStrike)
+            { Finish(false,TEXT("Expected a visible windup and strike during ward protection")); return; }
             FeedbackPhase = 2;
             return;
         }
@@ -845,7 +962,8 @@ void UTibetQASubsystem::PlayerFeedback(APlayerController& PC, ATibetGameMode& Mo
         if (Towards.Size2D() < 180.f)
         {
             if (GuardedContact < 0.f) GuardedContact = Now;
-            if (Now - GuardedContact > 1.6f && Screenshot.IsEmpty())
+            ObserveEnemyAttack();
+            if (Now - GuardedContact > 1.6f && SawEnemyStrike && Screenshot.IsEmpty() && !FScreenshotRequest::IsScreenshotRequested())
             {
                 Record(TEXT("ward-contact"));
                 Screenshot = Output / TEXT("ward.png");
@@ -873,8 +991,43 @@ void UTibetQASubsystem::PlayerFeedback(APlayerController& PC, ATibetGameMode& Mo
         FeedbackPhase = 4;
         return;
     }
-    if (FeedbackPhase == 4 && !FScreenshotRequest::IsScreenshotRequested())
-        Finish(true,TEXT("ward, injury, recovery and objective"));
+    if (FeedbackPhase < 4 || FScreenshotRequest::IsScreenshotRequested()) return;
+    bool Windup = false, Strike = false;
+    for (TActorIterator<ATibetRitualEffect> It(GetWorld()); It; ++It)
+    {
+        Windup |= It->GetEffectSlot() == ATibetRitualEffect::EnemyWindup;
+        Strike |= It->GetEffectSlot() == ATibetRitualEffect::EnemyStrike;
+    }
+    if (FeedbackPhase == 4 && Windup)
+    {
+        // Interrupt an actual charged attack through the player's phurba binding.
+        Tapped = EKeys::One;
+        SendKey(PC,Tapped,true);
+        AttackTestTime = Now;
+        FeedbackPhase = 5;
+    }
+    else if (FeedbackPhase == 5)
+    {
+        if (Windup || Strike || Cue.HitTime >= AttackTestTime)
+        { Finish(false,TEXT("Stunned attacker retained its tell or dealt damage")); return; }
+        if (Now - AttackTestTime > .65f)
+        {
+            Record(TEXT("enemy-interrupted"));
+            FeedbackPhase = 6;
+        }
+    }
+    else if (FeedbackPhase == 6 && Windup) FeedbackPhase = 7;
+    if (FeedbackPhase == 7)
+    {
+        Pawn->AddMovementInput(-Towards.GetSafeNormal2D());
+        if (Strike)
+        {
+            if (Towards.Size2D() < 200.f || Cue.HitTime >= AttackTestTime)
+            { Finish(false,TEXT("Backing out of the warning did not avoid the strike")); return; }
+            Record(TEXT("enemy-dodged"));
+            Finish(true,TEXT("ward, injury, recovery, interrupt and dodge"));
+        }
+    }
 }
 
 // Each invocation walks a fresh vault and casts into the same living guardian.

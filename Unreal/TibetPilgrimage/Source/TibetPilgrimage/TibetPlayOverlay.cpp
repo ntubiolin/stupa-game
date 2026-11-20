@@ -128,9 +128,32 @@ void STibetPlayOverlay::Show(ETibetPage Next)
         [SNew(SDPIScaler).Visibility(EVisibility::SelfHitTestInvisible).DPIScale_Lambda([this](){return LayoutScale();})
          [Page==ETibetPage::Play?Play():Journal()]]];
 }
+bool STibetPlayOverlay::SupportsKeyboardFocus() const
+{
+    return Page!=ETibetPage::Play || (Mode.IsValid() && Mode->FeedingPanel()!=0);
+}
 FReply STibetPlayOverlay::OnKeyDown(const FGeometry&,const FKeyEvent& Event)
 {
-    if (Page==ETibetPage::Play) return FReply::Unhandled();
+    if (!SupportsKeyboardFocus()) return FReply::Unhandled();
+    if (Mode->FeedingPanel())
+    {
+        if (Event.IsRepeat()) return FReply::Handled();
+        const FKey Key=Event.GetKey();
+        const int32 Panel=Mode->FeedingPanel();
+        if (Key==EKeys::Escape || Key==EKeys::F) Mode->CloseFeeding();
+        else if (Panel==1 && (Key==EKeys::One || Key==EKeys::Enter)) Mode->QuickFeed();
+        else if ((Panel==1 && Key==EKeys::Two) || (Panel==3 && (Key==EKeys::One || Key==EKeys::Enter))) Mode->StartFruitGame();
+        else if (Panel==2)
+        {
+            if (Key==EKeys::One) Mode->PickFruit(0);
+            else if (Key==EKeys::Two) Mode->PickFruit(1);
+            else if (Key==EKeys::Three) Mode->PickFruit(2);
+        }
+        return FReply::Handled();
+    }
+    // Letter shortcuts must pass through while the player composes a name or prayer.
+    if (Page==ETibetPage::Dedication && Event.GetKey()!=EKeys::Escape)
+        if (const auto Fields=DedicationFields.Pin(); Fields && Fields->HasFocusedDescendants()) return FReply::Unhandled();
     if (!Event.IsRepeat())
     {
         const FKey Key=Event.GetKey();
@@ -344,8 +367,8 @@ TSharedRef<SWidget> STibetPlayOverlay::Controls()
     const FText Guide=bTouch
         ? Local(TEXT("Drag the left half to walk and the right half to turn. Tap Act or a ritual to use it."),
                 TEXT("左側拖曳移動，右側拖曳轉向。點選「互動」或技能即可使用。"))
-        : Local(TEXT("WASD  Move     Right-drag  Look     Shift  Jump\nHold Q / E to orbit, release to follow     Tap E  Interact\nI  Pack     X  Quick item     K  Skills     M  World map     Esc  Menu / return"),
-                TEXT("WASD 移動　按住滑鼠右鍵拖曳轉向　Shift 跳躍\n按住 Q／E 左右環視，放開回到背後　輕按 E 互動\nI 行囊　X 快捷道具　K 技能　M 世界地圖　Esc 選單／返回"));
+        : Local(TEXT("WASD  Move     Right-drag  Look     Shift  Jump\nHold Q / E to orbit, release to return to your view     Tap E  Interact\nI  Pack     X  Quick item     K  Skills     M  World map     Esc  Menu / return"),
+                TEXT("WASD 移動　按住滑鼠右鍵拖曳轉向　Shift 跳躍\n按住 Q／E 左右環視，放開回到原視角　輕按 E 互動\nI 行囊　X 快捷道具　K 技能　M 世界地圖　Esc 選單／返回"));
     Box->AddSlot().AutoHeight().Padding(0,2,0,9)[Label(Guide,13,Paper)];
     auto* Settings=GetMutableDefault<UTibetCameraSettings>();
     auto Row=SNew(SHorizontalBox);
@@ -385,11 +408,12 @@ TSharedRef<SWidget> STibetPlayOverlay::Journal()
     auto Tab=[&](ETibetPage Target,FText Title){
         Tabs->AddSlot().FillWidth(1).Padding(2,0)[Button(Title,FSimpleDelegate::CreateLambda([this,Target](){
             if (Page!=Target) HUD->ToggleJournal(Target);
-        }),Page==Target)];
+        }),Page==Target,Target==ETibetPage::Pack ? FName(TEXT("TibetPackTab")) : NAME_None)];
     };
     Tab(ETibetPage::Map,Local(TEXT("World map"),TEXT("世界地圖")));
     Tab(ETibetPage::Skills,Local(TEXT("Ritual skills"),TEXT("法術技能")));
     Tab(ETibetPage::Pack,Local(TEXT("Pack"),TEXT("行囊")));
+    Tab(ETibetPage::Dedication,Local(TEXT("Dedication"),TEXT("回向")));
     Tab(ETibetPage::Controls,Local(TEXT("Controls"),TEXT("操作設定")));
     Panel->AddSlot().AutoHeight().Padding(0,8)[Tabs];
     auto Body=SNew(SVerticalBox);
@@ -402,6 +426,7 @@ TSharedRef<SWidget> STibetPlayOverlay::Journal()
         Body->AddSlot().AutoHeight()[SNew(STibetAtlas).Mode(Mode.Get()).Font(Font(14)).Compact(CompactAtlas)
             .Width(FMath::Min(Width()-68.f,1090.f)).Height(FMath::Clamp(Height()-(CompactAtlas?218.f:195.f),105.f,422.f))];
     }
+    else if (Page==ETibetPage::Dedication) Body->AddSlot().AutoHeight()[Dedication()];
     else Body->AddSlot().AutoHeight()[Page==ETibetPage::Skills?Skills():Page==ETibetPage::Pack?Pack():Controls()];
     Panel->AddSlot().FillHeight(1)[SNew(SScrollBox)+SScrollBox::Slot()[Body]];
     return SNew(SBorder).BorderImage(Tile()).BorderBackgroundColor(FLinearColor(0.008,0.012,0.012,.62))

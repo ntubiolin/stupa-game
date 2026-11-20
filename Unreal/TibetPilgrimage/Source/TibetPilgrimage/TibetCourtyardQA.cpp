@@ -1,11 +1,13 @@
 #include "TibetQASubsystem.h"
 #include "TibetGameMode.h"
 #include "TibetHUD.h"
+#include "TibetPlayOverlay.h"
 #include "TibetMacaques.h"
 #include "TibetButterFlame.h"
 #include "Camera/CameraActor.h"
 #include "Components/PointLightComponent.h"
 #include "EngineUtils.h"
+#include "Framework/Application/SlateApplication.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "InputKeyEventArgs.h"
@@ -59,7 +61,8 @@ void UTibetQASubsystem::Courtyard(APlayerController& PC,ATibetGameMode& Mode)
     if(Task==TEXT("CourtyardResume"))
     {
         Finish(Mode.ClockRate()==0 && Mode.SolarPhase()>.81f && Mode.SolarPhase()<.96f &&
-            Mode.FedCount()==1 && Mode.BestFeedingScore()==5 && Lamp,TEXT("night, flame and offerings survived relaunch"));
+            Mode.FedCount()==1 && Mode.BestFeedingScore()==5 && Lamp && Mode.Dedications().Num()==1 &&
+            !Mode.Dedications()[0].Prayer.IsEmpty(),TEXT("night, flame and offerings survived relaunch"));
         return;
     }
     const double Wait=Now-CourtyardSince;
@@ -148,12 +151,46 @@ void UTibetQASubsystem::Courtyard(APlayerController& PC,ATibetGameMode& Mode)
             Shot(TEXT("feeding-banana"),false); ++Frames; break;
         }
         if(PC.GetViewTarget()!=PC.GetPawn()) PC.SetViewTarget(PC.GetPawn());
-        if(Move(FVector(1430,-360,0),155)) {Stroke(EKeys::E,true); Next();} break;
+        if(Move(FVector(1430,-360,0),155)) {Stroke(EKeys::F,true); Next();} break;
     case 9:
-        Stroke(EKeys::E,false); Next(); break;
-    case 10:
+        Stroke(EKeys::F,false);
         if(Wait<.35) break;
-        if(!Lamp || !Lamp->FindComponentByClass<UPointLightComponent>()) {Finish(false,TEXT("No warm source on the offered wick"));return;}
+        if(!Lamp || !Lamp->FindComponentByClass<UPointLightComponent>() || PC.IsPaused())
+        {Finish(false,TEXT("F must light the wick and keep the courtyard playable"));return;}
+        Stroke(EKeys::E,true); Next(); break;
+    case 10:
+        if (Frames==2) { Stroke(EKeys::E,false); ++Frames; CourtyardSince=Now; break; }
+        if(Wait<.25) break;
+        if(Frames==3)
+        {
+            if (PC.GetHUD<ATibetHUD>()->GetJournalPage()!=ETibetPage::Dedication || !Mode.Dedications().IsEmpty())
+            { Finish(false,TEXT("E did not open a fresh dedication page")); return; }
+            if (!Click(TEXT("TibetPrayerPreset0"))) break;
+        }
+        if(Frames==4)
+        {
+            if (!FParse::Param(FCommandLine::Get(),TEXT("TibetTouch")))
+            {
+                if (!Click(TEXT("TibetPilgrimName"))) break;
+                // M normally opens the map. In the name field it must type a letter.
+                const FKeyEvent M(EKeys::M,FModifierKeysState(),0,false,'m',0);
+                auto& App=FSlateApplication::Get();
+                App.ProcessKeyDownEvent(M);
+                App.ProcessKeyCharEvent(FCharacterEvent('m',FModifierKeysState(),0,false));
+                App.ProcessKeyUpEvent(M);
+            }
+        }
+        if(Frames==5 && !Click(TEXT("TibetInscribePrayer"))) break;
+        if(Frames==6)
+        {
+            if(Mode.Dedications().Num()!=1 || Mode.Dedications()[0].Prayer.IsEmpty() ||
+                (!FParse::Param(FCommandLine::Get(),TEXT("TibetTouch")) && Mode.Dedications()[0].Pilgrim!=TEXT("m")))
+            { Finish(false,TEXT("Dedication did not appear in the journal")); return; }
+            Shot(TEXT("dedication"),true);
+        }
+        if(Frames==7 && !Click(TEXT("TibetCloseJournal"))) break;
+        if(++Frames<=8) { CourtyardSince=Now; break; }
+        if(PC.IsPaused()) {Finish(false,TEXT("Still paused after dedication"));return;}
         CheckedFlame=Lamp->GetFlicker();
         View({1640,-1320,380},{3340,-150,1420}); Next(); break;
     case 11:

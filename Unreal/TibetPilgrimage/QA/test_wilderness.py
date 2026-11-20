@@ -117,6 +117,10 @@ def play(exe, output):
         rows = capture(exe,stage,output,"resume","Play","wild",["-TibetQAEncounters"],slot)
         if ["pack","1","3","3"] not in rows or rows[-1] != ["pass","transition","pharping"]:
             raise ValueError("Failed to rebuild the partial encounter from the saved quest")
+        for scenario, events in (("first",first), ("resume",rows)):
+            for phase in ("enemy-windup", "enemy-strike"):
+                if [phase] not in events: raise ValueError(f"Missing ordinary enemy {phase}")
+                shot_data(output/scenario/(phase+".png"))
         captures = {model_name(row[1]): row[1] for row in rows if row[0]=="opponent"}
         if set(captures) != SPECIES|{"SnowKing"}:
             raise ValueError("Missing playable monster or boss")

@@ -112,17 +112,19 @@ def main():
     with tempfile.TemporaryDirectory(prefix="tibet-courtyard-",dir=temporary_root(exe)) as temp:
         root=Path(temp);(root/"user").mkdir()
         slot="QA-"+root.name
-        events=capture(exe,root,output,"play","Courtyard","stupa",["-TibetTouch"],slot,size=(1440,900))
+        events=capture(exe,root,output,"play","Courtyard","stupa",[],slot,size=(1440,900))
         if not any(row[0]=="clock" and 3.5<float(row[1])<4.5 for row in events):
             raise ValueError("No measured 4× world clock")
         game_log=(output/"play/game.log").read_text(errors="replace")
         if any("Courtyard/" in line and "missing usage flag" in line for line in game_log.splitlines()):
             raise ValueError("The macaque or banana rendered with Unreal's fallback material")
         hashes={s:shot_data(output/"play"/(s+".png")) for s in
-                ("macaque","feeding","offered","feeding-banana","flags-a","flags-b","night","butter-lamp")}
+                ("macaque","feeding","offered","feeding-banana","dedication","flags-a","flags-b","night","butter-lamp")}
         peel=visible_offering(output/"play/feeding-banana.png")
         motion=compare_light_and_wind(*(output/"play"/(s+".png") for s in ("flags-a","flags-b","night")))
         capture(exe,root,output,"resume","CourtyardResume","stupa",[],slot)
+        capture(exe,root,output,"touch","Courtyard","stupa",["-TibetTouch"],slot+"-touch")
+        capture(exe,root,output,"touch-resume","CourtyardResume","stupa",[],slot+"-touch")
         controls={}
         for label,size,options in (("wide",(1440,900),[]),("compact",(884,420),["-TibetTouch"])):
             name="clock-"+label

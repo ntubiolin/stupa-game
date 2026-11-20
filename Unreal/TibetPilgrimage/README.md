@@ -3,6 +3,8 @@
 UE 5.8 原生 Apple Silicon Mac 與 iOS 專案。從本目錄執行下列指令，以 UE Editor 產生關卡及原創美術，再封裝同一組關卡。
 
 ```sh
+npm ci --prefix ../..
+npx --prefix ../.. playwright install chromium
 python3 Tools/tibet.py build-editor
 python3 Tools/tibet.py generate
 python3 Tools/tibet.py play
@@ -22,8 +24,10 @@ python3 Tools/tibet.py package --platform IOS
 | 操作 | Mac |
 | --- | --- |
 | 移動 | WASD |
-| 轉動視角 | 走動時視角會跟到角色背後。按住 Q／E 暫時向左／右環視，放開平順回背。按住滑鼠右鍵拖曳可自由觀察。 |
+| 轉動視角 | 側移與倒退時維持目前視角。按住 Q／E 暫時向左／右環視，放開後回到原本的方向。按住滑鼠右鍵拖曳可調整視角。 |
 | 交談、點燈、操作祭壇與出口 | 輕按 E |
+| 餵獼猴 | 靠近後按 F，選 1 直接餵香蕉、2 進入水果配對。 |
+| 供燈與回向 | 靠近燈座或南側銅燈桌，按 E 點燈並寫回向，或按 F 快速供燈。手記的「回向」頁可隨時寫祈願及查看本機紀錄。 |
 | 吽字光彈、六字真言 | 空白鍵、R |
 | 金剛橛、金剛鈴、蓮盾、護法、上師心咒 | 1、2、3、4、T |
 | 使用快捷道具 | X；觸控點技能列旁的道具圖示。行囊可更換快捷道具與裝備。 |

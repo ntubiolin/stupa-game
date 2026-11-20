@@ -17,7 +17,7 @@ public:
     virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
     virtual TStatId GetStatId() const override;
     virtual void Tick(float DeltaSeconds) override;
-    virtual bool IsTickableWhenPaused() const override { return Task==TEXT("Dialogue") || Task==TEXT("Journal") || Task==TEXT("CameraFollow") || Task.StartsWith(TEXT("Pack")); }
+    virtual bool IsTickableWhenPaused() const override { return Task==TEXT("Courtyard") || Task==TEXT("Dialogue") || Task==TEXT("Journal") || Task==TEXT("CameraFollow") || Task.StartsWith(TEXT("Pack")); }
 private:
     void Finish(bool bSuccess, const FString& Detail);
     void DialogueTest(APlayerController& PC, ATibetGameMode& Mode);
@@ -27,17 +27,21 @@ private:
     void Photo(APlayerController& PC);
     void Arrival(APlayerController& PC);
     void Courtyard(APlayerController& PC, ATibetGameMode& Mode);
+    FName HoveredCourtyardControl;
     bool TapPlayControl(FName Tag, float XFraction=.5f);
     int32 CourtyardStep=0;
     float CheckedPhase=0, CheckedFlame=0, ClockStarted=0;
     double CourtyardSince=0;
     void CameraFollow(APlayerController& PC, ATibetGameMode& Mode);
     bool SurveyGate(APlayerController& PC, const FVector& Goal);
+    bool SawEnemyWindup = false, SawEnemyStrike = false;
+    void ObserveEnemyAttack();
     bool CaptureEncounter(APlayerController& PC, ATibetGameMode& Mode);
     TSet<FName> SeenEncounters;
     int32 GateFrames = 0;
     uint8 GatePhases = 0;
     void Play(APlayerController& PC, ATibetGameMode& Mode);
+    void ScoreMix(ATibetGameMode& Mode);
     void LearnedSkills(APlayerController& PC, ATibetGameMode& Mode);
     void SkillEncounter(APlayerController& PC, ATibetGameMode& Mode);
     void PlayerFeedback(APlayerController& PC, ATibetGameMode& Mode);
@@ -54,7 +58,7 @@ private:
     int32 SkillPhase = 0, SkillHealthBefore = 0;
     float SkillGameTime = 0;
     int32 FeedbackPhase = 0;
-    float GuardedContact = -1.f;
+    float GuardedContact = -1.f, AttackTestTime = 0.f;
     int32 Frames = 0, PreviousStep = INDEX_NONE, PreviousProgress = INDEX_NONE;
     bool bFinished = false, bMoving = false, bTestingSkills = false;
     FKey Tapped;

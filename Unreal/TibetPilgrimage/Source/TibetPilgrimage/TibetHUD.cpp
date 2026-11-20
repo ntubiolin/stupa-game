@@ -7,6 +7,7 @@
 #include "GameFramework/PlayerController.h"
 #include "TibetCharacter.h"
 #include "TibetPlayOverlay.h"
+#include "Widgets/SViewport.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Fonts/FontMeasure.h"
 #include "Misc/CommandLine.h"
@@ -24,8 +25,31 @@ void ATibetHUD::BeginPlay()
     if (!Viewport || !Mode) return;
     const bool Touch=PLATFORM_IOS || FParse::Param(FCommandLine::Get(),TEXT("TibetTouch"));
     Overlay=SNew(STibetPlayOverlay).Mode(Mode).HUD(this).Touch(Touch);
-    if (!Touch && GetOwningPlayerController()) GetOwningPlayerController()->SetShowMouseCursor(true);
     Viewport->AddViewportWidgetContent(Overlay.ToSharedRef());
+    RefreshInputMode();
+}
+
+void ATibetHUD::RefreshInputMode()
+{
+    auto* PC=GetOwningPlayerController();
+    auto* Viewport=GetWorld()->GetGameViewport();
+    auto* Mode=GetWorld()->GetAuthGameMode<ATibetGameMode>();
+    if (!Overlay || !PC || !Viewport || !Mode) return;
+    PC->SetShowMouseCursor(!Overlay->IsTouch());
+    if (IsJournalOpen() || Mode->FeedingPanel())
+    {
+        FInputModeUIOnly Menu;
+        Menu.SetWidgetToFocus(Overlay).SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+        PC->SetInputMode(Menu);
+    }
+    else
+    {
+        // The live HUD is clickable. Only a right-button drag captures the mouse for look.
+        FInputModeGameAndUI Play;
+        Play.SetWidgetToFocus(Viewport->GetGameViewportWidget()).SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+        PC->SetInputMode(Play);
+        Viewport->SetMouseCaptureMode(EMouseCaptureMode::CaptureDuringRightMouseDown);
+    }
 }
 
 bool ATibetHUD::IsJournalOpen() const
@@ -43,14 +67,11 @@ void ATibetHUD::ToggleJournal(ETibetPage Next)
     {
         if (auto* Pilgrim=Cast<ATibetCharacter>(PC->GetPawn())) Pilgrim->CancelGameplayInput();
         Mode->PauseDialogue(true);
-        bCursorBeforeJournal=PC->bShowMouseCursor;
         bPausedByJournal=!PC->IsPaused() && PC->SetPause(true);
-        PC->SetShowMouseCursor(true);
-        FSlateApplication::Get().ReleaseAllPointerCapture();
     }
     Page=Next;
     Overlay->Show(Page);
-    FSlateApplication::Get().SetKeyboardFocus(Overlay,EFocusCause::SetDirectly);
+    RefreshInputMode();
 }
 
 void ATibetHUD::UseQuickSlot()
@@ -67,13 +88,12 @@ void ATibetHUD::CloseJournal()
     if (auto* PC=GetOwningPlayerController())
     {
         if (bPausedByJournal) PC->SetPause(false);
-        PC->SetShowMouseCursor(bCursorBeforeJournal);
         if (auto* Pilgrim=Cast<ATibetCharacter>(PC->GetPawn())) Pilgrim->CancelGameplayInput();
     }
     if (auto* Mode=GetWorld()->GetAuthGameMode<ATibetGameMode>()) Mode->PauseDialogue(false);
     bPausedByJournal=false;
     if (Overlay) Overlay->Show(Page);
-    FSlateApplication::Get().SetAllUserFocusToGameViewport();
+    RefreshInputMode();
 }
 void ATibetHUD::DrawHUD()
 {
@@ -88,8 +108,10 @@ void ATibetHUD::DrawHUD()
     FVector2D AnimalPixel;
     if(M->MacaquePrompt(AnimalPosition,AnimalMeters) && PC->ProjectWorldLocationToScreen(AnimalPosition,AnimalPixel,true))
     {
-        const FString Label=FString::Printf(TEXT("%s · %d m"),*M->Local(TEXT("Macaque"),TEXT("獼猴")),AnimalMeters);
-        FCanvasTextItem Text(AnimalPixel,FText::FromString(Label),GEngine->GetMediumFont(),FLinearColor(1,.91f,.66f));
+        const FString Action=M->CanFeed() && !Overlay->IsTouch() && !M->AtButterLamp() ?
+            M->Local(TEXT("[F] Feed macaque"),TEXT("[F] 餵獼猴")) : M->Local(TEXT("Macaque"),TEXT("獼猴"));
+        const FString Label=FString::Printf(TEXT("%s · %d m"),*Action,AnimalMeters);
+        FCanvasTextItem Text(AnimalPixel,FText::FromString(Label),Overlay->Font(FMath::RoundToInt(16*HScale)),FLinearColor(1,.91f,.66f));
         Text.bCentreX=true; Text.bOutlined=true;
         Text.OutlineColor=FLinearColor(.06,.04,.03);
         Canvas->DrawItem(Text);

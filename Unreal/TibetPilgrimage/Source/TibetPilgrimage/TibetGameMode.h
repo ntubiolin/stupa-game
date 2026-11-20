@@ -7,6 +7,14 @@
 #include "TibetPack.h"
 #include "TibetGameMode.generated.h"
 
+USTRUCT()
+struct FTibetDedication
+{
+    GENERATED_BODY()
+    UPROPERTY(SaveGame) FString Pilgrim;
+    UPROPERTY(SaveGame) FString Prayer;
+};
+
 UCLASS()
 class TIBETPILGRIMAGE_API UTibetSave : public USaveGame
 {
@@ -25,6 +33,10 @@ public:
     UPROPERTY(SaveGame) float SolarPhase = .30f;
     UPROPERTY(SaveGame) int32 ClockRate = 1;
     UPROPERTY(SaveGame) uint8 ButterLampMask = 0;
+    UPROPERTY(SaveGame) bool bUsesDistinctLamps = false;
+    bool ReconcileLampQuest();
+    int32 NextUnlitLamp() const;
+    UPROPERTY(SaveGame) TArray<FTibetDedication> Dedications;
     UPROPERTY(SaveGame) int32 MonkeysFed = 0;
     UPROPERTY(SaveGame) int32 FeedingBest = 0;
     UPROPERTY(SaveGame) int32 FeedingPlays = 0;
@@ -81,6 +93,15 @@ public:
     void SetSolarPhase(float Phase, bool bCommit=true);
     FString TimeLabel() const;
     bool CanFeed() const;
+    bool AtButterLamp() const;
+    void OfferNearbyLamp();
+    void QuickPractice();
+    TConstArrayView<FTibetDedication> Dedications() const
+    {
+        if (Save) return Save->Dedications;
+        return {};
+    }
+    bool InscribeDedication(const FString& Pilgrim, const FString& Prayer);
     bool MacaquePrompt(FVector& Position,int32& Meters) const;
     void BeginFeeding();
     void CloseFeeding();
@@ -144,7 +165,13 @@ private:
     float SinceClockSave=0, SinceSkyUpdate=0;
     void RewardFeeding();
     void StartCourtyard();
+    void RefreshScore();
+    FTimerHandle ScoreTimer;
+    FName ScoreName;
+    UPROPERTY() TObjectPtr<class UAudioComponent> ScorePlayer;
     void UpdateClock(float Dt);
+    void OfferButter(int32 Lamp, bool bOpenDedication);
+    float LastButterOffer = -1.f;
     int32 NearestButterLamp(const FVector& Where) const;
     int32 FurthestMap = INDEX_NONE;
     bool HasLearnedSkill(int32 Slot) const;
@@ -156,6 +183,10 @@ private:
     void UpdateWilderness(const FVector& Player, float Dt);
     FString EnemyLabel() const;
     float PursuitSpeed(bool bBoss) const;
+    bool bEnemyWindingUp = false;
+    TWeakObjectPtr<class ATibetRitualEffect> WindupEffect;
+    void CancelEnemyWindup();
+    void UpdateEnemyAttack(APawn& Player, bool bBoss, float Dt);
     FTibetPlayerFeedback PlayerFeedback;
     TArray<FTibetDamageCue> DamageCues;
     float Health = 100, Mana = 100, HurtTimer = 0, Stun = 0, Shield = 0, NoticeUntil = 0;
@@ -187,7 +218,7 @@ private:
     float NextPill = 0;
     TArray<float> HealTicks;
     void UpdatePills(float Now);
-    void Store();
+    bool Store();
     void MoveToNextMap();
     void SetNotice(const FString& Line);
     void Pulse(const FVector& At, const FLinearColor& Color, float Magnitude);
