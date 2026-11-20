@@ -16,6 +16,10 @@
 void ATibetHUD::BeginPlay()
 {
     Super::BeginPlay();
+#if !UE_BUILD_SHIPPING
+    FString QA;
+    if(FParse::Value(FCommandLine::Get(),TEXT("TibetQA="),QA) && QA==TEXT("Photo")) return;
+#endif
     auto* Viewport=GetWorld()->GetGameViewport();
     auto* M=GetWorld()->GetAuthGameMode<ATibetGameMode>();
     if(!Viewport || !M) return;

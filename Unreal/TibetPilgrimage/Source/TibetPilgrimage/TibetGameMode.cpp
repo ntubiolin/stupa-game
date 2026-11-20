@@ -12,7 +12,7 @@
 namespace
 {
 enum class EObjective { Talk, Kora, Interact, Reach, Combat, Boss, Escort, Gate };
-struct FObjective { EObjective Kind; const TCHAR* En; const TCHAR* Zh; int32 Count; };
+struct FObjective { EObjective Kind; const TCHAR* En; const TCHAR* Zh; int32 Count; const TCHAR* SpeechEn; const TCHAR* SpeechZh; };
 const TMap<FString,TArray<FObjective>>& Routes()
 {
     static const TMap<FString,TArray<FObjective>> Table = {
@@ -22,7 +22,7 @@ const TMap<FString,TArray<FObjective>>& Routes()
 }
 const FObjective& Objective(const FString& Route, int32 Index)
 {
-    static const FObjective Gate{EObjective::Gate,TEXT("Cross the northern threshold"),TEXT("前往北側出入口"),1};
+    static const FObjective Gate{EObjective::Gate,TEXT("Cross the northern threshold"),TEXT("前往北側出入口"),1,TEXT(""),TEXT("")};
     const auto* List = Routes().Find(Route);
     return List && List->IsValidIndex(Index) ? (*List)[Index] : Gate;
 }
@@ -55,6 +55,7 @@ AActor* MeshActor(UWorld* World, const FVector& Pos, const FString& Path, const 
     A->SetActorScale3D(Scale);
     return A;
 }
+const FVector GroveGate(-1860,-480,0);
 const FString Cylinder=TEXT("/Engine/BasicShapes/Cylinder.Cylinder");
 const FString Sphere=TEXT("/Engine/BasicShapes/Sphere.Sphere");
 const FLinearColor Gold(.87,.43,.065), Water(.04,.57,.58);
@@ -89,6 +90,10 @@ void ATibetGameMode::StartPlay()
     Save->Map=Map;
     Save->Steps.FindOrAdd(Route)=FMath::Clamp(GetStep(),0,Routes().FindChecked(Route).Num());
     Save->Counts.FindOrAdd(Route)=FMath::Clamp(GetStepProgress(),0,Objective(Route,GetStep()).Count-1);
+    if (Map==TEXT("stupa"))
+    {
+        MeshActor(GetWorld(),GroveGate+FVector(0,0,12),Cylinder,FVector(1.8,1.8,.2),&Water);
+    }
     Store();
     Refresh();
 }
@@ -104,6 +109,32 @@ FVector ATibetGameMode::Anchor() const
 {
     const EObjective K=Objective(Route,GetStep()).Kind;
     const int32 Count=GetStepProgress();
+    const int32 Step=GetStep();
+    if (Map==TEXT("grove") && K==EObjective::Interact) return FVector(1280,0,0);
+    if (Map==TEXT("stupa") && K==EObjective::Interact)
+        return FVector(1430+70*Count,-360+320*Count,0);
+    if (Map==TEXT("pharping"))
+    {
+        if(Step==2) return FVector(1250+80*Count,-760+90*Count,0);
+        if(Step==4 || Step==10) return FVector(Step==4?1430:2670,-50,0);
+        if(Step==5) return FVector(2690+60*(Count%3),-180+54*Count,0);
+        if(Step==6 || Step==9 || Step==12) return FVector(2760,-38,0);
+        if(Step==8 && bEscorting) return FVector(1370,-65,0);
+    }
+    if (Map==TEXT("mangyul"))
+    {
+        if(Step==0) return FVector(1580,1290,0);
+        if(Step==1) return FVector(-720+(Count/2)*250, (Count%2?1.:-1.)*(470+30*(Count%3)),0);
+        if(Step>=2 && K!=EObjective::Gate) return FVector(1510+(Step%2)*120, -660+(Step%3)*120,0);
+    }
+    if (Map==TEXT("yarlung"))
+    {
+        if(Step==0 || Step==1) return FVector(1490,-1040,0);
+        if(Step==2 || Step==3) return FVector(1550+140*(Count%2),580+145*(Count/2),0);
+    }
+    if (Map==TEXT("samye") && (Step==0 || Step==1 || Step==6 || Step==8))
+        return FVector(1420,Step%2?210:-210,0);
+    if (Map==TEXT("chimphu") && K==EObjective::Talk) return FVector(1570,-720,0);
     switch (K)
     {
     case EObjective::Talk: return {-1320,230,0};
@@ -112,8 +143,8 @@ FVector ATibetGameMode::Anchor() const
         // Eight ordered stops trace a clockwise circumambulation.
         const double A=(Count+4)*UE_TWO_PI/8;
         const bool Hub = Map==TEXT("stupa");
-        const double Radius = Hub ? 2000. : 1250.;
-        return FVector((Hub ? 3400. : 3800.)+Radius*FMath::Cos(A),Radius*FMath::Sin(A),0);
+        return FVector((Hub ? 3400. : 3800.)+(Hub ? 2000. : 2480.)*FMath::Cos(A),
+            (Hub ? 2000. : 3100.)*FMath::Sin(A),0);
     }
     case EObjective::Boss:
     case EObjective::Combat: return {-50+110.*(Count%3),-350+150.*(Count%4),0};
@@ -147,6 +178,8 @@ FString ATibetGameMode::Status() const
     FString S=FString::Printf(TEXT("%s %d   %s %d   ·   %d m"),*Local(TEXT("Life"),TEXT("體力")),FMath::CeilToInt(Health),
        *Local(TEXT("Mantra"),TEXT("法力")),FMath::FloorToInt(Mana),Meters);
     if (K==EObjective::Boss || K==EObjective::Combat) S+=FString::Printf(TEXT("   ·   %s %d"),*Local(TEXT("Spirit"),TEXT("靈障")),EnemyHealth);
+    if(P && Map==TEXT("stupa") && FVector::Dist2D(P->GetActorLocation(),GroveGate)<280)
+        S+=Local(TEXT("\nE · Visit the votive grove"),TEXT("\n互動・前往行者塔林"));
     if (GetWorld()->GetTimeSeconds()<NoticeUntil) S+=TEXT("\n")+Notice;
     return S;
 }
@@ -201,7 +234,9 @@ void ATibetGameMode::MoveToNextMap()
 {
     const int32 Id=Order.IndexOfByKey(Map);
     FString Dest;
-    if(Route==TEXT("return")) {Dest=TEXT("stupa"); Save->bEpilogue=true;}
+    if(Map==TEXT("stupa")) Dest=TEXT("wild");
+    else if(Map==TEXT("grove")) Dest=TEXT("stupa");
+    else if(Route==TEXT("return")) {Dest=TEXT("stupa"); Save->bEpilogue=true;}
     else if(Map==TEXT("terma3")) {Dest=TEXT("chimphu"); Save->bReturnFromTerma=true;}
     else if(Order.IsValidIndex(Id+1)) Dest=Order[Id+1];
     if(Dest.IsEmpty()) return;
@@ -214,13 +249,25 @@ void ATibetGameMode::Interact()
 {
     if (!Save || bTravel || IsCampaignComplete()) return;
     const auto* P=UGameplayStatics::GetPlayerPawn(this,0);
-    if (!P || FVector::Dist2D(P->GetActorLocation(),GetObjectiveLocation())>225) return;
+    if (!P) return;
+    if (Map==TEXT("stupa") && FVector::Dist2D(P->GetActorLocation(),GroveGate)<215)
+    {
+        Save->Map=TEXT("grove"); Store(); bTravel=true;
+        UGameplayStatics::OpenLevel(this,FName(TEXT("/Game/Maps/Tibet/grove")));
+        return;
+    }
+    if (FVector::Dist2D(P->GetActorLocation(),GetObjectiveLocation())>225) return;
     const auto K=Objective(Route,GetStep()).Kind;
     if(K==EObjective::Gate) MoveToNextMap();
     if(K==EObjective::Talk || K==EObjective::Interact)
     {
         Pulse(GetObjectiveLocation()+FVector(0,0,80),Gold,.6);
-        if(K==EObjective::Talk) SetNotice(GetObjectiveText());
+        if(K==EObjective::Talk)
+        {
+            const auto& O=Objective(Route,GetStep());
+            SetNotice(Local(O.SpeechEn,O.SpeechZh));
+            NoticeUntil=GetWorld()->GetTimeSeconds()+12;
+        }
         Advance();
     }
 }
