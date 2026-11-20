@@ -1,4 +1,7 @@
 #include "TibetCharacter.h"
+#include "TibetCameraBoom.h"
+#include "TibetCameraMotion.h"
+#include "TibetCameraSettings.h"
 #include "TibetGameMode.h"
 #include "Camera/CameraComponent.h"
 #include "Camera/PlayerCameraManager.h"
@@ -8,7 +11,7 @@
 #include "Engine/StaticMesh.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
-#include "GameFramework/SpringArmComponent.h"
+#include "GameFramework/PlayerInput.h"
 #include "Kismet/KismetSystemLibrary.h"
 
 ATibetCharacter::ATibetCharacter()
@@ -22,14 +25,15 @@ ATibetCharacter::ATibetCharacter()
     Figure = CreateDefaultSubobject<USceneComponent>(TEXT("Pilgrim"));
     Figure->SetupAttachment(GetRootComponent());
     Figure->SetRelativeLocation(FVector(0,0,-88));
-    auto* Arm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArm"));
+    auto* Arm = CreateDefaultSubobject<UTibetCameraBoom>(TEXT("SpringArm"));
     Arm->SetupAttachment(GetRootComponent());
     Arm->TargetArmLength = 465;
     Arm->SetRelativeLocation(FVector(0,0,80));
     Arm->SocketOffset = FVector(0,45,22);
-    Arm->bUsePawnControlRotation = true;
+    Arm->ProbeSize = 16.f;
     auto* Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
     Camera->SetupAttachment(Arm, USpringArmComponent::SocketName);
+    Camera->bUsePawnControlRotation = true;
     Camera->FieldOfView = 79;
 }
 
@@ -39,31 +43,43 @@ void ATibetCharacter::SetPlayerDefaults()
     auto* Player = Cast<APlayerController>(GetController());
     if (!Player || !Player->PlayerCameraManager) return;
 
-    Player->PlayerCameraManager->ViewPitchMin = -55.f;
-    Player->PlayerCameraManager->ViewPitchMax = 19.f;
+    Player->PlayerCameraManager->ViewPitchMin = TibetCamera::MinPitch;
+    Player->PlayerCameraManager->ViewPitchMax = TibetCamera::MaxPitch;
     // The player start faces the approach. Frame its skyline once, when spawning.
     Player->SetControlRotation(FRotator(5.f, Player->GetControlRotation().Yaw, 0.f));
 }
 
 void ATibetCharacter::UpdateMouseLook(APlayerController& Player)
 {
-    if (!Player.IsInputKeyDown(EKeys::RightMouseButton))
+    if (!Player.PlayerInput || Player.IsLookInputIgnored() || !Player.IsInputKeyDown(EKeys::RightMouseButton))
     {
         bAwaitingDragMotion = true;
         return;
     }
 
-    float DeltaX, DeltaY;
-    Player.GetInputMouseDelta(DeltaX, DeltaY);
-    if (DeltaX == 0.f && DeltaY == 0.f) return;
-    // Capturing the mouse can warp the pointer. The first motion establishes the drag origin.
-    if (bAwaitingDragMotion || Player.WasInputKeyJustPressed(EKeys::RightMouseButton))
+    if (Player.WasInputKeyJustPressed(EKeys::RightMouseButton)) bAwaitingDragMotion = true;
+    // Slate's raw MouseY is already positive when the mouse moves up. Reading raw counts
+    // avoids the extra axis sensitivity, FOV scale and legacy pitch inversion.
+    const FVector2D Counts(Player.PlayerInput->GetRawKeyValue(EKeys::MouseX),
+        Player.PlayerInput->GetRawKeyValue(EKeys::MouseY));
+    if (Counts.IsZero()) return;
+    if (bAwaitingDragMotion)
     {
         bAwaitingDragMotion = false;
-        return;
+        int32 Width, Height;
+        Player.GetViewportSize(Width, Height);
+        // Ignore a cursor recenter on capture, while preserving small first drags.
+        if (FMath::Abs(Counts.X) > FMath::Max(160., Width * .35) ||
+            FMath::Abs(Counts.Y) > FMath::Max(160., Height * .35)) return;
     }
-    Player.AddYawInput(DeltaX);
-    Player.AddPitchInput(-DeltaY);
+    TurnView(Player, TibetCamera::MouseDegrees(Counts));
+}
+
+void ATibetCharacter::TurnView(APlayerController& Player, FVector2D Degrees)
+{
+    const auto* Settings = GetDefault<UTibetCameraSettings>();
+    Player.SetControlRotation(TibetCamera::Turn(Player.GetControlRotation(), Degrees,
+        Settings->GetSensitivity(), Settings->IsVerticalInverted()));
 }
 
 void ATibetCharacter::BeginPlay()
@@ -114,11 +130,10 @@ void ATibetCharacter::Tick(float Dt)
     if (LookFinger >= 0)
     {
         PC->GetInputTouchState(static_cast<ETouchIndex::Type>(LookFinger),At.X,At.Y,Down);
-        if (Down && W>0)
+        if (Down && H>0 && !PC->IsLookInputIgnored())
         {
-            const FVector2D Delta = (At-Drag)/W;
-            PC->AddYawInput(Delta.X*150);
-            PC->AddPitchInput(Delta.Y*100);
+            const FVector2D Delta = (At-Drag)/H;
+            if (!Delta.IsZero()) TurnView(*PC, FVector2D(Delta.X*95., -Delta.Y*80.));
             Drag=At;
         }
     }
