@@ -310,6 +310,8 @@ void ATibetGameMode::CastSkill(int32 Slot)
     const int32 Power[]={1,2,3,3,0,4,6};
     const bool Hit=(K==EObjective::Boss || K==EObjective::Combat) && Slot!=4 &&
         FVector::Dist2D(P->GetActorLocation(),GetObjectiveLocation())<Ranges[Slot];
+    UE_LOG(LogTemp,Display,TEXT("TIBET_CAST slot=%d map=%s hit=%d mp=%.1f shield=%.1f"),
+        Slot,*Map,Hit?1:0,Mana,Shield);
     const FVector From=P->GetActorLocation()+FVector(0,0,25);
     const FVector To=Hit ? GetObjectiveLocation()+FVector(0,0,105) : From+P->GetActorForwardVector()*300;
     if (Slot==0)
