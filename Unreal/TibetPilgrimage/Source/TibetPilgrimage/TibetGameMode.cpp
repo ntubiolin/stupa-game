@@ -34,32 +34,33 @@ const TCHAR* EnglishNames[]={TEXT("Boudhanath Stupa"),TEXT("Pilgrim Stupa Grove"
 const TCHAR* ChineseNames[]={TEXT("博達哈大佛塔"),TEXT("行者塔林"),TEXT("北郊原野"),TEXT("帕平・揚列雪"),
     TEXT("芒域・吉隆山口"),TEXT("雅礱河谷"),TEXT("桑耶寺"),TEXT("青浦修行地"),TEXT("伏藏・地窟"),TEXT("伏藏・水晶"),TEXT("伏藏・虛空")};
 
-AActor* MeshActor(UWorld* World, const FVector& Pos, const FString& Path, const FVector& Scale,
-                  const FLinearColor* Color=nullptr)
+const FVector GroveGate(-1860,-480,0);
+const FString Cylinder=TEXT("/Engine/BasicShapes/Cylinder.Cylinder");
+const FString Cone=TEXT("/Engine/BasicShapes/Cone.Cone");
+const FString Sphere=TEXT("/Engine/BasicShapes/Sphere.Sphere");
+const FLinearColor Gold(.87,.43,.065), Water(.04,.57,.58);
+}
+
+AActor* ATibetGameMode::MeshActor(const FVector& Pos, const FString& Path, const FVector& Scale,
+                  const FLinearColor* Color)
 {
     auto* Mesh=LoadObject<UStaticMesh>(nullptr,*Path);
-    if (!Mesh) return nullptr;
-    auto* A=World->SpawnActor<AActor>();
+    if (!Mesh || (Color && !RitualMaterial)) return nullptr;
+    auto* A=GetWorld()->SpawnActor<AActor>();
     auto* C=NewObject<UStaticMeshComponent>(A);
     A->SetRootComponent(C);
     C->SetMobility(EComponentMobility::Movable);
     C->SetStaticMesh(Mesh);
     C->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-    if (Color && C->GetMaterial(0))
+    if (Color)
     {
-        auto* Mat = C->CreateDynamicMaterialInstance(0);
+        auto* Mat = C->CreateDynamicMaterialInstance(0, RitualMaterial);
         Mat->SetVectorParameterValue(TEXT("Color"),*Color);
     }
     C->RegisterComponent();
     A->SetActorLocation(Pos);
     A->SetActorScale3D(Scale);
     return A;
-}
-const FVector GroveGate(-1860,-480,0);
-const FString Cylinder=TEXT("/Engine/BasicShapes/Cylinder.Cylinder");
-const FString Cone=TEXT("/Engine/BasicShapes/Cone.Cone");
-const FString Sphere=TEXT("/Engine/BasicShapes/Sphere.Sphere");
-const FLinearColor Gold(.87,.43,.065), Water(.04,.57,.58);
 }
 
 ATibetGameMode::ATibetGameMode()
@@ -73,6 +74,9 @@ void ATibetGameMode::StartPlay()
     Super::StartPlay();
     Map=UGameplayStatics::GetCurrentLevelName(this,true).ToLower();
     if (!Order.Contains(Map)) return;
+    // The generated material lives within the project's always-cooked /Game/Figures directory.
+    RitualMaterial=LoadObject<UMaterialInterface>(nullptr,TEXT("/Game/Figures/Materials/M_RitualColor.M_RitualColor"));
+    if (!RitualMaterial) UE_LOG(LogTemp,Error,TEXT("Missing M_RitualColor; regenerate the spell material before cooking."));
     SlotName=TEXT("TibetPilgrimage-v1");
     FParse::Value(FCommandLine::Get(),TEXT("TibetSaveSlot="),SlotName);
     Save=Cast<UTibetSave>(UGameplayStatics::LoadGameFromSlot(SlotName,0));
@@ -93,7 +97,7 @@ void ATibetGameMode::StartPlay()
     Save->Counts.FindOrAdd(Route)=FMath::Clamp(GetStepProgress(),0,Objective(Route,GetStep()).Count-1);
     if (Map==TEXT("stupa"))
     {
-        MeshActor(GetWorld(),GroveGate+FVector(0,0,12),Cylinder,FVector(1.8,1.8,.2),&Water);
+        MeshActor(GroveGate+FVector(0,0,12),Cylinder,FVector(1.8,1.8,.2),&Water);
     }
     Store();
     Refresh();
@@ -211,13 +215,13 @@ void ATibetGameMode::Refresh()
             HurtTimer=1.3f;
         }
         const FString Path=FString::Printf(TEXT("/Game/Figures/%s.%s"),*Model,*Model);
-        Focus=MeshActor(GetWorld(),At,Path,FVector(K==EObjective::Boss?1.48:1));
+        Focus=MeshActor(At,Path,FVector(K==EObjective::Boss?1.48:1));
         if (Focus) Focus->SetActorRotation(FRotator(0,-90,0));
     }
     else
     {
         const bool Gate=K==EObjective::Gate;
-        Focus=MeshActor(GetWorld(),At+FVector(0,0,Gate?18:10),Cylinder,FVector(Gate?1.7:.82,Gate?1.7:.82,.16),Gate?&Water:&Gold);
+        Focus=MeshActor(At+FVector(0,0,Gate?18:10),Cylinder,FVector(Gate?1.7:.82,Gate?1.7:.82,.16),Gate?&Water:&Gold);
     }
     UE_LOG(LogTemp,Display,TEXT("Tibet objective map=%s route=%s step=%d kind=%s count=%d"),
         *Map,*Route,GetStep(),*GetObjectiveKind().ToString(),GetStepProgress());
@@ -286,7 +290,7 @@ void ATibetGameMode::Pulse(const FVector& At,const FLinearColor& Color,float Mag
     {
         const double A=UE_TWO_PI*j/8;
         const FVector Offset(FMath::Cos(A)*48,FMath::Sin(A)*48,12.*(j%3));
-        if(auto* Bead=MeshActor(GetWorld(),At+Offset*Magnitude,Sphere,FVector(.11,.11,.22)*Magnitude,&Color))
+        if(auto* Bead=MeshActor(At+Offset*Magnitude,Sphere,FVector(.11,.11,.22)*Magnitude,&Color))
             Bead->SetLifeSpan(.32f);
     }
 }
@@ -318,20 +322,20 @@ void ATibetGameMode::CastSkill(int32 Slot)
     {
         // A strand of turquoise seed beads travels along the arm-to-target line.
         for (int32 j=1;j<=5;++j)
-            if(auto* Dot=MeshActor(GetWorld(),FMath::Lerp(From,To,j/5.),Sphere,FVector(.10+j*.018),&Colors[Slot]))
+            if(auto* Dot=MeshActor(FMath::Lerp(From,To,j/5.),Sphere,FVector(.10+j*.018),&Colors[Slot]))
                 Dot->SetLifeSpan(.18f);
     }
     else if(Slot==2)
     {
         // Three-sided silhouette, bound hilt and three bronze prongs.
-        if(auto* Pin=MeshActor(GetWorld(),To+FVector(0,0,12),Cone,{.23,.23,1.15},&Colors[Slot]))
+        if(auto* Pin=MeshActor(To+FVector(0,0,12),Cone,{.23,.23,1.15},&Colors[Slot]))
         {
             Pin->SetActorRotation(FRotator(180,0,0)); Pin->SetLifeSpan(.7f);
         }
         for(int32 j=0;j<3;++j)
         {
             const double A=j*UE_TWO_PI/3;
-            if(auto* Prong=MeshActor(GetWorld(),To+FVector(10*FMath::Cos(A),10*FMath::Sin(A),73),
+            if(auto* Prong=MeshActor(To+FVector(10*FMath::Cos(A),10*FMath::Sin(A),73),
                 Sphere,{.06,.06,.32},&Gold)) Prong->SetLifeSpan(.7f);
         }
     }
@@ -344,7 +348,7 @@ void ATibetGameMode::CastSkill(int32 Slot)
             const double A=j*UE_TWO_PI/N;
             const FVector Radial(FMath::Cos(A),FMath::Sin(A),0);
             const bool Petal=Slot==4;
-            auto* Piece=MeshActor(GetWorld(),Center+Radial*(Petal?74.:106.)+FVector(0,0,Petal?4:-54),
+            auto* Piece=MeshActor(Center+Radial*(Petal?74.:106.)+FVector(0,0,Petal?4:-54),
                 Sphere,Petal?FVector(.18,.42,.74):FVector(.11,.46,.07),&Colors[Slot]);
             if(Piece)
             {
@@ -357,7 +361,7 @@ void ATibetGameMode::CastSkill(int32 Slot)
     else if(Slot==5)
     {
         const FString Guardian=TEXT("/Game/Figures/Tenma.Tenma");
-        if(auto* Protector=MeshActor(GetWorld(),From+P->GetActorRightVector()*140-FVector(0,0,115),Guardian,FVector(1.08)))
+        if(auto* Protector=MeshActor(From+P->GetActorRightVector()*140-FVector(0,0,115),Guardian,FVector(1.08)))
         {
             Protector->SetActorRotation(FRotator(0,(To-From).Rotation().Yaw+90,0));
             Protector->SetLifeSpan(1.25f);
