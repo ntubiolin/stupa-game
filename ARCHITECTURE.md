@@ -750,3 +750,7 @@ preserved.
 - A browser installation ID is owned by `ctx.save.getInstallationIdAsync()` in the separate `stupa.installation.v1` key. It survives save reset/import, stays out of backup/cloud-save documents, and uses Web Locks to avoid first-load tab races.
 - `analytics_daily_aliases` binds a same-day guest installation to the authenticated account. Retries, reloads, concurrent tabs, stale guest requests, and authenticated use across devices stay idempotent. Switching between two accounts counts each account once.
 - Collection begins when the analytics tables are first deployed. Existing cloud saves are not used as historical backfill. Run `npm run analytics:report -- YYYY-MM-DD` on the backend host to read `{ collectionSince, day, googleUsers, dau }`. Anonymous players who clear site storage receive a new installation ID and may count again.
+
+## Unreal 蓮師巡禮
+
+`Unreal/TibetPilgrimage` 是西藏路線的原生 UE 5.8 專案。西藏關卡共用 TibetPilgrimage runtime module。編輯器在本機從原始美術產生 Content，Mac 與 iOS 使用同一份 `Config/DefaultGame.ini` 關卡封裝清單。建置與地圖生成入口為 `Tools/tibet.py`。
