@@ -1,4 +1,5 @@
 #include "TibetQASubsystem.h"
+#include "TibetCameraSettings.h"
 #include "TibetGameMode.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
@@ -184,8 +185,12 @@ void UTibetQASubsystem::Arrival(APlayerController& PC)
     {
         HeadingAfterDrag = PC.GetControlRotation();
         const FRotator Change = (HeadingAfterDrag - HeadingBeforeDrag).GetNormalized();
-        if (FMath::Abs(Change.Yaw) < 1 || FMath::Abs(Change.Pitch) < 1)
-        { Finish(false, TEXT("Right drag did not turn both camera axes")); return; }
+        const auto* Settings = GetDefault<UTibetCameraSettings>();
+        const double Gain = Settings->GetSensitivity();
+        const double ExpectedPitch = 1.7 * Gain * (Settings->IsVerticalInverted() ? -1. : 1.);
+        if (!FMath::IsNearlyEqual(Change.Yaw, 6. * Gain, .05) ||
+            !FMath::IsNearlyEqual(Change.Pitch, ExpectedPitch, .05))
+        { Finish(false, TEXT("Right drag direction or sensitivity changed")); return; }
         Record(TEXT("right-drag\t") + HeadingAfterDrag.ToCompactString());
         SendKey(PC, EKeys::RightMouseButton, false);
         SendKey(PC, EKeys::D, true);
