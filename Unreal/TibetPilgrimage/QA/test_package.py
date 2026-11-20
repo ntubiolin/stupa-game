@@ -118,6 +118,55 @@ def shot_data(p):
     return hashlib.sha256(data).hexdigest()
 
 
+# All eleven landmark compositions put the site in the lower two thirds. A sky-only
+# frame can have a valid PNG, hash and camera record even while its scene is streaming.
+MIN_LANDMARK_DETAIL = 2.0
+
+
+def landmark_detail(image):
+    with tempfile.TemporaryDirectory() as tmp:
+        bitmap = Path(tmp) / "sample.bmp"
+        subprocess.run(["sips", "-s", "format", "bmp", "-z", "120", "192", str(image), "--out", str(bitmap)],
+                       check=True, stdout=subprocess.DEVNULL)
+        data = bitmap.read_bytes()
+    offset = struct.unpack_from("<I", data, 10)[0]
+    width, height, planes, bits = struct.unpack_from("<iiHH", data, 18)
+    if (data[:2] != b"BM" or width != 192 or abs(height) != 120 or planes != 1 or bits not in (24, 32)):
+        raise ValueError(f"Unexpected macOS bitmap layout for {image}")
+    stride = ((width * bits + 31) // 32) * 4
+    channels = bits // 8
+    total = 0
+    rows = abs(height)
+    for y in range(rows // 3, rows):
+        # BMPs may store rows top-down or bottom-up.
+        row = offset + (y if height < 0 else rows - 1 - y) * stride
+        for x in range(1, width):
+            pixel = row + x * channels
+            total += sum(abs(data[pixel + c] - data[pixel - channels + c]) for c in range(3))
+    return total / ((rows - rows // 3) * (width - 1) * 3)
+
+
+def capture_landmark(exe, stage, output, view, slot):
+    level = view["id"]
+    args = ["-TibetQAEye=" + vector(view["ueEye"]), "-TibetQALook=" + vector(view["ueLook"])]
+    if (output / level).exists():
+        raise ValueError(f"Capture already exists: {output / level}")
+    for attempt in range(1, 4):
+        name = level if attempt == 1 else f"{level}-attempt-{attempt}"
+        capture(exe, stage, output, name, "Photo", level, args, slot + name)
+        result = output / name
+        detail = landmark_detail(result / "capture.png")
+        if detail >= MIN_LANDMARK_DETAIL:
+            if name != level:
+                result.rename(output / level)
+            return
+        rejected = output / "rejected"
+        rejected.mkdir(exist_ok=True)
+        result.rename(rejected / name)
+        print(f"Retrying {level}: lower-frame detail {detail:.2f} suggests missing scenery", flush=True)
+    raise ValueError(f"Three captures of {level} lacked visible scenery")
+
+
 def compare(web, mac, output):
     output.mkdir()
     web_report = json.loads((web / "report.json").read_text())
@@ -132,8 +181,11 @@ def compare(web, mac, output):
         data = [s.split("\t") for s in (mac / level / "events.tsv").read_text().splitlines()]
         if data[0][:2] != ['view', level] or data[-1] != ['pass', 'photo']:
             raise ValueError(f"Invalid native map capture for {level}")
+        detail = landmark_detail(after)
+        if detail < MIN_LANDMARK_DETAIL:
+            raise ValueError(f"Missing scenery in {level} (lower-frame detail {detail:.2f})")
         rows.append({"id":level, "webSHA256":baseline_hash, "nativeSHA256":shot_data(after),
-                     "web":indexed[level], "ue":data})
+                     "nativeLowerFrameDetail":detail, "web":indexed[level], "ue":data})
         figures = []
         for label, path in [("原網頁版", before), ("UE 5.8 · macOS", after)]:
             url = quote(os.path.relpath(path,output))
@@ -175,8 +227,7 @@ def main():
             for view in VIEWS:
                 if args.only and view["id"] != args.only:
                     continue
-                capture(exe,stage,output,view["id"],"Photo",view["id"],[
-                    "-TibetQAEye="+vector(view["ueEye"]), "-TibetQALook="+vector(view["ueLook"])],slot + view["id"])
+                capture_landmark(exe,stage,output,view,slot)
         elif args.action == "skills":
             capture(exe,stage,output,"skills","Skills","terma3",[],slot)
             game_log = (output / "skills/game.log").read_text(errors="replace")
