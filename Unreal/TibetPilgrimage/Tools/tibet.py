@@ -61,7 +61,8 @@ def main():
     parser.add_argument("command", choices=("build-editor", "generate", "play", "package"))
     parser.add_argument("--ue-root", type=Path, default=Path("/Users/Shared/Epic Games/UE_5.8"))
     parser.add_argument("--platform", choices=("Mac", "IOS"), default="Mac")
-    parser.add_argument("--archive", type=Path, default=ROOT / "Builds")
+    parser.add_argument("--archive", type=Path, default=Path.home() / "Downloads/TibetPilgrimage",
+                        help="Output directory (default: ~/Downloads/TibetPilgrimage)")
     parser.add_argument("--unsigned", action="store_true", help="Create an unsigned native iOS device .xcarchive")
     args = parser.parse_args()
     if args.unsigned and (args.command != "package" or args.platform != "IOS"):
