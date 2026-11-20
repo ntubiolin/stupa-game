@@ -53,8 +53,7 @@ journal 分別在繁中、英文桌面及 884 × 420 英文觸控預覽擷取技
 在 Mac 安裝 UE 5.8 的 iOS 平台元件、iPhoneOS SDK 與 Metal 編譯器。從 `Unreal/TibetPilgrimage` 執行下列命令。若工作區尚無產生的關卡，先依專案 README 完成 `build-editor` 和 `generate`。
 
 ```sh
-python3 Tools/tibet.py package --platform IOS --unsigned \
-  --archive "$PWD/Builds/IOS/TibetPilgrimage.xcarchive"
+python3 Tools/tibet.py package --platform IOS --unsigned
 ```
 
 此命令以 iPhoneOS 為目標編譯，cook 所有列在 DefaultGame.ini 的關卡，並把未簽署的裝置用執行檔和遊戲內容寫進 Xcode archive。若 `--archive` 指向一般目錄，輸出位於其下的 `IOS/TibetPilgrimage.xcarchive`。檢查 archive 根層的 Info.plist，以及 Products/Applications/TibetPilgrimage.app 內的執行檔、裝置平台和 cooked 資料。
@@ -62,10 +61,10 @@ python3 Tools/tibet.py package --platform IOS --unsigned \
 裝置安裝需要與 Bundle ID 相符的開發團隊、簽章及佈建描述檔。簽署者可在具備簽署資源的 Mac 上用下列命令建立 Development 套件，並用 Xcode 安裝到啟用開發者模式、已配對的 iPhone。
 
 ```sh
-python3 Tools/tibet.py package --platform IOS --archive "$PWD/Builds/Signed"
+python3 Tools/tibet.py package --platform IOS
 ```
 
-UE 5.8 的通常輸出為 Builds/Signed/IOS/TibetPilgrimage.app。將連接裝置的啟動、橫向觸控、讀檔及關卡轉場結果另行記錄。
+UE 5.8 的通常輸出為 `~/Downloads/TibetPilgrimage/IOS/TibetPilgrimage.app`。將連接裝置的啟動、橫向觸控、讀檔及關卡轉場結果另行記錄。
 
 [西藏 UE 模組移植驗收](Module-audit.md) 逐項對照網頁客戶端、伺服器與原生遊戲。執行 `python3 -m unittest discover -s QA` 可核對每個原始模組都有且只有一個盤點項目。
 
