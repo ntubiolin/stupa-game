@@ -296,8 +296,8 @@ TSharedRef<SWidget> STibetPlayOverlay::Controls()
     const FText Guide=bTouch
         ? Local(TEXT("Drag the left half to walk and the right half to turn. Tap Act or a ritual to use it."),
                 TEXT("左側拖曳移動，右側拖曳轉向。點選「互動」或技能即可使用。"))
-        : Local(TEXT("WASD  Move     Right mouse + drag  Look     Shift  Jump\nE  Interact     K  Skills     M  World map     Esc  Menu / return"),
-                TEXT("WASD 移動　按住滑鼠右鍵拖曳轉向　Shift 跳躍\nE 互動　K 技能　M 世界地圖　Esc 選單／返回"));
+        : Local(TEXT("WASD  Move     Right-drag  Look     Shift  Jump\nHold Q / E to orbit, release to follow     Tap E  Interact\nK  Skills     M  World map     Esc  Menu / return"),
+                TEXT("WASD 移動　按住滑鼠右鍵拖曳轉向　Shift 跳躍\n按住 Q／E 左右環視，放開回到背後　輕按 E 互動\nK 技能　M 世界地圖　Esc 選單／返回"));
     Box->AddSlot().AutoHeight().Padding(0,2,0,9)[Label(Guide,13,Paper)];
     auto* Settings=GetMutableDefault<UTibetCameraSettings>();
     auto Row=SNew(SHorizontalBox);

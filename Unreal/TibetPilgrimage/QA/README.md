@@ -17,6 +17,7 @@ mkdir -p "$result"
 node "$qa/capture-web.mjs" http://127.0.0.1:4477 "$result/web"
 python3 "$qa/test_package.py" photos --exe "$app" --output "$result/mac"
 python3 "$qa/test_package.py" arrival --exe "$app" --output "$result/arrival"
+python3 "$qa/test_package.py" camera --exe "$app" --output "$result/camera"
 python3 "$qa/test_package.py" play --exe "$app" --output "$result/play"
 python3 "$qa/test_package.py" skills --exe "$app" --output "$result/skills"
 python3 "$qa/test_package.py" feedback --exe "$app" --output "$result/feedback"
@@ -26,6 +27,8 @@ python3 "$qa/test_package.py" compare --web "$result/web" --mac "$result/mac" --
 ```
 
 arrival 使用新存檔和預設開場鏡頭，確認塔座、塔尖與洛桑都在畫面內，並保存玩家進場原圖。接著透過遊戲輸入實測游標移動、右鍵拖曳，以及放開右鍵後邊走邊移動游標時的鏡頭朝向。
+
+camera 先執行 arrival，再以每秒 30 與 60 幀上限實測側移路徑、鏡頭跟隨、按住 Q／E 與放開後的回正、選單輸入隔離，以及洛桑面前的 E 輕按互動。events.tsv 記錄鏡頭、角色和移動基準的角度。
 
 learned 從伏藏第三層走回青浦與博達哈，重開後實際施放上師心咒，另用新存檔核對鎖定狀態及法力。
 

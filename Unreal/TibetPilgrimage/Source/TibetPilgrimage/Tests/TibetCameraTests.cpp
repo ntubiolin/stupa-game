@@ -47,4 +47,30 @@ bool FTibetWallTest::RunTest(const FString&)
     }
     return true;
 }
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTibetFollowTest, "Tibet.Camera.TravelFollow",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FTibetFollowTest::RunTest(const FString&)
+{
+    for (int32 Frames : {30, 60, 120})
+    {
+        const double Dt=1./Frames;
+        // Cross the signed-yaw seam while returning from a temporary orbit.
+        double View=155.;
+        for (int32 I=0; I<Frames; ++I) View=FRotator::NormalizeAxis(View+TibetCamera::OrbitDegreesPerSecond*Dt);
+        TestTrue(TEXT("Clockwise orbit travels the same angle at 30, 60 and 120 Hz"),
+            FMath::IsNearlyEqual(View,-100.,.001));
+        const double Start=View, Target=155.;
+        for (int32 I=0; I<Frames; ++I)
+        {
+            const double Next=TibetCamera::FollowYaw(View,Target,Dt);
+            const double Change=FRotator::NormalizeAxis(Next-View);
+            TestTrue(TEXT("Release takes the shortest path at a bounded speed"),Change<=0. && -Change<=175.*Dt+.05);
+            View=Next;
+        }
+        TestTrue(TEXT("Return is independent of frame partition"),FMath::IsNearlyEqual(View,TibetCamera::FollowYaw(Start,Target,1.),.001));
+        TestTrue(TEXT("After a second the view is close to the actual travel direction"),FMath::Abs(FRotator::NormalizeAxis(View-Target))<3.);
+    }
+    return true;
+}
 #endif

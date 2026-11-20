@@ -17,12 +17,13 @@ public:
     virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
     virtual TStatId GetStatId() const override;
     virtual void Tick(float DeltaSeconds) override;
-    virtual bool IsTickableWhenPaused() const override { return Task==TEXT("Journal"); }
+    virtual bool IsTickableWhenPaused() const override { return Task==TEXT("Journal") || Task==TEXT("CameraFollow"); }
 private:
     void Finish(bool bSuccess, const FString& Detail);
     void Journal(APlayerController& PC, ATibetGameMode& Mode);
     void Photo(APlayerController& PC);
     void Arrival(APlayerController& PC);
+    void CameraFollow(APlayerController& PC, ATibetGameMode& Mode);
     void Play(APlayerController& PC, ATibetGameMode& Mode);
     void LearnedSkills(APlayerController& PC, ATibetGameMode& Mode);
     void SkillEncounter(APlayerController& PC, ATibetGameMode& Mode);
