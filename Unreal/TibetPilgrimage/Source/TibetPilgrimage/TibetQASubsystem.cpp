@@ -3,6 +3,11 @@
 #include "TibetGameMode.h"
 #include "TibetRitualEffect.h"
 #include "EngineUtils.h"
+#include "TibetHUD.h"
+#include "TibetPlayOverlay.h"
+#include "Framework/Application/SlateApplication.h"
+#include "GenericPlatform/GenericPlatformInputDeviceMapper.h"
+#include "Widgets/SWindow.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "Camera/PlayerCameraManager.h"
@@ -79,6 +84,7 @@ void UTibetQASubsystem::Tick(float)
     }
     if (Task != TEXT("Campaign") && World->GetMapName() != StartMap) { Finish(false, TEXT("Unexpected map: ") + World->GetMapName()); return; }
     if (Task == TEXT("Arrival")) Arrival(*PC);
+    else if (Task == TEXT("Journal")) Journal(*PC,*Mode);
     else if (Task == TEXT("Photo")) Photo(*PC);
     else if (Task == TEXT("Play") || Task == TEXT("Campaign") || Task == TEXT("GroveEntry") || Task == TEXT("Skills")) Play(*PC, *Mode);
     else if (Task == TEXT("Resume"))
@@ -144,6 +150,105 @@ void SendKey(APlayerController& PC, FKey Key, bool bDown)
     auto Input = FInputKeyEventArgs::CreateSimulated(Key, bDown ? IE_Pressed : IE_Released, bDown ? 1 : 0);
     PC.InputKey(Input);
 }
+}
+
+namespace
+{
+TSharedPtr<SWidget> FindJournalButton(const TSharedRef<SWidget>& Root,FName Tag)
+{
+    if (Root->GetTag()==Tag) return Root;
+    FChildren* Children=Root->GetChildren();
+    for (int32 I=0;I<Children->Num();++I)
+    {
+        if (auto Match=FindJournalButton(Children->GetChildAt(I),Tag)) return Match;
+    }
+    return nullptr;
+}
+
+bool TapJournalButton(FName Tag)
+{
+    auto Window=GEngine->GameViewport->GetWindow();
+    if (!Window) return false;
+    auto Button=FindJournalButton(Window.ToSharedRef(),Tag);
+    if (!Button) return false;
+    const auto Geometry=Button->GetCachedGeometry();
+    const auto ScreenSize=Geometry.GetAbsoluteSize();
+    if (ScreenSize.GetMin()<Window->GetCachedGeometry().GetAbsoluteSize().Y*.095f) return false;
+    const auto Center=Geometry.LocalToAbsolute(Geometry.GetLocalSize()*.5);
+    auto& App=FSlateApplication::Get();
+    auto& Mapper=IPlatformInputDeviceMapper::Get();
+    App.OnTouchStarted(Window->GetNativeWindow(),Center,1,0,Mapper.GetPrimaryPlatformUser(),Mapper.GetDefaultInputDevice());
+    App.OnTouchEnded(Center,0,Mapper.GetPrimaryPlatformUser(),Mapper.GetDefaultInputDevice());
+    return true;
+}
+}
+
+void UTibetQASubsystem::Journal(APlayerController& PC,ATibetGameMode& Mode)
+{
+    auto* HUD=Cast<ATibetHUD>(PC.GetHUD());
+    const double Now=FPlatformTime::Seconds();
+    if (Now-Began>50) { Finish(false,TEXT("Journal timeout")); return; }
+    if (!HUD || Now-Began<2 || Now-LastAction<.24 || FScreenshotRequest::IsScreenshotRequested()) return;
+    LastAction=Now;
+    auto Shot=[&](const TCHAR* Name){
+        Screenshot=Output/(FString(Name)+TEXT(".png"));
+        FScreenshotRequest::RequestScreenshot(Screenshot,true,false,false);
+    };
+    if (!Screenshot.IsEmpty() && IFileManager::Get().FileSize(*Screenshot)<=0) return;
+    auto Tap=[&](FKey Key){SendKey(PC,Key,true);};
+    const bool Touch=FParse::Param(FCommandLine::Get(),TEXT("TibetTouch"));
+    switch (Frames++)
+    {
+    case 0:
+        if (Mode.IsEnglish()!=FParse::Param(FCommandLine::Get(),TEXT("TibetQAEnglish"))) Mode.ChangeLanguage();
+        break;
+    case 1:
+        if (HUD->IsJournalOpen()) { Finish(false,TEXT("Unexpected startup menu")); return; }
+        Shot(TEXT("hud")); break;
+    case 2:
+        if (Touch) { if (!TapJournalButton(TEXT("TibetOpenMap"))) { Finish(false,TEXT("Map touch target missing")); return; } }
+        else Tap(EKeys::M);
+        break;
+    case 3:
+        if (HUD->GetJournalPage()!=ETibetPage::Map || !PC.IsPaused()) { Finish(false,TEXT("Map did not open and pause")); return; }
+        SendKey(PC,EKeys::M,false); ArrivalPosition=PC.GetPawn()->GetActorLocation(); HeadingBeforeDrag=PC.GetControlRotation();
+        Shot(TEXT("map")); break;
+    case 4:
+        SendKey(PC,EKeys::W,true); SendKey(PC,EKeys::R,true); SendKey(PC,EKeys::RightMouseButton,true);
+        PC.InputKey(FInputKeyEventArgs::CreateSimulated(EKeys::MouseX,IE_Axis,18.f,1));
+        break;
+    case 5:
+        if (!PC.GetPawn()->GetActorLocation().Equals(ArrivalPosition,.1) || !PC.GetControlRotation().Equals(HeadingBeforeDrag,.01)
+            || Mode.GetSkillState(1).CooldownRemaining>0 || Mode.GetMana()!=100) { Finish(false,TEXT("Gameplay input crossed journal")); return; }
+        SendKey(PC,EKeys::W,false); SendKey(PC,EKeys::R,false); SendKey(PC,EKeys::RightMouseButton,false);
+        Tap(EKeys::K); break;
+    case 6:
+        SendKey(PC,EKeys::K,false);
+        if (HUD->GetJournalPage()!=ETibetPage::Skills) { Finish(false,TEXT("Skills toggle failed")); return; }
+        Shot(TEXT("skills")); break;
+    case 7: Tap(EKeys::Escape); break;
+    case 8:
+        SendKey(PC,EKeys::Escape,false);
+        if (HUD->IsJournalOpen() || PC.IsPaused()) { Finish(false,TEXT("Esc did not restore play")); return; }
+        break;
+    case 9: Tap(EKeys::Escape); break;
+    case 10:
+        SendKey(PC,EKeys::Escape,false);
+        if (HUD->GetJournalPage()!=ETibetPage::Controls) { Finish(false,TEXT("Menu did not reopen")); return; }
+        Shot(TEXT("controls")); break;
+    case 11:
+        if (Touch) { if (!TapJournalButton(TEXT("TibetCloseJournal"))) { Finish(false,TEXT("Return touch target missing")); return; } }
+        else Tap(EKeys::Escape);
+        break;
+    case 12:
+        SendKey(PC,EKeys::Escape,false);
+        if (HUD->IsJournalOpen() || PC.IsPaused() || !PC.GetPawn()->GetActorLocation().Equals(ArrivalPosition,.1)
+            || Mode.GetMana()!=100) { Finish(false,TEXT("Return leaked input")); return; }
+        SendKey(PC,EKeys::W,true); break;
+    default:
+        SendKey(PC,EKeys::W,false);
+        Finish(FVector::Dist2D(PC.GetPawn()->GetActorLocation(),ArrivalPosition)>5,TEXT("journal input and return"));
+    }
 }
 
 // Exercise the actual third-person view before the campaign driver starts steering the pawn.
