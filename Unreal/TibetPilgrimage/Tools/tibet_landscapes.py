@@ -2,6 +2,8 @@
 
 import math
 import random
+import struct
+from pathlib import Path
 
 from tibet_mesh import Scene, noise, normal
 
@@ -491,11 +493,28 @@ def terrain(s, stage, rng):
     s.group = "Ridgelines"
     seed = MAPS.index(stage) * 1.9
 
+    measured = stage in {"stupa", "pharping", "mangyul", "yarlung", "samye", "chimphu"}
+    if measured:
+        source = Path(__file__).resolve().parents[1] / "Assets/Relief" / f"{stage}.i16"
+        samples = struct.unpack("<7921h", source.read_bytes())
+
+    def elevation(x, y):
+        # The grid runs west to east, then south to north. One world metre spans 50 survey metres.
+        col = min(88., max(0., x / 5 + 44))
+        row = min(88., max(0., y / 5 + 44))
+        i, j = min(87, int(col)), min(87, int(row))
+        u, v = col - i, row - j
+        south = samples[89*j+i] * (1-u) + samples[89*j+i+1] * u
+        north = samples[89*(j+1)+i] * (1-u) + samples[89*(j+1)+i+1] * u
+        return south * (1-v) + north * v
+
     def height(x, y):
         radius = math.hypot(x, y - 5)
         blend = min(1, max(0, (radius - 55) / 28))
         if blend == 0:
             return -0.65
+        if measured:
+            return blend * (elevation(x, y) - samples[89*44+44]) / 50 - 0.64
         angle = math.atan2(y - 5, x)
         wav = 7 * math.sin(3 * angle + seed) + 5 * math.cos(6 * angle + seed)
         middle = math.exp(-(((radius - 99 - wav) / 28) ** 2))
@@ -524,11 +543,11 @@ def terrain(s, stage, rng):
             keys = [(x, y), (x + 5, y), (x + 5, y + 5), (x, y + 5)]
             face = [pts[k] for k in keys]
             avg = sum(p[2] for p in face) / 4
-            if avg < -0.58:
+            if avg < -0.58 and (not measured or max(abs(x), abs(y-5)) < 52):
                 continue
             surface = (
                 "snow"
-                if alpine and avg > 45 + 3 * math.sin(x * 0.16)
+                if (elevation(x, y) > 4950 if measured else alpine and avg > 45 + 3 * math.sin(x * 0.16))
                 else "shale"
                 if avg > 24
                 else "grass"
