@@ -46,7 +46,7 @@ TSharedRef<SWidget> STibetPlayOverlay::CourtyardControls()
     Content->AddSlot().AutoHeight().Padding(5,2)
         [SNew(SSlider).Tag(TEXT("TibetClockSlider")).StepSize(.002f)
          .Value_Lambda([this](){return Mode->SolarPhase();})
-         .ToolTipText(Local(TEXT("Time of day"),TEXT("市區時刻")))
+         .AccessibleText(Local(TEXT("Time of day"),TEXT("市區時刻")))
          .OnValueChanged_Lambda([this](float V){Mode->SetSolarPhase(V,false);})
          .OnMouseCaptureEnd_Lambda([this](){Mode->SetSolarPhase(Mode->SolarPhase());})
          .OnControllerCaptureEnd_Lambda([this](){Mode->SetSolarPhase(Mode->SolarPhase());})];
@@ -55,10 +55,17 @@ TSharedRef<SWidget> STibetPlayOverlay::CourtyardControls()
         [Button(TAttribute<FText>::CreateLambda([this](){return (bTouch || Mode->AtButterLamp())?Local(TEXT("Feed macaque"),TEXT("餵獼猴")):
             Local(TEXT("F  Feed macaque"),TEXT("F  餵獼猴"));}),
             FSimpleDelegate::CreateLambda([this](){Mode->BeginFeeding();}),true,TEXT("TibetFeedMacaque"))]];
-    Content->AddSlot().AutoHeight()[SNew(SBox).Visibility_Lambda([this](){
-        return Mode->AtButterLamp() && !Mode->FeedingPanel()?EVisibility::Visible:EVisibility::Collapsed;})
-        [Button(TAttribute<FText>::CreateLambda([this](){return Local(TEXT("Light & dedicate"),TEXT("點燈回向"));}),
-            FSimpleDelegate::CreateLambda([this](){Mode->OfferNearbyLamp();}),true,TEXT("TibetOfferLamp"))]];
+    auto LampActions=SNew(SVerticalBox).Visibility_Lambda([this](){
+        return Mode->AtButterLamp() && !Mode->FeedingPanel()?EVisibility::Visible:EVisibility::Collapsed;});
+    LampActions->AddSlot().AutoHeight()[Button(TAttribute<FText>::CreateLambda([this](){
+            return !bTouch && Mode->InteractTargetsLamp() ? Local(TEXT("E  Light & dedicate"),TEXT("E  點燈回向")) :
+                Local(TEXT("Light & dedicate"),TEXT("點燈回向"));}),
+        FSimpleDelegate::CreateLambda([this](){Mode->OfferNearbyLamp();}),true,TEXT("TibetOfferLamp"))];
+    if (!bTouch)
+        LampActions->AddSlot().AutoHeight().Padding(0,1,0,0)[Button(TAttribute<FText>::CreateLambda([this](){
+                return Local(TEXT("F  Quick offering"),TEXT("F  快速供燈"));}),
+            FSimpleDelegate::CreateLambda([this](){Mode->QuickPractice();}),false,TEXT("TibetQuickOffering"))];
+    Content->AddSlot().AutoHeight()[LampActions];
     return SNew(SBox).WidthOverride(bTouch?163.f:190.f)
         [SNew(SBorder).BorderImage(PanelBrush()).BorderBackgroundColor(TimePanel).Padding(4)[Content]];
 }

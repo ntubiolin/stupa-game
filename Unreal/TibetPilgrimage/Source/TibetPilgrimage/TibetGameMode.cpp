@@ -442,15 +442,10 @@ FString ATibetGameMode::Status(bool bTouchControls) const
     const auto K=Objective(Route,GetStep()).Kind;
     FString S=FString::Printf(TEXT("%s %d   ·   %d m"),*Local(TEXT("Life"),TEXT("體力")),FMath::CeilToInt(Health),Meters);
     if (K==EObjective::Boss || K==EObjective::Combat) S+=FString::Printf(TEXT("   ·   %s %d"),*EnemyLabel(),EnemyHealth);
-    if (P)
+    if (P && Map!=TEXT("stupa"))
     {
         const EInteraction Action=InteractionAt(P->GetActorLocation());
-        if (AtButterLamp() && (Action==EInteraction::Use || Action==EInteraction::None))
-        {
-            S+=bTouchControls ? Local(TEXT("\nOffer a lamp or dedicate a prayer"),TEXT("\n可供燈或回向")) :
-                Local(TEXT("\nE  Light & dedicate    F  Quick offering"),TEXT("\nE 點燈回向　F 快速供燈"));
-        }
-        else if (Action==EInteraction::Use)
+        if (Action==EInteraction::Use)
         {
             S+=bTouchControls ? Local(TEXT("\nTap Act · "),TEXT("\n點選「互動」・")) : Local(TEXT("\nTap E · "),TEXT("\n輕按 E・"));
             S+=ActionLabel(Action);
@@ -657,6 +652,20 @@ bool ATibetGameMode::AtButterLamp() const
     return Pawn && NearestButterLamp(Pawn->GetActorLocation())!=INDEX_NONE;
 }
 
+int32 ATibetGameMode::LampForInteraction(const FVector& PlayerLocation, EInteraction Action) const
+{
+    // E can also talk or travel when a target overlaps a lamp. F always prefers the lamp.
+    return Action==EInteraction::Use || Action==EInteraction::None ? NearestButterLamp(PlayerLocation) : INDEX_NONE;
+}
+
+bool ATibetGameMode::InteractTargetsLamp() const
+{
+    const auto* Pawn=UGameplayStatics::GetPlayerPawn(this,0);
+    if (!Pawn) return false;
+    const FVector Location=Pawn->GetActorLocation();
+    return LampForInteraction(Location,InteractionAt(Location))!=INDEX_NONE;
+}
+
 void ATibetGameMode::OfferNearbyLamp()
 {
     const auto* Pawn=UGameplayStatics::GetPlayerPawn(this,0);
@@ -710,14 +719,14 @@ void ATibetGameMode::Interact()
     const auto* P=UGameplayStatics::GetPlayerPawn(this,0);
     if (!P) return;
     const EInteraction Action=InteractionAt(P->GetActorLocation());
+    const int32 Lamp=LampForInteraction(P->GetActorLocation(),Action);
+    if (Lamp!=INDEX_NONE)
+    {
+        OfferButter(Lamp,true);
+        return;
+    }
     if (Action==EInteraction::Use || Action==EInteraction::None)
     {
-        const int32 Lamp=NearestButterLamp(P->GetActorLocation());
-        if (Lamp!=INDEX_NONE)
-        {
-            OfferButter(Lamp,true);
-            return;
-        }
         // The quest uses the same bowl and distance as quick offerings.
         if (Map==TEXT("stupa") && Action==EInteraction::Use) return;
         if (CanFeed() && Action==EInteraction::None) { BeginFeeding(); return; }
