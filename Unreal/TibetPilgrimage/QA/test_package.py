@@ -121,7 +121,7 @@ def compare(web, mac, output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["photos", "play", "compare"])
+    parser.add_argument("action", choices=["photos", "play", "skills", "compare"])
     parser.add_argument("--exe", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--web", type=Path)
@@ -149,6 +149,14 @@ def main():
                     continue
                 capture(exe,stage,output,view["id"],"Photo",view["id"],[
                     "-TibetQAEye="+vector(view["ueEye"]), "-TibetQALook="+vector(view["ueLook"])],slot + view["id"])
+        elif args.action == "skills":
+            capture(exe,stage,output,"skills","Skills","terma3",[],slot)
+            game_log = (output / "skills/game.log").read_text(errors="replace")
+            slots = [int(n) for n in re.findall(r"TIBET_CAST slot=(\d+)", game_log)]
+            if slots != list(range(7)):
+                raise ValueError(f"Expected seven accepted game casts; got {slots}")
+            for n in slots:
+                shot_data(output / f"skills/skill-{n}.png")
         else:
             checkpoint = capture(exe,stage,output,"checkpoint","Play","stupa",["-TibetQAStopStep=1"],slot)
             if not any(row[:3]==["step","stupa","1"] for row in checkpoint):
