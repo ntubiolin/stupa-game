@@ -39,6 +39,7 @@ private:
     void TurnView(APlayerController& Player, FVector2D Degrees);
     void TouchDown(ETouchIndex::Type Index, FVector Position);
     void TouchUp(ETouchIndex::Type Index, FVector Position);
+    void FeedMonkey();
     void DoInteract();
     void DoCast(int32 Skill);
     void Language();

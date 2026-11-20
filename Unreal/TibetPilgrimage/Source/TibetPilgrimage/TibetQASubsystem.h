@@ -26,6 +26,11 @@ private:
     void Journal(APlayerController& PC, ATibetGameMode& Mode);
     void Photo(APlayerController& PC);
     void Arrival(APlayerController& PC);
+    void Courtyard(APlayerController& PC, ATibetGameMode& Mode);
+    bool TapPlayControl(FName Tag, float XFraction=.5f);
+    int32 CourtyardStep=0;
+    float CheckedPhase=0, CheckedFlame=0, ClockStarted=0;
+    double CourtyardSince=0;
     void CameraFollow(APlayerController& PC, ATibetGameMode& Mode);
     bool SurveyGate(APlayerController& PC, const FVector& Goal);
     bool CaptureEncounter(APlayerController& PC, ATibetGameMode& Mode);

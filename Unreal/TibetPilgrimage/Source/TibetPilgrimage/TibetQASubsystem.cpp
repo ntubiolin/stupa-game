@@ -89,7 +89,8 @@ void UTibetQASubsystem::Tick(float)
         return;
     }
     if (Task != TEXT("Campaign") && World->GetMapName() != StartMap) { Finish(false, TEXT("Unexpected map: ") + World->GetMapName()); return; }
-    if (Task == TEXT("Arrival")) Arrival(*PC);
+    if (Task == TEXT("Courtyard") || Task == TEXT("CourtyardResume")) Courtyard(*PC,*Mode);
+    else if (Task == TEXT("Arrival")) Arrival(*PC);
     else if (Task == TEXT("CameraFollow")) CameraFollow(*PC,*Mode);
     else if (Task == TEXT("Dialogue")) DialogueTest(*PC,*Mode);
     else if (Task == TEXT("PackJourney") || Task == TEXT("PackResume")) PackJourney(*PC,*Mode);
@@ -402,6 +403,28 @@ void UTibetQASubsystem::PackJourney(APlayerController& PC, ATibetGameMode& Mode)
     case 22: Key(EKeys::Escape); ++Frames; break;
     default: Finish(!HUD->IsJournalOpen() && !PC.IsPaused(),TEXT("restored pack and chart input")); break;
     }
+}
+
+bool UTibetQASubsystem::TapPlayControl(FName Tag,float XFraction)
+{
+    auto Window=GEngine->GameViewport->GetWindow();
+    if(!Window) return false;
+    auto Widget=FindJournalButton(Window.ToSharedRef(),Tag);
+    if(!Widget || !Widget->GetVisibility().IsVisible())
+    {UE_LOG(LogTemp,Display,TEXT("Courtyard control %s missing or collapsed"),*Tag.ToString()); return false;}
+    const auto Geometry=Widget->GetCachedGeometry();
+    const auto Size=Geometry.GetLocalSize();
+    if(Size.GetMin()<4)
+    {UE_LOG(LogTemp,Display,TEXT("Courtyard control %s has no layout"),*Tag.ToString()); return false;}
+    const auto At=Geometry.LocalToAbsolute(FVector2D(Size.X*XFraction,Size.Y*.5));
+    auto& App=FSlateApplication::Get();
+    auto& Map=IPlatformInputDeviceMapper::Get();
+    const bool bSlider=Tag==TEXT("TibetClockSlider");
+    const auto Down=bSlider ? Geometry.LocalToAbsolute(FVector2D(Size.X*.15,Size.Y*.5)) : At;
+    App.OnTouchStarted(Window->GetNativeWindow(),Down,1,0,Map.GetPrimaryPlatformUser(),Map.GetDefaultInputDevice());
+    if(bSlider) App.OnTouchMoved(At,1,0,Map.GetPrimaryPlatformUser(),Map.GetDefaultInputDevice());
+    App.OnTouchEnded(At,0,Map.GetPrimaryPlatformUser(),Map.GetDefaultInputDevice());
+    return true;
 }
 
 void UTibetQASubsystem::Journal(APlayerController& PC,ATibetGameMode& Mode)

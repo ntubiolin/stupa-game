@@ -15,6 +15,7 @@ from import_tibet_figures import import_meshes
 from import_tibet_atlas import import_atlas
 from migrate_tibet_maps import strip_import_metadata
 from tibet_cave_lighting import dress_passages, wick_material
+from tibet_courtyard_assets import macaques, wind_materials
 from tibet_landscapes import MAPS, landscape
 from tibet_surfaces import make_surfaces
 
@@ -92,6 +93,8 @@ def populate(levels, actors, stage, source, surfaces):
     )
     if not manager.import_scene(destination, src, params):
         raise RuntimeError(f"Failed to import {source}")
+    if stage == "stupa":
+        surfaces.update(wind_materials())
     loaded = [a for a in actors.get_all_level_actors() if a.get_path_name() not in before]
     paths = {a.get_path_name() for a in loaded}
     # Interchange glTF east initially lies along Unreal +X. Rotate east into +Y, north into +X.
@@ -177,6 +180,7 @@ def generate():
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     import_atlas()
     import_meshes()
+    macaques()
     surfaces = make_surfaces()
     surfaces["lampflame"] = wick_material()
     output = PROJECT / "Saved/TibetSource"

@@ -22,6 +22,12 @@ public:
     UPROPERTY(SaveGame) int32 Equipment = 0;
     UPROPERTY(SaveGame) int32 PillCharges = 4;
     UPROPERTY(SaveGame) bool bQuickMap = false;
+    UPROPERTY(SaveGame) float SolarPhase = .30f;
+    UPROPERTY(SaveGame) int32 ClockRate = 1;
+    UPROPERTY(SaveGame) uint8 ButterLampMask = 0;
+    UPROPERTY(SaveGame) int32 MonkeysFed = 0;
+    UPROPERTY(SaveGame) int32 FeedingBest = 0;
+    UPROPERTY(SaveGame) int32 FeedingPlays = 0;
     UPROPERTY(SaveGame) bool bMessengerJoined = false;
 };
 
@@ -69,6 +75,24 @@ public:
     void PauseDialogue(bool Paused);
     void StopDialogue();
     virtual void Tick(float DeltaSeconds) override;
+    float SolarPhase() const { return Save ? Save->SolarPhase : .30f; }
+    int32 ClockRate() const { return Save ? Save->ClockRate : 1; }
+    void SetClockRate(int32 Rate);
+    void SetSolarPhase(float Phase, bool bCommit=true);
+    FString TimeLabel() const;
+    bool CanFeed() const;
+    bool MacaquePrompt(FVector& Position,int32& Meters) const;
+    void BeginFeeding();
+    void CloseFeeding();
+    void QuickFeed();
+    void StartFruitGame();
+    void PickFruit(int32 Fruit);
+    int32 FeedingPanel() const { return FeedPanel; }
+    int32 RequestedFruit() const { return FruitRequest; }
+    int32 FedCount() const { return Save ? Save->MonkeysFed : 0; }
+    int32 BestFeedingScore() const { return Save ? Save->FeedingBest : 0; }
+    FString FeedingText() const;
+    FString FruitName(int32 Fruit) const;
     FVector GetObjectiveLocation() const;
     FString GetObjectiveText() const;
     FName GetObjectiveKind() const;
@@ -112,7 +136,16 @@ private:
     FString Map, Route, SlotName;
     TMap<FName, FVector> PassageSockets;
     int32 LitCaveLamps = 0;
-    int32 LitStupaLamps = 0;
+    uint8 SpawnedLampMask = 0;
+    UPROPERTY() TObjectPtr<class ATibetMacaques> Macaques;
+    UPROPERTY() TObjectPtr<class ATibetSkyClock> OutdoorSky;
+    int32 FeedPanel=0, FeedTarget=INDEX_NONE, FruitRequest=INDEX_NONE, FruitRound=0, FruitScore=0, FruitAffection=0;
+    bool LastFruitMatched=false, bFedThisSession=false;
+    float SinceClockSave=0, SinceSkyUpdate=0;
+    void RewardFeeding();
+    void StartCourtyard();
+    void UpdateClock(float Dt);
+    int32 NearestButterLamp(const FVector& Where) const;
     int32 FurthestMap = INDEX_NONE;
     bool HasLearnedSkill(int32 Slot) const;
     int32 EnemyHealth = 0, EnemyMaximum = 0;
