@@ -67,6 +67,16 @@ bool ATibetMacaques::Offer(int32 I,const FVector& From)
     return true;
 }
 bool ATibetMacaques::IsEating(int32 I) const { return Animals.IsValidIndex(I) && Animals[I].Feeding>=0; }
+bool ATibetMacaques::HoldingFruit(int32 I,FVector& FruitPosition,float& ToeClearance) const
+{
+    if(!Animals.IsValidIndex(I) || Animals[I].Feeding<.68f) return false;
+    FTransform Banana,Leg;
+    if(!Parts[Fruit]->GetInstanceTransform(I,Banana,true) || !Parts[RightLeg]->GetInstanceTransform(I,Leg,true))
+        return false;
+    FruitPosition=Banana.GetLocation();
+    ToeClearance=Leg.TransformPosition(FVector(0,0,-20)).Z-3*Leg.GetScale3D().Z-Location(I).Z;
+    return true;
+}
 void ATibetMacaques::Tick(float Dt)
 {
     Super::Tick(Dt); Age+=Dt;
@@ -88,24 +98,37 @@ void ATibetMacaques::Pose(int32 I,float Dt)
     }
     else if(Eating) M.Heading=FMath::FixedTurn(M.Heading,(M.FruitFrom-M.Position).Rotation().Yaw,Dt*210);
     const float Walk=FMath::Sin(Age*9.5f+I), Munch=FMath::Sin(Age*11.f+I);
-    const float H=Sleeping?14.f:(Roam?24.f:18.f);
+    // UE pitch carries a downward limb toward +X at positive angles. Match the
+    // web rig's forward paws and keep the sitting toes on the perch or paving.
+    const float Back=Sleeping?-44.f:Roam?-31.f:-8.f;
+    const float RestLeg=Sleeping?72.f:57.f;
+    const FQuat Spine=FRotator(Back,0,0).Quaternion();
+    const FVector SittingToe=Spine.RotateVector(FVector(-2,0,2)+
+        FRotator(RestLeg,0,0).RotateVector(FVector(0,0,-20)));
+    const float H=Roam?24.f:3.f-SittingToe.Z;
     const FTransform Root(FRotator(0,M.Heading,0),M.Position,FVector(1.55));
-    const FTransform Trunk=FTransform(FRotator(Sleeping?44.f:Roam?31.f:8.f,0,0),
+    const FTransform Trunk=FTransform(Spine,
         FVector(0,0,H+(Roam?FMath::Abs(Walk)*6:0)))*Root;
     auto Place=[&](int32 Part,const FTransform& T){Parts[Part]->UpdateInstanceTransform(I,T,false,true,true);};
     Place(Body,Trunk);
-    Place(Head,FTransform(FRotator(Sleeping?26.f:Roam?-25.f:Eating?10+Munch*7:5,
+    Place(Head,FTransform(FRotator(Sleeping?-26.f:Roam?25.f:Eating?-9-Munch*7:-5,
         Eating?0:22*FMath::Sin(Age*1.4f+I),0),FVector(3,0,30))*Trunk);
     FTransform Hand;
     for(int32 J=0;J<2;++J)
     {
         const float Sign=J?1.f:-1.f;
         const float Swing=Roam?37*Walk*Sign:0;
-        const FTransform Arm=FTransform(FRotator(Eating?-95+Munch*11:Sleeping?-69:Roam?-32+Swing:-18,
-            Eating?-Sign*16:0,0),FVector(2,Sign*12,24))*Trunk;
+        const float Reach=Eating?(J?125+Munch*8:48-Munch*5):Sleeping?69:Roam?32+Swing:18;
+        const FTransform Arm=FTransform(FRotator(Reach,Eating&&J?-23:0,0),FVector(2,Sign*12,24))*Trunk;
         Place(LeftArm+J,Arm);
-        Place(LeftLeg+J,FTransform(FRotator(Roam?-19-Swing:-68,0,0),FVector(-2,Sign*8.5,2))*Trunk);
-        if(J) Hand=FTransform(FRotator(0,0,16),FVector(4,0,-22))*Arm;
+        Place(LeftLeg+J,FTransform(FRotator(Roam?19-Swing:RestLeg,0,0),FVector(-2,Sign*8.5,2))*Trunk);
+        if(J)
+        {
+            const FVector Palm=Arm.TransformPosition(FVector(0,0,-23));
+            // The curved fruit stands upright beside the muzzle as the wrist
+            // rises; inheriting the straight arm pitch drives it into the chest.
+            Hand=FTransform(FRotator(-18,M.Heading,12),Palm+FVector(0,0,4),Root.GetScale3D());
+        }
     }
     const FTransform TailBase=FTransform(FRotator(0,0,13*FMath::Sin(Age*2.6f+I)),FVector(-10,0,4))*Trunk;
     Place(Tail,TailBase);

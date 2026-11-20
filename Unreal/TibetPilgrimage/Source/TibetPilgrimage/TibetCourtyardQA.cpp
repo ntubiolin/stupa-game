@@ -109,7 +109,22 @@ void UTibetQASubsystem::Courtyard(APlayerController& PC,ATibetGameMode& Mode)
             View(At+FVector(-112,132,65),At+FVector(0,0,49));
             ++Frames; CourtyardSince=Now; break;
         }
-        if(Frames==1) {Shot(TEXT("feeding-banana"),false); ++Frames; break;}
+        if(Frames==1)
+        {
+            FVector Banana;
+            float Toe;
+            if(!Monkeys->HoldingFruit(2,Banana,Toe))
+            {
+                if(!Monkeys->IsEating(2)) Finish(false,TEXT("Macaque did not hold the fruit"));
+                break;
+            }
+            const FVector Relative=Banana-Monkeys->Location(2);
+            const FVector Giver=(PC.GetPawn()->GetActorLocation()-Monkeys->Location(2)).GetSafeNormal2D();
+            if(FVector::DotProduct(Relative,Giver)<15 || Relative.Z<49 || FMath::Abs(Toe)>3)
+            {Finish(false,TEXT("The offering must be in front of a grounded, seated macaque")); return;}
+            Record(FString::Printf(TEXT("held-fruit\t%s\ttoeCm=%.1f"),*Relative.ToCompactString(),Toe));
+            Shot(TEXT("feeding-banana"),false); ++Frames; break;
+        }
         if(PC.GetViewTarget()!=PC.GetPawn()) PC.SetViewTarget(PC.GetPawn());
         if(Move(FVector(1430,-360,0),155)) {Stroke(EKeys::E,true); Next();} break;
     case 9:
