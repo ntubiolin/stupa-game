@@ -44,7 +44,7 @@ def temporary_root(executable):
     root = Path.home() / "Library/Containers" / bundle_id / "Data/tmp"
     if not root.is_dir():
         slot_argument = "-TibetSaveSlot=QA-bootstrap-" + uuid4().hex
-        args = ["open", "-n", "-W", "-a", str(bundle), "--args", "-unattended", "-RenderOffscreen",
+        args = ["open", "-n", "-W", "-g", "-a", str(bundle), "--args", "-unattended", "-RenderOffscreen",
                 "-nosound", "-ExecCmds=quit", slot_argument]
         try:
             subprocess.run(args, cwd=executable.parent, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -80,21 +80,29 @@ def package_record(executable, output):
     path.write_text(json.dumps(record, indent=2))
 
 
-def capture(exe, stage, dest, name, mode, level, options, slot):
+def capture(exe, stage, dest, name, mode, level, options, slot, size=(1440, 900)):
     output = stage / name
     output.mkdir()
     target = dest / name
     target.mkdir()
     # Arrival exercises the default launch map and leaves the pawn camera untouched.
     map_args = [] if mode == "Arrival" else ["/Game/Maps/Tibet/" + level]
-    args = [exe, *map_args, "-windowed", "-RenderOffscreen", "-ForceRes", "-ResX=1440",
-            "-ResY=900", "-unattended", "-nosplash", "-NoVSync", "-SaveToUserDir", f"-UserDir={stage / 'user'}",
+    # Touch emulation uses Slate's native-window hit test. A packaged
+    # Mac offscreen window is invisible to the desktop window search.
+    interactive_touch = mode == "Journal" and "-TibetTouch" in options
+    rendering = [] if interactive_touch else ["-RenderOffscreen"]
+    exec_commands = "r.ScreenPercentage 100,r.DynamicRes.OperationMode 0"
+    if interactive_touch:
+        exec_commands += ",SlateDebugger.Event.Start"
+    args = [exe, *map_args, "-windowed", *rendering, "-ForceRes", f"-ResX={size[0]}",
+            f"-ResY={size[1]}", "-unattended", "-nosplash", "-NoVSync", "-SaveToUserDir", f"-UserDir={stage / 'user'}",
             f"-TibetSaveSlot={slot}", f"-TibetQAStart={level}", f"-TibetQAOutput={output}", f"-TibetQA={mode}",
-            "-ExecCmds=r.ScreenPercentage 100,r.DynamicRes.OperationMode 0", f"-abslog={output / 'game.log'}", *options]
+            f"-ExecCmds={exec_commands}", f"-abslog={output / 'game.log'}", *options]
     print(name, flush=True)
     try:
         # Use LaunchServices, as Finder does when the player opens the app bundle.
-        cmd = ["open", "-n", "-W", "-a", str(exe.parents[2]), "--args", *args[1:]]
+        foreground = [] if interactive_touch else ["-g"]
+        cmd = ["open", "-n", "-W", *foreground, "-a", str(exe.parents[2]), "--args", *args[1:]]
         with (target / "launch.log").open("w") as log:
             subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT, check=True,
                            timeout=1800 if mode == "Campaign" else 300)
@@ -113,9 +121,9 @@ def vector(xyz):
     return ",".join(f"{axis}={value}" for axis, value in zip("XYZ", xyz))
 
 
-def shot_data(p):
+def shot_data(p, size=(1440, 900)):
     data = p.read_bytes()
-    if data[:8] != b"\x89PNG\r\n\x1a\n" or struct.unpack(">II", data[16:24]) != (1440, 900):
+    if data[:8] != b"\x89PNG\r\n\x1a\n" or struct.unpack(">II", data[16:24]) != size:
         raise ValueError(f"Unexpected screenshot dimensions for {p}")
     return hashlib.sha256(data).hexdigest()
 
@@ -203,7 +211,7 @@ def compare(web, mac, output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["photos", "arrival", "play", "skills", "learned", "compare"])
+    parser.add_argument("action", choices=["photos", "arrival", "play", "skills", "learned", "journal", "compare"])
     parser.add_argument("--exe", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--web", type=Path)
@@ -231,6 +239,17 @@ def main():
             shot_data(frame)
             if landmark_detail(frame) < MIN_LANDMARK_DETAIL:
                 raise ValueError("Arrival frame lacks the pilgrim and plaza")
+        elif args.action == "journal":
+            for name, options, size in [
+                ("desktop-zh", [], (1440, 900)),
+                ("desktop-en", ["-TibetQAEnglish"], (1440, 900)),
+                ("touch-en", ["-TibetTouch", "-TibetQAEnglish"], (884, 420)),
+            ]:
+                capture(exe, stage, output, name, "Journal", "stupa", options, slot+"-"+name, size)
+                hashes = {shot_data(output/name/(view+".png"), size)
+                          for view in ("hud", "map", "skills", "controls")}
+                if len(hashes) != 4:
+                    raise ValueError(f"Journal panels did not change in {name}")
         elif args.action == "photos":
             for view in VIEWS:
                 if args.only and view["id"] != args.only:

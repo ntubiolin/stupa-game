@@ -19,10 +19,14 @@ python3 "$qa/test_package.py" photos --exe "$app" --output "$result/mac"
 python3 "$qa/test_package.py" arrival --exe "$app" --output "$result/arrival"
 python3 "$qa/test_package.py" play --exe "$app" --output "$result/play"
 python3 "$qa/test_package.py" skills --exe "$app" --output "$result/skills"
+python3 "$qa/test_package.py" learned --exe "$app" --output "$result/learned"
+python3 "$qa/test_package.py" journal --exe "$app" --output "$result/journal"
 python3 "$qa/test_package.py" compare --web "$result/web" --mac "$result/mac" --output "$result/comparison"
 ```
 
 arrival 使用新存檔和預設開場鏡頭，確認塔座、塔尖與洛桑都在畫面內，並保存玩家進場原圖。接著透過遊戲輸入實測游標移動、右鍵拖曳，以及放開右鍵後邊走邊移動游標時的鏡頭朝向。
+
+learned 從伏藏第三層走回青浦與博達哈，重開後實際施放上師心咒，另用新存檔核對鎖定狀態及法力。
 
 play 在第一盞酥油燈點亮後重啟遊戲，核對存檔進度與燈芯上的可見火焰，再繼續走完主線及塔林支線。
 
@@ -31,6 +35,8 @@ play 在第一盞酥油燈點亮後重啟遊戲，核對存檔進度與燈芯上
 在 comparison/index.html 檢視每關原圖與畫質差異。固定 55° 垂直視角，同地標分別取景；機位記錄於 views.json，PNG 的雜湊與原始參數記錄於 comparison/report.json。UE 每張攝影取樣 60 個渲染幀的中位數與第 95 百分位幀間隔，僅描述當下靜態鏡位。
 
 macOS 驗證採用與 Finder 相同的 LaunchServices 開啟 app，逐次核對遊戲寫出的完成事件及畫面。play 會啟動打包版，用獨立存檔進行鍵盤遊玩，確認第一個目標在重新啟動後仍能讀取，再依遊戲提示完成五章主線，從伏藏回到青樸及博達哈。另以新存檔從南門進入塔林，完成裝藏後返回大塔。遊戲中每次切換目標留下 HUD 截圖，events.tsv 記錄角色位置、目標及轉場。skills 會在七份獨立存檔中走到第三層守藏者，逐一按鍵施法並拍攝。每份 events.tsv 記錄實際施法前後的敵方血量、扣血值、延遲血條及命中特效數。額外一次從射程外施放六字真言，驗證血量維持及零命中提示。上師心咒場次接著以護法收尾，驗證剩下 3 點生命時只顯示 3 點傷害。iPhone 實機的觸控、效能與簽名安裝須分別在配對裝置執行。
+
+journal 分別在繁中、英文桌面及 884 × 420 英文觸控預覽擷取技能列、地圖、技能與操作設定。測試會透過遊戲輸入開關選單，確認暫停期間的移動、滑鼠轉向與施法不會影響遊戲，並於返回後實際移動角色。
 
 ## iPhone 17 Pro Max 裝置封裝
 
@@ -50,3 +56,5 @@ python3 Tools/tibet.py package --platform IOS --archive "$PWD/Builds/Signed"
 ```
 
 UE 5.8 的通常輸出為 Builds/Signed/IOS/TibetPilgrimage.app。將連接裝置的啟動、橫向觸控、讀檔及關卡轉場結果另行記錄。
+
+[西藏 UE 模組移植驗收](Module-audit.md) 逐項對照網頁客戶端、伺服器與原生遊戲。執行 `python3 -m unittest discover -s QA` 可核對每個原始模組都有且只有一個盤點項目。

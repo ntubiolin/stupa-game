@@ -3,6 +3,8 @@
 #include "TibetCameraMotion.h"
 #include "TibetCameraSettings.h"
 #include "TibetGameMode.h"
+#include "TibetHUD.h"
+#include "TibetPlayOverlay.h"
 #include "Camera/CameraComponent.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Components/CapsuleComponent.h"
@@ -12,7 +14,6 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerInput.h"
-#include "Kismet/KismetSystemLibrary.h"
 
 ATibetCharacter::ATibetCharacter()
 {
@@ -108,7 +109,7 @@ void ATibetCharacter::Tick(float Dt)
 {
     Super::Tick(Dt);
     auto* PC = Cast<APlayerController>(Controller);
-    if (!PC) return;
+    if (!PC || JournalOpen()) return;
     UpdateMouseLook(*PC);
     const FRotator Yaw(0,PC->GetControlRotation().Yaw,0);
     const FRotationMatrix Axes(Yaw);
@@ -158,8 +159,10 @@ void ATibetCharacter::SetupPlayerInputComponent(UInputComponent* Input)
     Super::SetupPlayerInputComponent(Input);
     Input->BindKey(EKeys::E,IE_Pressed,this,&ATibetCharacter::DoInteract);
     Input->BindKey(EKeys::L,IE_Pressed,this,&ATibetCharacter::Language);
-    Input->BindKey(EKeys::Escape,IE_Pressed,this,&ATibetCharacter::Quit);
-    Input->BindKey(EKeys::LeftShift,IE_Pressed,this,&ACharacter::Jump);
+    Input->BindKey(EKeys::M,IE_Pressed,this,&ATibetCharacter::OpenMap).bExecuteWhenPaused=true;
+    Input->BindKey(EKeys::K,IE_Pressed,this,&ATibetCharacter::OpenSkills).bExecuteWhenPaused=true;
+    Input->BindKey(EKeys::Escape,IE_Pressed,this,&ATibetCharacter::ToggleMenu).bExecuteWhenPaused=true;
+    Input->BindKey(EKeys::LeftShift,IE_Pressed,this,&ATibetCharacter::TryJump);
     Input->BindTouch(IE_Pressed,this,&ATibetCharacter::TouchDown);
     Input->BindTouch(IE_Released,this,&ATibetCharacter::TouchUp);
     const FKey Keys[] = {EKeys::SpaceBar,EKeys::R,EKeys::One,EKeys::Two,EKeys::Three,EKeys::Four,EKeys::T};
@@ -173,7 +176,7 @@ void ATibetCharacter::SetupPlayerInputComponent(UInputComponent* Input)
 void ATibetCharacter::TouchDown(ETouchIndex::Type Index,FVector Pos)
 {
     auto* PC=Cast<APlayerController>(Controller);
-    if (!PC) return;
+    if (!PC || JournalOpen()) return;
     int32 W,H; PC->GetViewportSize(W,H);
     if (Pos.X < W*.5 && MoveFinger < 0) { MoveFinger=Index; Thumb={Pos.X,Pos.Y}; }
     else if (Pos.X >= W*.5 && LookFinger < 0) { LookFinger=Index; Drag={Pos.X,Pos.Y}; }
@@ -183,7 +186,54 @@ void ATibetCharacter::TouchUp(ETouchIndex::Type Index,FVector)
     if(MoveFinger==Index) MoveFinger=-1;
     if(LookFinger==Index) LookFinger=-1;
 }
-void ATibetCharacter::DoInteract(){if(auto* M=GetWorld()->GetAuthGameMode<ATibetGameMode>()) M->Interact();}
-void ATibetCharacter::DoCast(int32 Slot){if(auto* M=GetWorld()->GetAuthGameMode<ATibetGameMode>()) M->CastSkill(Slot);}
-void ATibetCharacter::Language(){if(auto* M=GetWorld()->GetAuthGameMode<ATibetGameMode>()) M->ChangeLanguage();}
-void ATibetCharacter::Quit(){UKismetSystemLibrary::QuitGame(this,Cast<APlayerController>(Controller),EQuitPreference::Quit,false);}
+bool ATibetCharacter::JournalOpen() const
+{
+    const auto* PC=Cast<APlayerController>(Controller);
+    const auto* HUD=PC ? Cast<ATibetHUD>(PC->GetHUD()) : nullptr;
+    return HUD && HUD->IsJournalOpen();
+}
+void ATibetCharacter::CancelGameplayInput()
+{
+    MoveFinger=LookFinger=-1;
+    bAwaitingDragMotion=true;
+    StopJumping();
+    ConsumeMovementInputVector();
+    GetCharacterMovement()->StopMovementImmediately();
+    auto* PC=Cast<APlayerController>(Controller);
+    if (PC && PC->PlayerInput) PC->PlayerInput->FlushPressedKeys();
+}
+void ATibetCharacter::OpenMap()
+{
+    if (auto* HUD=Cast<ATibetHUD>(GetController<APlayerController>()->GetHUD())) HUD->ToggleJournal(ETibetPage::Map);
+}
+void ATibetCharacter::OpenSkills()
+{
+    if (auto* HUD=Cast<ATibetHUD>(GetController<APlayerController>()->GetHUD())) HUD->ToggleJournal(ETibetPage::Skills);
+}
+void ATibetCharacter::ToggleMenu()
+{
+    if (auto* HUD=Cast<ATibetHUD>(GetController<APlayerController>()->GetHUD()))
+    {
+        if (HUD->IsJournalOpen()) HUD->CloseJournal();
+        else HUD->ToggleJournal(ETibetPage::Controls);
+    }
+}
+void ATibetCharacter::TryJump()
+{
+    if (!JournalOpen()) Jump();
+}
+void ATibetCharacter::DoInteract()
+{
+    auto* Mode=GetWorld()->GetAuthGameMode<ATibetGameMode>();
+    if (Mode && !JournalOpen()) Mode->Interact();
+}
+void ATibetCharacter::DoCast(int32 Slot)
+{
+    auto* Mode=GetWorld()->GetAuthGameMode<ATibetGameMode>();
+    if (Mode && !JournalOpen()) Mode->CastSkill(Slot);
+}
+void ATibetCharacter::Language()
+{
+    auto* Mode=GetWorld()->GetAuthGameMode<ATibetGameMode>();
+    if (Mode && !JournalOpen()) Mode->ChangeLanguage();
+}

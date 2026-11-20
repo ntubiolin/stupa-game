@@ -201,8 +201,19 @@ FString ATibetGameMode::GetObjectiveText() const
 }
 FString ATibetGameMode::AreaName() const
 {
-    const int32 i=Order.IndexOfByKey(Map);
-    return Order.IsValidIndex(i) ? Local(EnglishNames[i],ChineseNames[i]) : FString();
+    return AreaName(CurrentAreaIndex());
+}
+int32 ATibetGameMode::CurrentAreaIndex() const
+{
+    return Order.IndexOfByKey(Map);
+}
+FString ATibetGameMode::AreaName(int32 Index) const
+{
+    return Order.IsValidIndex(Index) ? Local(EnglishNames[Index],ChineseNames[Index]) : FString();
+}
+bool ATibetGameMode::HasVisitedArea(int32 Index) const
+{
+    return Save && Order.IsValidIndex(Index) && Save->Steps.Contains(Order[Index]);
 }
 ATibetGameMode::EInteraction ATibetGameMode::InteractionAt(const FVector& PlayerLocation) const
 {
@@ -242,8 +253,7 @@ FString ATibetGameMode::Status(bool bTouchControls) const
     const auto* P=UGameplayStatics::GetPlayerPawn(this,0);
     const int32 Meters=P ? FMath::RoundToInt(FVector::Dist2D(P->GetActorLocation(),GetObjectiveLocation())/100.) : 0;
     const auto K=Objective(Route,GetStep()).Kind;
-    FString S=FString::Printf(TEXT("%s %d   %s %d   ·   %d m"),*Local(TEXT("Life"),TEXT("體力")),FMath::CeilToInt(Health),
-       *Local(TEXT("Mantra"),TEXT("法力")),FMath::FloorToInt(Mana),Meters);
+    FString S=FString::Printf(TEXT("%s %d   ·   %d m"),*Local(TEXT("Life"),TEXT("體力")),FMath::CeilToInt(Health),Meters);
     if (K==EObjective::Boss || K==EObjective::Combat) S+=FString::Printf(TEXT("   ·   %s %d"),*Local(TEXT("Spirit"),TEXT("靈障")),EnemyHealth);
     if (P)
     {
