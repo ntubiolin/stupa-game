@@ -12,12 +12,20 @@ from test_package import capture, package_record, shot_data, temporary_root
 
 PROJECT = Path(__file__).resolve().parents[1]
 SPECIES = {"Preta", "TsenRider", "SnowMigoi"}
+MODELS = {name.casefold(): name for name in SPECIES | {"SnowKing"}}
+
+
+def model_name(raw):
+    # Cooked FNames are case-insensitive. A pre-existing actor tag can supply
+    # their display spelling, even when the mesh came from Preta.fbx.
+    return MODELS.get(raw.casefold(), raw)
 
 
 def validate_hits(log):
     hits = re.findall(r"TIBET_WILD_HIT model=(\w+) before=(\d+) after=(\d+) loss=(\d+)", log)
     defeated = []
     for model, before, after, loss in hits:
+        model = model_name(model)
         before, after, loss = map(int, (before, after, loss))
         if model not in SPECIES or loss <= 0 or before-after != loss or after < 0:
             raise ValueError(f"Inconsistent hit on {model}: {before}, {after}, {loss}")
@@ -51,6 +59,8 @@ class WildernessTests(unittest.TestCase):
 
     def test_damage_ledger(self):
         self.assertEqual(validate_hits("TIBET_WILD_HIT model=TsenRider before=1 after=0 loss=1"),["TsenRider"])
+        self.assertEqual(validate_hits("TIBET_WILD_HIT model=preta before=1 after=0 loss=1"), ["Preta"])
+        with self.assertRaises(ValueError): validate_hits("TIBET_WILD_HIT model=Yak before=1 after=0 loss=1")
         with self.assertRaises(ValueError): validate_hits("TIBET_WILD_HIT model=Preta before=3 after=3 loss=1")
 
 
@@ -67,14 +77,15 @@ def play(exe, output):
         rows = capture(exe,stage,output,"resume","Play","wild",["-TibetQAEncounters"],slot)
         if ["pack","1","3","3"] not in rows or rows[-1] != ["pass","transition","pharping"]:
             raise ValueError("Failed to rebuild the partial encounter from the saved quest")
-        if {row[1] for row in rows if row[0]=="opponent"} != SPECIES|{"SnowKing"}:
+        captures = {model_name(row[1]): row[1] for row in rows if row[0]=="opponent"}
+        if set(captures) != SPECIES|{"SnowKing"}:
             raise ValueError("Missing playable monster or boss")
         defeated=[]
         for scenario in ("first","resume"):
             defeated += validate_hits((output/scenario/"game.log").read_text())
         if len(defeated)!=10 or set(defeated)!=SPECIES: raise ValueError(f"Unexpected defeats: {defeated}")
-        for model in SPECIES|{"SnowKing"}: shot_data(output/"resume"/(model+".png"))
-        print("Liberated",defeated,"Boss rim samples",visible_rim(output/"resume/SnowKing.png",rows))
+        for spelling in captures.values(): shot_data(output/"resume"/(spelling+".png"))
+        print("Liberated",defeated,"Boss rim samples",visible_rim(output/"resume"/(captures["SnowKing"]+".png"),rows))
 
 
 if __name__ == "__main__":
