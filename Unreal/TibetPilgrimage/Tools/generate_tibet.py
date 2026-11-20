@@ -146,6 +146,8 @@ def populate(levels, actors, stage, source, surfaces):
                     "collision_trace_flag", unreal.CollisionTraceFlag.CTF_USE_COMPLEX_AS_SIMPLE
                 )
                 part.set_collision_profile_name("BlockAll")
+            if stage == "stupa" and mesh.get_name() == "Landmarks":
+                a.tags = [*a.tags, unreal.Name("BoudhaShopfronts")]
             for i, slot in enumerate(mesh.get_editor_property("static_materials")):
                 name = str(slot.get_editor_property("imported_material_slot_name")).lower()
                 mat = mesh.get_material(i)

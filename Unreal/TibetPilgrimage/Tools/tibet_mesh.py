@@ -46,6 +46,7 @@ SURFACES = {
     "gold": ("c89c51", 0.37, 0.68, 0, "metal"),
     "bronze": ("9b7541", 0.49, 0.58, 0, "metal"),
     "glass": ("29464b", 0.28, 0.12, 0, "metal"),
+    "litglass": ("29464b", 0.28, 0.12, 0.01, "metal"),
     "blue": ("315884", 0.84, 0, 0, "cloth"),
     "yellow": ("dcb856", 0.85, 0, 0, "cloth"),
     "green": ("52846c", 0.85, 0, 0, "cloth"),
@@ -157,6 +158,7 @@ def linear(hexcolor):
 
 class Scene:
     def __init__(self):
+        self.emission_maps = {}  # material -> (PNG, glTF-position-to-UV function)
         self.group = "Landmarks"
         self.meshes = defaultdict(lambda: defaultdict(list))
 
@@ -304,6 +306,12 @@ class Scene:
             )
             if emit:
                 m["emissiveFactor"] = [v * emit for v in linear(color)]
+            if name in self.emission_maps:
+                atlas, _ = self.emission_maps[name]
+                images.append(dict(name=name + "WindowSpill", bufferView=view(atlas), mimeType="image/png"))
+                m["emissiveTexture"] = dict(index=len(textures), texCoord=1)
+                m["emissiveFactor"] = [0.01, 0.005, 0.002]
+                textures.append(dict(source=len(images) - 1))
             mat_ids[name] = len(materials)
             materials.append(m)
             return mat_ids[name]
@@ -322,6 +330,9 @@ class Scene:
                     "NORMAL": accessor(normals, "3f", "VEC3", 5126, 34962),
                     "TEXCOORD_0": accessor(uvs, "2f", "VEC2", 5126, 34962),
                 }
+                if mat in self.emission_maps:
+                    _, project = self.emission_maps[mat]
+                    attrs["TEXCOORD_1"] = accessor([project(p) for p in positions], "2f", "VEC2", 5126, 34962)
                 if has_vertex_colors:
                     attrs["COLOR_0"] = accessor([(c, c, c) for c in colors], "3f", "VEC3", 5126, 34962)
                 idx = accessor([(indices[v],) for v in stream], "I", "SCALAR", 5125, 34963)

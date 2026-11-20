@@ -5,7 +5,7 @@ import random
 import struct
 from pathlib import Path
 
-from boudha_plaza import south_approach
+from boudha_plaza import south_approach, window_spill_map
 from tibet_passages import build_passages
 from tibet_mesh import Scene, noise, normal
 
@@ -384,6 +384,7 @@ def boudha_townhouse(s, x, y, angle, index, width):
         box("dark", tx, front, 0.28, bay - 0.36, 0.14, 1.83)
         box("wood", tx, front - 0.08, 0.30, bay - 0.56, 0.10, 1.68)
         box("bronze", tx, front - 0.14, 0.30, 0.055, 0.05, 1.64)
+    lit_windows = []
     for level in range(1, storeys):
         z = level * floor_height
         box("wood", 0, front, z, width, 0.25, 0.13)
@@ -393,7 +394,11 @@ def boudha_townhouse(s, x, y, angle, index, width):
             offset = -0.22 if j == 0 else -0.08
             fy = front + offset
             box("wood", tx, fy, z + 0.43, w, 0.36, 1.47)
-            box("glass", tx, fy - 0.19, z + 0.57, w - 0.24, 0.055, 1.16)
+            occupied = (index + j + level) % 4 < 2
+            box("litglass" if occupied else "glass", tx, fy - 0.19, z + 0.57, w - 0.24, 0.055, 1.16)
+            if occupied and level == 1:
+                lit_windows.append((x + tx * ca - (fy - 0.19) * sa,
+                                    y + tx * sa + (fy - 0.19) * ca, sa, -ca, z + 1.15))
             for post in (-0.21, 0.21):
                 box("wood", tx + w * post, fy - 0.24, z + 0.55, 0.065, 0.07, 1.20)
             box("wood", tx, fy - 0.24, z + 1.36, w - 0.14, 0.075, 0.07)
@@ -410,6 +415,8 @@ def boudha_townhouse(s, x, y, angle, index, width):
         )
         for tx in (-0.45 * width, 0.45 * width):
             box("wood", tx, front - 0.51, 0.30, 0.12, 0.12, 1.83)
+
+    return lit_windows
 
 
 def boudha(s):
@@ -534,6 +541,7 @@ def boudha(s):
         s.rings("gold", *tip, [(-0.105, 0.058), (0, 0.028)], 8)
     boudha_flags(s, x, y, spire, z)
 
+    windows = []
     for i in range(17):
         a = i * TAU / 17
         u, v = x + 30 * math.cos(a), y + 30 * math.sin(a)
@@ -541,7 +549,8 @@ def boudha(s):
             continue
         # Keep the flanking parcels clear of the original southern entry.
         width = 6.2 if v < y and abs(u) < 20 else 9.4 + 0.40 * (i % 2)
-        boudha_townhouse(s, u, v, a, i, width)
+        windows.extend(boudha_townhouse(s, u, v, a, i, width))
+    s.emission_maps["paving"] = window_spill_map(windows)
 
 
 def tree(s, x, y, z, h, seed, conifer):
