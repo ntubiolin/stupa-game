@@ -5,7 +5,7 @@
 
 class ATibetGameMode;
 class ATibetHUD;
-enum class ETibetPage : uint8 { Play, Map, Skills, Controls, Pack };
+enum class ETibetPage : uint8 { Play, Map, Skills, Controls, Pack, Dedication };
 
 class STibetPlayOverlay : public SCompoundWidget
 {
@@ -24,6 +24,7 @@ public:
 private:
     TWeakObjectPtr<ATibetGameMode> Mode;
     TWeakObjectPtr<ATibetHUD> HUD;
+    TWeakPtr<SWidget> DedicationFields;
     TSharedPtr<const FCompositeFont> Typeface;
     ETibetPage Page = ETibetPage::Play;
     bool bTouch = false;
@@ -35,6 +36,7 @@ private:
     TSharedRef<SWidget> Button(TAttribute<FText> Name, FSimpleDelegate Action, bool Highlight = false, FName Tag = NAME_None) const;
     TSharedRef<SWidget> CourtyardControls();
     TSharedRef<SWidget> FeedingMenu();
+    TSharedRef<SWidget> Dedication();
     TSharedRef<SWidget> Play();
     TSharedRef<SWidget> Journal();
     TSharedRef<SWidget> SkillSlot(int32 Index);

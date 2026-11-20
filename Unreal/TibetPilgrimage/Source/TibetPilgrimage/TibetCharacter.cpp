@@ -291,7 +291,7 @@ void ATibetCharacter::FeedMonkey()
     auto* PC=GetController<APlayerController>();
     auto* HUD=PC?Cast<ATibetHUD>(PC->GetHUD()):nullptr;
     auto* Mode=GetWorld()->GetAuthGameMode<ATibetGameMode>();
-    if(Mode && HUD && !HUD->IsJournalOpen()) Mode->BeginFeeding();
+    if(Mode && HUD && !HUD->IsJournalOpen()) Mode->QuickPractice();
 }
 void ATibetCharacter::DoInteract()
 {

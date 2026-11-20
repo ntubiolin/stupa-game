@@ -151,6 +151,9 @@ FReply STibetPlayOverlay::OnKeyDown(const FGeometry&,const FKeyEvent& Event)
         }
         return FReply::Handled();
     }
+    // Letter shortcuts must pass through while the player composes a name or prayer.
+    if (Page==ETibetPage::Dedication && Event.GetKey()!=EKeys::Escape)
+        if (const auto Fields=DedicationFields.Pin(); Fields && Fields->HasFocusedDescendants()) return FReply::Unhandled();
     if (!Event.IsRepeat())
     {
         const FKey Key=Event.GetKey();
@@ -410,6 +413,7 @@ TSharedRef<SWidget> STibetPlayOverlay::Journal()
     Tab(ETibetPage::Map,Local(TEXT("World map"),TEXT("世界地圖")));
     Tab(ETibetPage::Skills,Local(TEXT("Ritual skills"),TEXT("法術技能")));
     Tab(ETibetPage::Pack,Local(TEXT("Pack"),TEXT("行囊")));
+    Tab(ETibetPage::Dedication,Local(TEXT("Dedication"),TEXT("回向")));
     Tab(ETibetPage::Controls,Local(TEXT("Controls"),TEXT("操作設定")));
     Panel->AddSlot().AutoHeight().Padding(0,8)[Tabs];
     auto Body=SNew(SVerticalBox);
@@ -422,6 +426,7 @@ TSharedRef<SWidget> STibetPlayOverlay::Journal()
         Body->AddSlot().AutoHeight()[SNew(STibetAtlas).Mode(Mode.Get()).Font(Font(14)).Compact(CompactAtlas)
             .Width(FMath::Min(Width()-68.f,1090.f)).Height(FMath::Clamp(Height()-(CompactAtlas?218.f:195.f),105.f,422.f))];
     }
+    else if (Page==ETibetPage::Dedication) Body->AddSlot().AutoHeight()[Dedication()];
     else Body->AddSlot().AutoHeight()[Page==ETibetPage::Skills?Skills():Page==ETibetPage::Pack?Pack():Controls()];
     Panel->AddSlot().FillHeight(1)[SNew(SScrollBox)+SScrollBox::Slot()[Body]];
     return SNew(SBorder).BorderImage(Tile()).BorderBackgroundColor(FLinearColor(0.008,0.012,0.012,.62))

@@ -1,6 +1,7 @@
 #include "TibetGameMode.h"
 #include "TibetCharacter.h"
 #include "TibetHUD.h"
+#include "TibetPlayOverlay.h"
 #include "TibetVoice.h"
 #include "Async/Async.h"
 #include "Misc/App.h"
@@ -80,8 +81,12 @@ const FResidentPlacement CastPlacements[] = {
 };
 const FVector MessengerDestination(1370,-65,0);
 const FVector GroveGate(-1860,-480,0);
+// The three quest bowls have individual wicks. The bronze table on the
+// southern approach already has lit lamps in the plaza mesh.
+constexpr int32 SouthLampTable = 3;
 FVector StupaLampLocation(int32 Index)
 {
+    if (Index==SouthLampTable) return FVector(-1080,615,0);
     return FVector(1430+70*Index,-360+320*Index,0);
 }
 const FString Cylinder=TEXT("/Engine/BasicShapes/Cylinder.Cylinder");
@@ -393,14 +398,16 @@ FString ATibetGameMode::Status(bool bTouchControls) const
     if (P)
     {
         const EInteraction Action=InteractionAt(P->GetActorLocation());
-        if (Action==EInteraction::Use)
+        if (AtButterLamp() && (Action==EInteraction::Use || Action==EInteraction::None))
+        {
+            S+=bTouchControls ? Local(TEXT("\nOffer a lamp or dedicate a prayer"),TEXT("\n可供燈或回向")) :
+                Local(TEXT("\nE  Light & dedicate    F  Quick offering"),TEXT("\nE 點燈回向　F 快速供燈"));
+        }
+        else if (Action==EInteraction::Use)
         {
             S+=bTouchControls ? Local(TEXT("\nTap Act · "),TEXT("\n點選「互動」・")) : Local(TEXT("\nTap E · "),TEXT("\n輕按 E・"));
             S+=ActionLabel(Action);
         }
-        else if(NearestButterLamp(P->GetActorLocation())!=INDEX_NONE)
-            S+=bTouchControls ? Local(TEXT("\nTap Act · Offer butter"),TEXT("\n點選「互動」・供酥油")) :
-                              Local(TEXT("\nE · Offer butter"),TEXT("\nE・供酥油"));
     }
     if (GetWorld()->GetTimeSeconds()<NoticeUntil) S+=TEXT("\n")+Notice;
     if (LastPackReward!=ETibetItem::Count && GetWorld()->GetTimeSeconds()<PackRewardUntil)
@@ -410,10 +417,11 @@ FString ATibetGameMode::Status(bool bTouchControls) const
     }
     return S;
 }
-void ATibetGameMode::Store()
+bool ATibetGameMode::Store()
 {
-    if (!UGameplayStatics::SaveGameToSlot(Save,SlotName,0))
-        UE_LOG(LogTemp,Error,TEXT("Tibet: checkpoint write failed in %s"),*Map);
+    if (UGameplayStatics::SaveGameToSlot(Save,SlotName,0)) return true;
+    UE_LOG(LogTemp,Error,TEXT("Tibet: checkpoint write failed in %s"),*Map);
+    return false;
 }
 void ATibetGameMode::RestoreStupaFlames()
 {
@@ -441,7 +449,7 @@ int32 ATibetGameMode::NearestButterLamp(const FVector& Where) const
     int32 Result=INDEX_NONE;
     double Best=220;
     if (Map==TEXT("stupa"))
-        for(int32 I=0;I<3;++I)
+        for(int32 I=0;I<=SouthLampTable;++I)
         {
             const double D=FVector::Dist2D(Where,StupaLampLocation(I));
             if(D<Best) { Best=D; Result=I; }
@@ -564,25 +572,73 @@ void ATibetGameMode::MoveToNextMap()
     bTravel=true;
     UGameplayStatics::OpenLevel(this,FName(*FString::Printf(TEXT("/Game/Maps/Tibet/%s"),*Dest)));
 }
+bool ATibetGameMode::AtButterLamp() const
+{
+    const auto* Pawn=UGameplayStatics::GetPlayerPawn(this,0);
+    return Pawn && NearestButterLamp(Pawn->GetActorLocation())!=INDEX_NONE;
+}
+
+void ATibetGameMode::OfferNearbyLamp()
+{
+    const auto* Pawn=UGameplayStatics::GetPlayerPawn(this,0);
+    if (!Pawn) return;
+    const int32 Lamp=NearestButterLamp(Pawn->GetActorLocation());
+    if (Lamp!=INDEX_NONE) OfferButter(Lamp,true);
+}
+
+void ATibetGameMode::QuickPractice()
+{
+    if (!Save || bTravel) return;
+    if (FeedingPanel()) { CloseFeeding(); return; }
+    const auto* Pawn=UGameplayStatics::GetPlayerPawn(this,0);
+    if (!Pawn) return;
+    const int32 Lamp=NearestButterLamp(Pawn->GetActorLocation());
+    if (Lamp!=INDEX_NONE) OfferButter(Lamp,false);
+    else BeginFeeding();
+}
+
+void ATibetGameMode::OfferButter(int32 Lamp,bool bOpenDedication)
+{
+    if (!Save || bTravel) return;
+    const bool bTable=Lamp==SouthLampTable;
+    const bool bLit=bTable || (Save->ButterLampMask & (1u<<Lamp));
+    // A held or repeated key must not refill a lamp every frame.
+    const float Now=GetWorld()->GetTimeSeconds();
+    if (Now-LastButterOffer>=.6f)
+    {
+        LastButterOffer=Now;
+        if (!bTable) Save->ButterLampMask |= 1u<<Lamp;
+        RestoreStupaFlames();
+        Mana=FMath::Min(MaxMana(),Mana+15.f);
+        SetNotice(bLit ? Local(TEXT("Fresh butter feeds the flame."),TEXT("添入酥油，燈火明亮。")) :
+            Local(TEXT("The butter lamp is lit."),TEXT("酥油燈亮起。")));
+        if (Route==TEXT("stupa") && Objective(Route,GetStep()).Kind==EObjective::Interact && Lamp==GetStepProgress())
+            Advance();
+        else Store();
+    }
+    if (bOpenDedication)
+    {
+        auto* PC=GetWorld()->GetFirstPlayerController();
+        if (auto* HUD=PC?PC->GetHUD<ATibetHUD>():nullptr) HUD->ToggleJournal(ETibetPage::Dedication);
+    }
+}
+
 void ATibetGameMode::Interact()
 {
     const auto* P=UGameplayStatics::GetPlayerPawn(this,0);
     if (!P) return;
     const EInteraction Action=InteractionAt(P->GetActorLocation());
-    if (Action==EInteraction::None && Save && !bTravel)
+    if (Action==EInteraction::Use || Action==EInteraction::None)
     {
         const int32 Lamp=NearestButterLamp(P->GetActorLocation());
         if (Lamp!=INDEX_NONE)
         {
-            const bool WasLit=(Save->ButterLampMask & (1u<<Lamp))!=0;
-            Save->ButterLampMask |= 1u<<Lamp;
-            RestoreStupaFlames();
-            Mana=FMath::Min(100.f,Mana+10);
-            SetNotice(WasLit ? Local(TEXT("The wick burns steadily in fresh butter."),TEXT("添入酥油，燈芯安穩地燃燒。")) :
-                               Local(TEXT("The butter lamp is lit."),TEXT("酥油燈亮起。")));
-            Store();
+            OfferButter(Lamp,true);
             return;
         }
+        // The quest uses the same bowl and distance as quick offerings.
+        if (Map==TEXT("stupa") && Action==EInteraction::Use) return;
+        if (CanFeed() && Action==EInteraction::None) { BeginFeeding(); return; }
     }
     if (Action==EInteraction::Grove)
     {

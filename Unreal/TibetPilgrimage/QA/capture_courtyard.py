@@ -119,7 +119,7 @@ def main():
         if any("Courtyard/" in line and "missing usage flag" in line for line in game_log.splitlines()):
             raise ValueError("The macaque or banana rendered with Unreal's fallback material")
         hashes={s:shot_data(output/"play"/(s+".png")) for s in
-                ("macaque","feeding","offered","feeding-banana","flags-a","flags-b","night","butter-lamp")}
+                ("macaque","feeding","offered","feeding-banana","dedication","flags-a","flags-b","night","butter-lamp")}
         peel=visible_offering(output/"play/feeding-banana.png")
         motion=compare_light_and_wind(*(output/"play"/(s+".png") for s in ("flags-a","flags-b","night")))
         capture(exe,root,output,"resume","CourtyardResume","stupa",[],slot)
