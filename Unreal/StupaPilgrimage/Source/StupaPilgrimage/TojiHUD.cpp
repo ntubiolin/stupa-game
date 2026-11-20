@@ -2,6 +2,8 @@
 
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
+#include "Fonts/CompositeFont.h"
+#include "Fonts/SlateFontInfo.h"
 #include "HAL/FileManager.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
@@ -14,16 +16,20 @@
 
 namespace
 {
-FSlateFontInfo ChineseFont(int32 Size)
+TSharedPtr<const FCompositeFont> TraditionalChineseTypeface()
 {
 #if PLATFORM_MAC
     const TCHAR* Songti = TEXT("/System/Library/Fonts/Supplemental/Songti.ttc");
     if (IFileManager::Get().FileExists(Songti))
     {
-        return FSlateFontInfo(Songti, Size, TEXT("Regular"));
+        auto Font = MakeShared<FStandaloneCompositeFont>(TEXT("Regular"), FString(Songti),
+            EFontHinting::Default, EFontLoadingPolicy::LazyLoad);
+        // The macOS Songti collection stores STSongti-TC-Regular at face index 7.
+        Font->DefaultTypeface.Fonts[0].Font.SetSubFaceIndex(7);
+        return Font;
     }
 #endif
-    return FCoreStyle::GetDefaultFontStyle(TEXT("Regular"), Size);
+    return FCoreStyle::GetDefaultFont();
 }
 }
 
@@ -45,10 +51,11 @@ void ATojiHUD::BeginPlay()
     const FLinearColor Amber(0.96f, 0.68f, 0.31f);
     const FLinearColor Panel(0.035f, 0.043f, 0.053f, 0.88f);
     const FSlateBrush* White = FCoreStyle::Get().GetBrush(TEXT("WhiteBrush"));
-    const auto Font = [Game = TWeakObjectPtr<ATojiGameMode>(Mode)](int32 Size, const TCHAR* Face)
+    const auto Font = [Game = TWeakObjectPtr<ATojiGameMode>(Mode),
+        ChineseTypeface = TraditionalChineseTypeface()](int32 Size, const TCHAR* Face)
     {
         const FSlateFontInfo Latin = FCoreStyle::GetDefaultFontStyle(FName(Face), Size);
-        const FSlateFontInfo Chinese = ChineseFont(Size);
+        const FSlateFontInfo Chinese(ChineseTypeface, Size, TEXT("Regular"), FFontOutlineSettings());
         return TAttribute<FSlateFontInfo>::CreateLambda([Game, Latin, Chinese]()
         {
             return Game.IsValid() && !Game->IsEnglish() ? Chinese : Latin;
