@@ -751,3 +751,9 @@ preserved.
 - A browser installation ID is owned by `ctx.save.getInstallationIdAsync()` in the separate `stupa.installation.v1` key. It survives save reset/import, stays out of backup/cloud-save documents, and uses Web Locks to avoid first-load tab races.
 - `analytics_daily_aliases` binds a same-day guest installation to the authenticated account. Retries, reloads, concurrent tabs, stale guest requests, and authenticated use across devices stay idempotent. Switching between two accounts counts each account once.
 - Collection begins when the analytics tables are first deployed. Existing cloud saves are not used as historical backfill. Run `npm run analytics:report -- YYYY-MM-DD` on the backend host to read `{ collectionSince, day, googleUsers, dau }`. Anonymous players who clear site storage receive a new installation ID and may count again.
+
+## Unreal 蓮師巡禮
+
+`Unreal/TibetPilgrimage` 是西藏路線的原生 UE 5.8 專案。西藏關卡共用 TibetPilgrimage runtime module。編輯器在本機從原始美術產生 Content，Mac 與 iOS 使用同一份 `Config/DefaultGame.ini` 關卡封裝清單。建置與地圖生成入口為 `Tools/tibet.py`。
+
+`ATibetGameMode` 讀取 `Tools/export_route.mjs` 從原作任務轉出的雙語路線表，由 `ATibetCharacter` 和 `ATibetHUD` 共用同一組互動與技能入口。原生存檔 `UTibetSave` 的預設槽為 `TibetPilgrimage-v1`，記錄各段任務、數量、目前地圖、終章與語言。跨圖於進入前先存檔。QA 使用獨立的具名槽測試關閉重開、主支線和技能。

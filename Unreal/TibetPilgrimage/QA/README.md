@@ -1,0 +1,47 @@
+# 西藏朝聖試玩與攝影
+
+在 Mac 開啟本機正式網頁建置並執行以下命令。網頁測試使用桌面 Chrome、實際遊戲 canvas、1440 × 900 視窗與固定春季光照。伏藏使用 seed 20261120，在各層的起點攝影。
+
+```sh
+npm run build
+npm run preview -- --host 127.0.0.1 --port 4477
+```
+
+在另一個終端從儲存庫根目錄執行，將 app 指向此次打包的 Development 建置。每次試玩與比較使用新的輸出目錄。可用 photos --only 重拍單一關卡至空目錄。
+
+```sh
+qa=Unreal/TibetPilgrimage/QA
+result=artifacts/tibet-comparison
+app="/path/to/TibetPilgrimage.app/Contents/MacOS/TibetPilgrimage"
+mkdir -p "$result"
+node "$qa/capture-web.mjs" http://127.0.0.1:4477 "$result/web"
+python3 "$qa/test_package.py" photos --exe "$app" --output "$result/mac"
+python3 "$qa/test_package.py" play --exe "$app" --output "$result/play"
+python3 "$qa/test_package.py" skills --exe "$app" --output "$result/skills"
+python3 "$qa/test_package.py" compare --web "$result/web" --mac "$result/mac" --output "$result/comparison"
+```
+
+攝影與報告產生時均會檢查畫面下方的橫向邊緣，擋下僅有天空、地平線的畫面。每個鏡位最多拍攝三次，缺景圖保留在 rejected 目錄。比對時仍須目視確認每張圖的主建築或關卡地標。
+
+在 comparison/index.html 檢視每關原圖與畫質差異。固定 55° 垂直視角，同地標分別取景；機位記錄於 views.json，PNG 的雜湊與原始參數記錄於 comparison/report.json。UE 每張攝影取樣 60 個渲染幀的中位數與第 95 百分位幀間隔，僅描述當下靜態鏡位。
+
+macOS 驗證採用與 Finder 相同的 LaunchServices 開啟 app，逐次核對遊戲寫出的完成事件及畫面。play 會啟動打包版，用獨立存檔進行鍵盤遊玩，確認第一個目標在重新啟動後仍能讀取，再依遊戲提示完成五章主線，從伏藏回到青樸及博達哈。另以新存檔從南門進入塔林，完成裝藏後返回大塔。遊戲中每次切換目標留下 HUD 截圖，events.tsv 記錄角色位置、目標及轉場。skills 會在第三層守藏者戰鬥逐一輸入七種法術，核對執行中的遊戲記錄與施法畫面。iPhone 實機的觸控、效能與簽名安裝須分別在配對裝置執行。
+
+## iPhone 17 Pro Max 裝置封裝
+
+在 Mac 安裝 UE 5.8 的 iOS 平台元件、iPhoneOS SDK 與 Metal 編譯器。從 `Unreal/TibetPilgrimage` 執行下列命令。若工作區尚無產生的關卡，先依專案 README 完成 `build-editor` 和 `generate`。
+
+```sh
+python3 Tools/tibet.py package --platform IOS --unsigned \
+  --archive "$PWD/Builds/IOS/TibetPilgrimage.xcarchive"
+```
+
+此命令以 iPhoneOS 為目標編譯，cook 所有列在 DefaultGame.ini 的關卡，並把未簽署的裝置用執行檔和遊戲內容寫進 Xcode archive。若 `--archive` 指向一般目錄，輸出位於其下的 `IOS/TibetPilgrimage.xcarchive`。檢查 archive 根層的 Info.plist，以及 Products/Applications/TibetPilgrimage.app 內的執行檔、裝置平台和 cooked 資料。
+
+裝置安裝需要與 Bundle ID 相符的開發團隊、簽章及佈建描述檔。簽署者可在具備簽署資源的 Mac 上用下列命令建立 Development 套件，並用 Xcode 安裝到啟用開發者模式、已配對的 iPhone。
+
+```sh
+python3 Tools/tibet.py package --platform IOS --archive "$PWD/Builds/Signed"
+```
+
+UE 5.8 的通常輸出為 Builds/Signed/IOS/TibetPilgrimage.app。將連接裝置的啟動、橫向觸控、讀檔及關卡轉場結果另行記錄。
