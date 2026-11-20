@@ -444,11 +444,26 @@ bool UTibetQASubsystem::TapPlayControl(FName Tag,float XFraction)
     {
         if (!FParse::Param(FCommandLine::Get(),TEXT("RenderOffscreen")))
         {
-            App.SetCursorPos(Down);
-            App.OnMouseMove();
-            if (!FVector2D(App.GetCursorPos()).Equals(Down,2.)) return false;
+            auto MoveCursor=[&App](const FVector2D& To,const TSet<FKey>& Buttons){
+                const FVector2D Previous=App.GetCursorPos();
+                App.SetCursorPos(To);
+                const FVector2D Actual=App.GetCursorPos();
+                App.ProcessMouseMoveEvent(FPointerEvent(App.GetUserIndexForMouse(),FSlateApplication::CursorPointerIndex,
+                    Actual,Previous,Buttons,EKeys::Invalid,0,FModifierKeysState()));
+            };
+            const TSet<FKey> Released, Pressed{EKeys::LeftMouseButton};
+            if (HoveredCourtyardControl!=Tag)
+            {
+                MoveCursor(Down,Released);
+                HoveredCourtyardControl=Tag;
+                return false;
+            }
+            HoveredCourtyardControl=NAME_None;
+            const FVector2D Actual=App.GetCursorPos();
+            const auto Path=App.LocateWindowUnderMouse(Actual,App.GetInteractiveTopLevelWindows());
+            if (!Actual.Equals(Down,2.) || !Path.ContainsWidget(Widget.Get())) return false;
             App.OnMouseDown(Window->GetNativeWindow(),EMouseButtons::Left);
-            if (bSlider) { App.SetCursorPos(At); App.OnMouseMove(); }
+            if (bSlider) MoveCursor(At,Pressed);
             App.OnMouseUp(EMouseButtons::Left);
             return true;
         }

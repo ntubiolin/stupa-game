@@ -179,17 +179,17 @@ void UTibetQASubsystem::Courtyard(APlayerController& PC,ATibetGameMode& Mode)
                 App.ProcessKeyCharEvent(FCharacterEvent('m',FModifierKeysState(),0,false));
                 App.ProcessKeyUpEvent(M);
             }
-            if (!Click(TEXT("TibetInscribePrayer"))) break;
         }
-        if(Frames==5)
+        if(Frames==5 && !Click(TEXT("TibetInscribePrayer"))) break;
+        if(Frames==6)
         {
             if(Mode.Dedications().Num()!=1 || Mode.Dedications()[0].Prayer.IsEmpty() ||
                 (!FParse::Param(FCommandLine::Get(),TEXT("TibetTouch")) && Mode.Dedications()[0].Pilgrim!=TEXT("m")))
             { Finish(false,TEXT("Dedication did not appear in the journal")); return; }
             Shot(TEXT("dedication"),true);
         }
-        if(Frames==6 && !Click(TEXT("TibetCloseJournal"))) break;
-        if(++Frames<=7) { CourtyardSince=Now; break; }
+        if(Frames==7 && !Click(TEXT("TibetCloseJournal"))) break;
+        if(++Frames<=8) { CourtyardSince=Now; break; }
         if(PC.IsPaused()) {Finish(false,TEXT("Still paused after dedication"));return;}
         CheckedFlame=Lamp->GetFlicker();
         View({1640,-1320,380},{3340,-150,1420}); Next(); break;
