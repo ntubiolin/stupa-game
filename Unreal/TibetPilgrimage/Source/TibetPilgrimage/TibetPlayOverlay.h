@@ -32,6 +32,8 @@ private:
     FText Local(const TCHAR* English, const TCHAR* Chinese) const;
     TSharedRef<SWidget> Label(TAttribute<FText> Value, int32 Size, FLinearColor Color) const;
     TSharedRef<SWidget> Button(TAttribute<FText> Name, FSimpleDelegate Action, bool Highlight = false, FName Tag = NAME_None) const;
+    TSharedRef<SWidget> CourtyardControls();
+    TSharedRef<SWidget> FeedingMenu();
     TSharedRef<SWidget> Play();
     TSharedRef<SWidget> Journal();
     TSharedRef<SWidget> SkillSlot(int32 Index);

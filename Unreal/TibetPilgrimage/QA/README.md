@@ -22,6 +22,7 @@ python3 "$qa/test_package.py" play --exe "$app" --output "$result/play"
 python3 "$qa/test_package.py" skills --exe "$app" --output "$result/skills"
 python3 "$qa/test_package.py" feedback --exe "$app" --output "$result/feedback"
 
+python3 "$qa/capture_courtyard.py" --exe "$app" --output "$result/courtyard"
 python3 "$qa/capture_passages.py" --exe "$app" --output "$result/passages"
 python3 "$qa/test_package.py" learned --exe "$app" --output "$result/learned"
 python3 "$qa/test_package.py" journal --exe "$app" --output "$result/journal"
@@ -31,6 +32,8 @@ python3 "$qa/test_package.py" compare --web "$result/web" --mac "$result/mac" --
 arrival 使用新存檔和預設開場鏡頭，確認塔座、塔尖與洛桑都在畫面內，並保存玩家進場原圖。接著透過遊戲輸入實測游標移動、右鍵拖曳，以及放開右鍵後邊走邊移動游標時的鏡頭朝向。
 
 camera 先執行 arrival，再以每秒 30 與 60 幀上限實測側移路徑、鏡頭跟隨、按住 Q／E 與放開後的回正、選單輸入隔離，以及洛桑面前的 E 輕按互動。events.tsv 記錄鏡頭、角色和移動基準的角度。
+
+capture_courtyard.py 走到廣場獼猴，以 F 和五輪水果配對完成供養，再步行到燈座按 E 點燈。測試操作右上的 4×、暫停和時間滑桿，拍攝固定鏡位的風幡、日夜與燈芯，重開遊戲後核對供養記錄、酥油燈和夜晚，並分別使用白日、夜間存檔實拍伏藏，檢查洞內地面亮度。
 
 capture_passages.py 從青浦走上洞口階梯，再穿越伏藏三層。每一層都擷取一般玩家鏡頭下傳送門明暗兩相、量測可見門柱像素與實際進門高度，並在固定機位檢查燭光能照見地面、拱頂保留暗部。關卡產生前可執行 `python3 Unreal/TibetPilgrimage/QA/test_cave_passages.py` 檢查六張地圖的階面、洞頂淨空及互動位置。
 

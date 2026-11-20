@@ -250,6 +250,7 @@ TSharedRef<SWidget> STibetPlayOverlay::Play()
     Bar->AddSlot().AutoHeight().Padding(3,0,3,3)[Mana];
     Bar->AddSlot().AutoHeight()[Row];
     auto Nav=SNew(SVerticalBox);
+    Nav->AddSlot().AutoHeight().Padding(0,0,0,4)[CourtyardControls()];
     Nav->AddSlot().AutoHeight()[Button(TAttribute<FText>::CreateLambda([this](){return bTouch?Local(TEXT("World map"),TEXT("世界地圖")):Local(TEXT("M  World map"),TEXT("M  世界地圖"));}),
         FSimpleDelegate::CreateLambda([this](){HUD->ToggleJournal(ETibetPage::Map);}),true,TEXT("TibetOpenMap"))];
     Nav->AddSlot().AutoHeight().Padding(0,3,0,0)[Button(TAttribute<FText>::CreateLambda([this](){return bTouch?Local(TEXT("Menu"),TEXT("選單")):Local(TEXT("Esc  Menu"),TEXT("Esc  選單"));}),
@@ -266,6 +267,7 @@ TSharedRef<SWidget> STibetPlayOverlay::Play()
         Root->AddSlot().HAlign(HAlign_Right).VAlign(VAlign_Bottom).Padding(0,0,12,108)
             [Button(TAttribute<FText>::CreateLambda([this](){return Local(TEXT("Act"),TEXT("互動"));}),
                     FSimpleDelegate::CreateLambda([this](){Mode->Interact();}),true)];
+    Root->AddSlot()[FeedingMenu()];
     return Root;
 }
 

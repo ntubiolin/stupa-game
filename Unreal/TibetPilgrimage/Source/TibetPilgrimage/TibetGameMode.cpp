@@ -3,6 +3,7 @@
 #include "TibetHUD.h"
 #include "TibetRitualEffect.h"
 #include "TibetTravelGate.h"
+#include "TibetButterFlame.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
@@ -78,7 +79,6 @@ FVector StupaLampLocation(int32 Index)
     return FVector(1430+70*Index,-360+320*Index,0);
 }
 const FString Cylinder=TEXT("/Engine/BasicShapes/Cylinder.Cylinder");
-const FString Cone=TEXT("/Engine/BasicShapes/Cone.Cone");
 const FString Sphere=TEXT("/Engine/BasicShapes/Sphere.Sphere");
 const FLinearColor Gold(.87,.43,.065);
 }
@@ -153,6 +153,7 @@ void ATibetGameMode::StartPlay()
         if (auto* Gate = GetWorld()->SpawnActor<ATibetTravelGate>(GroveGate, FRotator::ZeroRotator))
             Gate->SetSidePath();
     }
+    StartCourtyard();
     PopulateResidents();
     Store();
     Refresh();
@@ -347,6 +348,9 @@ FString ATibetGameMode::Status(bool bTouchControls) const
             S+=bTouchControls ? Local(TEXT("\nTap Act · "),TEXT("\n點選「互動」・")) : Local(TEXT("\nTap E · "),TEXT("\n輕按 E・"));
             S+=ActionLabel(Action);
         }
+        else if(NearestButterLamp(P->GetActorLocation())!=INDEX_NONE)
+            S+=bTouchControls ? Local(TEXT("\nTap Act · Offer butter"),TEXT("\n點選「互動」・供酥油")) :
+                              Local(TEXT("\nE · Offer butter"),TEXT("\nE・供酥油"));
     }
     if (GetWorld()->GetTimeSeconds()<NoticeUntil) S+=TEXT("\n")+Notice;
     return S;
@@ -363,18 +367,31 @@ void ATibetGameMode::RestoreStupaFlames()
     const int32 LampStep=Stupa.IndexOfByPredicate([](const FObjective& O){ return O.Kind==EObjective::Interact; });
     if (LampStep==INDEX_NONE) return;
     const int32 Step=Save->Steps.FindRef(Map);
-    if (Step<LampStep) return;
-    const int32 Count=Stupa[LampStep].Count;
-    const int32 Lit=Step>LampStep ? Count : FMath::Clamp(Save->Counts.FindRef(Map),0,Count);
-    const FLinearColor Flame(4.0,1.5,0.15);
-    for (; LitStupaLamps<Lit; ++LitStupaLamps)
+    const int32 Lit=Step>LampStep ? 3 : (Step==LampStep ? FMath::Clamp(Save->Counts.FindRef(Map),0,3) : 0);
+    // Existing saves only have the ordered quest count.
+    Save->ButterLampMask |= (1u << Lit)-1;
+    for (int32 I=0; I<3; ++I)
     {
-        // The cone is centred on its origin. Its base meets the wick at 116.5 cm.
-        AActor* WickFlame=MeshActor(StupaLampLocation(LitStupaLamps)+FVector(0,0,126.5),
-            Cone,FVector(.13,.13,.20),&Flame);
-        if (!WickFlame) break;
-        WickFlame->Tags.Add(TEXT("StupaLampFlame"));
+        const uint8 Bit=1u<<I;
+        if (!(Save->ButterLampMask & Bit) || (SpawnedLampMask & Bit)) continue;
+        auto* Flame=GetWorld()->SpawnActor<ATibetButterFlame>(StupaLampLocation(I)+FVector(0,0,126.5),FRotator::ZeroRotator);
+        if (!Flame) continue;
+        Flame->LightCourtyardBowl();
+        Flame->Tags.Add(TEXT("StupaLampFlame"));
+        SpawnedLampMask |= Bit;
     }
+}
+int32 ATibetGameMode::NearestButterLamp(const FVector& Where) const
+{
+    int32 Result=INDEX_NONE;
+    double Best=220;
+    if (Map==TEXT("stupa"))
+        for(int32 I=0;I<3;++I)
+        {
+            const double D=FVector::Dist2D(Where,StupaLampLocation(I));
+            if(D<Best) { Best=D; Result=I; }
+        }
+    return Result;
 }
 void ATibetGameMode::Refresh()
 {
@@ -385,11 +402,10 @@ void ATibetGameMode::Refresh()
     if (Map == TEXT("pharping"))
     {
         const int32 Lit = GetStep() > 5 ? 7 : (GetStep() == 5 ? GetStepProgress() : 0);
-        const FLinearColor Flame(4.0, 1.5, .15);
         while (LitCaveLamps < Lit)
         {
             const FVector* Bowl = PassageSockets.Find(FName(*FString::Printf(TEXT("Step5_%d"), LitCaveLamps)));
-            if (!Bowl || !MeshActor(*Bowl + FVector(0,0,129), Cone, FVector(.14,.14,.20), &Flame)) break;
+            if (!Bowl || !GetWorld()->SpawnActor<ATibetButterFlame>(*Bowl + FVector(0,0,129),FRotator::ZeroRotator)) break;
             ++LitCaveLamps;
         }
     }
@@ -472,6 +488,21 @@ void ATibetGameMode::Interact()
     const auto* P=UGameplayStatics::GetPlayerPawn(this,0);
     if (!P) return;
     const EInteraction Action=InteractionAt(P->GetActorLocation());
+    if (Action==EInteraction::None && Save && !bTravel)
+    {
+        const int32 Lamp=NearestButterLamp(P->GetActorLocation());
+        if (Lamp!=INDEX_NONE)
+        {
+            const bool WasLit=(Save->ButterLampMask & (1u<<Lamp))!=0;
+            Save->ButterLampMask |= 1u<<Lamp;
+            RestoreStupaFlames();
+            Mana=FMath::Min(100.f,Mana+10);
+            SetNotice(WasLit ? Local(TEXT("The wick burns steadily in fresh butter."),TEXT("添入酥油，燈芯安穩地燃燒。")) :
+                               Local(TEXT("The butter lamp is lit."),TEXT("酥油燈亮起。")));
+            Store();
+            return;
+        }
+    }
     if (Action==EInteraction::Grove)
     {
         Save->Map=TEXT("grove"); Store(); bTravel=true;
@@ -602,6 +633,7 @@ void ATibetGameMode::CastSkill(int32 Slot)
 void ATibetGameMode::Tick(float Dt)
 {
     Super::Tick(Dt);
+    if(Save && !bTravel) UpdateClock(Dt);
     const float Now = GetWorld()->GetTimeSeconds();
     DamageCues.RemoveAll([Now](const FTibetDamageCue& Cue) { return Now - Cue.SpawnTime >= 1.05f; });
     if (Now - LastHitTime > .22f)

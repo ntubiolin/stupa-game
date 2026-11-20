@@ -89,7 +89,7 @@ def capture(exe, stage, dest, name, mode, level, options, slot, size=(1440, 900)
     map_args = [] if mode == "Arrival" else ["/Game/Maps/Tibet/" + level]
     # Touch emulation uses Slate's native-window hit test. A packaged
     # Mac offscreen window is invisible to the desktop window search.
-    interactive_touch = mode == "Journal" and "-TibetTouch" in options
+    interactive_touch = mode in ("Journal", "Courtyard") and "-TibetTouch" in options
     rendering = [] if interactive_touch else ["-RenderOffscreen"]
     exec_commands = "r.ScreenPercentage 100,r.DynamicRes.OperationMode 0"
     if max_fps:

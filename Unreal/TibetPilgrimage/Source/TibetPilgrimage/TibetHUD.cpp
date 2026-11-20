@@ -71,6 +71,17 @@ void ATibetHUD::DrawHUD()
     const auto* PC=GetOwningPlayerController();
     if(IsJournalOpen() || !Overlay || !Canvas || !PC || !PC->GetPawn() || !M || M->IsCampaignComplete()) return;
     const float HScale = FMath::Clamp(Canvas->SizeY / 800.f, .76f, 1.4f);
+    FVector AnimalPosition;
+    int32 AnimalMeters;
+    FVector2D AnimalPixel;
+    if(M->MacaquePrompt(AnimalPosition,AnimalMeters) && PC->ProjectWorldLocationToScreen(AnimalPosition,AnimalPixel,true))
+    {
+        const FString Label=FString::Printf(TEXT("%s · %d m"),*M->Local(TEXT("Macaque"),TEXT("獼猴")),AnimalMeters);
+        FCanvasTextItem Text(AnimalPixel,FText::FromString(Label),GEngine->GetMediumFont(),FLinearColor(1,.91f,.66f));
+        Text.bCentreX=true; Text.bOutlined=true;
+        Text.OutlineColor=FLinearColor(.06,.04,.03);
+        Canvas->DrawItem(Text);
+    }
     FTibetEnemyMeter Meter;
     const bool HasEnemy = M->GetEnemyMeter(Meter);
     FVector2D At;
