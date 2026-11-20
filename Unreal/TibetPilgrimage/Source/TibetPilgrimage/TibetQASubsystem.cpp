@@ -4,6 +4,7 @@
 #include "TibetRitualEffect.h"
 #include "EngineUtils.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/BoxComponent.h"
 #include "Engine/StaticMesh.h"
 #include "TibetHUD.h"
 #include "TibetPlayOverlay.h"
@@ -87,6 +88,7 @@ void UTibetQASubsystem::Tick(float)
     if (Task != TEXT("Campaign") && World->GetMapName() != StartMap) { Finish(false, TEXT("Unexpected map: ") + World->GetMapName()); return; }
     if (Task == TEXT("Arrival")) Arrival(*PC);
     else if (Task == TEXT("CameraFollow")) CameraFollow(*PC,*Mode);
+    else if (Task == TEXT("Dialogue")) DialogueTest(*PC,*Mode);
     else if (Task == TEXT("Journal")) Journal(*PC,*Mode);
     else if (Task == TEXT("Photo")) Photo(*PC);
     else if (Task == TEXT("Play") || Task == TEXT("Campaign") || Task == TEXT("GroveEntry") ||
@@ -186,6 +188,95 @@ bool TapJournalButton(FName Tag)
     App.OnTouchEnded(Center,0,Mapper.GetPrimaryPlatformUser(),Mapper.GetDefaultInputDevice());
     return true;
 }
+}
+
+void UTibetQASubsystem::DialogueTest(APlayerController& PC, ATibetGameMode& Mode)
+{
+    const double Now = FPlatformTime::Seconds();
+    if (Now-Began > 40) { Finish(false, FString::Printf(TEXT("Dialogue timeout at phase %d"),DialoguePhase)); return; }
+    if (Now-Began < 1.5 || Now-LastAction < .8 || FScreenshotRequest::IsScreenshotRequested()) return;
+    auto* HUD = Cast<ATibetHUD>(PC.GetHUD());
+    APawn* Pawn = PC.GetPawn();
+    if (!HUD || !Pawn) return;
+    auto Move = [&](const FVector& Feet) {
+        Pawn->SetActorLocation(Feet + FVector(0,0,90), false, nullptr, ETeleportType::TeleportPhysics);
+        PC.SetControlRotation(FRotator(3,0,0));
+    };
+    auto Capture = [&](const TCHAR* Name) {
+        FScreenshotRequest::RequestScreenshot(Output / (FString(Name)+TEXT(".png")),true,false,false);
+    };
+    FVector Anchor;
+    if (DialoguePhase == 0)
+    {
+        if (Mode.IsEnglish() != FParse::Param(FCommandLine::Get(), TEXT("TibetQAEnglish"))) Mode.ChangeLanguage();
+        if (Mode.GetStep() != 0) { Finish(false,TEXT("Dialogue QA needs a fresh slot")); return; }
+        Move(Mode.GetObjectiveLocation() - FVector(520,0,0));
+    }
+    else if (DialoguePhase == 1)
+    {
+        if (Mode.GetInteractionCue(Anchor) || HUD->HasDrawnInteractionCue()) { Finish(false,TEXT("Distant resident cue")); return; }
+        Move(Mode.GetObjectiveLocation() - FVector(165,0,0));
+    }
+    else if (DialoguePhase == 2 || DialoguePhase == 7)
+    {
+        if (!Mode.GetInteractionCue(Anchor) || !HUD->HasDrawnInteractionCue()) return;
+        FVector2D Pixel;
+        if (!PC.ProjectWorldLocationToScreen(Anchor,Pixel,true)) { Finish(false,TEXT("Anchor behind camera")); return; }
+        Record(FString::Printf(TEXT("anchor\t%s\t%.0f\t%.0f\t%.0f"),DialoguePhase==2?TEXT("resident"):TEXT("gate"),Anchor.Z,Pixel.X,Pixel.Y));
+        Capture(DialoguePhase==2?TEXT("resident-cue"):TEXT("gate-cue"));
+    }
+    else if (DialoguePhase == 3)
+    {
+        const FVector Target = Mode.GetObjectiveLocation();
+        AActor* Wall = GetWorld()->SpawnActor<AActor>();
+        auto* Box = NewObject<UBoxComponent>(Wall);
+        Wall->SetRootComponent(Box);
+        Box->SetBoxExtent(FVector(8,100,185));
+        Box->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+        Box->SetCollisionResponseToAllChannels(ECR_Ignore);
+        Box->SetCollisionResponseToChannel(ECC_Visibility,ECR_Block);
+        Box->RegisterComponent();
+        Wall->SetActorLocation((Pawn->GetActorLocation()+Target)*.5 + FVector(0,0,60));
+        Mode.Interact();
+        if (Mode.GetInteractionCue(Anchor) || Mode.GetStep() != 0) { Finish(false,TEXT("Interaction through wall")); return; }
+        Box->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        Wall->Destroy();
+        Mode.Interact();
+        if (Mode.GetStep()!=1 || Mode.GetInteractionCue(Anchor)) { Finish(false,TEXT("Completed resident remained interactive")); return; }
+    }
+    else if (DialoguePhase == 4)
+    {
+        if (!Mode.HasSpokenWord() || Mode.DialoguePage().IsEmpty()) return;
+        auto Window=GEngine->GameViewport->GetWindow();
+        if (!Window) return;
+        auto Card=FindJournalButton(Window.ToSharedRef(),TEXT("TibetDialogue"));
+        auto Bar=FindJournalButton(Window.ToSharedRef(),TEXT("TibetRitualBar"));
+        if (!Card || !Bar) { Finish(false,TEXT("Subtitle or ritual bar missing")); return; }
+        const auto C=Card->GetCachedGeometry().GetLayoutBoundingRect(), B=Bar->GetCachedGeometry().GetLayoutBoundingRect();
+        if (C.Bottom > B.Top + 1 || C.Bottom <= C.Top) { Finish(false,TEXT("Dialogue overlaps ritual bar")); return; }
+        Record(TEXT("playing\t")+Mode.DialogueSpeaker()+TEXT("\t")+Mode.DialoguePage());
+        Capture(TEXT("dialogue"));
+    }
+    else if (DialoguePhase == 5)
+    {
+        HUD->ToggleJournal(ETibetPage::Controls);
+        if (!PC.IsPaused()) { Finish(false,TEXT("Journal did not pause dialogue scene")); return; }
+        Screenshot = Mode.DialoguePage();
+    }
+    else if (DialoguePhase == 6)
+    {
+        if (Mode.DialoguePage()!=Screenshot) { Finish(false,TEXT("Subtitle advanced during pause")); return; }
+        HUD->CloseJournal();
+        Mode.StopDialogue();
+        if (!Mode.DialogueSpeaker().IsEmpty()) { Finish(false,TEXT("Skipped subtitle remained")); return; }
+        Move(FVector(-1860-165,-480,0));
+    }
+    else if (DialoguePhase == 8)
+    {
+        Finish(true,TEXT("bilingual dialogue and interaction cues")); return;
+    }
+    ++DialoguePhase;
+    LastAction=Now;
 }
 
 void UTibetQASubsystem::Journal(APlayerController& PC,ATibetGameMode& Mode)

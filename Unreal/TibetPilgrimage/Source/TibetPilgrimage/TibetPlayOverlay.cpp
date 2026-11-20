@@ -259,9 +259,25 @@ TSharedRef<SWidget> STibetPlayOverlay::Play()
         [SNew(SBox).WidthOverride_Lambda([this](){return FOptionalSize(FMath::Clamp(Width()*.46f,180.f,390.f));})
          [SNew(SBorder).Visibility(EVisibility::HitTestInvisible).BorderImage(Tile()).BorderBackgroundColor(Ink).Padding(FMargin(12,8))[Objective]]];
     Root->AddSlot().HAlign(HAlign_Right).VAlign(VAlign_Top).Padding(12)[Nav];
-    Root->AddSlot().HAlign(bTouch?HAlign_Right:HAlign_Center).VAlign(VAlign_Bottom).Padding(8)
-        [SNew(SBox).WidthOverride_Lambda([this](){return FOptionalSize(FMath::Min(Width()-32.f,bTouch?455.f:700.f));})
+    auto Lower = SNew(SVerticalBox).Visibility(EVisibility::SelfHitTestInvisible);
+    auto DialogueCard = SNew(SVerticalBox);
+    DialogueCard->AddSlot().AutoHeight()[SNew(STextBlock).Font(Font(bTouch ? 13 : 16)).ColorAndOpacity(Gold)
+        .Text_Lambda([this] { return Text(Mode->DialogueSpeaker()); })];
+    DialogueCard->AddSlot().AutoHeight().Padding(0,3,0,0)[SNew(STextBlock).Font(Font(bTouch ? 16 : 20))
+        .ColorAndOpacity(Paper).AutoWrapText(true).Text_Lambda([this] { return Text(Mode->DialoguePage()); })];
+    auto DialogueRow = SNew(SHorizontalBox);
+    DialogueRow->AddSlot().FillWidth(1)[DialogueCard];
+    DialogueRow->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(7,0,0,0)
+        [Button(TAttribute<FText>::CreateLambda([this]{return Local(TEXT("Skip"),TEXT("略過"));}),
+            FSimpleDelegate::CreateLambda([this]{Mode->StopDialogue();}))];
+    Lower->AddSlot().AutoHeight().HAlign(HAlign_Center).Padding(0,0,0,6)
+        [SNew(SBox).Visibility_Lambda([this]{return Mode->DialogueSpeaker().IsEmpty() ? EVisibility::Collapsed : EVisibility::SelfHitTestInvisible;})
+         .WidthOverride_Lambda([this]{return FOptionalSize(FMath::Clamp(Width()-(bTouch?165.f:32.f),150.f,680.f));})
+         [SNew(SBorder).Tag(TEXT("TibetDialogue")).BorderImage(Tile()).BorderBackgroundColor(Ink).Padding(FMargin(13,8))[DialogueRow]]];
+    Lower->AddSlot().AutoHeight().HAlign(bTouch?HAlign_Right:HAlign_Center)
+        [SNew(SBox).Tag(TEXT("TibetRitualBar")).WidthOverride_Lambda([this](){return FOptionalSize(FMath::Min(Width()-32.f,bTouch?455.f:700.f));})
          [SNew(SBorder).BorderImage(Tile()).BorderBackgroundColor(Ink).Padding(5)[Bar]]];
+    Root->AddSlot().HAlign(HAlign_Fill).VAlign(VAlign_Bottom).Padding(8)[Lower];
     if (bTouch)
         Root->AddSlot().HAlign(HAlign_Right).VAlign(VAlign_Bottom).Padding(0,0,12,108)
             [Button(TAttribute<FText>::CreateLambda([this](){return Local(TEXT("Act"),TEXT("互動"));}),

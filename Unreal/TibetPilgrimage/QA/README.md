@@ -68,3 +68,9 @@ python3 Tools/tibet.py package --platform IOS --archive "$PWD/Builds/Signed"
 UE 5.8 的通常輸出為 Builds/Signed/IOS/TibetPilgrimage.app。將連接裝置的啟動、橫向觸控、讀檔及關卡轉場結果另行記錄。
 
 [西藏 UE 模組移植驗收](Module-audit.md) 逐項對照網頁客戶端、伺服器與原生遊戲。執行 `python3 -m unittest discover -s QA` 可核對每個原始模組都有且只有一個盤點項目。
+
+### 任務配音、底部字幕與場景互動提示
+
+`python3 QA/test_dialogue.py --voices` 會核對全部 22 個對話目標的雙語台詞及角色名，並在 Mac 以遊戲使用的 AVFoundation 音色將洛桑第一句中英文各合成一次，檢查有效取樣數、時長及音量。Mac 與 iOS 遊戲使用裝置上的臺灣國語或美式英文語音，遊戲內切換語言即同步切換配音。玩家可用「略過」中止，打開選單會暫停，關閉後續播。系統以目前裝置的音量輸出。[Apple AVSpeechSynthesizer](https://developer.apple.com/documentation/avfaudio/avspeechsynthesizer/)
+
+`python3 QA/test_dialogue.py --exe /path/to/TibetPilgrimage.app/Contents/MacOS/TibetPilgrimage --output /path/to/new/dialogue` 使用獨立存檔，在繁中桌面和英文觸控版面操作洛桑與塔林側門，會短暫播放聲音。驗收覆蓋遠距離、隔牆、交談後提示消失、開啟選單暫停、略過、字幕與技能列的幾何範圍，以及傳送門錨點。每個版面輸出三張含 HUD 的截圖及 events.tsv。可在正常遊戲與洛桑談話時確認發音與字幕換句，按 M 暫停、關閉後續聽，再點「略過」。

@@ -16,6 +16,8 @@ public:
         SLATE_ARGUMENT(bool, Touch)
     SLATE_END_ARGS()
     void Construct(const FArguments& Args);
+    FSlateFontInfo Font(int32 Size) const;
+    bool IsTouch() const { return bTouch; }
     void Show(ETibetPage Page);
     virtual bool SupportsKeyboardFocus() const override { return Page!=ETibetPage::Play; }
     virtual FReply OnKeyDown(const FGeometry& Geometry,const FKeyEvent& Key) override;
@@ -28,7 +30,6 @@ private:
     float Width() const;
     float Height() const;
     float LayoutScale() const;
-    FSlateFontInfo Font(int32 Size) const;
     FText Local(const TCHAR* English, const TCHAR* Chinese) const;
     TSharedRef<SWidget> Label(TAttribute<FText> Value, int32 Size, FLinearColor Color) const;
     TSharedRef<SWidget> Button(TAttribute<FText> Name, FSimpleDelegate Action, bool Highlight = false, FName Tag = NAME_None) const;
