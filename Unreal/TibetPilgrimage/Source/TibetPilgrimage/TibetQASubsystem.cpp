@@ -423,6 +423,16 @@ bool UTibetQASubsystem::TapPlayControl(FName Tag,float XFraction)
     const auto Down=bSlider ? Geometry.LocalToAbsolute(FVector2D(Size.X*.15,Size.Y*.5)) : At;
     if (!FParse::Param(FCommandLine::Get(),TEXT("TibetTouch")))
     {
+        if (!FParse::Param(FCommandLine::Get(),TEXT("RenderOffscreen")))
+        {
+            App.SetCursorPos(Down);
+            App.OnMouseMove();
+            if (!FVector2D(App.GetCursorPos()).Equals(Down,2.)) return false;
+            App.OnMouseDown(Window->GetNativeWindow(),EMouseButtons::Left);
+            if (bSlider) { App.SetCursorPos(At); App.OnMouseMove(); }
+            App.OnMouseUp(EMouseButtons::Left);
+            return true;
+        }
         const FWidgetPath Path(Window->GetHittestGrid().GetBubblePath(Down,0,false,0));
         if (!Path.ContainsWidget(Widget.Get())) return false;
         const TSet<FKey> Pressed{EKeys::LeftMouseButton}, Released;
