@@ -156,3 +156,22 @@ return f*f * float3(10*gust + 4*ripple, 5*gust + 6*ripple, 4*ripple);
         ASSETS.save_loaded_asset(instance, only_if_is_dirty=False)
         result[key.lower()] = instance
     return result
+
+
+def bind_window_spill():
+    # Interchange preserves existing glTF material-instance overrides on reimport.
+    # Explicitly enable the new lightmap on both fresh and previously generated plazas.
+    directory = "/Game/TibetWorld/stupa/stupa"
+    paving = ASSETS.load_asset(directory + "/Materials/paving")
+    spill = ASSETS.load_asset(directory + "/Textures/pavingWindowSpill")
+    if not paving or not spill:
+        raise RuntimeError("Boudha paving or its window lightmap is missing")
+    LIB.set_material_instance_static_switch_parameter_value(paving, "bHasEmissiveTexture", True)
+    LIB.set_material_instance_scalar_parameter_value(paving, "EmissiveTexture_TexCoord", 1.)
+    LIB.set_material_instance_texture_parameter_value(paving, "EmissiveTexture", spill)
+    LIB.update_material_instance(paving)
+    if (not LIB.get_material_instance_static_switch_parameter_value(paving, "bHasEmissiveTexture")
+            or LIB.get_material_instance_scalar_parameter_value(paving, "EmissiveTexture_TexCoord") != 1.
+            or LIB.get_material_instance_texture_parameter_value(paving, "EmissiveTexture") != spill):
+        raise RuntimeError("Failed to bind the ground lightmap to the plaza's second UV channel")
+    ASSETS.save_loaded_asset(paving, only_if_is_dirty=False)

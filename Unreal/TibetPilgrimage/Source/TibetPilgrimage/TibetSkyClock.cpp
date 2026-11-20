@@ -7,6 +7,8 @@
 #include "Components/ExponentialHeightFogComponent.h"
 #include "Components/PostProcessComponent.h"
 #include "Components/SkyLightComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Kismet/GameplayStatics.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/ExponentialHeightFog.h"
 #include "Engine/SkyLight.h"
@@ -34,8 +36,9 @@ ATibetSkyClock::ATibetSkyClock()
     Moon->SetAtmosphereSunLight(true);
     Moon->SetAtmosphereSunLightIndex(1);
     Moon->SetLightSourceAngle(1.05f);
-    Moon->SetLightColor(FLinearColor(.38,.53,.86),true);
-    Moon->SetRelativeRotation(FRotator(-35,28,0));
+    Moon->SetLightColor(FLinearColor(.52,.67,.94),true);
+    // Shine across the south approach to model the white dome and the gilt rings.
+    Moon->SetRelativeRotation(FRotator(-40,32,0));
     Exposure=CreateDefaultSubobject<UPostProcessComponent>(TEXT("Outdoor exposure"));
     Exposure->SetupAttachment(RootComponent);
     Exposure->bUnbound=true;
@@ -90,6 +93,26 @@ void ATibetSkyClock::BeginPlay()
     Stars->CreateMeshSection_LinearColor(0,Points,Faces,{},{},{},{},false);
     if(auto* Material=LoadObject<UMaterialInterface>(nullptr,TEXT("/Game/Figures/Materials/M_TravelGlow.M_TravelGlow")))
         StarMaterial=Stars->CreateDynamicMaterialInstance(0,Material);
+
+    bWhitewashedPlaza = UGameplayStatics::GetCurrentLevelName(this) == TEXT("stupa");
+    TArray<AActor*> Shopfronts;
+    UGameplayStatics::GetAllActorsWithTag(GetWorld(), TEXT("BoudhaShopfronts"), Shopfronts);
+    for (AActor* Building : Shopfronts)
+    {
+        TInlineComponentArray<UStaticMeshComponent*> Meshes(Building);
+        for (UStaticMeshComponent* Mesh : Meshes)
+        {
+            for (int32 Slot = 0; Slot < Mesh->GetNumMaterials(); ++Slot)
+            {
+                UMaterialInterface* Surface = Mesh->GetMaterial(Slot);
+                if (!Surface) continue;
+                if (Surface->GetFName() == TEXT("litglass"))
+                    WindowPanes = Mesh->CreateDynamicMaterialInstance(Slot);
+                else if (Surface->GetFName() == TEXT("paving"))
+                    StreetPaving = Mesh->CreateDynamicMaterialInstance(Slot);
+            }
+        }
+    }
 }
 
 float ATibetSkyClock::Daylight(float Phase)
@@ -109,14 +132,19 @@ void ATibetSkyClock::Apply(float Phase)
         Sun->SetIntensity(35000*Day);
         Sun->SetTemperature(FMath::Lerp(3900.f,5650.f,FMath::Clamp(Elevation*2.9f,0.f,1.f)));
     }
-    Moon->SetIntensity(2.6f*Night);
+    // The whitewashed court reflects much more of the key than the dark soil
+    // and timber on the open trails. Expose the two at their own night levels.
+    Moon->SetIntensity((bWhitewashedPlaza ? 5.8f : 8.6f) * Night);
+    const FLinearColor WindowColor(1.f,.52f,.20f);
+    if (WindowPanes) WindowPanes->SetVectorParameterValue(TEXT("EmissiveFactor"), WindowColor * (5.5f * Night));
+    if (StreetPaving) StreetPaving->SetVectorParameterValue(TEXT("EmissiveFactor"), WindowColor * (1.30f * Night));
     Moon->SetVisibility(Night>.004f);
-    if(Sky) Sky->SetIntensity(FMath::Lerp(.68f,1.35f,Day));
+    if(Sky) Sky->SetIntensity(FMath::Lerp(.82f,1.35f,Day));
     if(Fog) Fog->SetFogInscatteringColor(FMath::Lerp(FLinearColor(.009,.018,.058),FLinearColor(.45,.56,.70),Day));
     auto& S=Exposure->Settings;
     S.bOverride_AutoExposureMinBrightness=S.bOverride_AutoExposureMaxBrightness=true;
-    S.AutoExposureMinBrightness=FMath::Lerp(3.1f,6.f,Day);
-    S.AutoExposureMaxBrightness=FMath::Lerp(4.3f,16.f,Day);
+    S.AutoExposureMinBrightness=FMath::Lerp(bWhitewashedPlaza ? 2.65f : 2.05f,6.f,Day);
+    S.AutoExposureMaxBrightness=FMath::Lerp(bWhitewashedPlaza ? 3.85f : 3.25f,16.f,Day);
     Stars->SetVisibility(Night>.03f);
     if(StarMaterial) StarMaterial->SetVectorParameterValue(TEXT("Color"),FLinearColor(.69,.80,1.35)*Night);
 }

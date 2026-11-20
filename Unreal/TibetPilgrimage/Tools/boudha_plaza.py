@@ -2,6 +2,46 @@
 
 import math
 
+from tibet_mesh import png
+
+
+def window_spill_map(windows):
+    # Bake onto the paving's second UV set. Both the shop panes and their pools of
+    # warm light can then dim together without a movable light per room on mobile.
+    size, span = 512, 136.0
+    energy = [0.0] * (size * size)
+    scale = size / span
+    for east, north, nx, ny, height in windows:
+        u = (east + 68) * scale
+        v = (72 - north) * scale
+        radius = math.ceil(3 * height * scale)
+        for row in range(max(0, int(v) - radius), min(size, int(v) + radius + 1)):
+            for col in range(max(0, int(u) - radius), min(size, int(u) + radius + 1)):
+                dx, dy = (col + .5 - u) / scale, (v - row - .5) / scale
+                reach = dx * nx + dy * ny
+                if not 0 < reach < 3 * height:
+                    continue
+                across = (dx * ny - dy * nx) / (.78 + .32 * reach)
+                # Window emission faces the street. Incidence on the ground and
+                # inverse-square falloff put the brightest patch outside the sill.
+                distance_sq = dx * dx + dy * dy + height * height
+                incidence = 3.6 * height ** 3 * reach / distance_sq ** 2
+                feather = min(1, (3 * height - reach) / height)
+                energy[row * size + col] += incidence * feather * math.exp(-.5 * across * across)
+
+    # glTF emissive textures are sRGB. Encode linear illuminance before packing.
+    rgb = bytearray()
+    for value in energy:
+        linear = min(1, value)
+        encoded = 12.92 * linear if linear <= .0031308 else 1.055 * linear ** (1 / 2.4) - .055
+        rgb.extend([round(255 * encoded)] * 3)
+
+    def uv(gltf_position):
+        east, _, south = gltf_position
+        return ((east + 68) / span, (south + 72) / span)
+
+    return png(rgb, size), uv
+
 
 def south_approach(s):
     # Flush terracotta headers and a narrow stone course widen into the square.

@@ -17,7 +17,7 @@ from import_tibet_music import import_music
 from migrate_tibet_maps import strip_import_metadata
 from tibet_cloud_layer import generate as generate_cloud_layer
 from tibet_cave_lighting import dress_passages, wick_material
-from tibet_courtyard_assets import macaques, wind_materials
+from tibet_courtyard_assets import bind_window_spill, macaques, wind_materials
 from tibet_landscapes import MAPS, landscape
 from tibet_surfaces import make_surfaces
 
@@ -97,6 +97,7 @@ def populate(levels, actors, stage, source, surfaces):
         raise RuntimeError(f"Failed to import {source}")
     if stage == "stupa":
         surfaces.update(wind_materials())
+        bind_window_spill()
     loaded = [a for a in actors.get_all_level_actors() if a.get_path_name() not in before]
     paths = {a.get_path_name() for a in loaded}
     # Interchange glTF east initially lies along Unreal +X. Rotate east into +Y, north into +X.
@@ -147,6 +148,8 @@ def populate(levels, actors, stage, source, surfaces):
                     "collision_trace_flag", unreal.CollisionTraceFlag.CTF_USE_COMPLEX_AS_SIMPLE
                 )
                 part.set_collision_profile_name("BlockAll")
+            if stage == "stupa" and mesh.get_name() == "Landmarks":
+                a.tags = [*a.tags, unreal.Name("BoudhaShopfronts")]
             for i, slot in enumerate(mesh.get_editor_property("static_materials")):
                 name = str(slot.get_editor_property("imported_material_slot_name")).lower()
                 mat = mesh.get_material(i)

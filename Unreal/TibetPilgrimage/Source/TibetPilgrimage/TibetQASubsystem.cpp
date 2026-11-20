@@ -119,6 +119,15 @@ void UTibetQASubsystem::Photo(APlayerController& PC)
     {
         FString EyeString, AtString;
         const TCHAR* Args = FCommandLine::Get();
+        float Phase;
+        if (FParse::Value(Args, TEXT("TibetQASolarPhase="), Phase))
+        {
+            if (auto* Mode = GetWorld()->GetAuthGameMode<ATibetGameMode>())
+            {
+                Mode->SetClockRate(0);
+                Mode->SetSolarPhase(Phase, false);
+            }
+        }
         FParse::Value(Args, TEXT("TibetQAEye="), EyeString, false);
         FParse::Value(Args, TEXT("TibetQALook="), AtString, false);
         FVector Eye, At;
