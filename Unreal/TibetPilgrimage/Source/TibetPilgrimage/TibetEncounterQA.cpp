@@ -1,5 +1,7 @@
 #include "TibetQASubsystem.h"
 #include "TibetBossHalo.h"
+#include "TibetRitualEffect.h"
+#include "ProceduralMeshComponent.h"
 #include "TibetGameMode.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
@@ -7,6 +9,29 @@
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "UnrealClient.h"
+
+void UTibetQASubsystem::ObserveEnemyAttack()
+{
+    if (SawEnemyStrike || FScreenshotRequest::IsScreenshotRequested()) return;
+    const bool Strike = SawEnemyWindup;
+    const int32 Expected = Strike ? ATibetRitualEffect::EnemyStrike : ATibetRitualEffect::EnemyWindup;
+    for (TActorIterator<ATibetRitualEffect> It(GetWorld()); It; ++It)
+    {
+        if (It->GetEffectSlot() != Expected) continue;
+        const AActor* Attacker = It->GetOwner();
+        const auto* Mesh = Cast<UProceduralMeshComponent>(It->GetRootComponent());
+        if (!IsValid(Attacker) || FVector::Dist2D(It->GetActorLocation(),Attacker->GetActorLocation()) > 30 ||
+            It->IsHidden() || !Mesh || !Mesh->IsRegistered() || !Mesh->IsVisible() || Mesh->GetNumSections()!=2 ||
+            !Mesh->GetMaterial(0) || !Mesh->GetMaterial(1))
+        { Finish(false, TEXT("Expected visible attack geometry at its living attacker")); return; }
+        const FString Phase = Strike ? TEXT("enemy-strike") : TEXT("enemy-windup");
+        Record(Phase);
+        FScreenshotRequest::RequestScreenshot(Output / (Phase + TEXT(".png")), true, false, false);
+        if (Strike) SawEnemyStrike = true;
+        else SawEnemyWindup = true;
+        return;
+    }
+}
 
 bool UTibetQASubsystem::CaptureEncounter(APlayerController& PC, ATibetGameMode& Mode)
 {
@@ -41,7 +66,11 @@ bool UTibetQASubsystem::CaptureEncounter(APlayerController& PC, ATibetGameMode& 
     const auto* Body=Target->FindComponentByClass<UStaticMeshComponent>();
     if (!Body || !Body->GetStaticMesh() || !Body->IsVisible()) { Finish(false,TEXT("Missing encounter mesh")); return true; }
     const FName Model=Body->GetStaticMesh()->GetFName();
-    if (SeenEncounters.Contains(Model)) return false;
+    if (SeenEncounters.Contains(Model))
+    {
+        if (!Boss && !SawEnemyStrike) { ObserveEnemyAttack(); return true; }
+        return false;
+    }
     SeenEncounters.Add(Model);
     if (Boss)
     {

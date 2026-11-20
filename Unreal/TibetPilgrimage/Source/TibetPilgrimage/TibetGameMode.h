@@ -156,6 +156,10 @@ private:
     void UpdateWilderness(const FVector& Player, float Dt);
     FString EnemyLabel() const;
     float PursuitSpeed(bool bBoss) const;
+    bool bEnemyWindingUp = false;
+    TWeakObjectPtr<class ATibetRitualEffect> WindupEffect;
+    void CancelEnemyWindup();
+    void UpdateEnemyAttack(APawn& Player, bool bBoss, float Dt);
     FTibetPlayerFeedback PlayerFeedback;
     TArray<FTibetDamageCue> DamageCues;
     float Health = 100, Mana = 100, HurtTimer = 0, Stun = 0, Shield = 0, NoticeUntil = 0;

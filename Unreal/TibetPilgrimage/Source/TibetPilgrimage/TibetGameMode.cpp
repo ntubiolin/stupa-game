@@ -448,6 +448,7 @@ int32 ATibetGameMode::NearestButterLamp(const FVector& Where) const
 }
 void ATibetGameMode::Refresh()
 {
+    CancelEnemyWindup();
     const auto K=Objective(Route,GetStep()).Kind;
     if (Map==TEXT("wild") && K==EObjective::Combat && !IsCampaignComplete())
     {
@@ -806,7 +807,11 @@ void ATibetGameMode::CastSkill(int32 Slot)
     }
     EnemyHealth = After;
     LastHitTime = GetWorld()->GetTimeSeconds();
-    if (Slot == 2 || Slot == 3) Stun = 2;
+    if (Slot == 2 || Slot == 3)
+    {
+        Stun = 2;
+        CancelEnemyWindup();
+    }
     FTibetEnemyMeter Meter;
     GetEnemyMeter(Meter);
     DamageCues.Add({Meter.Anchor, Damage, LastHitTime});
@@ -868,35 +873,69 @@ void ATibetGameMode::Tick(float Dt)
     if (EnemyMaximum > 0 && Focus)
     {
         FRotator Pose = Focus->GetActorRotation();
-        if (Stun <= 0 && Dist < 1600) Pose.Yaw = ToPlayer.Rotation().Yaw + 90;
+        if (!bEnemyWindingUp && Stun <= 0 && Dist < 1600) Pose.Yaw = ToPlayer.Rotation().Yaw + 90;
         const float Phase = FMath::Clamp((Now - LastHitTime) / .32f, 0.f, 1.f);
         Pose.Roll = -18 * FMath::Sin(Phase * UE_PI) * (1 - Phase);
         Focus->SetActorRotation(Pose);
     }
     if ((K==EObjective::Combat || K==EObjective::Boss) && Focus && Stun<=0 && Dist<1600)
+        UpdateEnemyAttack(*P, K == EObjective::Boss, Dt);
+    else
     {
-        const FVector Dir=ToPlayer.GetSafeNormal2D();
-        if(Dist>124) Focus->AddActorWorldOffset(Dir*FMath::Min<double>(Dt*PursuitSpeed(K==EObjective::Boss),Dist-120));
-        HurtTimer-=Dt;
-        if(Dist<200 && HurtTimer<=0)
-        {
-            HurtTimer=1.5f;
-            if (Shield <= 0)
-            {
-                const float Before = Health;
-                Health = FMath::Max(0.f, Health - (K == EObjective::Boss ? 16.f : 8.f));
-                PlayerFeedback.RecordHit(Now, Before, Health);
-            }
-            if(Health<=0)
-            {
-                P->TeleportTo(FVector(-2000,0,100),FRotator::ZeroRotator);
-                Health=MaxHealth(); Mana=MaxMana(); HealTicks.Reset(); Refresh();
-                SetNotice(Local(TEXT("Restored at the trailhead."),TEXT("已在登山口恢復。")));
-            }
-        }
+        CancelEnemyWindup();
+        Health=FMath::Min(MaxHealth(),Health+Dt*2);
     }
-    else Health=FMath::Min(MaxHealth(),Health+Dt*2);
 }
+
+void ATibetGameMode::CancelEnemyWindup()
+{
+    if (auto* Effect = WindupEffect.Get()) Effect->Destroy();
+    WindupEffect.Reset();
+    bEnemyWindingUp = false;
+}
+
+void ATibetGameMode::UpdateEnemyAttack(APawn& Player, bool bBoss, float Dt)
+{
+    constexpr float Radius = 200.f;
+    constexpr float Windup = .5f;
+    constexpr float Interval = 1.5f;
+    const FVector Offset = Player.GetActorLocation() - Focus->GetActorLocation();
+    const double Distance = Offset.Size2D();
+    HurtTimer -= Dt;
+    if (!bEnemyWindingUp)
+    {
+        if (Distance > 124)
+            Focus->AddActorWorldOffset(Offset.GetSafeNormal2D() *
+                FMath::Min<double>(Dt * PursuitSpeed(bBoss), Distance - 120));
+        if (Distance >= Radius || HurtTimer > Windup) return;
+
+        HurtTimer = Windup;
+        bEnemyWindingUp = true;
+        WindupEffect = GetWorld()->SpawnActor<ATibetRitualEffect>();
+        if (auto* Effect = WindupEffect.Get())
+            Effect->StartEnemyAttack(*Focus, false, bBoss, Radius, Windup, RitualMaterial);
+        return;
+    }
+    if (HurtTimer > 0) return;
+
+    // The attacker plants its feet through the tell. Check range again at release
+    // so stepping outside the ring avoids damage and shielding only blocks injury.
+    CancelEnemyWindup();
+    HurtTimer = Interval;
+    if (auto* Effect = GetWorld()->SpawnActor<ATibetRitualEffect>())
+        Effect->StartEnemyAttack(*Focus, true, bBoss, Radius, Windup, RitualMaterial);
+    if (Distance >= Radius || Shield > 0) return;
+    const float Before = Health;
+    Health = FMath::Max(0.f, Health - (bBoss ? 16.f : 8.f));
+    PlayerFeedback.RecordHit(GetWorld()->GetTimeSeconds(), Before, Health);
+    if (Health <= 0)
+    {
+        Player.TeleportTo(FVector(-2000,0,100),FRotator::ZeroRotator);
+        Health=MaxHealth(); Mana=MaxMana(); HealTicks.Reset(); Refresh();
+        SetNotice(Local(TEXT("Restored at the trailhead."),TEXT("已在登山口恢復。")));
+    }
+}
+
 void ATibetGameMode::ChangeLanguage()
 {
     if (!Save) return;

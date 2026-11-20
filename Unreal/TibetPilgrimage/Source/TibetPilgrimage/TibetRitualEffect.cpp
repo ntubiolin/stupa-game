@@ -350,6 +350,55 @@ void ATibetRitualEffect::StartImpact(const FVector& Position, const FVector& Out
     Animate();
 }
 
+void ATibetRitualEffect::StartEnemyAttack(AActor& Attacker, bool bStrike, bool bBoss, float Radius,
+    float Windup, UMaterialInterface* Material)
+{
+    SetOwner(&Attacker);
+    Slot = bStrike ? EnemyStrike : EnemyWindup;
+    Origin = Attacker.GetActorLocation() + Up * 12;
+    Facing = FRotator(0, Attacker.GetActorRotation().Yaw - 90, 0);
+    Duration = bStrike ? .38f : Windup;
+    FSurface Body, Rim;
+    if (!bStrike)
+    {
+        // The border remains at the exact damage radius while the teeth turn inward.
+        Body.Hoop(FVector::ZeroVector, FVector::ForwardVector, FVector::RightVector, Radius - 4, 4);
+        for (int32 I = 0; I < 8; ++I)
+        {
+            const FVector R = Radial(I * UE_TWO_PI / 8);
+            Rim.Leaf(R * (Radius - 10), R * (Radius - 35), (Up ^ R) * 8, Up * 9);
+        }
+    }
+    else if (bBoss)
+    {
+        Body.Hoop(Up * 8, FVector::ForwardVector, FVector::RightVector, Radius - 8, 8);
+        for (int32 I = 0; I < 12; ++I)
+        {
+            const FVector R = Radial(I * UE_TWO_PI / 12);
+            Rim.Leaf(R * 60, R * Radius + Up * (I % 2 ? 76 : 42), (Up ^ R) * 10, Up * 24);
+        }
+    }
+    else
+    {
+        // Two raised, tapered claw arcs read above a monster's feet and the terrain.
+        for (int32 J = 0; J < 2; ++J)
+        {
+            FSurface& Arc = J == 0 ? Body : Rim;
+            const auto Edge = [Radius, J](int32 Step, double Sign) {
+                const double T = Step / 12.;
+                return Radial((T - .5) * 2.65) * (Radius - 12 * J) +
+                    Up * (48 + 62 * T + 22 * J + Sign * (1 + 9 * FMath::Sin(T * UE_PI)));
+            };
+            for (int32 I = 0; I < 12; ++I)
+                Arc.Quad(Edge(I, -1), Edge(I + 1, -1), Edge(I + 1, 1), Edge(I, 1));
+        }
+    }
+    Body.Install(Motif, 0, Material, FLinearColor(1.65f,.025f,.035f));
+    Rim.Install(Motif, 1, Material, FLinearColor(2.f,.47f,.09f));
+    if (bStrike) SetLifeSpan(Duration);
+    Animate();
+}
+
 void ATibetRitualEffect::Tick(float Dt)
 {
     Super::Tick(Dt);
@@ -412,6 +461,15 @@ void ATibetRitualEffect::Animate()
         At = Target - Up * 109;
         Rotation.Yaw += 80 * Rise;
         Scale = FVector(1.06 + .46 * Rise, 1.06 + .46 * Rise, 1.02 + .38 * Rise) * (.45 + .55 * Fade);
+        break;
+    case EnemyWindup:
+        Rotation.Yaw += 30 * Rise;
+        Scale.Z = .5 + 2 * T;
+        break;
+    case EnemyStrike:
+        Scale = FVector(.55 + .45 * Rise, .55 + .45 * Rise, (.65 + .35 * Rise) * Fade);
+        Rotation.Yaw += 38 * (Rise - .5);
+        At.Z += 8 * Rise;
         break;
     case 7:
         Scale = FVector((bFinisher ? 1.35 : 1.) * (.35 + 1.08 * Rise) * (.35 + .65 * Fade));

@@ -303,9 +303,11 @@ def main():
         elif args.action == "feedback":
             for name, options, size in (("desktop", [], (1440, 900)), ("compact", ["-TibetTouch"], (884, 420))):
                 rows = capture(exe, stage, output, name, "Feedback", "terma3", options, slot+name, size)
-                for expected in (["objective-pulse"], ["ward-contact"], ["injury", "100", "84", "16"]):
+                for expected in (["objective-pulse"], ["enemy-windup"], ["enemy-strike"], ["enemy-interrupted"], ["enemy-dodged"], ["ward-contact"], ["injury", "100", "84", "16"]):
                     if expected not in rows:
                         raise ValueError(f"{name}: missing combat observation {expected}")
+                phases = [shot_data(output/name/(phase+".png"), size) for phase in ("enemy-windup", "enemy-strike")]
+                if phases[0] == phases[1]: raise ValueError(f"{name}: identical enemy attack phases")
                 frames = [output / name / (state + ".png") for state in ("ward", "injury", "settled")]
                 for frame in frames:
                     shot_data(frame, size)
