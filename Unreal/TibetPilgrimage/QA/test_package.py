@@ -9,6 +9,7 @@ import shutil
 import struct
 import subprocess
 import tempfile
+from uuid import uuid4
 from pathlib import Path
 from urllib.parse import quote
 
@@ -27,7 +28,8 @@ def temporary_root(executable):
         raise ValueError("Unexpected bundle identifier")
     root = Path.home() / "Library/Containers" / bundle_id / "Data/tmp"
     if not root.is_dir():
-        subprocess.run([executable, "-unattended", "-ExecCmds=quit"], cwd=executable.parent, check=True, timeout=100)
+        subprocess.run([executable, "-unattended", "-ExecCmds=quit", "-TibetSaveSlot=QA-bootstrap-" + uuid4().hex],
+                       cwd=executable.parent, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=100)
     return root
 
 
