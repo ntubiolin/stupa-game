@@ -22,6 +22,7 @@ private:
     void Photo(APlayerController& PC);
     void Arrival(APlayerController& PC);
     void Play(APlayerController& PC, ATibetGameMode& Mode);
+    void SkillEncounter(APlayerController& PC, ATibetGameMode& Mode);
     void Record(const FString& Line) const;
     bool FindWalkingPath(APawn& Pawn, const FVector& Goal, double Reach);
 
@@ -32,7 +33,8 @@ private:
     FRotator HeadingAfterDrag;
     FVector ArrivalPosition;
     double Began = 0, LastFrame = 0, LastAction = 0;
-    int32 NextSkill = 0, PendingSkillPhoto = INDEX_NONE;
+    int32 SkillPhase = 0, SkillHealthBefore = 0;
+    float SkillGameTime = 0;
     int32 Frames = 0, PreviousStep = INDEX_NONE, PreviousProgress = INDEX_NONE;
     bool bFinished = false, bMoving = false, bTestingSkills = false;
     FKey Tapped;

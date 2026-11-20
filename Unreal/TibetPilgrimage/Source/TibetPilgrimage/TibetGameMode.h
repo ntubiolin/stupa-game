@@ -19,6 +19,27 @@ public:
     UPROPERTY(SaveGame) bool bComplete = false;
 };
 
+struct FTibetDamageCue
+{
+    FVector Origin;
+    int32 Amount;
+    float SpawnTime;
+};
+
+struct FTibetEnemyMeter
+{
+    FVector Anchor = FVector::ZeroVector;
+    int32 Health = 0, Maximum = 0;
+    float Trailing = 0;
+};
+
+struct FTibetSkillState
+{
+    FString Name, Binding;
+    float Cost = 0, CooldownRemaining = 0, CooldownDuration = 0, ActiveRemaining = 0;
+    bool bUnlocked = false;
+};
+
 UCLASS()
 class TIBETPILGRIMAGE_API ATibetGameMode : public AGameModeBase
 {
@@ -35,6 +56,11 @@ public:
     bool IsCampaignComplete() const { return Save && Save->bComplete; }
     void Interact();
     void CastSkill(int32 Slot = 0);
+    FTibetSkillState GetSkillState(int32 Slot) const;
+    bool GetEnemyMeter(FTibetEnemyMeter& Meter) const;
+    const TArray<FTibetDamageCue>& GetDamageCues() const { return DamageCues; }
+    float GetMana() const { return Mana; }
+    float GetHealth() const { return Health; }
     void ChangeLanguage();
     FString AreaName() const;
     FString Status(bool bTouchControls) const;
@@ -50,7 +76,10 @@ private:
     UPROPERTY() TObjectPtr<AActor> Messenger;
     FString Map, Route, SlotName;
     int32 LitStupaLamps = 0;
-    int32 EnemyHealth = 0;
+    int32 EnemyHealth = 0, EnemyMaximum = 0;
+    float EnemyTrailing = 0, LastHitTime = -10, FinishTime = -10;
+    FTibetEnemyMeter FinishingMeter;
+    TArray<FTibetDamageCue> DamageCues;
     float Health = 100, Mana = 100, HurtTimer = 0, Stun = 0, Shield = 0, NoticeUntil = 0;
     float Cooldown[7]{};
     FString Notice;

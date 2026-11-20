@@ -2,6 +2,7 @@
 #include "TibetGameMode.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/Canvas.h"
+#include "Engine/Engine.h"
 #include "GameFramework/PlayerController.h"
 #include "Fonts/CompositeFont.h"
 #include "Misc/Paths.h"
@@ -99,6 +100,37 @@ void ATibetHUD::DrawHUD()
     const auto* M=GetWorld()->GetAuthGameMode<ATibetGameMode>();
     const auto* PC=GetOwningPlayerController();
     if(!Overlay || !Canvas || !PC || !PC->GetPawn() || !M || M->IsCampaignComplete()) return;
+    const float HScale = FMath::Clamp(Canvas->SizeY / 800.f, .76f, 1.4f);
+    FTibetEnemyMeter Meter;
+    const bool HasEnemy = M->GetEnemyMeter(Meter);
+    FVector2D At;
+    if (HasEnemy && PC->ProjectWorldLocationToScreen(Meter.Anchor, At, true) &&
+        At.X > 0 && At.X < Canvas->SizeX && At.Y < Canvas->SizeY - 8)
+    {
+        const float Width = 96 * HScale, Height = 7 * HScale;
+        const float X = FMath::Clamp(float(At.X) - Width * .5f, 6.f, Canvas->SizeX - Width - 6.f);
+        const float Y = FMath::Clamp(float(At.Y), 18.f, Canvas->SizeY - 20.f);
+        const FLinearColor Frame(.095f,.066f,.069f,.94f);
+        DrawRect(Frame, X-2, Y-2, Width+4, Height+4);
+        DrawRect(FLinearColor(.23f,.14f,.15f), X, Y, Width, Height);
+        DrawRect(FLinearColor(1,.73f,.31f), X, Y, Width * Meter.Trailing / Meter.Maximum, Height);
+        DrawRect(FLinearColor(.83f,.19f,.18f), X, Y, Width * Meter.Health / Meter.Maximum, Height);
+        for (int32 I = 1; I < Meter.Maximum; ++I)
+            DrawRect(Frame, X + Width * I / Meter.Maximum, Y + Height * .59f, HScale, Height * .41f);
+    }
+    const float Now = GetWorld()->GetTimeSeconds();
+    for (const FTibetDamageCue& Cue : M->GetDamageCues())
+    {
+        const float T = FMath::Clamp((Now - Cue.SpawnTime) / 1.05f, 0.f, 1.f);
+        if (!PC->ProjectWorldLocationToScreen(Cue.Origin, At, true)) continue;
+        const float Alpha = 1 - FMath::SmoothStep(.58f,1.f,T);
+        const float X = At.X + (9 + 18 * T) * HScale;
+        const float Y = FMath::Max(3.f, float(At.Y) - (29 + 47 * T) * HScale);
+        const float Size = HScale * (1.22f + .18f * (1 - T));
+        const FString Loss = FString::Printf(TEXT("-%d"), Cue.Amount);
+        DrawText(Loss, FLinearColor(.08f,.03f,.025f,Alpha), X + 2, Y + 2, GEngine->GetMediumFont(), Size);
+        DrawText(Loss, FLinearColor(1,.86f,.49f,Alpha), X, Y, GEngine->GetMediumFont(), Size);
+    }
     const FVector Target=M->GetObjectiveLocation()+FVector(0,0,130);
     FVector2D Point;
     const bool InFront=PC->ProjectWorldLocationToScreen(Target,Point,true);
@@ -125,6 +157,7 @@ void ATibetHUD::DrawHUD()
         DrawLine(Base.X-Side.X*R,Base.Y-Side.Y*R,Tip.X,Tip.Y,Gold,2);
         return;
     }
+    if (HasEnemy && Meter.Health > 0) return;
     DrawLine(X,Y-R,X+R,Y,Gold,2); DrawLine(X+R,Y,X,Y+R,Gold,2);
     DrawLine(X,Y+R,X-R,Y,Gold,2); DrawLine(X-R,Y,X,Y-R,Gold,2);
 }

@@ -1,6 +1,8 @@
 #include "TibetQASubsystem.h"
 #include "TibetCameraSettings.h"
 #include "TibetGameMode.h"
+#include "TibetRitualEffect.h"
+#include "EngineUtils.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "Camera/PlayerCameraManager.h"
@@ -298,31 +300,10 @@ void UTibetQASubsystem::Play(APlayerController& PC, ATibetGameMode& Mode)
     if (Mode.IsCampaignComplete() && Task == TEXT("Campaign"))
     { Finish(true,TEXT("campaign completed")); return; }
 
-    if (Task == TEXT("Skills") && (bTestingSkills || (Kind == TEXT("Boss") && FVector::Dist2D(Pos,Goal)<900)))
+    if (Task == TEXT("Skills") && (bTestingSkills || Kind == TEXT("Boss")))
     {
         bTestingSkills = true;
-        if (bMoving) { SendKey(PC,EKeys::W,false); bMoving=false; }
-        // InputKey queues the bound action. Photograph after PlayerInput and the renderer
-        // have processed it, while the short-lived spell meshes are still present.
-        if (PendingSkillPhoto != INDEX_NONE)
-        {
-            if (Now-LastAction >= 0.12 && !FScreenshotRequest::IsScreenshotRequested())
-            {
-                FScreenshotRequest::RequestScreenshot(Output / FString::Printf(TEXT("skill-%d.png"),PendingSkillPhoto),true,false,false);
-                PendingSkillPhoto=INDEX_NONE;
-            }
-            return;
-        }
-        if (Now - LastAction < 2.5 || FScreenshotRequest::IsScreenshotRequested()) return;
-        const FKey Keys[] = {EKeys::SpaceBar,EKeys::R,EKeys::One,EKeys::Two,EKeys::Three,EKeys::Four,EKeys::T};
-        if (NextSkill == UE_ARRAY_COUNT(Keys)) { Finish(true,TEXT("skill inputs")); return; }
-        Tapped = Keys[NextSkill];
-        PC.SetControlRotation((Goal-Pos).Rotation());
-        SendKey(PC,Tapped,true);
-        PendingSkillPhoto=NextSkill;
-        Record(FString::Printf(TEXT("skillKey\t%d\t%s"),NextSkill,*Tapped.ToString()));
-        LastAction = Now;
-        ++NextSkill;
+        SkillEncounter(PC, Mode);
         return;
     }
     const bool bFight = Kind == TEXT("Combat") || Kind == TEXT("Boss");
@@ -351,4 +332,95 @@ void UTibetQASubsystem::Play(APlayerController& PC, ATibetGameMode& Mode)
         SendKey(PC,Tapped,true);
         LastAction=Now;
     }
+}
+
+
+// Each invocation walks a fresh vault and casts into the same living guardian.
+void UTibetQASubsystem::SkillEncounter(APlayerController& PC, ATibetGameMode& Mode)
+{
+    static const FKey Keys[] = {EKeys::SpaceBar,EKeys::R,EKeys::One,EKeys::Two,EKeys::Three,EKeys::Four,EKeys::T};
+    static const int32 Power[] = {1,2,3,3,0,4,6};
+    int32 Slot = 0;
+    FParse::Value(FCommandLine::Get(), TEXT("TibetQASkillSlot="), Slot);
+    const bool Miss = FParse::Param(FCommandLine::Get(), TEXT("TibetQAMiss"));
+    const bool Finisher = FParse::Param(FCommandLine::Get(), TEXT("TibetQAFinisher"));
+    if (Slot < 0 || Slot >= UE_ARRAY_COUNT(Keys)) { Finish(false, TEXT("Invalid skill probe")); return; }
+    const float Time = GetWorld()->GetTimeSeconds();
+    const FVector Pos = PC.GetPawn()->GetActorLocation(), Goal = Mode.GetObjectiveLocation();
+    const float Dist = FVector::Dist2D(Pos, Goal);
+    FTibetEnemyMeter Meter;
+    if (SkillPhase == 0)
+    {
+        if (FScreenshotRequest::IsScreenshotRequested()) return;
+        const bool Walk = Miss ? Dist < 940 : Dist > 380;
+        if (Walk)
+        {
+            // The entrance corridor leads along the X axis and has already been walked.
+            const FVector Direction = Miss ? FVector(-1,0,0) : (Goal-Pos).GetSafeNormal2D();
+            PC.SetControlRotation(Direction.Rotation());
+            if (!bMoving) { SendKey(PC,EKeys::W,true); bMoving = true; }
+            return;
+        }
+        if (bMoving) { SendKey(PC,EKeys::W,false); bMoving = false; }
+        if (!Mode.GetEnemyMeter(Meter) || Meter.Health <= 0) { Finish(false,TEXT("Expected living guardian")); return; }
+        PC.SetControlRotation((Goal + FVector(0,0,85) - Pos).Rotation());
+        SkillHealthBefore = Meter.Health;
+        Tapped = Keys[Slot];
+        SendKey(PC,Tapped,true);
+        SkillGameTime = Time;
+        SkillPhase = 1;
+        return;
+    }
+    if (SkillPhase == 1)
+    {
+        if (Time - SkillGameTime < .16f || FScreenshotRequest::IsScreenshotRequested()) return;
+        const int32 Damage = Miss ? 0 : FMath::Min(Power[Slot], SkillHealthBefore);
+        const auto& Cues = Mode.GetDamageCues();
+        const bool CorrectCue = Damage ? !Cues.IsEmpty() && Cues.Last().Amount == Damage : Cues.IsEmpty();
+        if (!Mode.GetEnemyMeter(Meter) || Meter.Health != SkillHealthBefore - Damage ||
+            Meter.Trailing < Meter.Health || (Damage && Meter.Trailing <= Meter.Health) ||
+            !CorrectCue || Mode.GetSkillState(Slot).CooldownRemaining <= 0)
+        { Finish(false,TEXT("Health, trailing bar, cooldown or damage cue disagrees with cast")); return; }
+        int32 CastEffects = 0, Impacts = 0;
+        for (TActorIterator<ATibetRitualEffect> Effect(GetWorld()); Effect; ++Effect)
+        {
+            if (Effect->GetEffectSlot() == Slot) ++CastEffects;
+            if (Effect->GetEffectSlot() == 7) ++Impacts;
+        }
+        if (CastEffects != 1 || Impacts != (Damage > 0 ? 1 : 0))
+        { Finish(false,TEXT("Expected cast and hit-only impact geometry")); return; }
+        Record(FString::Printf(TEXT("combat\t%d\t%d\t%d\t%d\t%.2f\t%d\t%d"),
+            Slot, SkillHealthBefore, Meter.Health, Damage, Meter.Trailing, CastEffects, Impacts));
+        Screenshot = Output / FString::Printf(TEXT("skill-%d.png"),Slot);
+        FScreenshotRequest::RequestScreenshot(Screenshot,true,false,false);
+        SkillPhase = 2;
+        return;
+    }
+    if (FScreenshotRequest::IsScreenshotRequested() || IFileManager::Get().FileSize(*Screenshot) <= 0) return;
+    if (Finisher && SkillPhase == 2)
+    {
+        if (Time - SkillGameTime < 1.12f) return;
+        if (!Mode.GetEnemyMeter(Meter) || Meter.Health != 3 || !Mode.GetDamageCues().IsEmpty())
+        { Finish(false,TEXT("Expected three remaining health and expired first cue")); return; }
+        SkillHealthBefore = Meter.Health;
+        Tapped = EKeys::Four;
+        SendKey(PC,Tapped,true);
+        SkillGameTime = Time;
+        SkillPhase = 3;
+        return;
+    }
+    if (Finisher && SkillPhase == 3)
+    {
+        if (Time - SkillGameTime < .15f) return;
+        const auto& Cues = Mode.GetDamageCues();
+        if (!Mode.GetEnemyMeter(Meter) || Meter.Health != 0 || Meter.Trailing <= 0 ||
+            Cues.Num() != 1 || Cues[0].Amount != SkillHealthBefore || Mode.GetObjectiveKind() == TEXT("Boss"))
+        { Finish(false,TEXT("Finishing loss or objective transition incorrect")); return; }
+        Record(FString::Printf(TEXT("finisher\t%d\t%d\t%d"), SkillHealthBefore, Meter.Health, Cues[0].Amount));
+        Screenshot = Output / TEXT("finisher.png");
+        FScreenshotRequest::RequestScreenshot(Screenshot,true,false,false);
+        SkillPhase = 4;
+        return;
+    }
+    Finish(true,TEXT("skill feedback"));
 }

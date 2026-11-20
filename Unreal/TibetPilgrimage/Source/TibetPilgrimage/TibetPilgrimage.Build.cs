@@ -11,7 +11,7 @@ public class TibetPilgrimage : ModuleRules
         });
         PrivateDependencyModuleNames.AddRange(new[]
         {
-            "Json", "JsonUtilities", "Slate", "SlateCore"
+            "Json", "JsonUtilities", "Slate", "SlateCore", "ProceduralMeshComponent"
         });
     }
 }
