@@ -19,12 +19,15 @@ python3 "$qa/test_package.py" photos --exe "$app" --output "$result/mac"
 python3 "$qa/test_package.py" arrival --exe "$app" --output "$result/arrival"
 python3 "$qa/test_package.py" play --exe "$app" --output "$result/play"
 python3 "$qa/test_package.py" skills --exe "$app" --output "$result/skills"
+python3 "$qa/capture_passages.py" --exe "$app" --output "$result/passages"
 python3 "$qa/test_package.py" learned --exe "$app" --output "$result/learned"
 python3 "$qa/test_package.py" journal --exe "$app" --output "$result/journal"
 python3 "$qa/test_package.py" compare --web "$result/web" --mac "$result/mac" --output "$result/comparison"
 ```
 
 arrival 使用新存檔和預設開場鏡頭，確認塔座、塔尖與洛桑都在畫面內，並保存玩家進場原圖。接著透過遊戲輸入實測游標移動、右鍵拖曳，以及放開右鍵後邊走邊移動游標時的鏡頭朝向。
+
+capture_passages.py 從青浦走上洞口階梯，再穿越伏藏三層。每一層都擷取一般玩家鏡頭下傳送門明暗兩相、量測可見門柱像素與實際進門高度，並在固定機位檢查燭光能照見地面、拱頂保留暗部。關卡產生前可執行 `python3 Unreal/TibetPilgrimage/QA/test_cave_passages.py` 檢查六張地圖的階面、洞頂淨空及互動位置。
 
 learned 從伏藏第三層走回青浦與博達哈，重開後實際施放上師心咒，另用新存檔核對鎖定狀態及法力。
 
