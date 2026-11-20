@@ -12,5 +12,5 @@ namespace TojiFigures
         const FVector& Position, const FVector& Size, const FLinearColor& Color,
         const FRotator& Rotation = FRotator::ZeroRotator);
     void Person(AActor& Owner, USceneComponent& Parent, bool bPilgrim,
-        TArray<UStaticMeshComponent*>* Limbs = nullptr);
+        TArray<USceneComponent*>* Limbs = nullptr);
 }

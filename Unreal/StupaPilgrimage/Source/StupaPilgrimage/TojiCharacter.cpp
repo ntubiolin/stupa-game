@@ -3,7 +3,7 @@
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/InputComponent.h"
-#include "Components/StaticMeshComponent.h"
+#include "Components/SceneComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -63,11 +63,13 @@ void ATojiCharacter::Tick(float DeltaSeconds)
     }
     const float Speed = GetVelocity().Size2D();
     WalkTime += DeltaSeconds * Speed * 0.022f;
-    const float Swing = FMath::Sin(WalkTime) * FMath::Min(Speed / 15.0f, 24.0f);
+    GaitWeight = FMath::FInterpTo(GaitWeight, FMath::Clamp(Speed / 520.0f, 0.0f, 1.0f), DeltaSeconds, 10);
+    const float Swing = FMath::Sin(WalkTime) * GaitWeight;
     for (int32 Index = 0; Index < Limbs.Num(); ++Index)
     {
         const float Direction = (Index == 0 || Index == 3) ? 1.0f : -1.0f;
-        Limbs[Index]->SetRelativeRotation(FRotator(Direction * Swing, 0, 0));
+        const float Sweep = Index % 2 == 0 ? 19.0f : 13.0f;
+        Limbs[Index]->SetRelativeRotation(FRotator(Direction * Swing * Sweep, 0, 0));
     }
 }
 

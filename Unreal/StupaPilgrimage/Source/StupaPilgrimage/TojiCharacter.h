@@ -4,8 +4,6 @@
 #include "GameFramework/Character.h"
 #include "TojiCharacter.generated.h"
 
-class UStaticMeshComponent;
-
 UCLASS()
 class STUPAPILGRIMAGE_API ATojiCharacter : public ACharacter
 {
@@ -24,10 +22,11 @@ private:
     TObjectPtr<USceneComponent> Figure;
 
     UPROPERTY()
-    TArray<UStaticMeshComponent*> Limbs;
+    TArray<USceneComponent*> Limbs;
 
     FVector Trailhead;
     float WalkTime = 0;
+    float GaitWeight = 0;
     void Interact();
     void Cast();
     void ChangeLanguage();
