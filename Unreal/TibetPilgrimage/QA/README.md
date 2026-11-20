@@ -54,6 +54,8 @@ pack 用獨立存檔在北郊實際受擊、服用甘露丸、調伏靈障取得
 
 journal 分別在繁中、英文桌面及 884 × 420 英文觸控預覽擷取技能列、地圖、技能與操作設定。測試會透過遊戲輸入開關選單，確認暫停期間的移動、滑鼠轉向與施法不會影響遊戲，並於返回後實際移動角色。
 
+以 `test_package.py score --exe <執行檔> --output <目錄>` 驗證廣場日夜、北郊及伏藏的曲目、循環旗標和播放狀態。每段從遊戲主混音讀回五秒 PCM 並量測 RMS。
+
 ## iPhone 17 Pro Max 裝置封裝
 
 在 Mac 安裝 UE 5.8 的 iOS 平台元件、iPhoneOS SDK 與 Metal 編譯器。從 `Unreal/TibetPilgrimage` 執行下列命令。若工作區尚無產生的關卡，先依專案 README 完成 `build-editor` 和 `generate`。
