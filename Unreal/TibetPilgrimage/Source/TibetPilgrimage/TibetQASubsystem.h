@@ -27,6 +27,7 @@ private:
     void Photo(APlayerController& PC);
     void Arrival(APlayerController& PC);
     void Courtyard(APlayerController& PC, ATibetGameMode& Mode);
+    FName HoveredCourtyardControl;
     bool TapPlayControl(FName Tag, float XFraction=.5f);
     int32 CourtyardStep=0;
     float CheckedPhase=0, CheckedFlame=0, ClockStarted=0;
