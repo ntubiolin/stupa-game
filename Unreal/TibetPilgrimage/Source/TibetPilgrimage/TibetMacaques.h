@@ -16,6 +16,7 @@ public:
     void SetDaylight(float Value) { Daylight=Value; }
     void Attend(int32 Index) { Attending=Index; }
     bool IsEating(int32 Index) const;
+    bool HoldingFruit(int32 Index, FVector& FruitPosition, float& ToeClearance) const;
 private:
     struct FAnimal
     {

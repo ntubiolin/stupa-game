@@ -36,6 +36,17 @@ def compare_light_and_wind(day_a, day_b, night):
     return values
 
 
+def visible_offering(path):
+    # The fixed three-quarter camera puts the palm between the eyes and the
+    # near edge of the silhouette. Sample the yellow peel in that region.
+    width,height,pixel=bitmap(path,(480,300))
+    peel=sum(1 for x in range(width//3,width//2) for y in range(height//4,height//2)
+             for r,g,b in [pixel(x,y)] if min(r,g)-b>35 and abs(r-g)<30 and b<.51*g)
+    if peel<35:
+        raise ValueError(f"Offered banana is obscured: {peel} yellow samples beside the muzzle")
+    return peel
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--exe",type=Path,required=True)
@@ -55,6 +66,7 @@ def main():
             raise ValueError("The macaque or banana rendered with Unreal's fallback material")
         hashes={s:shot_data(output/"play"/(s+".png")) for s in
                 ("macaque","feeding","offered","feeding-banana","flags-a","flags-b","night","butter-lamp")}
+        peel=visible_offering(output/"play/feeding-banana.png")
         motion=compare_light_and_wind(*(output/"play"/(s+".png") for s in ("flags-a","flags-b","night")))
         capture(exe,root,output,"resume","CourtyardResume","stupa",[],slot)
         view=next(v for v in VIEWS if v["id"]=="terma1")
@@ -66,7 +78,7 @@ def main():
             vault[phase]=candlelight(output/name/"capture.png")
         if abs(vault["day"]["floorMedian"]-vault["night"]["floorMedian"])>8:
             raise ValueError(f"Outdoor clock changed the underground illumination: {vault}")
-        (output/"courtyard.json").write_text(json.dumps({"images":hashes,"motion":motion,"vault":vault},indent=2))
+        (output/"courtyard.json").write_text(json.dumps({"images":hashes,"motion":motion,"vault":vault,"bananaPixels":peel},indent=2))
 
 
 if __name__=="__main__":
