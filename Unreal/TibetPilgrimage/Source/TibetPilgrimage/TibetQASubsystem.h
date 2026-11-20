@@ -17,9 +17,11 @@ public:
     virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
     virtual TStatId GetStatId() const override;
     virtual void Tick(float DeltaSeconds) override;
-    virtual bool IsTickableWhenPaused() const override { return Task==TEXT("Journal") || Task==TEXT("CameraFollow"); }
+    virtual bool IsTickableWhenPaused() const override { return Task==TEXT("Dialogue") || Task==TEXT("Journal") || Task==TEXT("CameraFollow"); }
 private:
     void Finish(bool bSuccess, const FString& Detail);
+    void DialogueTest(APlayerController& PC, ATibetGameMode& Mode);
+    int32 DialoguePhase = 0;
     void Journal(APlayerController& PC, ATibetGameMode& Mode);
     void Photo(APlayerController& PC);
     void Arrival(APlayerController& PC);

@@ -8,6 +8,7 @@
 #include "TibetCharacter.h"
 #include "TibetPlayOverlay.h"
 #include "Framework/Application/SlateApplication.h"
+#include "Fonts/FontMeasure.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 
@@ -40,6 +41,7 @@ void ATibetHUD::ToggleJournal(ETibetPage Next)
     if (!IsJournalOpen())
     {
         if (auto* Pilgrim=Cast<ATibetCharacter>(PC->GetPawn())) Pilgrim->CancelGameplayInput();
+        if (auto* Mode=GetWorld()->GetAuthGameMode<ATibetGameMode>()) Mode->PauseDialogue(true);
         bCursorBeforeJournal=PC->bShowMouseCursor;
         bPausedByJournal=!PC->IsPaused() && PC->SetPause(true);
         PC->SetShowMouseCursor(true);
@@ -60,6 +62,7 @@ void ATibetHUD::CloseJournal()
         PC->SetShowMouseCursor(bCursorBeforeJournal);
         if (auto* Pilgrim=Cast<ATibetCharacter>(PC->GetPawn())) Pilgrim->CancelGameplayInput();
     }
+    if (auto* Mode=GetWorld()->GetAuthGameMode<ATibetGameMode>()) Mode->PauseDialogue(false);
     bPausedByJournal=false;
     if (Overlay) Overlay->Show(Page);
     FSlateApplication::Get().SetAllUserFocusToGameViewport();
@@ -67,6 +70,7 @@ void ATibetHUD::CloseJournal()
 void ATibetHUD::DrawHUD()
 {
     Super::DrawHUD();
+    bDrewInteraction = false;
     const auto* M=GetWorld()->GetAuthGameMode<ATibetGameMode>();
     const auto* PC=GetOwningPlayerController();
     if(IsJournalOpen() || !Overlay || !Canvas || !PC || !PC->GetPawn() || !M || M->IsCampaignComplete()) return;
@@ -130,6 +134,23 @@ void ATibetHUD::DrawHUD()
         Numeral.OutlineColor = FLinearColor(.045f,.016f,.012f,Alpha);
         Numeral.EnableShadow(FLinearColor(.045f,.016f,.012f,Alpha),FVector2D(2,3));
         Canvas->DrawItem(Numeral);
+    }
+    FVector CueAnchor;
+    if (M->GetInteractionCue(CueAnchor) && PC->ProjectWorldLocationToScreen(CueAnchor, At, true))
+    {
+        const FString Label = Overlay->IsTouch() ? M->Local(TEXT("Tap Act"),TEXT("點選互動")) : TEXT("[E]");
+        FCanvasTextItem Key(FVector2D::ZeroVector, FText::FromString(Label), Overlay->Font(FMath::RoundToInt(16 * HScale)),
+            FLinearColor(1.f,.90f,.64f));
+        const FVector2D Size = FSlateApplication::Get().GetRenderer()->GetFontMeasureService()->Measure(Label, Key.SlateFontInfo.GetValue());
+        const FVector2D Corner(At.X - Size.X * .5 - 7, At.Y - Size.Y - 6);
+        if (Corner.X >= 0 && Corner.Y >= 0 && Corner.X+Size.X+14 < Canvas->SizeX && At.Y < Canvas->SizeY)
+        {
+            DrawRect(FLinearColor(.045f,.055f,.05f,.95f), Corner.X, Corner.Y, Size.X+14, Size.Y+6);
+            bDrewInteraction = true;
+            Key.Position = Corner + FVector2D(7,3);
+            Canvas->DrawItem(Key);
+            return;
+        }
     }
     const FVector Target=M->GetObjectiveLocation()+FVector(0,0,130);
     FVector2D Point;

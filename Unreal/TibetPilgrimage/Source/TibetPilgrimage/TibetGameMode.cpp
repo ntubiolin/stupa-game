@@ -1,6 +1,10 @@
 #include "TibetGameMode.h"
 #include "TibetCharacter.h"
 #include "TibetHUD.h"
+#include "TibetVoice.h"
+#include "Async/Async.h"
+#include "Misc/App.h"
+#include "GameFramework/PlayerController.h"
 #include "TibetRitualEffect.h"
 #include "TibetTravelGate.h"
 #include "Components/CapsuleComponent.h"
@@ -17,7 +21,7 @@
 namespace
 {
 enum class EObjective { Talk, Kora, Interact, Reach, Combat, Boss, Escort, Gate };
-struct FObjective { EObjective Kind; const TCHAR* En; const TCHAR* Zh; int32 Count; const TCHAR* SpeechEn; const TCHAR* SpeechZh; const TCHAR* Resident = nullptr; };
+struct FObjective { EObjective Kind; const TCHAR* En; const TCHAR* Zh; int32 Count; const TCHAR* SpeechEn; const TCHAR* SpeechZh; const TCHAR* Resident = nullptr; const TCHAR* SpeakerEn = nullptr; const TCHAR* SpeakerZh = nullptr; };
 const TMap<FString,TArray<FObjective>>& Routes()
 {
     static const TMap<FString,TArray<FObjective>> Table = {
@@ -151,7 +155,10 @@ void ATibetGameMode::StartPlay()
     if (Map==TEXT("stupa"))
     {
         if (auto* Gate = GetWorld()->SpawnActor<ATibetTravelGate>(GroveGate, FRotator::ZeroRotator))
+        {
             Gate->SetSidePath();
+            SideGate = Gate;
+        }
     }
     PopulateResidents();
     Store();
@@ -301,16 +308,54 @@ bool ATibetGameMode::HasVisitedArea(int32 Index) const
 ATibetGameMode::EInteraction ATibetGameMode::InteractionAt(const FVector& PlayerLocation) const
 {
     if (!Save || bTravel || IsCampaignComplete()) return EInteraction::None;
-    if (Map==TEXT("stupa") && FVector::Dist2D(PlayerLocation,GroveGate)<215) return EInteraction::Grove;
-    if (FVector::Dist2D(PlayerLocation,GetObjectiveLocation())>225 ||
+    const APawn* Pawn = UGameplayStatics::GetPlayerPawn(this,0);
+    if (!Pawn) return EInteraction::None;
+    const double Feet = PlayerLocation.Z - Pawn->GetSimpleCollisionHalfHeight();
+    if (SideGate && FMath::Abs(Feet - GroveGate.Z) < 110 && FVector::Dist2D(PlayerLocation,GroveGate)<215 &&
+        ClearSight(Pawn->GetPawnViewLocation(), GroveGate + FVector(0,0,135), SideGate))
+        return EInteraction::Grove;
+    if (FMath::Abs(Feet - GetObjectiveLocation().Z) > 110 || FVector::Dist2D(PlayerLocation,GetObjectiveLocation())>225 ||
         !OnObjectiveFloor(UGameplayStatics::GetPlayerPawn(this,0), Anchor())) return EInteraction::None;
     switch (Objective(Route,GetStep()).Kind)
     {
-    case EObjective::Gate: return EInteraction::Gate;
-    case EObjective::Talk: return ActiveResident() ? EInteraction::Talk : EInteraction::None;
+    case EObjective::Gate:
+        return Focus && ClearSight(Pawn->GetPawnViewLocation(), GetObjectiveLocation() + FVector(0,0,135), Focus)
+            ? EInteraction::Gate : EInteraction::None;
+    case EObjective::Talk:
+        if (auto* Target = ActiveResident())
+        {
+            FVector Center, Extent;
+            Target->GetActorBounds(false, Center, Extent);
+            if (ClearSight(Pawn->GetPawnViewLocation(), Center + FVector(0,0,.5 * Extent.Z), Target)) return EInteraction::Talk;
+        }
+        return EInteraction::None;
     case EObjective::Interact: return EInteraction::Use;
     default: return EInteraction::None;
     }
+}
+bool ATibetGameMode::ClearSight(const FVector& From, const FVector& To, const AActor* Target) const
+{
+    FCollisionQueryParams Query(SCENE_QUERY_STAT(TibetInteraction), false, Target);
+    Query.AddIgnoredActor(UGameplayStatics::GetPlayerPawn(this,0));
+    return !GetWorld()->LineTraceTestByChannel(From, To, ECC_Visibility, Query);
+}
+
+bool ATibetGameMode::GetInteractionCue(FVector& WorldAnchor) const
+{
+    const auto* PC = GetWorld()->GetFirstPlayerController();
+    if (!PC || !PC->GetPawn()) return false;
+    const EInteraction Action = InteractionAt(PC->GetPawn()->GetActorLocation());
+    const AActor* Target = nullptr;
+    if (Action == EInteraction::Talk) Target = ActiveResident();
+    else if (Action == EInteraction::Grove) Target = SideGate;
+    else if (Action == EInteraction::Gate) Target = Focus;
+    if (!Target) return false;
+    FVector Center, Extent, Eye;
+    FRotator View;
+    Target->GetActorBounds(false, Center, Extent);
+    WorldAnchor = Center + FVector(0, 0, Extent.Z + 14);
+    PC->GetPlayerViewPoint(Eye, View);
+    return ClearSight(Eye, Center + FVector(0,0,.5 * Extent.Z), Target) && ClearSight(Eye, WorldAnchor, Target);
 }
 FString ATibetGameMode::ActionLabel(EInteraction Action) const
 {
@@ -342,7 +387,7 @@ FString ATibetGameMode::Status(bool bTouchControls) const
     if (P)
     {
         const EInteraction Action=InteractionAt(P->GetActorLocation());
-        if (Action!=EInteraction::None)
+        if (Action==EInteraction::Use)
         {
             S+=bTouchControls ? Local(TEXT("\nTap Act · "),TEXT("\n點選「互動」・")) : Local(TEXT("\nTap E · "),TEXT("\n輕按 E・"));
             S+=ActionLabel(Action);
@@ -484,13 +529,115 @@ void ATibetGameMode::Interact()
         Pulse(GetObjectiveLocation()+FVector(0,0,80),Gold,.6);
         if(Action==EInteraction::Talk)
         {
-            const auto& O=Objective(Route,GetStep());
-            SetNotice(Local(O.SpeechEn,O.SpeechZh));
-            NoticeUntil=GetWorld()->GetTimeSeconds()+12;
+            BeginDialogue(GetStep());
         }
         Advance();
     }
 }
+void ATibetGameMode::BeginDialogue(int32 ObjectiveIndex)
+{
+    StopDialogue();
+    DialogueIndex = ObjectiveIndex;
+    const auto& Line = Objective(Route, ObjectiveIndex);
+    Speaker = Local(Line.SpeakerEn, Line.SpeakerZh);
+    Dialogue = Local(Line.SpeechEn, Line.SpeechZh);
+    const int32 Limit = IsEnglish() ? 82 : 32;
+    for (int32 Start = 0; Start < Dialogue.Len();)
+    {
+        PageStarts.Add(Start);
+        int32 End = FMath::Min(Start + Limit, Dialogue.Len());
+        if (End < Dialogue.Len())
+        {
+            // Keep English words and short phrases together, including their closing punctuation.
+            int32 Space = 0;
+            for (int32 I = End - 1; I > Start + Limit / 3; --I)
+            {
+                if (FChar::IsWhitespace(Dialogue[I]) && !Space) Space = I + 1;
+                if (FCString::Strchr(TEXT("，。！？、；：,.!?;:—"), Dialogue[I])) { End = I + 1; Space = 0; break; }
+            }
+            if (Space) End = Space;
+            while (End < Dialogue.Len() && FCString::Strchr(TEXT("」』）”"), Dialogue[End])) ++End;
+        }
+        Start = End;
+    }
+    bVoicePending = true;
+    PageDeadline = GetWorld()->GetTimeSeconds() + 1.0 + DialoguePage().Len() / (IsEnglish() ? 14. : 4.);
+    if (!bDialoguePaused) StartDialogueVoice();
+}
+
+void ATibetGameMode::StartDialogueVoice()
+{
+    bVoicePending = false;
+    // Existing automated campaigns run unattended. Only the audio QA scenario opts into audible playback.
+    if (FParse::Param(FCommandLine::Get(), TEXT("nosound")) ||
+        (FApp::IsUnattended() && !FParse::Param(FCommandLine::Get(), TEXT("TibetQAVoice")))) return;
+    bVoiceRequested = true;
+    const auto Owner = TWeakObjectPtr<ATibetGameMode>(this);
+    const uint32 Generation = VoiceGeneration;
+    TibetVoice::Speak(TCHAR_TO_UTF8(*Dialogue), IsEnglish(), [Owner, Generation](int Offset) {
+        AsyncTask(ENamedThreads::GameThread, [Owner, Generation, Offset] {
+            if (Owner.IsValid() && Owner->VoiceGeneration == Generation) Owner->SetDialogueWord(Offset);
+        });
+    }, [Owner, Generation] {
+        AsyncTask(ENamedThreads::GameThread, [Owner, Generation] {
+            if (!Owner.IsValid() || Owner->VoiceGeneration != Generation) return;
+            Owner->PageIndex = Owner->PageStarts.Num() - 1;
+            Owner->PageDeadline = Owner->GetWorld()->GetTimeSeconds() + 1.4;
+        });
+    });
+}
+
+FString ATibetGameMode::DialoguePage() const
+{
+    if (!PageStarts.IsValidIndex(PageIndex)) return {};
+    const int32 Start = PageStarts[PageIndex];
+    const int32 End = PageStarts.IsValidIndex(PageIndex + 1) ? PageStarts[PageIndex + 1] : Dialogue.Len();
+    return Dialogue.Mid(Start, End - Start).TrimStartAndEnd();
+}
+
+void ATibetGameMode::SetDialogueWord(int32 Offset)
+{
+    if (!bSpokenWord)
+        UE_LOG(LogTemp, Display, TEXT("TIBET_VOICE playing language=%s speaker=%s"), IsEnglish() ? TEXT("en-US") : TEXT("zh-TW"), *Speaker);
+    bSpokenWord = true;
+    while (PageStarts.IsValidIndex(PageIndex + 1) && Offset >= PageStarts[PageIndex + 1]) ++PageIndex;
+    // Allow a missing device finish callback to recover after its longest remaining clause.
+    PageDeadline = GetWorld()->GetTimeSeconds() + 4. + (Dialogue.Len() - Offset) / (IsEnglish() ? 9. : 2.5);
+}
+
+void ATibetGameMode::TickDialogue()
+{
+    if (DialogueIndex == INDEX_NONE || bDialoguePaused || GetWorld()->GetTimeSeconds() < PageDeadline) return;
+    if (bSpokenWord || !PageStarts.IsValidIndex(PageIndex + 1)) { StopDialogue(); return; }
+    ++PageIndex;
+    PageDeadline = GetWorld()->GetTimeSeconds() + 1.0 + DialoguePage().Len() / (IsEnglish() ? 14. : 4.);
+}
+void ATibetGameMode::PauseDialogue(bool Paused)
+{
+    bDialoguePaused = Paused;
+    if (DialogueIndex == INDEX_NONE) return;
+    if (!Paused && bVoicePending) StartDialogueVoice();
+    else if (bVoiceRequested) TibetVoice::Pause(Paused);
+}
+void ATibetGameMode::StopDialogue()
+{
+    if (bVoiceRequested) TibetVoice::Stop();
+    bVoiceRequested = false;
+    ++VoiceGeneration;
+    DialogueIndex = INDEX_NONE;
+    PageStarts.Reset();
+    Dialogue.Reset();
+    Speaker.Reset();
+    PageIndex = 0;
+    bVoicePending = false;
+    bSpokenWord = false;
+}
+void ATibetGameMode::EndPlay(const EEndPlayReason::Type Reason)
+{
+    StopDialogue();
+    Super::EndPlay(Reason);
+}
+
 void ATibetGameMode::SetNotice(const FString& Line)
 {
     Notice=Line; NoticeUntil=GetWorld()->GetTimeSeconds()+3.f;
@@ -602,6 +749,7 @@ void ATibetGameMode::CastSkill(int32 Slot)
 void ATibetGameMode::Tick(float Dt)
 {
     Super::Tick(Dt);
+    TickDialogue();
     const float Now = GetWorld()->GetTimeSeconds();
     DamageCues.RemoveAll([Now](const FTibetDamageCue& Cue) { return Now - Cue.SpawnTime >= 1.05f; });
     if (Now - LastHitTime > .22f)
@@ -677,5 +825,6 @@ void ATibetGameMode::ChangeLanguage()
 {
     if (!Save) return;
     Save->bEnglish=!Save->bEnglish;
+    if (DialogueIndex != INDEX_NONE) BeginDialogue(DialogueIndex);
     Store();
 }

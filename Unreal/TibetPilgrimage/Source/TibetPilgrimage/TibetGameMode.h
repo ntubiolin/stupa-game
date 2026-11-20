@@ -49,6 +49,13 @@ class TIBETPILGRIMAGE_API ATibetGameMode : public AGameModeBase
 public:
     ATibetGameMode();
     virtual void StartPlay() override;
+    virtual void EndPlay(const EEndPlayReason::Type Reason) override;
+    bool GetInteractionCue(FVector& WorldAnchor) const;
+    FString DialoguePage() const;
+    const FString& DialogueSpeaker() const { return Speaker; }
+    bool HasSpokenWord() const { return bSpokenWord; }
+    void PauseDialogue(bool Paused);
+    void StopDialogue();
     virtual void Tick(float DeltaSeconds) override;
     FVector GetObjectiveLocation() const;
     FString GetObjectiveText() const;
@@ -95,6 +102,18 @@ private:
     float Health = 100, Mana = 100, HurtTimer = 0, Stun = 0, Shield = 0, NoticeUntil = 0;
     float Cooldown[7]{};
     FString Notice;
+    FString Speaker, Dialogue;
+    TArray<int32> PageStarts;
+    int32 DialogueIndex = INDEX_NONE, PageIndex = 0;
+    uint32 VoiceGeneration = 0;
+    double PageDeadline = 0;
+    bool bSpokenWord = false, bDialoguePaused = false, bVoicePending = false, bVoiceRequested = false;
+    void StartDialogueVoice();
+    void BeginDialogue(int32 ObjectiveIndex);
+    void TickDialogue();
+    void SetDialogueWord(int32 Offset);
+    UPROPERTY() TObjectPtr<AActor> SideGate;
+    bool ClearSight(const FVector& From, const FVector& To, const AActor* Target) const;
     bool bTravel = false, bEscorting = false;
     AActor* MeshActor(const FVector& Position, const FString& MeshPath, const FVector& Scale,
         const FLinearColor* Color = nullptr);

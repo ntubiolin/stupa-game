@@ -24,8 +24,9 @@ for line in (CPP/'TibetRoute.inl').read_text().splitlines():
         ROUTES[route] = []
     if line.startswith('        {EObjective::'):
         kind = re.search(r'EObjective::(\w+)',line)[1]
-        person = re.search(r', TEXT\("([\w.]+)"\)\},$',line) if kind in ('Talk','Escort') else None
-        ROUTES[route].append((kind,person[1] if person else None))
+        fields = re.findall(r'TEXT\(("(?:[^"\\]|\\.)*")\)', line)
+        person = json.loads(fields[4]) if kind in ('Talk','Escort') else None
+        ROUTES[route].append((kind, person))
 
 
 class CastTests(unittest.TestCase):
