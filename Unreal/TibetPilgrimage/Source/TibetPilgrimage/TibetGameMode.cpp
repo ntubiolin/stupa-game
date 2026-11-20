@@ -2,6 +2,8 @@
 #include "TibetCharacter.h"
 #include "TibetHUD.h"
 #include "TibetRitualEffect.h"
+#include "TibetTravelGate.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/TargetPoint.h"
@@ -55,6 +57,15 @@ const FRitualSkill Skills[] = {
     {TEXT("Vajra Guru Mantra"), TEXT("上師心咒"), TEXT("T"), 8, 35, 18, 1600, 6}
 };
 
+bool OnObjectiveFloor(const APawn* Pawn, const FVector& Goal)
+{
+    if (Goal.Z < 45) return true;
+    const auto* Character = Cast<ACharacter>(Pawn);
+    if (!Character) return false;
+    const double Feet = Pawn->GetActorLocation().Z - Character->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+    return FMath::Abs(Feet - Goal.Z) <= 28;
+}
+
 const FVector GroveGate(-1860,-480,0);
 FVector StupaLampLocation(int32 Index)
 {
@@ -63,7 +74,7 @@ FVector StupaLampLocation(int32 Index)
 const FString Cylinder=TEXT("/Engine/BasicShapes/Cylinder.Cylinder");
 const FString Cone=TEXT("/Engine/BasicShapes/Cone.Cone");
 const FString Sphere=TEXT("/Engine/BasicShapes/Sphere.Sphere");
-const FLinearColor Gold(.87,.43,.065), Water(.04,.57,.58);
+const FLinearColor Gold(.87,.43,.065);
 }
 
 AActor* ATibetGameMode::MeshActor(const FVector& Pos, const FString& Path, const FVector& Scale,
@@ -126,10 +137,14 @@ void ATibetGameMode::StartPlay()
     FurthestMap = Order.IndexOfByKey(Map);
     for (int32 I = FurthestMap + 1; I < Order.Num(); ++I)
         if (Save->Steps.Contains(Order[I])) FurthestMap = I;
+    TArray<AActor*> Markers;
+    UGameplayStatics::GetAllActorsWithTag(this, TEXT("TibetPassage"), Markers);
+    for (const AActor* Marker : Markers)
+        for (FName Name : Marker->Tags)
+            if (Name != TEXT("TibetPassage")) PassageSockets.Add(Name, Marker->GetActorLocation());
     if (Map==TEXT("stupa"))
-    {
-        MeshActor(GroveGate+FVector(0,0,12),Cylinder,FVector(1.8,1.8,.2),&Water);
-    }
+        if (auto* Gate = GetWorld()->SpawnActor<ATibetTravelGate>(GroveGate, FRotator::ZeroRotator))
+            Gate->SetSidePath();
     Store();
     Refresh();
 }
@@ -146,6 +161,12 @@ FVector ATibetGameMode::Anchor() const
     const EObjective K=Objective(Route,GetStep()).Kind;
     const int32 Count=GetStepProgress();
     const int32 Step=GetStep();
+    if (Map == Route && !PassageSockets.IsEmpty())
+    {
+        const FName Key = K == EObjective::Gate ? FName(TEXT("Gate")) : FName(*FString::Printf(TEXT("Step%d"), Step));
+        if (const FVector* At = PassageSockets.Find(Key)) return *At;
+        if (const FVector* At = PassageSockets.Find(FName(*FString::Printf(TEXT("Step%d_%d"), Step, Count)))) return *At;
+    }
     if (Map==TEXT("grove") && K==EObjective::Interact) return FVector(1280,0,0);
     if (Map==TEXT("stupa") && K==EObjective::Interact)
         return StupaLampLocation(Count);
@@ -220,7 +241,8 @@ ATibetGameMode::EInteraction ATibetGameMode::InteractionAt(const FVector& Player
 {
     if (!Save || bTravel || IsCampaignComplete()) return EInteraction::None;
     if (Map==TEXT("stupa") && FVector::Dist2D(PlayerLocation,GroveGate)<215) return EInteraction::Grove;
-    if (FVector::Dist2D(PlayerLocation,GetObjectiveLocation())>225) return EInteraction::None;
+    if (FVector::Dist2D(PlayerLocation,GetObjectiveLocation())>225 ||
+        !OnObjectiveFloor(UGameplayStatics::GetPlayerPawn(this,0), Anchor())) return EInteraction::None;
     switch (Objective(Route,GetStep()).Kind)
     {
     case EObjective::Gate: return EInteraction::Gate;
@@ -299,6 +321,17 @@ void ATibetGameMode::Refresh()
     LastHitTime = -10;
     if (Focus) { Focus->Destroy(); Focus=nullptr; }
     if (Map==TEXT("stupa")) RestoreStupaFlames();
+    if (Map == TEXT("pharping"))
+    {
+        const int32 Lit = GetStep() > 5 ? 7 : (GetStep() == 5 ? GetStepProgress() : 0);
+        const FLinearColor Flame(4.0, 1.5, .15);
+        while (LitCaveLamps < Lit)
+        {
+            const FVector* Bowl = PassageSockets.Find(FName(*FString::Printf(TEXT("Step5_%d"), LitCaveLamps)));
+            if (!Bowl || !MeshActor(*Bowl + FVector(0,0,129), Cone, FVector(.14,.14,.20), &Flame)) break;
+            ++LitCaveLamps;
+        }
+    }
     if (IsCampaignComplete()) return;
     const auto K=Objective(Route,GetStep()).Kind;
     const FVector At=Anchor();
@@ -328,11 +361,12 @@ void ATibetGameMode::Refresh()
         // The level supplies the visible paving and lamp. Keep the HUD/interaction target.
         Focus=GetWorld()->SpawnActor<ATargetPoint>(At,FRotator::ZeroRotator);
     }
+    else if (K==EObjective::Gate || (Route==TEXT("chimphu") && K==EObjective::Reach))
+        Focus=GetWorld()->SpawnActor<ATibetTravelGate>(At,FRotator::ZeroRotator);
+    else if ((Map==TEXT("pharping") && GetStep()==5) || (Map==TEXT("yarlung") && GetStep()==3))
+        Focus=GetWorld()->SpawnActor<ATargetPoint>(At,FRotator::ZeroRotator);
     else
-    {
-        const bool Gate=K==EObjective::Gate;
-        Focus=MeshActor(At+FVector(0,0,Gate?18:10),Cylinder,FVector(Gate?1.7:.82,Gate?1.7:.82,.16),Gate?&Water:&Gold);
-    }
+        Focus=MeshActor(At+FVector(0,0,10),Cylinder,FVector(.82,.82,.16),&Gold);
     UE_LOG(LogTemp,Display,TEXT("Tibet objective map=%s route=%s step=%d kind=%s count=%d"),
         *Map,*Route,GetStep(),*GetObjectiveKind().ToString(),GetStepProgress());
 }
@@ -522,7 +556,7 @@ void ATibetGameMode::Tick(float Dt)
             Messenger->SetActorRotation(FRotator(0,Delta.Rotation().Yaw+90,0));
         }
     }
-    if ((K==EObjective::Reach || K==EObjective::Kora || K==EObjective::Escort) && Dist<140)
+    if ((K==EObjective::Reach || K==EObjective::Kora || K==EObjective::Escort) && Dist<140 && OnObjectiveFloor(P,Anchor()))
     {
         if(K==EObjective::Escort && !bEscorting)
         {

@@ -6,6 +6,7 @@ import struct
 from pathlib import Path
 
 from boudha_plaza import south_approach
+from tibet_passages import build_passages
 from tibet_mesh import Scene, noise, normal
 
 
@@ -599,6 +600,8 @@ def hermitage(s, rng):
     for i in range(25):
         x = (i % 7 - 3) * 7 + rng.uniform(-2, 2)
         y = 31 + (i // 7) * 6 + rng.uniform(-2, 2)
+        if -9 < x < 3:
+            y = max(y, 32.5)  # Leave a continuous floor right up to the inner cave wall.
         h = (y - 20) * 0.7 + rng.uniform(2, 7)
         rock(s, x, y, 0, 5.5, h, i, "stone" if i % 4 else "shale")
     for i, (x, y, z) in enumerate(
@@ -606,9 +609,6 @@ def hermitage(s, rng):
     ):
         house(s, x, y, z, 5, 3.8, 2.7, "lime", i == 4)
         chorten(s, x + 3, y - 2, z, 2.05)
-    for j in range(35):
-        x = -3 + 5.6 * math.sin(j / 9)
-        s.box("stone", x, 15 + j * 0.52, j * 0.16, 2.3, 0.66, 0.19)
     flags(s, (-16, 24, 7), (15, 30, 10), 30, 3)
 
 
@@ -618,14 +618,6 @@ def pharping(s):
         rock(s, x, 39 + math.sin(j * 0.9) * 2, 0, 5, 12 + 4 * math.cos(j * 0.66), j)
     house(s, -10, 25, 0, 10, 6, 6.4, "ochre", True)
     house(s, 8, 30, 0, 7, 4.8, 4.65, "red", True)
-    # Rock lintel and a genuine doorway between retaining walls.
-    s.box("dark", -0.5, 35, 0, 4, 0.6, 4.9)
-    for j in (-1, 1):
-        s.box("lime", -0.5 + j * 2, 32.6, 0, 1.5, 4.9, 4.8)
-        s.box("red", -0.5 + j * 2, 32.55, 4.75, 1.8, 4.85, 0.39)
-    s.box("stone", -0.5, 33.8, 5, 5.9, 4.4, 1.1)
-    for k in range(13):
-        s.box("stone", -0.5, 15 + k * 0.68, 0, 3.9, 0.75, 0.13 * (k + 1))
     s.rings("water", -10, 13, 0.045, [(0, 3.2), (0.02, 3.2)], 40, 0.67)
     flags(s, (-15, 25, 9), (11, 30, 8), 25, 2)
 
@@ -971,6 +963,7 @@ def landscape(stage):
             chorten(s, 11 + j * 3, 23 + j * 2, 0, 2.5 + j * 0.32)
     else:
         cave(s, int(stage[-1]))
+    build_passages(s, stage)
     return s
 
 

@@ -80,6 +80,8 @@ private:
     UPROPERTY() TObjectPtr<AActor> Focus;
     UPROPERTY() TObjectPtr<AActor> Messenger;
     FString Map, Route, SlotName;
+    TMap<FName, FVector> PassageSockets;
+    int32 LitCaveLamps = 0;
     int32 LitStupaLamps = 0;
     int32 FurthestMap = INDEX_NONE;
     bool HasLearnedSkill(int32 Slot) const;

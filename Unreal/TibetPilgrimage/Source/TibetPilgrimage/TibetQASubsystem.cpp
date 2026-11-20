@@ -436,7 +436,7 @@ bool UTibetQASubsystem::FindWalkingPath(APawn& Pawn, const FVector& Goal, double
     {
         const FIntPoint Key=Queue[I];
         const FVector From=Points[Key];
-        if (FVector::Dist2D(From,Goal)<Reach)
+        if (FVector::Dist2D(From,Goal)<Reach && (Goal.Z<45 || FMath::Abs(From.Z-Goal.Z-88)<26))
         {
             for (FIntPoint At=Key; At!=FIntPoint::ZeroValue; At=Parent[At]) Waypoints.Add(Points[At]);
             return !Waypoints.IsEmpty();
@@ -523,10 +523,14 @@ void UTibetQASubsystem::Play(APlayerController& PC, ATibetGameMode& Mode)
     }
     const bool bFight = Kind == TEXT("Combat") || Kind == TEXT("Boss");
     const double Reach = bFight ? 320 : ((Kind == TEXT("Kora") || Kind == TEXT("Escort") || Kind == TEXT("Reach")) ? 105 : 170);
-    if (FVector::Dist2D(Pos,Goal)<Reach) Waypoints.Reset();
+    if (FParse::Param(FCommandLine::Get(),TEXT("TibetQAGateEvidence")) &&
+        (Kind == TEXT("Gate") || (StartMap == TEXT("chimphu") && Kind == TEXT("Reach"))) &&
+        SurveyGate(PC, Goal)) return;
+    const bool OnFloor = Goal.Z < 45 || FMath::Abs(Pos.Z-Goal.Z-88)<26;
+    if (OnFloor && FVector::Dist2D(Pos,Goal)<Reach) Waypoints.Reset();
     if (Now-LastNavCheck>1.5)
     {
-        if (bMoving && FVector::Dist2D(LastNavPosition,Pos)<22 && FVector::Dist2D(Pos,Goal)>Reach)
+        if (bMoving && FVector::Dist2D(LastNavPosition,Pos)<22 && (!OnFloor || FVector::Dist2D(Pos,Goal)>Reach))
         {
             Waypoints.Reset();
             FindWalkingPath(*PC.GetPawn(),Goal,Reach);
@@ -539,10 +543,12 @@ void UTibetQASubsystem::Play(APlayerController& PC, ATibetGameMode& Mode)
     FVector Offset = (Waypoints.IsEmpty() ? Goal : Waypoints.Last())-Pos;
     Offset.Z = 0;
     if (!Offset.IsNearlyZero()) PC.SetControlRotation(Offset.Rotation());
-    const bool bWalk = !Waypoints.IsEmpty() || Offset.Size2D() > Reach;
+    const bool bWalk = !Waypoints.IsEmpty() || Offset.Size2D() > Reach || !OnFloor;
     if (bWalk != bMoving) { SendKey(PC,EKeys::W,bWalk); bMoving=bWalk; }
     if (!bWalk && Now - LastAction >= 0.26 && !FScreenshotRequest::IsScreenshotRequested())
     {
+        if (Kind == TEXT("Gate") && FParse::Param(FCommandLine::Get(),TEXT("TibetQAGateEvidence")))
+            Record(FString::Printf(TEXT("enter\t%.1f\t%.1f\t%.1f"), Pos.Z-88, Goal.Z, FVector::Dist2D(Pos,Goal)));
         Tapped = bFight ? EKeys::SpaceBar : EKeys::E;
         SendKey(PC,Tapped,true);
         LastAction=Now;
