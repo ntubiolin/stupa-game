@@ -1,4 +1,8 @@
 #include "TibetSkyClock.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/ExponentialHeightFogComponent.h"
 #include "Components/PostProcessComponent.h"
@@ -13,6 +17,16 @@
 ATibetSkyClock::ATibetSkyClock()
 {
     RootComponent=CreateDefaultSubobject<USceneComponent>(TEXT("Sky"));
+    // A single cloud deck also casts the sun's moving shadow over raised scenery.
+    Clouds = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Drifting cloud layer"));
+    Clouds->SetupAttachment(RootComponent);
+    Clouds->SetMobility(EComponentMobility::Movable);
+    Clouds->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    Clouds->SetCanEverAffectNavigation(false);
+    Clouds->SetGenerateOverlapEvents(false);
+    Clouds->SetRelativeLocation(FVector(0, 0, 8200));
+    Clouds->SetRelativeScale3D(FVector(1800, 1800, 1));
+    Clouds->bCastShadowAsTwoSided = true;
     Moon=CreateDefaultSubobject<UDirectionalLightComponent>(TEXT("Moonlight"));
     Moon->SetupAttachment(RootComponent);
     Moon->SetMobility(EComponentMobility::Movable);
@@ -34,6 +48,21 @@ ATibetSkyClock::ATibetSkyClock()
 void ATibetSkyClock::BeginPlay()
 {
     Super::BeginPlay();
+    auto* CloudSurface = LoadObject<UMaterialInterface>(nullptr,
+        TEXT("/Game/Figures/Materials/M_CloudLayer.M_CloudLayer"));
+    if (ensureMsgf(CloudSurface, TEXT("Generate the Tibet outdoor cloud material before play")))
+    {
+        Clouds->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane")));
+        CloudMaterial = Clouds->CreateDynamicMaterialInstance(0, CloudSurface);
+        // Material time restarts on travel. Preserve the weather front's position across maps.
+        const double Start = FPlatformTime::Seconds() - GStartTime - GetWorld()->GetTimeSeconds();
+        CloudMaterial->SetScalarParameterValue(TEXT("WeatherStart"), static_cast<float>(Start));
+#if !UE_BUILD_SHIPPING
+        float FixedTime;
+        if (FParse::Value(FCommandLine::Get(), TEXT("TibetWeatherTime="), FixedTime))
+            CloudMaterial->SetScalarParameterValue(TEXT("FixedTime"), FixedTime);
+#endif
+    }
     if(TActorIterator<ADirectionalLight> It{GetWorld()}; It) Sun=It->FindComponentByClass<UDirectionalLightComponent>();
     if(TActorIterator<ASkyLight> It{GetWorld()}; It) Sky=It->GetLightComponent();
     if(TActorIterator<AExponentialHeightFog> It{GetWorld()}; It) Fog=It->GetComponent();
@@ -72,6 +101,7 @@ float ATibetSkyClock::Daylight(float Phase)
 void ATibetSkyClock::Apply(float Phase)
 {
     const float Elevation=FMath::Sin((Phase-.25f)*UE_TWO_PI), Day=Daylight(Phase), Night=1-Day;
+    if (CloudMaterial) CloudMaterial->SetScalarParameterValue(TEXT("Daylight"), Day);
     if (Sun)
     {
         Sun->SetWorldRotation(FRotator(-FMath::RadiansToDegrees(FMath::Asin(Elevation))*.78f,
