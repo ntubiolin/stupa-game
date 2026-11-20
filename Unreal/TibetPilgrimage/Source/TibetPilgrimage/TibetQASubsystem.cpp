@@ -687,16 +687,25 @@ void UTibetQASubsystem::CameraFollow(APlayerController& PC,ATibetGameMode& Mode)
         ArrivalPosition=Pos;
         SendKey(PC,EKeys::A,true); Next(); break;
     case 2:
-        if (Held<.55) break;
-        if (FVector::Dist2D(Pos,ArrivalPosition)<120 || FMath::Abs(Error(HeadingBeforeDrag.Yaw))>.15)
-        { Finish(false,TEXT("Reversing strafe rotated the camera or failed to move")); return; }
-        SendKey(PC,EKeys::A,false); SendKey(PC,EKeys::S,true);
-        ArrivalPosition=Pos; Next(); break;
     case 3:
-        if (Held<.55) break;
-        if (FVector::Dist2D(Pos,ArrivalPosition)<120 || FMath::Abs(Error(HeadingBeforeDrag.Yaw))>.15)
-        { Finish(false,TEXT("Backing up rotated the camera or failed to move")); return; }
-        SendKey(PC,EKeys::S,false); Next(); break;
+    {
+        // Changing direction must first brake the previous movement. Observe the actual
+        // displacement along the requested input axis while checking yaw on every frame.
+        const bool Reversing=Frames==2;
+        const FVector Direction=FRotator(0,HeadingBeforeDrag.Yaw+(Reversing?-90.:180.),0).Vector();
+        const double Displacement=FVector::DotProduct(Pos-ArrivalPosition,Direction);
+        if (FMath::Abs(Error(HeadingBeforeDrag.Yaw))>.15 || Held>2.)
+        {
+            Finish(false,FString::Printf(TEXT("Unstable strafe/backing at phase %d: displacement %.1f cm, yaw change %.2f"),
+                Frames,Displacement,Error(HeadingBeforeDrag.Yaw)));
+            return;
+        }
+        if (Displacement<120.) break;
+        Detail(Reversing?TEXT("reverse-strafe"):TEXT("backward"));
+        SendKey(PC,Reversing?EKeys::A:EKeys::S,false);
+        if (Reversing) SendKey(PC,EKeys::S,true);
+        ArrivalPosition=Pos; Next(); break;
+    }
     case 4:
         if (Held<.5) break;
         HeadingBeforeDrag=CameraView;
