@@ -12,6 +12,7 @@ PROJECT = TOOLS.parent
 sys.path.insert(0, str(TOOLS))
 
 from import_tibet_figures import import_meshes
+from migrate_tibet_maps import strip_import_metadata
 from tibet_landscapes import MAPS, landscape
 from tibet_surfaces import make_surfaces
 
@@ -168,6 +169,7 @@ def populate(levels, actors, stage, source, surfaces):
         )
     lighting(levels, actors, stage)
     place(levels, actors, unreal.PlayerStart, "South approach", (-2000, 0, 100))
+    strip_import_metadata(levels, actors)
     if not unreal.EditorAssetLibrary.save_directory(
         destination, only_if_is_dirty=False, recursive=True
     ):
