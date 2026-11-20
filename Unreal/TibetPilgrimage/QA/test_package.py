@@ -4,6 +4,7 @@ import hashlib
 import html
 import json
 import plistlib
+import platform
 import re
 import shutil
 import struct
@@ -31,6 +32,28 @@ def temporary_root(executable):
         subprocess.run([executable, "-unattended", "-ExecCmds=quit", "-TibetSaveSlot=QA-bootstrap-" + uuid4().hex],
                        cwd=executable.parent, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=100)
     return root
+
+
+
+def package_record(executable, output):
+    bundle = executable.parents[2]
+    info = plistlib.loads((bundle / "Contents/Info.plist").read_bytes())
+    files = [executable, *sorted(p for p in bundle.rglob("*") if p.suffix in (".pak", ".ucas", ".utoc"))]
+    if len(files) < 2:
+        raise ValueError("The app contains no cooked package")
+    hashes = {}
+    for file in files:
+        digest = hashlib.sha256()
+        with file.open("rb") as stream:
+            for block in iter(lambda: stream.read(1 << 20), b""):
+                digest.update(block)
+        hashes[str(file.relative_to(bundle))] = digest.hexdigest()
+    record = {"platform":"macOS", "osVersion":platform.mac_ver()[0], "architecture":platform.machine(),
+              "bundleVersion":info.get("CFBundleVersion"), "sha256":hashes}
+    path = output / "package.json"
+    if path.exists() and json.loads(path.read_text()) != record:
+        raise ValueError("The existing captures use a different package or host configuration")
+    path.write_text(json.dumps(record, indent=2))
 
 
 def capture(exe, stage, dest, name, mode, level, options, slot):
@@ -92,7 +115,8 @@ def compare(web, mac, output):
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>西藏朝聖 · 遊戲畫面對照</title>
 <style>html{font:16px system-ui;background:#191917;color:#f6f5ef}body{margin:2rem auto;max-width:1550px;padding:0 1rem}section{margin:2.5rem 0}section div{display:grid;grid-template-columns:1fr 1fr;gap:.8rem}figure{margin:0}img{width:100%}figcaption{padding-bottom:.4rem;color:#e1ccad}@media(max-width:700px){section div{grid-template-columns:1fr}}</style>
 <h1>西藏朝聖 · 原版與 UE 重製</h1><p>同一台 Mac 在兩個版本擷取 1440 × 900 遊戲畫面。每組對應同一關卡或地標，各自調整機位以呈現重製後的空間。點選圖片可開啟原圖。</p>''' + ''.join(sections) + '</html>', encoding="utf-8")
-    (output / "report.json").write_text(json.dumps(rows, indent=2))
+    (output / "report.json").write_text(json.dumps({"package":json.loads((mac / "package.json").read_text()),
+                                                    "webSource":web_report["source"], "views":rows}, indent=2))
 
 
 def main():
@@ -113,6 +137,7 @@ def main():
         parser.error("Capture requires --exe (Contents/MacOS/TibetPilgrimage)")
     exe = args.exe.resolve(strict=True)
     output.mkdir(exist_ok=args.action=="photos")
+    package_record(exe, output)
     with tempfile.TemporaryDirectory(prefix="tibet-qa-", dir=temporary_root(exe)) as temporary:
         stage = Path(temporary)
         (stage/"user").mkdir()
