@@ -269,3 +269,40 @@ test('Tō-ji and Mount Kōya switch cherry foliage through existing seasonal upd
     }
   }
 });
+
+test('Japanese garden trees retain distinct branch silhouettes, ground-level roots and airy foliage', async () => {
+  for (const [id, name] of [['toji', 'Tō-ji weeping cherries'], ['koyasan', 'Mount Kōya cherries']]) {
+    const { instance } = await loadMap(id);
+    const trunks = [], foliage = [];
+    instance.group.traverse(o => {
+      if (o.name === name + ' trunks') trunks.push(o);
+      if (o.name === name + ' foliage') foliage.push(o);
+    });
+    assert.equal(trunks.length, 3);
+    assert.equal(new Set(trunks.map(mesh => mesh.geometry)).size, 3);
+    assert.deepEqual(trunks.map(mesh => mesh.count), foliage.map(mesh => mesh.count));
+    assert.equal(new Set(foliage.map(mesh => mesh.material)).size, 1);
+    const mask = foliage[0].material.map.image.data;
+    let covered = 0;
+    for (let i = 3; i < mask.length; i += 4) if (mask[i]) covered++;
+    assert.ok(covered / (mask.length / 4) < 0.42, 'flower sprays leave gaps between shoots');
+    for (const mesh of trunks) {
+      const positions = mesh.geometry.attributes.position;
+      assert.ok(Array.from({ length: positions.count }, (_, i) => i).some(i =>
+        positions.getY(i) < 0 && Math.hypot(positions.getX(i), positions.getZ(i)) > 0.7),
+      'roots taper below the soil outside the trunk');
+    }
+    const cover = instance.group.getObjectByName('Moss and sedge beneath trees');
+    assert.ok(cover.isInstancedMesh && cover.count > 10);
+    const { x: ox, z: oz } = MAPS[id].origin;
+    for (let i = 0; i < cover.count; i++) {
+      const matrix = new THREE.Matrix4();
+      cover.getMatrixAt(i, matrix);
+      const { x, y, z } = new THREE.Vector3().setFromMatrixPosition(matrix);
+      assert.ok(Math.abs(y - instance.getHeight(ox + x, oz + z) - 0.012) < 1e-5);
+      if (id === 'koyasan') assert.ok(Math.abs(x - 48) > 4 && Math.abs(z + 16) > 5);
+      else assert.ok(x > 19 && Math.hypot(x - 36, z + 11) > 9.2 && Math.hypot(x - 35, z + 22) > 7.5);
+    }
+    instance.dispose();
+  }
+});
