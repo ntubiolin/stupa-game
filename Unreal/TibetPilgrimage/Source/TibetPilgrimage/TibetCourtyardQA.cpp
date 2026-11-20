@@ -66,9 +66,11 @@ void UTibetQASubsystem::Courtyard(APlayerController& PC,ATibetGameMode& Mode)
         return;
     }
     const double Wait=Now-CourtyardSince;
+    const bool bTouch=FParse::Param(FCommandLine::Get(),TEXT("TibetTouch"));
     switch(CourtyardStep)
     {
     case 0:
+        if (FParse::Param(FCommandLine::Get(),TEXT("TibetQAEnglish")) && !Mode.IsEnglish()) Mode.ChangeLanguage();
         if(Monkeys->Location(0).Z<130 || Monkeys->Location(1).Z<130 || Monkeys->Location(2).Z>5 ||
             Monkeys->Location(4).IsZero() || !Lamps.IsEmpty() || Mode.ClockRate()!=1)
         {Finish(false,TEXT("Incorrect starting plaza"));return;}
@@ -100,6 +102,14 @@ void UTibetQASubsystem::Courtyard(APlayerController& PC,ATibetGameMode& Mode)
     case 4:
         if(Wait<.5) break;
         if(!Mode.CanFeed()) {Finish(false,TEXT("Macaque unreachable"));return;}
+        if (!bCapturedPracticeHUD)
+        {
+            const FString Label=bTouch ? Mode.Local(TEXT("Feed macaque"),TEXT("餵獼猴")) :
+                Mode.Local(TEXT("F  Feed macaque"),TEXT("F  餵獼猴"));
+            if (!CheckPracticeShortcut(TEXT("TibetFeedMacaque"),Label)) return;
+            Shot(TEXT("feed-shortcut"),true); bCapturedPracticeHUD=true; break;
+        }
+        bCapturedPracticeHUD=false;
         Shot(TEXT("macaque"),false); Stroke(EKeys::F,true); Next(); break;
     case 5:
         Stroke(EKeys::F,false);
@@ -157,6 +167,16 @@ void UTibetQASubsystem::Courtyard(APlayerController& PC,ATibetGameMode& Mode)
         if(Wait<.35) break;
         if(!Lamp || !Lamp->FindComponentByClass<UPointLightComponent>() || PC.IsPaused())
         {Finish(false,TEXT("F must light the wick and keep the courtyard playable"));return;}
+        if (!bCapturedPracticeHUD)
+        {
+            const FString Label=bTouch ? Mode.Local(TEXT("Light & dedicate"),TEXT("點燈回向")) :
+                Mode.Local(TEXT("E  Light & dedicate"),TEXT("E  點燈回向"));
+            if (!CheckPracticeShortcut(TEXT("TibetOfferLamp"),Label)) return;
+            if (!bTouch && !CheckPracticeShortcut(TEXT("TibetQuickOffering"),Mode.Local(TEXT("F  Quick offering"),TEXT("F  快速供燈")))) return;
+            if (Mode.Status(bTouch).Contains(Mode.Local(TEXT("Quick offering"),TEXT("快速供燈"))))
+            { Finish(false,TEXT("Lamp shortcut also appears in the objective card")); return; }
+            Shot(TEXT("lamp-shortcuts"),true); bCapturedPracticeHUD=true; break;
+        }
         Stroke(EKeys::E,true); Next(); break;
     case 10:
         if (Frames==2) { Stroke(EKeys::E,false); ++Frames; CourtyardSince=Now; break; }

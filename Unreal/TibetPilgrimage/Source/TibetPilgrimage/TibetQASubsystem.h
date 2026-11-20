@@ -29,6 +29,8 @@ private:
     void Courtyard(APlayerController& PC, ATibetGameMode& Mode);
     FName HoveredCourtyardControl;
     bool TapPlayControl(FName Tag, float XFraction=.5f);
+    bool CheckPracticeShortcut(FName Tag, const FString& ExpectedLabel);
+    bool bCapturedPracticeHUD=false;
     int32 CourtyardStep=0;
     float CheckedPhase=0, CheckedFlame=0, ClockStarted=0;
     double CourtyardSince=0;
