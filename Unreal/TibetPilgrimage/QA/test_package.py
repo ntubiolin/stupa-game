@@ -87,8 +87,8 @@ def capture(exe, stage, dest, name, mode, level, options, slot, size=(1440, 900)
     target.mkdir()
     # Arrival exercises the default launch map and leaves the pawn camera untouched.
     map_args = [] if mode == "Arrival" else ["/Game/Maps/Tibet/" + level]
-    # Native mouse and touch dispatch must find the actual package window on the desktop.
-    interactive_window = mode == "Journal" or (mode == "Courtyard" and "-TibetTouch" in options)
+    # Native pointer dispatch must hit the real package window on the desktop.
+    interactive_window = mode in ("Journal", "Courtyard")
     rendering = [] if interactive_window else ["-RenderOffscreen"]
     exec_commands = "r.ScreenPercentage 100,r.DynamicRes.OperationMode 0"
     if max_fps:
