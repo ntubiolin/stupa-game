@@ -24,6 +24,7 @@ private:
     int32 MoveFinger = -1, LookFinger = -1;
     bool bAwaitingDragMotion = true;
     void UpdateMouseLook(APlayerController& Player);
+    void TurnView(APlayerController& Player, FVector2D Degrees);
     void TouchDown(ETouchIndex::Type Index, FVector Position);
     void TouchUp(ETouchIndex::Type Index, FVector Position);
     void DoInteract();
