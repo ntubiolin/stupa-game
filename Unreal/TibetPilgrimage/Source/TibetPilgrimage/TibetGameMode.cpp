@@ -439,6 +439,10 @@ void ATibetGameMode::CastSkill(int32 Slot)
     const FVector From = Player + FVector(0,0,30);
     const FVector To = Hit ? Focus->GetActorLocation() + FVector(0,0,105) :
         From + P->GetActorForwardVector() * 340;
+    // The web spell system turns the pilgrim toward the acquired target for
+    // bolts, phurbas and bells. Keep the player's independent camera heading.
+    if (Hit && (Slot == 0 || Slot == 2 || Slot == 3))
+        P->SetActorRotation((To - From).GetSafeNormal2D().Rotation());
     auto* Effect = GetWorld()->SpawnActor<ATibetRitualEffect>();
     if (Effect) Effect->Start(Slot, From, To, P, RitualMaterial);
 
