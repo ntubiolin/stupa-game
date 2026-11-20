@@ -12,6 +12,7 @@ PROJECT = TOOLS.parent
 sys.path.insert(0, str(TOOLS))
 
 from import_tibet_figures import import_meshes
+from import_tibet_atlas import import_atlas
 from migrate_tibet_maps import strip_import_metadata
 from tibet_cave_lighting import dress_passages, wick_material
 from tibet_landscapes import MAPS, landscape
@@ -174,6 +175,7 @@ def generate():
     levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
     actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
+    import_atlas()
     import_meshes()
     surfaces = make_surfaces()
     surfaces["lampflame"] = wick_material()

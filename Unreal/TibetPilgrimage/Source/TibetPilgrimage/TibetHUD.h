@@ -13,6 +13,7 @@ class TIBETPILGRIMAGE_API ATibetHUD : public AHUD
 public:
     void ToggleJournal(ETibetPage Page);
     void CloseJournal();
+    void UseQuickSlot();
     bool IsJournalOpen() const;
     ETibetPage GetJournalPage() const { return Page; }
 protected:

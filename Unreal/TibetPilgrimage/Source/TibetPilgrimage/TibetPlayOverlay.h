@@ -5,7 +5,7 @@
 
 class ATibetGameMode;
 class ATibetHUD;
-enum class ETibetPage : uint8 { Play, Map, Skills, Controls };
+enum class ETibetPage : uint8 { Play, Map, Skills, Controls, Pack };
 
 class STibetPlayOverlay : public SCompoundWidget
 {
@@ -37,5 +37,7 @@ private:
     TSharedRef<SWidget> SkillSlot(int32 Index);
     TSharedRef<SWidget> Skills();
     TSharedRef<SWidget> Controls();
+    TSharedRef<SWidget> Pack();
+    TSharedRef<SWidget> QuickSlot();
     FString SkillStatus(int32 Index) const;
 };

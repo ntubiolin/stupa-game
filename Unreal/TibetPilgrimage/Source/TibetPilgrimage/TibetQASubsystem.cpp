@@ -10,6 +10,9 @@
 #include "Framework/Application/SlateApplication.h"
 #include "GenericPlatform/GenericPlatformInputDeviceMapper.h"
 #include "Widgets/SWindow.h"
+#include "Input/HittestGrid.h"
+#include "Widgets/Text/STextBlock.h"
+#include "Engine/Texture2D.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "Camera/PlayerCameraManager.h"
@@ -87,6 +90,7 @@ void UTibetQASubsystem::Tick(float)
     if (Task != TEXT("Campaign") && World->GetMapName() != StartMap) { Finish(false, TEXT("Unexpected map: ") + World->GetMapName()); return; }
     if (Task == TEXT("Arrival")) Arrival(*PC);
     else if (Task == TEXT("CameraFollow")) CameraFollow(*PC,*Mode);
+    else if (Task == TEXT("PackJourney") || Task == TEXT("PackResume")) PackJourney(*PC,*Mode);
     else if (Task == TEXT("Journal")) Journal(*PC,*Mode);
     else if (Task == TEXT("Photo")) Photo(*PC);
     else if (Task == TEXT("Play") || Task == TEXT("Campaign") || Task == TEXT("GroveEntry") ||
@@ -186,6 +190,127 @@ bool TapJournalButton(FName Tag)
     App.OnTouchEnded(Center,0,Mapper.GetPrimaryPlatformUser(),Mapper.GetDefaultInputDevice());
     return true;
 }
+}
+
+void UTibetQASubsystem::PackJourney(APlayerController& PC, ATibetGameMode& Mode)
+{
+    auto* HUD = Cast<ATibetHUD>(PC.GetHUD());
+    const double Now = FPlatformTime::Seconds();
+    if (Now-Began>120) { Finish(false,FString::Printf(TEXT("Pack journey timed out at phase %d"),Frames)); return; }
+    if (!HUD || Now-Began<2 || FScreenshotRequest::IsScreenshotRequested()) return;
+    if (Tapped.IsValid()) { SendKey(PC,Tapped,false); Tapped=FKey(); }
+    const auto Key=[&](FKey K){ Tapped=K; SendKey(PC,K,true); };
+    const auto Shot=[&](const TCHAR* Name){ FScreenshotRequest::RequestScreenshot(Output/(FString(Name)+TEXT(".png")),true,false,false); };
+    const auto Window=GEngine->GameViewport->GetWindow();
+    if (!Window) return;
+    const auto Find=[&](FName Tag){return FindJournalButton(Window.ToSharedRef(),Tag);};
+    const auto Click=[&](FName Tag){
+        auto Button=Find(Tag);
+        if (!Button) return false;
+        const auto Geometry=Button->GetCachedGeometry();
+        const FVector2D At=Geometry.LocalToAbsolute(Geometry.GetLocalSize()*.5);
+        auto& Slate=FSlateApplication::Get();
+        const FWidgetPath Path(Window->GetHittestGrid().GetBubblePath(At,0,false,0));
+        if (!Path.ContainsWidget(Button.Get())) return false;
+        const TSet<FKey> Down={EKeys::LeftMouseButton}, Up;
+        const bool Touch=FParse::Param(FCommandLine::Get(),TEXT("TibetTouch"));
+        if (!Touch)
+            Slate.RoutePointerMoveEvent(Path,FPointerEvent(0,At,At,Up,EKeys::Invalid,0,FModifierKeysState()),false);
+        const auto Press=Touch ? FPointerEvent(0,0,At,At,1.f,true) :
+            FPointerEvent(0,At,At,Down,EKeys::LeftMouseButton,0,FModifierKeysState());
+        const auto Release=Touch ? FPointerEvent(0,0,At,At,0.f,false) :
+            FPointerEvent(0,At,At,Up,EKeys::LeftMouseButton,0,FModifierKeysState());
+        Slate.RoutePointerDownEvent(Path,Press);
+        Slate.RoutePointerUpEvent(Path,Release);
+        return true;
+    };
+    if (Frames==0)
+    {
+        if (Mode.IsEnglish()!=FParse::Param(FCommandLine::Get(),TEXT("TibetQAEnglish"))) Mode.ChangeLanguage();
+        if (Task==TEXT("PackResume"))
+        {
+            if (Mode.QuickItem()!=ETibetItem::Map || !Mode.IsEquipped(ETibetItem::Bell) ||
+                Mode.Pills()!=3 || Mode.GetMana()!=110)
+            { Finish(false,TEXT("Saved quick item, charges or equipped benefit failed to restore")); return; }
+            Key(EKeys::X); Frames=20; LastAction=Now; return;
+        }
+        if (Mode.OwnsItem(ETibetItem::Bell) || Mode.Pills()!=4 || Mode.GetHealth()!=100)
+        { Finish(false,TEXT("Expected a fresh pilgrimage")); return; }
+        Key(EKeys::X); Frames=1; return;
+    }
+    if (Now-LastAction<.28) return;
+    if (Frames==1 || Frames==3 || Frames==6)
+    {
+        const FVector V=Mode.GetObjectiveLocation()-PC.GetPawn()->GetActorLocation();
+        PC.SetControlRotation(V.Rotation());
+        const bool Walk=V.Size2D()>(Mode.GetStep()==1?105.f:148.f);
+        if (Walk!=bMoving) { SendKey(PC,EKeys::W,Walk); bMoving=Walk; }
+        if (Frames==1)
+        {
+            if (Mode.Pills()!=4) { Finish(false,TEXT("Full-health use consumed a pill")); return; }
+            if (Mode.GetHealth()<99) { Key(EKeys::X); Frames=2; LastAction=Now; }
+            return;
+        }
+        if ((Frames==3 && Mode.OwnsItem(ETibetItem::Bell)) || (Frames==6 && Mode.OwnsItem(ETibetItem::Map)))
+        {
+            if (bMoving) {SendKey(PC,EKeys::W,false); bMoving=false;}
+            Key(EKeys::I); ++Frames; LastAction=Now; return;
+        }
+        if (Mode.GetStep()==0 && V.Size2D()<750 && Now-LastAction>.42)
+        { Key(Mode.GetSkillState(1).CooldownRemaining<=0 && Mode.GetMana()>=15?EKeys::R:EKeys::SpaceBar); LastAction=Now; }
+        return;
+    }
+    LastAction=Now;
+    switch (Frames)
+    {
+    case 2:
+        if (Mode.Pills()!=3 || Mode.GetHealth()<99) { Finish(false,TEXT("Quick pill did not restore real injury")); return; }
+        Record(TEXT("pill-used\t4->3")); ++Frames; break;
+    case 4:
+        if (HUD->GetJournalPage()!=ETibetPage::Pack || !Click(TEXT("TibetPackAction2"))) { Finish(false,TEXT("Bronze bell equip target missing")); return; }
+        ++Frames; break;
+    case 5:
+        if (!Mode.IsEquipped(ETibetItem::Bell) || Mode.MaxMana()!=110) { Finish(false,TEXT("Equipped bell did not raise mantra")); return; }
+        Record(TEXT("bell-equipped\t110")); Key(EKeys::Escape); ++Frames; break;
+    case 7:
+        if (HUD->GetJournalPage()!=ETibetPage::Pack || !Click(TEXT("TibetPackAction4"))) { Finish(false,TEXT("Map assignment target missing")); return; }
+        ++Frames; break;
+    case 8:
+        if (Mode.QuickItem()!=ETibetItem::Map) { Finish(false,TEXT("Map assignment failed")); return; }
+        Shot(TEXT("pack")); Record(TEXT("map-assigned")); ++Frames; break;
+    case 9: Finish(true,TEXT("earned, equipped, healed and assigned")); break;
+    case 20:
+        if (HUD->GetJournalPage()!=ETibetPage::Map || !PC.IsPaused() ||
+            !LoadObject<UTexture2D>(nullptr,TEXT("/Game/Journal/PilgrimageAtlas.PilgrimageAtlas")))
+        { Finish(false,TEXT("Saved map shortcut did not open painted chart")); return; }
+        {
+            for (int32 Index=0;Index<9;++Index)
+            {
+                const auto Pin=Find(FName(*FString::Printf(TEXT("TibetAtlas%d"),Index)));
+                if (!Pin) { Finish(false,TEXT("Missing atlas pin")); return; }
+                const auto G=Pin->GetCachedGeometry();
+                const auto At=G.LocalToAbsolute(G.GetLocalSize()*.5);
+                const FWidgetPath Hit(Window->GetHittestGrid().GetBubblePath(At,0,false,0));
+                if (!Hit.ContainsWidget(Pin.Get()))
+                { Finish(false,FString::Printf(TEXT("Obscured atlas pin %d"),Index)); return; }
+            }
+            auto West=Find(TEXT("TibetAtlas0")), North=Find(TEXT("TibetAtlas7")), East=Find(TEXT("TibetAtlas6"));
+            if (!West || !North || !East || East->GetCachedGeometry().GetAbsolutePosition().X<=West->GetCachedGeometry().GetAbsolutePosition().X ||
+                North->GetCachedGeometry().GetAbsolutePosition().Y>=East->GetCachedGeometry().GetAbsolutePosition().Y ||
+                !Click(TEXT("TibetAtlas6")))
+            { Finish(false,TEXT("Route geography or Samye pin hit target failed")); return; }
+        }
+        ++Frames; break;
+    case 21:
+        {
+            auto Header=StaticCastSharedPtr<STextBlock>(Find(TEXT("TibetAtlasSelection")));
+            if (!Header || !Header->GetText().ToString().Contains(Mode.Local(TEXT("Samye"),TEXT("桑耶"))))
+            { Finish(false,TEXT("Selecting Samye did not update its description")); return; }
+        }
+        Shot(TEXT("atlas")); Record(TEXT("quick-map\tSamye")); ++Frames; break;
+    case 22: Key(EKeys::Escape); ++Frames; break;
+    default: Finish(!HUD->IsJournalOpen() && !PC.IsPaused(),TEXT("restored pack and chart input")); break;
+    }
 }
 
 void UTibetQASubsystem::Journal(APlayerController& PC,ATibetGameMode& Mode)

@@ -237,7 +237,7 @@ def compare(web, mac, output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["photos", "arrival", "camera", "play", "skills", "learned", "journal", "feedback", "compare"])
+    parser.add_argument("action", choices=["photos", "arrival", "camera", "play", "skills", "learned", "journal", "pack", "feedback", "compare"])
     parser.add_argument("--exe", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--web", type=Path)
@@ -275,6 +275,15 @@ def main():
                         raise ValueError(f"Missing camera angle observations in {name}")
                     if shot_data(output/name/"travel.png") == shot_data(output/name/"orbit.png"):
                         raise ValueError(f"Camera views are identical in {name}")
+        elif args.action == "pack":
+            for name, opts, size in (("desktop-zh", [], (1440, 900)), ("compact-en", ["-TibetTouch", "-TibetQAEnglish"], (884, 420))):
+                save = slot+"-"+name
+                first = capture(exe, stage, output, name, "PackJourney", "wild", opts, save, size)
+                second = capture(exe, stage, output, name+"-resume", "PackResume", "wild", opts, save, size)
+                if ["bell-equipped", "110"] not in first or ["quick-map", "Samye"] not in second:
+                    raise ValueError(f"Missing item effect or selected location in {name}")
+                shot_data(output/name/"pack.png", size)
+                shot_data(output/(name+"-resume")/"atlas.png", size)
         elif args.action == "journal":
             for name, options, size in [
                 ("desktop-zh", [], (1440, 900)),

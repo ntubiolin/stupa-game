@@ -4,6 +4,7 @@
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/SaveGame.h"
 #include "TibetPlayerFeedback.h"
+#include "TibetPack.h"
 #include "TibetGameMode.generated.h"
 
 UCLASS()
@@ -18,6 +19,9 @@ public:
     UPROPERTY(SaveGame) bool bReturnFromTerma = false;
     UPROPERTY(SaveGame) bool bEpilogue = false;
     UPROPERTY(SaveGame) bool bComplete = false;
+    UPROPERTY(SaveGame) int32 Equipment = 0;
+    UPROPERTY(SaveGame) int32 PillCharges = 4;
+    UPROPERTY(SaveGame) bool bQuickMap = false;
     UPROPERTY(SaveGame) bool bMessengerJoined = false;
 };
 
@@ -62,6 +66,15 @@ public:
     bool GetEnemyMeter(FTibetEnemyMeter& Meter) const;
     const TArray<FTibetDamageCue>& GetDamageCues() const { return DamageCues; }
     float GetMana() const { return Mana; }
+    float MaxHealth() const;
+    float MaxMana() const;
+    bool OwnsItem(ETibetItem Item) const;
+    bool IsEquipped(ETibetItem Item) const;
+    ETibetItem QuickItem() const;
+    void SetQuickItem(ETibetItem Item);
+    void ToggleEquipment(ETibetItem Item);
+    void UsePill();
+    int32 Pills() const;
     float GetHealth() const { return Health; }
     const FTibetPlayerFeedback& GetPlayerFeedback() const { return PlayerFeedback; }
     void ChangeLanguage();
@@ -104,6 +117,11 @@ private:
     void RestoreStupaFlames();
     void Refresh();
     void Advance();
+    ETibetItem LastPackReward = ETibetItem::Count;
+    float PackRewardUntil = 0;
+    float NextPill = 0;
+    TArray<float> HealTicks;
+    void UpdatePills(float Now);
     void Store();
     void MoveToNextMap();
     void SetNotice(const FString& Line);

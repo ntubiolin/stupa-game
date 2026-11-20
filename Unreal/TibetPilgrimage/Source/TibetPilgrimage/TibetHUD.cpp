@@ -50,6 +50,13 @@ void ATibetHUD::ToggleJournal(ETibetPage Next)
     FSlateApplication::Get().SetKeyboardFocus(Overlay,EFocusCause::SetDirectly);
 }
 
+void ATibetHUD::UseQuickSlot()
+{
+    auto* Mode=GetWorld()->GetAuthGameMode<ATibetGameMode>();
+    if (!Mode || IsJournalOpen()) return;
+    if (Mode->QuickItem()==ETibetItem::Map) ToggleJournal(ETibetPage::Map);
+    else Mode->UsePill();
+}
 void ATibetHUD::CloseJournal()
 {
     if (!IsJournalOpen()) return;

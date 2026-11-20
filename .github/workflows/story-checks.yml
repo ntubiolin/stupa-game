@@ -18,6 +18,8 @@ jobs:
       - run: npm test
       - name: Check Unreal migration inventory
         run: python3 Unreal/TibetPilgrimage/QA/test_module_inventory.py
+      - name: Compare the native pilgrimage chart to the web map
+        run: python3 Unreal/TibetPilgrimage/QA/test_atlas_parity.py
       - name: Check Mac game delivery paths
         run: python3 -m unittest discover -s Unreal/TibetPilgrimage/QA -p test_mac_delivery.py
       - name: Check Tibet cave routes and resident continuity
