@@ -10,6 +10,7 @@
 #include "Styling/CoreStyle.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Layout/SBorder.h"
+#include "Widgets/Layout/SBox.h"
 #include "Widgets/Layout/SSafeZone.h"
 #include "Widgets/SOverlay.h"
 #include "Widgets/SBoxPanel.h"
@@ -41,6 +42,15 @@ void ATibetHUD::BeginPlay()
     TSharedRef<SVerticalBox> Controls=SNew(SVerticalBox);
     if(Touch)
     {
+        // Screen-height fractions use the actual viewport overlay's Slate space, including its DPI scale.
+        // On a 440-point landscape iPhone, 11% is a 48.4-point hit target.
+        auto Height=[this](){return Overlay ? float(Overlay->GetCachedGeometry().GetLocalSize().Y) : 0.f;};
+        auto Target=TAttribute<FOptionalSize>::CreateLambda([Height](){
+            return FOptionalSize(FMath::Max(44.f,Height()*.11f));
+        });
+        auto TouchFont=TAttribute<FSlateFontInfo>::CreateLambda([Height,Font](){
+            return Font(FMath::Max(12,FMath::RoundToInt(Height()*.027f)));
+        });
         TSharedRef<SHorizontalBox> Row=SNew(SHorizontalBox);
         Controls->AddSlot().AutoHeight()[Row];
         const TCHAR* En[]={TEXT("Act"),TEXT("Hūṃ"),TEXT("Chant"),TEXT("Phurba"),TEXT("Bell"),TEXT("Lotus"),TEXT("Guard"),TEXT("Guru"),TEXT("EN/中")};
@@ -53,11 +63,12 @@ void ATibetHUD::BeginPlay()
                 Controls->AddSlot().HAlign(HAlign_Right).AutoHeight()[Row];
             }
             FString E=En[i],Z=Zh[i];
-            Row->AddSlot().AutoWidth().Padding(2)[SNew(SButton)
-                .ContentPadding(FMargin(9,8)).IsFocusable(false)
+            Row->AddSlot().AutoWidth().Padding(2)[SNew(SBox).MinDesiredWidth(Target).MinDesiredHeight(Target)
+                [SNew(SButton).HAlign(HAlign_Center).VAlign(VAlign_Center)
+                .ContentPadding(FMargin(5,3)).IsFocusable(false)
                 .OnClicked_Lambda([M,i](){if(i==0)M->Interact();else if(i==8)M->ChangeLanguage();else M->CastSkill(i-1);return FReply::Handled();})
-                [SNew(STextBlock).Font(Font(12)).ColorAndOpacity(FLinearColor::White)
-                    .Text_Lambda([M,E,Z](){return FText::FromString(M->IsEnglish()?E:Z);})]];
+                [SNew(STextBlock).Font(TouchFont).ColorAndOpacity(FLinearColor::White)
+                    .Text_Lambda([M,E,Z](){return FText::FromString(M->IsEnglish()?E:Z);})]]];
         }
     }
     else
