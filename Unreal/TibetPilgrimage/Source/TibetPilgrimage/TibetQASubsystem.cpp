@@ -879,7 +879,7 @@ void UTibetQASubsystem::PlayerFeedback(APlayerController& PC, ATibetGameMode& Mo
         FeedbackPhase = 1;
         return;
     }
-    if (Towards.Size2D() > 153.f)
+    if (FeedbackPhase < 7 && Towards.Size2D() > 153.f)
     {
         PC.SetControlRotation(Towards.Rotation());
         Pawn->AddMovementInput(Towards.GetSafeNormal2D());
@@ -888,7 +888,8 @@ void UTibetQASubsystem::PlayerFeedback(APlayerController& PC, ATibetGameMode& Mo
     {
         if (Mode.GetSkillState(4).ActiveRemaining <= 0.f)
         {
-            if (GuardedContact < 0.f) { Finish(false,TEXT("Ward never protected contact")); return; }
+            if (GuardedContact < 0.f || !SawEnemyStrike)
+            { Finish(false,TEXT("Expected a visible windup and strike during ward protection")); return; }
             FeedbackPhase = 2;
             return;
         }
@@ -897,7 +898,8 @@ void UTibetQASubsystem::PlayerFeedback(APlayerController& PC, ATibetGameMode& Mo
         if (Towards.Size2D() < 180.f)
         {
             if (GuardedContact < 0.f) GuardedContact = Now;
-            if (Now - GuardedContact > 1.6f && Screenshot.IsEmpty())
+            ObserveEnemyAttack();
+            if (Now - GuardedContact > 1.6f && SawEnemyStrike && Screenshot.IsEmpty() && !FScreenshotRequest::IsScreenshotRequested())
             {
                 Record(TEXT("ward-contact"));
                 Screenshot = Output / TEXT("ward.png");
@@ -925,8 +927,43 @@ void UTibetQASubsystem::PlayerFeedback(APlayerController& PC, ATibetGameMode& Mo
         FeedbackPhase = 4;
         return;
     }
-    if (FeedbackPhase == 4 && !FScreenshotRequest::IsScreenshotRequested())
-        Finish(true,TEXT("ward, injury, recovery and objective"));
+    if (FeedbackPhase < 4 || FScreenshotRequest::IsScreenshotRequested()) return;
+    bool Windup = false, Strike = false;
+    for (TActorIterator<ATibetRitualEffect> It(GetWorld()); It; ++It)
+    {
+        Windup |= It->GetEffectSlot() == ATibetRitualEffect::EnemyWindup;
+        Strike |= It->GetEffectSlot() == ATibetRitualEffect::EnemyStrike;
+    }
+    if (FeedbackPhase == 4 && Windup)
+    {
+        // Interrupt an actual charged attack through the player's phurba binding.
+        Tapped = EKeys::One;
+        SendKey(PC,Tapped,true);
+        AttackTestTime = Now;
+        FeedbackPhase = 5;
+    }
+    else if (FeedbackPhase == 5)
+    {
+        if (Windup || Strike || Cue.HitTime >= AttackTestTime)
+        { Finish(false,TEXT("Stunned attacker retained its tell or dealt damage")); return; }
+        if (Now - AttackTestTime > .65f)
+        {
+            Record(TEXT("enemy-interrupted"));
+            FeedbackPhase = 6;
+        }
+    }
+    else if (FeedbackPhase == 6 && Windup) FeedbackPhase = 7;
+    if (FeedbackPhase == 7)
+    {
+        Pawn->AddMovementInput(-Towards.GetSafeNormal2D());
+        if (Strike)
+        {
+            if (Towards.Size2D() < 200.f || Cue.HitTime >= AttackTestTime)
+            { Finish(false,TEXT("Backing out of the warning did not avoid the strike")); return; }
+            Record(TEXT("enemy-dodged"));
+            Finish(true,TEXT("ward, injury, recovery, interrupt and dodge"));
+        }
+    }
 }
 
 // Each invocation walks a fresh vault and casts into the same living guardian.

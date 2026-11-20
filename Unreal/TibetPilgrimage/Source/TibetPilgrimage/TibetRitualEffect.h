@@ -17,6 +17,9 @@ public:
         UMaterialInterface* Material);
     void StartImpact(const FVector& Position, const FVector& Outward, int32 SourceSlot, bool bFinal,
         UMaterialInterface* Material);
+    static constexpr int32 EnemyWindup = 8, EnemyStrike = 9;
+    void StartEnemyAttack(AActor& Attacker, bool bStrike, bool bBoss, float Radius, float Windup,
+        UMaterialInterface* Material);
     virtual void Tick(float DeltaSeconds) override;
     int32 GetEffectSlot() const { return Slot; }
 

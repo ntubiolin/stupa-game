@@ -79,6 +79,7 @@ void ATibetGameMode::UpdateWilderness(const FVector& Player, float Dt)
     if (!Closest || Focus==Closest->Actor.Get()) return;
     for (FTibetWildEnemy& Member : WildernessPack)
         if (Member.Actor.Get()==Focus) { Member.Health=EnemyHealth; Member.StunnedUntil=Now+Stun; }
+    CancelEnemyWindup();
     Focus=Closest->Actor.Get();
     EnemyHealth=Closest->Health;
     EnemyMaximum=3;

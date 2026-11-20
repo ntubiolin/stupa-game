@@ -33,6 +33,8 @@ private:
     double CourtyardSince=0;
     void CameraFollow(APlayerController& PC, ATibetGameMode& Mode);
     bool SurveyGate(APlayerController& PC, const FVector& Goal);
+    bool SawEnemyWindup = false, SawEnemyStrike = false;
+    void ObserveEnemyAttack();
     bool CaptureEncounter(APlayerController& PC, ATibetGameMode& Mode);
     TSet<FName> SeenEncounters;
     int32 GateFrames = 0;
@@ -55,7 +57,7 @@ private:
     int32 SkillPhase = 0, SkillHealthBefore = 0;
     float SkillGameTime = 0;
     int32 FeedbackPhase = 0;
-    float GuardedContact = -1.f;
+    float GuardedContact = -1.f, AttackTestTime = 0.f;
     int32 Frames = 0, PreviousStep = INDEX_NONE, PreviousProgress = INDEX_NONE;
     bool bFinished = false, bMoving = false, bTestingSkills = false;
     FKey Tapped;
