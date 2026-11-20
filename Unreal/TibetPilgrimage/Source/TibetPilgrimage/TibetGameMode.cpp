@@ -143,8 +143,8 @@ FVector ATibetGameMode::Anchor() const
         // Eight ordered stops trace a clockwise circumambulation.
         const double A=(Count+4)*UE_TWO_PI/8;
         const bool Hub = Map==TEXT("stupa");
-        return FVector((Hub ? 3400. : 3800.)+(Hub ? 2000. : 2480.)*FMath::Cos(A),
-            (Hub ? 2000. : 3100.)*FMath::Sin(A),0);
+        return FVector((Hub ? 3400. : 3800.)+(Hub ? 2000. : 2700.)*FMath::Cos(A),
+            (Hub ? 2000. : 3250.)*FMath::Sin(A),0);
     }
     case EObjective::Boss:
     case EObjective::Combat: return {-50+110.*(Count%3),-350+150.*(Count%4),0};
@@ -197,10 +197,13 @@ void ATibetGameMode::Refresh()
     if (K==EObjective::Talk || (K==EObjective::Escort && !bEscorting) || K==EObjective::Combat || K==EObjective::Boss)
     {
         const bool Fight=K==EObjective::Combat || K==EObjective::Boss;
-        FString Model=TEXT("Guide");
+        FString Model=Map==TEXT("chimphu") ? TEXT("Tsogyal") : TEXT("Guide");
         if (Fight)
         {
             if (Map==TEXT("yarlung")) Model=TEXT("RiverYak");
+            else if (Map==TEXT("pharping")) Model=TEXT("DroughtSpirit");
+            else if (Map==TEXT("mangyul") && K==EObjective::Boss) Model=TEXT("Tenma");
+            else if (Map==TEXT("samye") && K==EObjective::Boss) Model=TEXT("Pehar");
             else if (Map==TEXT("wild") || Map==TEXT("mangyul")) Model=TEXT("SnowKing");
             else Model=TEXT("Guardian");
             EnemyHealth=K==EObjective::Boss ? 9 : 3;
@@ -225,6 +228,7 @@ void ATibetGameMode::Advance()
         Save->Counts[Route]=0;
         ++Save->Steps.FindOrAdd(Route);
         bEscorting=false;
+        if (Messenger) { Messenger->Destroy(); Messenger=nullptr; }
         if (Route==TEXT("ending")) Save->bComplete=true;
     }
     Store();
@@ -335,9 +339,28 @@ void ATibetGameMode::Tick(float Dt)
     const auto K=Objective(Route,GetStep()).Kind;
     const FVector ToPlayer=P->GetActorLocation()-GetObjectiveLocation();
     const double Dist=ToPlayer.Size2D();
+    if (bEscorting && Messenger)
+    {
+        const FVector Delta=P->GetActorLocation()-Messenger->GetActorLocation();
+        if(Delta.Size2D()>95 && Delta.Size2D()<1800)
+        {
+            Messenger->AddActorWorldOffset(Delta.GetSafeNormal2D()*FMath::Min<double>(Dt*470,Delta.Size2D()-90));
+            Messenger->SetActorRotation(FRotator(0,Delta.Rotation().Yaw-90,0));
+        }
+    }
     if ((K==EObjective::Reach || K==EObjective::Kora || K==EObjective::Escort) && Dist<140)
     {
-        if(K==EObjective::Escort && !bEscorting){bEscorting=true;Refresh();}
+        if(K==EObjective::Escort && !bEscorting)
+        {
+            Messenger=Focus;
+            Focus=nullptr;
+            bEscorting=true;
+            Refresh();
+        }
+        else if(K==EObjective::Escort && Messenger && FVector::Dist2D(Messenger->GetActorLocation(),GetObjectiveLocation())>190)
+        {
+            SetNotice(Local(TEXT("Wait for the scripture bearer."),TEXT("稍候，持經者正趕上。")));
+        }
         else Advance();
     }
     if ((K==EObjective::Combat || K==EObjective::Boss) && Focus && Stun<=0 && Dist<1600)

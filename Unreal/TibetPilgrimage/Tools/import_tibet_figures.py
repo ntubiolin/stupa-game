@@ -22,8 +22,8 @@ def import_meshes():
         options.static_mesh_import_data.auto_generate_collision = False
         task.options = options
         tasks.append(task)
-    if len(tasks) != 9:
-        raise RuntimeError(f"Expected nine generated figure meshes in {source}, found {len(tasks)}")
+    if len(tasks) != 13:
+        raise RuntimeError(f"Expected thirteen generated figure meshes in {source}, found {len(tasks)}")
     assets.import_asset_tasks(tasks)
     for task in tasks:
         mesh = unreal.load_asset("/Game/Figures/" + Path(task.filename).stem)
