@@ -18,6 +18,16 @@ def normal(a, b, c):
 
 # sRGB paint samples; texture roughness, metal, emission and nominal grain.
 SURFACES = {
+    "whitewash": ("faf8ef", 0.94, 0, 0, "chalk"),
+    "turmeric": ("cb7d27", 0.90, 0, 0, "chalk"),
+    "giltpaint": ("edbe66", 0.53, 0.22, 0, "chalk"),
+    "lapis": ("263c63", 0.88, 0, 0, "chalk"),
+    "vermillion": ("b24236", 0.88, 0, 0, "chalk"),
+    "indigoCloth": ("426bc4", 0.93, 0, 0.06, "printed"),
+    "whiteCloth": ("f3efdf", 0.93, 0, 0.06, "printed"),
+    "redCloth": ("c14a48", 0.93, 0, 0.06, "printed"),
+    "greenCloth": ("4f9072", 0.93, 0, 0.06, "printed"),
+    "yellowCloth": ("efd366", 0.93, 0, 0.06, "printed"),
     "saffron": ("d5a653", 0.9, 0, 0, "plaster"),
     "lime": ("dfd7c4", 0.89, 0, 0, "plaster"),
     "ochre": ("bc7142", 0.83, 0, 0, "plaster"),
@@ -110,6 +120,22 @@ def tile(style, size=128):
         for i in range(size):
             index = j * size + i
             grey = int(173 + 82 * height[index])
+            if style == "chalk":
+                grey = int(226 + 27 * height[index])
+            elif style == "printed":
+                # Undyed hem and a woodblock rosette. UVs span one rectangle of fabric.
+                x, y = (i + 0.5) / size, (j + 0.5) / size
+                dx, dy = x - 0.5, (y - 0.47) * 1.22
+                theta = math.atan2(dy, dx)
+                petal = 0.13 + 0.066 * math.cos(8 * theta)
+                edge = min(x, y, 1 - x, 1 - y)
+                ink = (
+                    0.041 < edge < 0.056
+                    or 0.072 < edge < 0.080
+                    or abs(math.hypot(dx, dy) - petal) < 0.012
+                    or abs(math.hypot(dx, dy) - 0.071) < 0.014
+                )
+                grey = int((168 if ink else 219) + 24 * height[index])
             if style == "tile" and height[index] < 0.1:
                 grey = 126
             color.extend((grey, grey, grey))
@@ -133,13 +159,13 @@ class Scene:
         self.group = "Landmarks"
         self.meshes = defaultdict(lambda: defaultdict(list))
 
-    def face(self, mat, points, normals=None, tint=1):
+    def face(self, mat, points, normals=None, tint=1, uvs=None):
         n = normal(*points[:3])
         projection = max(range(3), key=lambda a: abs(n[a]))
         axes = ((1, 2), (0, 2), (0, 1))[projection]
         verts = []
         for i, p in enumerate(points):
-            uv = (p[axes[0]] * 0.64, -p[axes[1]] * 0.64)
+            uv = uvs[i] if uvs is not None else (p[axes[0]] * 0.64, -p[axes[1]] * 0.64)
             verts.append((axis(p), axis(normals[i] if normals else n), uv, tint))
         for i in range(1, len(verts) - 1):
             self.meshes[self.group][mat].extend((verts[0], verts[i], verts[i + 1]))
@@ -265,7 +291,8 @@ class Scene:
             col, norm = texture_ids[style]
             m = dict(
                 name=name,
-                doubleSided=name in ("blue", "red", "green", "yellow", "lime", "pine", "leaf"),
+                doubleSided=style == "printed"
+                or name in ("blue", "red", "green", "yellow", "lime", "pine", "leaf"),
                 pbrMetallicRoughness=dict(
                     baseColorFactor=linear(color) + [1.0],
                     baseColorTexture=dict(index=col),

@@ -10,6 +10,7 @@ class TIBETPILGRIMAGE_API ATibetCharacter : public ACharacter
     GENERATED_BODY()
 public:
     ATibetCharacter();
+    virtual void SetPlayerDefaults() override;
     virtual void Tick(float DeltaSeconds) override;
     virtual void SetupPlayerInputComponent(UInputComponent* Input) override;
 protected:
@@ -21,6 +22,8 @@ private:
     float WalkPhase = 0;
     FVector2D Thumb, Drag;
     int32 MoveFinger = -1, LookFinger = -1;
+    bool bAwaitingDragMotion = true;
+    void UpdateMouseLook(APlayerController& Player);
     void TouchDown(ETouchIndex::Type Index, FVector Position);
     void TouchUp(ETouchIndex::Type Index, FVector Position);
     void DoInteract();

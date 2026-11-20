@@ -36,9 +36,9 @@ void ATibetHUD::BeginPlay()
         .Text_Lambda([M](){return FText::FromString(M->AreaName());})];
     Content->AddSlot().AutoHeight().Padding(0,4)[SNew(STextBlock).Font(Font(14)).ColorAndOpacity(Paper)
         .WrapTextAt(420).Text_Lambda([M](){return FText::FromString(M->GetObjectiveText());})];
-    Content->AddSlot().AutoHeight()[SNew(STextBlock).Font(Font(12)).ColorAndOpacity(Gold)
-        .WrapTextAt(420).Text_Lambda([M](){return FText::FromString(M->Status());})];
     const bool Touch=PLATFORM_IOS || FParse::Param(FCommandLine::Get(),TEXT("TibetTouch"));
+    Content->AddSlot().AutoHeight()[SNew(STextBlock).Font(Font(12)).ColorAndOpacity(Gold)
+        .WrapTextAt(420).Text_Lambda([M,Touch](){return FText::FromString(M->Status(Touch));})];
     TSharedRef<SVerticalBox> Controls=SNew(SVerticalBox);
     if(Touch)
     {
@@ -75,8 +75,8 @@ void ATibetHUD::BeginPlay()
     {
         Controls->AddSlot().AutoHeight()[SNew(STextBlock).Font(Font(12)).ColorAndOpacity(Paper)
             .Text_Lambda([M](){return FText::FromString(M->Local(
-                TEXT("WASD Move   E Interact   Space Hūṃ   R Chant   1–4/T Skills   L Language"),
-                TEXT("WASD 移動   E 互動   空白鍵 吽   R 真言   1–4/T 法術   L 語言")));})];
+                TEXT("WASD Move   Hold right mouse and drag to look   E Interact\nSpace Hūṃ   R Chant   1–4/T Skills   L Language"),
+                TEXT("WASD 移動   按住滑鼠右鍵拖曳轉向   E 互動\n空白鍵 吽   R 真言   1–4/T 法術   L 語言")));})];
     }
     auto Layout=SNew(SOverlay).Visibility(EVisibility::SelfHitTestInvisible)
         +SOverlay::Slot().HAlign(HAlign_Left).VAlign(VAlign_Top).Padding(16)
@@ -101,19 +101,30 @@ void ATibetHUD::DrawHUD()
     if(!Overlay || !Canvas || !PC || !PC->GetPawn() || !M || M->IsCampaignComplete()) return;
     const FVector Target=M->GetObjectiveLocation()+FVector(0,0,130);
     FVector2D Point;
-    const bool Visible=PC->ProjectWorldLocationToScreen(Target,Point,true);
+    const bool InFront=PC->ProjectWorldLocationToScreen(Target,Point,true);
     const float W=Canvas->SizeX,H=Canvas->SizeY;
     const FLinearColor Gold(.98,.67,.19,.95);
-    if(!Visible)
+    if(!InFront)
     {
-        const float Relative=FRotator::NormalizeAxis((Target-PC->GetPawn()->GetActorLocation()).Rotation().Yaw-
-            PC->GetControlRotation().Yaw);
-        Point={Relative<0?32.:W-32.,H*.54};
+        FVector Eye;
+        FRotator View;
+        PC->GetPlayerViewPoint(Eye,View);
+        const double Relative=FRotator::NormalizeAxis((Target-Eye).Rotation().Yaw-View.Yaw);
+        Point={Relative<0?0.:double(W),H*.54};
     }
-    Point.X=FMath::Clamp(Point.X,32.,double(W)-32);
-    Point.Y=FMath::Clamp(Point.Y,double(H)*.19,double(H)*.78);
+    const FVector2D Marker(FMath::Clamp(Point.X,32.,double(W)-32),
+        FMath::Clamp(Point.Y,double(H)*.19,double(H)*.78));
     const float R=FMath::Clamp(H*.009f,4.f,10.f);
-    const float X=Point.X,Y=Point.Y;
+    const float X=Marker.X,Y=Marker.Y;
+    if (!Point.Equals(Marker,1.))
+    {
+        const FVector2D Direction=(Point-Marker).GetSafeNormal();
+        const FVector2D Side(-Direction.Y,Direction.X);
+        const FVector2D Tip=Marker+Direction*R, Base=Marker-Direction*R;
+        DrawLine(Base.X+Side.X*R,Base.Y+Side.Y*R,Tip.X,Tip.Y,Gold,2);
+        DrawLine(Base.X-Side.X*R,Base.Y-Side.Y*R,Tip.X,Tip.Y,Gold,2);
+        return;
+    }
     DrawLine(X,Y-R,X+R,Y,Gold,2); DrawLine(X+R,Y,X,Y+R,Gold,2);
     DrawLine(X,Y+R,X-R,Y,Gold,2); DrawLine(X-R,Y,X,Y-R,Gold,2);
 }

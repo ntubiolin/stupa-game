@@ -14,6 +14,7 @@
 #include "HAL/PlatformMisc.h"
 #include "HAL/PlatformTime.h"
 #include "InputKeyEventArgs.h"
+#include "Kismet/GameplayStatics.h"
 #include "Misc/CommandLine.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Parse.h"
@@ -74,7 +75,8 @@ void UTibetQASubsystem::Tick(float)
         return;
     }
     if (Task != TEXT("Campaign") && World->GetMapName() != StartMap) { Finish(false, TEXT("Unexpected map: ") + World->GetMapName()); return; }
-    if (Task == TEXT("Photo")) Photo(*PC);
+    if (Task == TEXT("Arrival")) Arrival(*PC);
+    else if (Task == TEXT("Photo")) Photo(*PC);
     else if (Task == TEXT("Play") || Task == TEXT("Campaign") || Task == TEXT("GroveEntry") || Task == TEXT("Skills")) Play(*PC, *Mode);
     else if (Task == TEXT("Resume"))
     {
@@ -141,6 +143,63 @@ void SendKey(APlayerController& PC, FKey Key, bool bDown)
 }
 }
 
+// Exercise the actual third-person view before the campaign driver starts steering the pawn.
+void UTibetQASubsystem::Arrival(APlayerController& PC)
+{
+    const double Elapsed = FPlatformTime::Seconds() - Began;
+    if (Elapsed > 30) { Finish(false, TEXT("Arrival timed out")); return; }
+    if (Elapsed < 2) return;
+    ++Frames;
+    if (Frames == 1)
+    {
+        int32 Width, Height;
+        PC.GetViewportSize(Width, Height);
+        const FVector Landmarks[] = {{1750, 0, 110}, {3400, 0, 2640}, {-1320, 230, 155}};
+        for (FVector Point : Landmarks)
+        {
+            FVector2D Screen;
+            if (!PC.ProjectWorldLocationToScreen(Point, Screen) || Screen.X < Width * .025 ||
+                Screen.X > Width * .975 || Screen.Y < Height * .025 || Screen.Y > Height * .975)
+            { Finish(false, TEXT("Stupa or guide outside the arrival frame")); return; }
+        }
+        HeadingBeforeDrag = PC.GetControlRotation();
+        ArrivalPosition = PC.GetPawn()->GetActorLocation();
+        Screenshot = Output / TEXT("arrival.png");
+        FScreenshotRequest::RequestScreenshot(Screenshot, true, false, false);
+        Record(TEXT("arrival\t") + HeadingBeforeDrag.ToCompactString());
+    }
+    // Send both axes through PlayerInput while free, dragging, and released.
+    if ((Frames >= 5 && Frames < 15) || (Frames >= 25 && Frames < 35) || (Frames >= 49 && Frames < 60))
+    {
+        PC.InputKey(FInputKeyEventArgs::CreateSimulated(EKeys::MouseX, IE_Axis, 6.f, 1));
+        PC.InputKey(FInputKeyEventArgs::CreateSimulated(EKeys::MouseY, IE_Axis, 2.f, 1));
+    }
+    if (Frames == 20)
+    {
+        if (!PC.GetControlRotation().Equals(HeadingBeforeDrag, .05))
+        { Finish(false, TEXT("Free mouse movement rotated the view")); return; }
+        SendKey(PC, EKeys::RightMouseButton, true);
+    }
+    if (Frames == 42)
+    {
+        HeadingAfterDrag = PC.GetControlRotation();
+        const FRotator Change = (HeadingAfterDrag - HeadingBeforeDrag).GetNormalized();
+        if (FMath::Abs(Change.Yaw) < 1 || FMath::Abs(Change.Pitch) < 1)
+        { Finish(false, TEXT("Right drag did not turn both camera axes")); return; }
+        Record(TEXT("right-drag\t") + HeadingAfterDrag.ToCompactString());
+        SendKey(PC, EKeys::RightMouseButton, false);
+        SendKey(PC, EKeys::D, true);
+    }
+    if (Frames >= 65 && FVector::Dist2D(ArrivalPosition, PC.GetPawn()->GetActorLocation()) > 35)
+    {
+        SendKey(PC, EKeys::D, false);
+        Record(TEXT("released-walking\t") + PC.GetControlRotation().ToCompactString());
+        const bool bStable = PC.GetControlRotation().Equals(HeadingAfterDrag, .05);
+        Finish(bStable && IFileManager::Get().FileSize(*Screenshot) > 0,
+            bStable ? TEXT("arrival and mouse controls") : TEXT("Released mouse or walking rotated the view"));
+    }
+}
+
 // Search a local walkable grid only after the direct keyboard approach stalls. The
 // pawn still moves through normal character collision between every waypoint.
 bool UTibetQASubsystem::FindWalkingPath(APawn& Pawn, const FVector& Goal, double Reach)
@@ -194,21 +253,42 @@ void UTibetQASubsystem::Play(APlayerController& PC, ATibetGameMode& Mode)
     const FVector Goal = Task == TEXT("GroveEntry") ? FVector(-1860,-480,0) : Mode.GetObjectiveLocation();
     if (Step != PreviousStep || Progress != PreviousProgress)
     {
+        if (GetWorld()->GetMapName() == TEXT("stupa") && (Kind == TEXT("Interact") || Step == 3))
+        {
+            TArray<AActor*> Flames;
+            UGameplayStatics::GetAllActorsWithTag(GetWorld(), TEXT("StupaLampFlame"), Flames);
+            const int32 Lit = Kind == TEXT("Interact") ? Progress : 3;
+            if (Flames.Num() != Lit)
+            { Finish(false, TEXT("Visible offering flames disagree with saved progress")); return; }
+            for (int32 I = 0; I < Lit; ++I)
+            {
+                const FVector Wick(1430 + 70 * I, -360 + 320 * I, 126.5);
+                if (!Flames.ContainsByPredicate([&Wick](const AActor* A){ return A->GetActorLocation().Equals(Wick, 2); }))
+                { Finish(false, TEXT("Offering flame missing from its wick")); return; }
+            }
+        }
         Record(FString::Printf(TEXT("step\t%s\t%d\t%d\t%s\t%s\t%s"),*GetWorld()->GetMapName(),Step,Progress,*Kind.ToString(),
             *Pos.ToCompactString(),*Goal.ToCompactString()));
         if (Step != PreviousStep)
-            {
+        {
             FString File = Output / FString::Printf(TEXT("%s-%03d.png"),*GetWorld()->GetMapName(),Step);
             if (FPaths::FileExists(File))
                 File = Output / FString::Printf(TEXT("%s-return-%03d.png"),*GetWorld()->GetMapName(),Step);
             FScreenshotRequest::RequestScreenshot(File,true,false,false);
         }
+        else if (GetWorld()->GetMapName() == TEXT("stupa") && Kind == TEXT("Interact"))
+        {
+            FScreenshotRequest::RequestScreenshot(Output / FString::Printf(TEXT("lamps-%d.png"), Progress),
+                true, false, false);
+        }
         PreviousStep = Step; PreviousProgress = Progress;
         Waypoints.Reset(); LastNavCheck=Now; LastNavPosition=Pos;
     }
-    int32 StopStep = INDEX_NONE;
+    int32 StopStep = INDEX_NONE, StopProgress = INDEX_NONE;
     FParse::Value(FCommandLine::Get(),TEXT("TibetQAStopStep="),StopStep);
-    if (StopStep != INDEX_NONE && Step == StopStep && !FScreenshotRequest::IsScreenshotRequested())
+    FParse::Value(FCommandLine::Get(),TEXT("TibetQAStopProgress="),StopProgress);
+    if (Step == StopStep && (StopProgress == INDEX_NONE || Progress == StopProgress)
+        && !FScreenshotRequest::IsScreenshotRequested())
     { Finish(true,TEXT("checkpoint")); return; }
     if (Mode.IsCampaignComplete() && Task == TEXT("Campaign"))
     { Finish(true,TEXT("campaign completed")); return; }

@@ -5,6 +5,7 @@ import random
 import struct
 from pathlib import Path
 
+from boudha_plaza import south_approach
 from tibet_mesh import Scene, noise, normal
 
 
@@ -129,16 +130,15 @@ def chorten(s, x, y, z, h=3):
     )
 
 
-def whitewashed_dome(s, x, y):
-    radius, base = 11.9, 2.02
-
-    def shell(azimuth, latitude, offset=0):
-        unit = (
-            math.cos(latitude) * math.cos(azimuth),
-            math.cos(latitude) * math.sin(azimuth),
-            math.sin(latitude),
-        )
-        return tuple(c + n * (radius + offset) for c, n in zip((x, y, base), unit)), unit
+def whitewashed_dome(s, x, y, base, radius, height):
+    def shell(a, lat, offset=0):
+        c, sn = math.cos(lat), math.sin(lat)
+        ca, sa = math.cos(a), math.sin(a)
+        n = (c * ca / radius, c * sa / radius, sn / height)
+        length = math.sqrt(sum(v * v for v in n))
+        n = tuple(v / length for v in n)
+        pos = (x + radius * c * ca, y + radius * c * sa, base + height * sn)
+        return tuple(p + v * offset for p, v in zip(pos, n)), n
 
     for row in range(24):
         for side in range(120):
@@ -146,156 +146,400 @@ def whitewashed_dome(s, x, y):
             if row == 23:
                 coords = coords[:3]
             points, normals = zip(*(shell(a * TAU / 120, b * math.pi / 48) for a, b in coords))
-            s.face("lime", points, normals)
-    # Saffron offerings are thrown onto the whitewash in broad, imperfect lotus-petal strokes.
-    for petal in range(10):
+            s.face("whitewash", points, normals)
 
-        def edge(i):
-            t = i / 32
-            azimuth = (petal + t) * TAU / 10
-            spread = (0.024 + 0.018 * math.sin(math.pi * t)) * (0.85 + 0.26 * noise(petal, i))
-            latitude = 0.08 + (0.37 + 0.08 * noise(petal, 7)) * math.sin(math.pi * t) ** 0.82
-            return (shell(azimuth, latitude - spread, 0.016), shell(azimuth, latitude + spread, 0.016))
+    # Each throw begins under the harmika, sweeps around a pointed petal,
+    # then tapers into a short drip. The white field stays open below the crown.
+    for petal in range(16):
+        center = (petal + 0.25) * TAU / 16
+        tip = 0.57 + 0.14 * noise(petal, 12)
+        for side in (-1, 1):
+            last = None
+            for step in range(23):
+                t = step / 22
+                lat = 1.25 + (tip - 1.25) * t
+                sweep = (0.24 + 0.86 * math.sin(math.pi * t) ** 0.9) * (1 - t**3)
+                a = center + side * 0.157 * sweep + 0.013 * math.sin(5 * t + petal)
+                width = (0.006 + 0.022 * (1 - t) + 0.006 * math.sin(math.pi * t)) * (
+                    0.86 + 0.28 * noise(petal * 3 + side, step)
+                )
+                pair = (shell(a - width, lat, 0.034), shell(a + width, lat, 0.034))
+                if last:
+                    pts, norms = zip(last[0], pair[0], pair[1], last[1])
+                    s.face("turmeric", pts, norms, 0.91 + 0.09 * noise(step, petal))
+                last = pair
+        a = center + 0.013 * math.sin(5 + petal)
+        stroke = [
+            shell(a - 0.007, tip, 0.036),
+            shell(a + 0.002, tip - 0.035 - 0.068 * noise(8, petal), 0.036),
+            shell(a + 0.007, tip, 0.036),
+        ]
+        pts, norms = zip(*stroke)
+        s.face("turmeric", pts, norms)
 
-        for i in range(32):
-            lo, hi = edge(i)
-            nx, ny = edge(i + 1)
-            pts, norms = zip(lo, nx, ny, hi)
-            s.face("saffron", pts, norms, 0.82 + 0.17 * noise(i, petal))
+
+def mandala_terrace(s, x, y, z, half, height):
+    # One stepped outline avoids coincident top faces where cross-shaped slabs meet.
+    edge = (
+        (-0.72, -0.72),
+        (-0.37, -0.72),
+        (-0.37, -0.87),
+        (-0.23, -0.87),
+        (-0.23, -1),
+        (0.23, -1),
+        (0.23, -0.87),
+        (0.37, -0.87),
+        (0.37, -0.72),
+    )
+    outline = []
+    for turn in range(4):
+        for a, b in edge:
+            for _ in range(turn):
+                a, b = -b, a
+            outline.append((a, b))
+
+    profile = [
+        (0, 1),
+        (0.12, 0.995),
+        (height - 0.23, 0.99),
+        (height - 0.15, 1.005),
+        (height - 0.06, 1.006),
+        (height, 0.996),
+    ]
+    rows = [
+        [(x + a * half * scale, y + b * half * scale, z + dz) for a, b in outline]
+        for dz, scale in profile
+    ]
+    for mat, lower, upper in zip(
+        ("ochre", "whitewash", "turmeric", "giltpaint", "whitewash"), rows, rows[1:]
+    ):
+        for i in range(len(outline)):
+            j = (i + 1) % len(outline)
+            s.face(mat, [lower[i], lower[j], upper[j], upper[i]])
+    for i, p in enumerate(rows[-1]):
+        s.face("whitewash", [(x, y, z + height), p, rows[-1][(i + 1) % len(outline)]])
+
+
+def boudha_eyes(s, x, y, h):
+    for face in range(4):
+        ca, sa = math.cos(face * math.pi / 2), math.sin(face * math.pi / 2)
+
+        def paint(mat, coords, depth):
+            area = sum(a * d - b * c for (a, b), (c, d) in zip(coords, coords[1:] + coords[:1]))
+            pts = [
+                (x + t * ca + (2.64 + depth) * sa, y + t * sa - (2.64 + depth) * ca, h + u)
+                for t, u in coords
+            ]
+            s.face(mat, pts if area > 0 else pts[::-1])
+
+        def dot(mat, tx, ty, rx, ry, depth):
+            paint(
+                mat,
+                [
+                    (tx + rx * math.cos(i * TAU / 24), ty + ry * math.sin(i * TAU / 24))
+                    for i in range(24)
+                ],
+                depth,
+            )
+
+        for sign in (-1, 1):
+            for j in range(24):
+                top, base, brow = [], [], []
+                for t in (j / 24, (j + 1) / 24):
+                    arc = math.sin(math.pi * t)
+                    tx = sign * (0.23 + 2.06 * t)
+                    mid = 1.73 + 0.20 * t + 0.04 * arc
+                    base.append((tx, mid - 0.25 * arc - 0.02))
+                    top.append((tx, mid + 0.28 * arc + 0.02))
+                    brow.append((tx, mid + 0.50 + 0.28 * math.sin(math.pi * (t**0.72))))
+                paint("whitewash", [*base, *top[::-1]], 0.015)
+                paint("lapis", [*base, *((a, b - 0.073) for a, b in base[::-1])], 0.022)
+                paint("vermillion", [*top, *((a, b + 0.127) for a, b in top[::-1])], 0.022)
+                paint("dark", [*top, *((a, b + 0.055) for a, b in top[::-1])], 0.026)
+                paint(
+                    "lapis",
+                    [
+                        *brow,
+                        *(
+                            (a, b + 0.055 + 0.09 * math.sin(math.pi * t))
+                            for (a, b), t in zip(brow[::-1], ((j + 1) / 24, j / 24))
+                        ),
+                    ],
+                    0.024,
+                )
+            dot("giltpaint", sign * 1.15, 1.89, 0.235, 0.243, 0.030)
+            dot("dark", sign * 1.15, 1.89, 0.170, 0.191, 0.037)
+            dot("whitewash", sign * 1.15 - 0.056, 1.96, 0.045, 0.046, 0.043)
+
+        # Painted curl of the Nepali 'one', tapered at the foot.
+        curl = [
+            (0.07, 1.40),
+            (0.21, 1.43),
+            (0.26, 1.54),
+            (0.18, 1.63),
+            (0.02, 1.60),
+            (-0.08, 1.46),
+            (-0.04, 1.32),
+            (0.10, 1.20),
+            (0.02, 1.09),
+            (-0.18, 0.96),
+            (-0.23, 0.77),
+            (-0.13, 0.61),
+            (0.15, 0.47),
+        ]
+        for i, (p, q) in enumerate(zip(curl, curl[1:])):
+            width = 0.041 + 0.022 * math.sin(math.pi * i / (len(curl) - 1))
+            paint(
+                "lapis",
+                [
+                    (p[0] - width, p[1]),
+                    (q[0] - width, q[1]),
+                    (q[0] + width, q[1]),
+                    (p[0] + width, p[1]),
+                ],
+                0.030,
+            )
+        dot("vermillion", 0, 2.89, 0.17, 0.19, 0.022)
+        dot("giltpaint", 0, 2.90, 0.071, 0.082, 0.027)
+
+
+def boudha_flags(s, x, y, harmika_top, canopy):
+    colors = ("indigoCloth", "whiteCloth", "redCloth", "greenCloth", "yellowCloth")
+    for line in range(24):
+        upper = line % 2 == 0
+        corner, strand = divmod(line, 6)
+        # Garlands divide into four corner fans. The entrance to the south
+        # remains open all the way from the outer wheel walk to the painted eyes.
+        corner_angle = math.radians((-135, -45, 45, 135)[corner])
+        fan_center = (-150, -13, 50, 135)[corner]
+        a = math.radians(fan_center + (-17, -10, -3, 3, 10, 17)[strand])
+        ca, sa = math.cos(a), math.sin(a)
+        anchor_radius = 0.88 if upper else 3.94
+        start_x = x + anchor_radius * math.cos(corner_angle)
+        start_y = y + anchor_radius * math.sin(corner_angle)
+        z0 = canopy + 0.30 if upper else harmika_top + 0.04
+        end_height = 2.65 + 0.24 * (line % 3)
+        count = 31 if upper else 23
+
+        def position(t):
+            sag = (1.70 if upper else 1.15) * 4 * t * (1 - t)
+            return (
+                start_x + (x + 17.55 * ca - start_x) * t,
+                start_y + (y + 17.55 * sa - start_y) * t,
+                z0 + (end_height - z0) * t - sag,
+            )
+
+        # Faceted cord with a continuous curve, alternating upper and lower festoons.
+        for k in range(8):
+            s.beam("bronze", position(k / 8), position((k + 1) / 8), 0.013, 4)
+        end = position(1)
+        s.beam("wood", (end[0], end[1], 0.05), end, 0.049, 7)
+        # Leave a bare leader at each knot where the six cords gather.
+        for k in range(3 if upper else 2, count):
+            length = 0.36 + 0.24 * noise(line, k)
+            curl = 0.11 * math.sin(1.3 * k + line)
+            start = (k + 0.08) / count
+            width = (0.62 + 0.11 * noise(k, line + 49)) / count
+            top = [position(start + f * width) for f in (0, 0.5, 1)]
+            bottom = []
+            for j, p in enumerate(top):
+                # A breeze billows the centre of the cloth away from its tether.
+                wind = (0.21, 0.34, 0.24)[j] + curl
+                bottom.append(
+                    (
+                        p[0] + wind - sa * curl,
+                        p[1] + 0.13 + ca * curl,
+                        p[2] - length + 0.038 * math.cos(k + j),
+                    )
+                )
+            for j in range(2):
+                s.face(
+                    colors[(line + k) % 5],
+                    [top[j], top[j + 1], bottom[j + 1], bottom[j]],
+                    uvs=[(j / 2, 0), ((j + 1) / 2, 0), ((j + 1) / 2, 1), (j / 2, 1)],
+                )
+
+
+def boudha_townhouse(s, x, y, angle, index, width):
+    # The street facade faces the kora, with taller brick houses behind an open shop gallery.
+    yaw = angle - math.pi / 2
+    ca, sa = math.cos(yaw), math.sin(yaw)
+    depth = 4.50
+    front = -depth / 2
+    storeys = (3, 2, 3, 3, 2, 4, 2)[index % 7]
+    floor_height = 2.48 + 0.12 * (index % 3)
+    height = storeys * floor_height
+    body = ("red", "lime", "ochre", "red", "giltpaint", "lime")[index % 6]
+
+    def box(mat, tx, ty, z, w, d, h):
+        s.box(mat, x + tx * ca - ty * sa, y + tx * sa + ty * ca, z, w, d, h, yaw)
+
+    box("stone", 0, 0, 0, width, depth, 0.36)
+    box(body, 0, 0, 0.36, width - 0.10, depth - 0.06, height - 0.36)
+    bay = (width - 0.64) / 3
+    for j in range(3):
+        tx = (j - 1) * bay
+        box("dark", tx, front, 0.28, bay - 0.36, 0.14, 1.83)
+        box("wood", tx, front - 0.08, 0.30, bay - 0.56, 0.10, 1.68)
+        box("bronze", tx, front - 0.14, 0.30, 0.055, 0.05, 1.64)
+    for level in range(1, storeys):
+        z = level * floor_height
+        box("wood", 0, front, z, width, 0.25, 0.13)
+        for j in (-1, 0, 1):
+            tx = j * bay
+            w = min(1.75, bay - 0.40) * (1 if j else 1.14)
+            offset = -0.22 if j == 0 else -0.08
+            fy = front + offset
+            box("wood", tx, fy, z + 0.43, w, 0.36, 1.47)
+            box("glass", tx, fy - 0.19, z + 0.57, w - 0.24, 0.055, 1.16)
+            for post in (-0.21, 0.21):
+                box("wood", tx + w * post, fy - 0.24, z + 0.55, 0.065, 0.07, 1.20)
+            box("wood", tx, fy - 0.24, z + 1.36, w - 0.14, 0.075, 0.07)
+            box("dark", tx, fy, z + 0.39, w + 0.18, 0.46, 0.10)
+            box("maroon", tx, fy, z + 1.87, w + 0.28, 0.52, 0.12)
+    # Upper roof cap and a few timber galleries under shallow canvas canopies.
+    box("wood", 0, 0, height - 0.12, width + 0.12, depth + 0.12, 0.15)
+    box("ochre", 0, 0, height, width + 0.30, depth + 0.32, 0.16)
+    box(body, 0, front + 0.13, height + 0.14, width, 0.24, 0.41)
+    box("giltpaint", 0, front + 0.13, height + 0.52, width + 0.09, 0.31, 0.08)
+    if index % 3 != 1:
+        box(
+            ("maroon", "green", "ochre")[index % 3], 0, front - 0.30, 2.12, width - 0.28, 0.67, 0.14
+        )
+        for tx in (-0.45 * width, 0.45 * width):
+            box("wood", tx, front - 0.51, 0.30, 0.12, 0.12, 1.83)
 
 
 def boudha(s):
     x, y = 0, 34
-    # The east/west and north/south cross terraces leave a circular ambulatory at the base.
-    for i in range(3):
-        span = 33 - i * 3.2
-        for w, d in ((span, span * 0.69), (span * 0.69, span)):
-            s.box("lime", x, y, 0.68 * i, w, d, 0.67)
-            s.box("ochre", x, y, 0.68 * i + 0.04, w + 0.05, d + 0.05, 0.09)
-    whitewashed_dome(s, x, y)
+    z = 0
+    for half, height in ((15.1, 1.50), (13.32, 1.40), (11.55, 1.24)):
+        mandala_terrace(s, x, y, z, half, height)
+        z += height
+    for dx in (-1, 1):
+        for dy in (-1, 1):
+            chorten(s, x + 10.28 * dx, y + 10.28 * dy, 1.50, 2.65)
+    for face in range(4):
+        a = face * math.pi / 2
+        ca, sa = math.cos(a), math.sin(a)
+        for half, zbase, height in ((15.1, 0, 1.5), (13.32, 1.5, 1.40), (11.55, 2.90, 1.24)):
+            for step in range(6):
+                run = 1.44 * (1 - step / 6)
+                r = half + run / 2 - 0.015
+                s.box(
+                    "whitewash",
+                    x + sa * r,
+                    y - ca * r,
+                    zbase,
+                    2.02,
+                    run,
+                    height * (step + 1) / 6,
+                    a,
+                )
+            for offset in (-0.53, 0.53):
+                t, r = half * offset, half * 0.718
+                s.box(
+                    "vermillion",
+                    x + t * ca + r * sa,
+                    y + t * sa - r * ca,
+                    zbase + height * 0.28,
+                    0.60,
+                    0.10,
+                    height * 0.43,
+                    a,
+                )
+    s.rings("whitewash", x, y, z, [(0, 10.67), (0.14, 10.72), (0.40, 10.50)], 96)
+    s.rings("giltpaint", x, y, z + 0.40, [(0, 10.53), (0.13, 10.52), (0.18, 10.36)], 96)
+    whitewashed_dome(s, x, y, z + 0.56, 10.36, 8.15)
+
+    # Recessed wheel bays follow the existing circular ambulatory.
     for i in range(64):
         a = i * TAU / 64
-        u, v = x + 16.6 * math.sin(a), y + 16.6 * math.cos(a)
-        s.box("stone", u, v, 0, 1.65, 0.55, 0.24, -a)
-        s.box("red", u, v, 0.24, 1.66, 0.40, 0.89, -a)
-        s.box("lime", u, v, 1.13, 1.7, 0.55, 0.20, -a)
-        for j in (-0.51, 0, 0.51):
+        sa, ca = math.sin(a), math.cos(a)
+        u, v = x + 16.6 * sa, y + 16.6 * ca
+        s.box("stone", u, v, 0, 1.65, 0.55, 0.28, -a)
+        s.box("maroon", u, v, 0.27, 1.66, 0.34, 0.92, -a)
+        s.box("whitewash", u, v, 1.14, 1.70, 0.60, 0.20, -a)
+        s.box("giltpaint", u, v, 1.34, 1.70, 0.64, 0.065, -a)
+        for offset in (-0.51, 0, 0.51):
+            wx, wy = u + 0.30 * sa + offset * ca, v + 0.30 * ca - offset * sa
             s.rings(
                 "bronze",
-                u + 0.23 * math.sin(a) + j * math.cos(a),
-                v + 0.23 * math.cos(a) - j * math.sin(a),
-                0.39,
-                [(0, 0.14), (0.06, 0.19), (0.51, 0.19), (0.58, 0.14)],
-                12,
+                wx,
+                wy,
+                0.35,
+                [
+                    (0, 0.065),
+                    (0.08, 0.065),
+                    (0.13, 0.18),
+                    (0.17, 0.205),
+                    (0.65, 0.205),
+                    (0.70, 0.18),
+                    (0.74, 0.065),
+                ],
+                10,
             )
-    # Harmika, eyes and thirteen stepped spire rings.
-    h = 13.48
-    s.box("gold", x, y, h, 4.7, 4.7, 3.15)
-    for base in (h, h + 2.99):
-        s.box("gold", x, y, base, 5.11, 5.11, 0.20)
-    for face in range(4):
-        angle = face * math.pi / 2
+            for h in (0.57, 0.91):
+                s.rings("giltpaint", wx, wy, h, [(0, 0.211), (0.045, 0.211)], 10)
 
-        def pt(t, u, layer=0):
-            return (
-                x + t * math.cos(angle) + (2.36 + layer) * math.sin(angle),
-                y + t * math.sin(angle) - (2.36 + layer) * math.cos(angle),
-                h + u,
-            )
-
-        for sign in (-1, 1):
-            # Ivory infill follows the eye's almond contour against the gilt harmika.
-            for j in range(10):
-                a, b = j / 10, (j + 1) / 10
-
-                def eyelid(t, upper):
-                    curve = math.sin(t * math.pi)
-                    return pt(
-                        sign * (0.17 + t * 1.84),
-                        1.71 + (0.26 * curve + 0.08 * t if upper else -0.18 * curve),
-                        0.024,
-                    )
-
-                face = [eyelid(a, False), eyelid(b, False), eyelid(b, True), eyelid(a, True)]
-                if j == 0:
-                    face = face[:3]
-                s.face("lime", face if sign > 0 else face[::-1])
-            for offset, thickness, style in ((0, 0.063, "blue"), (0.47, 0.078, "dark")):
-                for j in range(9):
-                    t1 = j / 9
-                    t2 = (j + 1) / 9
-
-                    def arc(t):
-                        return pt(
-                            sign * (0.17 + t * 1.84),
-                            1.71 + offset + 0.26 * math.sin(math.pi * t) + 0.08 * t,
-                            0.04,
-                        )
-
-                    s.beam(style, arc(t1), arc(t2), thickness, 6)
-            for j in range(7):
-                s.beam(
-                    "blue",
-                    pt(sign * (0.17 + j / 7 * 1.84), 1.71 - 0.18 * math.sin(j / 7 * math.pi), 0.04),
-                    pt(
-                        sign * (0.17 + (j + 1) / 7 * 1.84),
-                        1.71 - 0.18 * math.sin((j + 1) / 7 * math.pi),
-                        0.04,
-                    ),
-                    0.043,
-                    5,
-                )
-            s.beam("glass", pt(sign * 1.02, 1.74, 0), pt(sign * 1.02, 1.74, 0.13), 0.20, 16)
-        pts = [
-            pt(0.24, 0.45, 0.05),
-            pt(-0.18, 0.68, 0.05),
-            pt(-0.22, 1.02, 0.05),
-            pt(0.12, 1.11, 0.05),
-            pt(0.19, 1.31, 0.05),
-        ]
-        for a, b in zip(pts, pts[1:]):
-            s.beam("ochre", a, b, 0.054, 6)
+    h = 12.18
+    s.box("whitewash", x, y, h - 0.18, 5.85, 5.85, 0.37)
+    s.box("vermillion", x, y, h + 0.16, 5.54, 5.54, 0.11)
+    s.box("giltpaint", x, y, h + 0.24, 5.28, 5.28, 3.49)
+    boudha_eyes(s, x, y, h)
+    s.box("gold", x, y, h + 3.51, 5.47, 5.47, 0.12)
+    s.box("vermillion", x, y, h + 3.63, 5.61, 5.61, 0.14)
+    s.box("gold", x, y, h + 3.77, 5.84, 5.84, 0.16)
+    spire = h + 3.93
     for i in range(13):
-        r = (2.50 - i * 0.151) * math.sqrt(2)
+        r = (2.60 - i * 0.158) * math.sqrt(2)
         s.rings(
             "gold",
             x,
             y,
-            h + 3.19 + i * 0.53,
-            [(0, r), (0.12, r), (0.48, r * 0.84), (0.53, r * 0.82)],
+            spire + i * 0.65,
+            [(0, r), (0.09, r * 1.01), (0.20, r * 0.985), (0.61, r * 0.87), (0.65, r * 0.86)],
             4,
             angle=math.pi / 4,
         )
-    z = h + 10.08
+    z = spire + 13 * 0.65
     s.rings(
         "gold",
         x,
         y,
         z,
-        [(0, 0.48), (0.25, 1.48), (0.47, 1.74), (0.59, 1.59), (0.81, 0.52), (1.22, 0.25), (1.7, 0)],
+        [
+            (0, 0.48),
+            (0.21, 0.51),
+            (0.37, 1.45),
+            (0.48, 1.79),
+            (0.61, 1.78),
+            (0.68, 1.58),
+            (0.88, 0.65),
+            (1.01, 0.38),
+        ],
         48,
+    )
+    s.rings("giltpaint", x, y, z + 0.40, [(0, 1.68), (0.07, 1.82), (0.11, 1.80)], 48)
+    s.rings(
+        "gold", x, y, z + 1, [(0, 0.27), (0.18, 0.33), (0.35, 0.12), (0.53, 0.24), (0.94, 0)], 32
     )
     for i in range(32):
         a = i * TAU / 32
-        end = (x + 1.64 * math.cos(a), y + 1.64 * math.sin(a), z + 0.42)
-        tip = (end[0], end[1], end[2] - 0.21 - 0.055 * math.cos(a * 4))
+        end = (x + 1.71 * math.cos(a), y + 1.71 * math.sin(a), z + 0.48)
+        tip = (end[0], end[1], end[2] - 0.22 - 0.055 * math.cos(a * 4))
         s.beam("bronze", end, tip, 0.024, 5)
         s.rings("gold", *tip, [(-0.105, 0.058), (0, 0.028)], 8)
-    for i in range(12):
-        a = TAU * i / 12
-        flags(
-            s,
-            (x + 0.25 * math.cos(a), y + 0.25 * math.sin(a), z + 0.2),
-            (x + 17.8 * math.cos(a), y + 17.8 * math.sin(a), 2),
-            22,
-            1.0,
-        )
+    boudha_flags(s, x, y, spire, z)
+
     for i in range(17):
         a = i * TAU / 17
         u, v = x + 30 * math.cos(a), y + 30 * math.sin(a)
         if abs(u) < 14 and v < y:
             continue
-        house(s, u, v, 0, 6.2, 5.4, 4.4 + (i % 3) * 0.8, ("lime", "ochre", "red")[i % 3])
+        # Keep the flanking parcels clear of the original southern entry.
+        width = 6.2 if v < y and abs(u) < 20 else 9.4 + 0.40 * (i % 2)
+        boudha_townhouse(s, u, v, a, i, width)
 
 
 def tree(s, x, y, z, h, seed, conifer):
@@ -697,6 +941,7 @@ def landscape(stage):
     terrain(s, stage, rng)
     if stage == "stupa":
         boudha(s)
+        south_approach(s)
     elif stage == "grove":
         grove(s)
     elif stage == "pharping":
