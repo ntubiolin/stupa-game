@@ -65,6 +65,7 @@ void ATibetSkyClock::BeginPlay()
     if(auto* Material=LoadObject<UMaterialInterface>(nullptr,TEXT("/Game/Figures/Materials/M_TravelGlow.M_TravelGlow")))
         StarMaterial=Stars->CreateDynamicMaterialInstance(0,Material);
 
+    bWhitewashedPlaza = UGameplayStatics::GetCurrentLevelName(this) == TEXT("stupa");
     TArray<AActor*> Shopfronts;
     UGameplayStatics::GetAllActorsWithTag(GetWorld(), TEXT("BoudhaShopfronts"), Shopfronts);
     for (AActor* Building : Shopfronts)
@@ -101,9 +102,9 @@ void ATibetSkyClock::Apply(float Phase)
         Sun->SetIntensity(35000*Day);
         Sun->SetTemperature(FMath::Lerp(3900.f,5650.f,FMath::Clamp(Elevation*2.9f,0.f,1.f)));
     }
-    // The outdoor key remains directional at night, while the exposure range
-    // below lets the shaded side of landmarks and paths retain their detail.
-    Moon->SetIntensity(5.8f*Night);
+    // The whitewashed court reflects much more of the key than the dark soil
+    // and timber on the open trails. Expose the two at their own night levels.
+    Moon->SetIntensity((bWhitewashedPlaza ? 5.8f : 8.6f) * Night);
     const FLinearColor WindowColor(1.f,.52f,.20f);
     if (WindowPanes) WindowPanes->SetVectorParameterValue(TEXT("EmissiveFactor"), WindowColor * (5.5f * Night));
     if (StreetPaving) StreetPaving->SetVectorParameterValue(TEXT("EmissiveFactor"), WindowColor * (1.30f * Night));
@@ -112,8 +113,8 @@ void ATibetSkyClock::Apply(float Phase)
     if(Fog) Fog->SetFogInscatteringColor(FMath::Lerp(FLinearColor(.009,.018,.058),FLinearColor(.45,.56,.70),Day));
     auto& S=Exposure->Settings;
     S.bOverride_AutoExposureMinBrightness=S.bOverride_AutoExposureMaxBrightness=true;
-    S.AutoExposureMinBrightness=FMath::Lerp(2.65f,6.f,Day);
-    S.AutoExposureMaxBrightness=FMath::Lerp(3.85f,16.f,Day);
+    S.AutoExposureMinBrightness=FMath::Lerp(bWhitewashedPlaza ? 2.65f : 2.05f,6.f,Day);
+    S.AutoExposureMaxBrightness=FMath::Lerp(bWhitewashedPlaza ? 3.85f : 3.25f,16.f,Day);
     Stars->SetVisibility(Night>.03f);
     if(StarMaterial) StarMaterial->SetVectorParameterValue(TEXT("Color"),FLinearColor(.69,.80,1.35)*Night);
 }

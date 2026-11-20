@@ -21,6 +21,7 @@ private:
     UPROPERTY() TObjectPtr<class UPostProcessComponent> Exposure;
     UPROPERTY() TObjectPtr<class UProceduralMeshComponent> Stars;
     UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> StarMaterial;
+    bool bWhitewashedPlaza = false;
     UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> WindowPanes;
     UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> StreetPaving;
 };
