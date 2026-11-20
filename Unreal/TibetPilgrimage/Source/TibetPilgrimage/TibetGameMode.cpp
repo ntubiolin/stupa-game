@@ -57,6 +57,7 @@ AActor* MeshActor(UWorld* World, const FVector& Pos, const FString& Path, const 
 }
 const FVector GroveGate(-1860,-480,0);
 const FString Cylinder=TEXT("/Engine/BasicShapes/Cylinder.Cylinder");
+const FString Cone=TEXT("/Engine/BasicShapes/Cone.Cone");
 const FString Sphere=TEXT("/Engine/BasicShapes/Sphere.Sphere");
 const FLinearColor Gold(.87,.43,.065), Water(.04,.57,.58);
 }
@@ -143,8 +144,8 @@ FVector ATibetGameMode::Anchor() const
         // Eight ordered stops trace a clockwise circumambulation.
         const double A=(Count+4)*UE_TWO_PI/8;
         const bool Hub = Map==TEXT("stupa");
-        return FVector((Hub ? 3400. : 3800.)+(Hub ? 2000. : 2700.)*FMath::Cos(A),
-            (Hub ? 2000. : 3250.)*FMath::Sin(A),0);
+        return FVector((Hub ? 3400. : 3800.)+(Hub ? 2300. : 2700.)*FMath::Cos(A),
+            (Hub ? 2300. : 3250.)*FMath::Sin(A),0);
     }
     case EObjective::Boss:
     case EObjective::Combat: return {-50+110.*(Count%3),-350+150.*(Count%4),0};
@@ -292,7 +293,7 @@ void ATibetGameMode::Pulse(const FVector& At,const FLinearColor& Color,float Mag
 void ATibetGameMode::CastSkill(int32 Slot)
 {
     if (!Save || bTravel || IsCampaignComplete() || Slot<0 || Slot>6) return;
-    const auto* P=UGameplayStatics::GetPlayerPawn(this,0);
+    auto* P=UGameplayStatics::GetPlayerPawn(this,0);
     if (!P) return;
     const int32 Unlock[]={0,0,4,5,6,7,8};
     if(Order.IndexOfByKey(Map)<Unlock[Slot])
@@ -311,11 +312,54 @@ void ATibetGameMode::CastSkill(int32 Slot)
         FVector::Dist2D(P->GetActorLocation(),GetObjectiveLocation())<Ranges[Slot];
     const FVector From=P->GetActorLocation()+FVector(0,0,25);
     const FVector To=Hit ? GetObjectiveLocation()+FVector(0,0,105) : From+P->GetActorForwardVector()*300;
-    if (Slot==0 || Slot==2)
+    if (Slot==0)
     {
+        // A strand of turquoise seed beads travels along the arm-to-target line.
         for (int32 j=1;j<=5;++j)
-            if(auto* Dot=MeshActor(GetWorld(),FMath::Lerp(From,To,j/5.),Sphere,FVector(.14),&Colors[Slot]))
+            if(auto* Dot=MeshActor(GetWorld(),FMath::Lerp(From,To,j/5.),Sphere,FVector(.10+j*.018),&Colors[Slot]))
                 Dot->SetLifeSpan(.18f);
+    }
+    else if(Slot==2)
+    {
+        // Three-sided silhouette, bound hilt and three bronze prongs.
+        if(auto* Pin=MeshActor(GetWorld(),To+FVector(0,0,12),Cone,{.23,.23,1.15},&Colors[Slot]))
+        {
+            Pin->SetActorRotation(FRotator(180,0,0)); Pin->SetLifeSpan(.7f);
+        }
+        for(int32 j=0;j<3;++j)
+        {
+            const double A=j*UE_TWO_PI/3;
+            if(auto* Prong=MeshActor(GetWorld(),To+FVector(10*FMath::Cos(A),10*FMath::Sin(A),73),
+                Sphere,{.06,.06,.32},&Gold)) Prong->SetLifeSpan(.7f);
+        }
+    }
+    else if(Slot==4 || Slot==1 || Slot==3 || Slot==6)
+    {
+        const int32 N=Slot==4?8:16;
+        const FVector Center=Slot==4 || Slot==1 ? From : To;
+        for(int32 j=0;j<N;++j)
+        {
+            const double A=j*UE_TWO_PI/N;
+            const FVector Radial(FMath::Cos(A),FMath::Sin(A),0);
+            const bool Petal=Slot==4;
+            auto* Piece=MeshActor(GetWorld(),Center+Radial*(Petal?74.:106.)+FVector(0,0,Petal?4:-54),
+                Sphere,Petal?FVector(.18,.42,.74):FVector(.11,.46,.07),&Colors[Slot]);
+            if(Piece)
+            {
+                Piece->SetActorRotation(FRotator(Petal?32:0,FMath::RadiansToDegrees(A),0));
+                if(Petal) Piece->AttachToActor(P,FAttachmentTransformRules::KeepWorldTransform);
+                Piece->SetLifeSpan(Petal?Shield:.55f);
+            }
+        }
+    }
+    else if(Slot==5)
+    {
+        const FString Guardian=TEXT("/Game/Figures/Tenma.Tenma");
+        if(auto* Protector=MeshActor(GetWorld(),From+P->GetActorRightVector()*140-FVector(0,0,115),Guardian,FVector(1.08)))
+        {
+            Protector->SetActorRotation(FRotator(0,(To-From).Rotation().Yaw-90,0));
+            Protector->SetLifeSpan(1.25f);
+        }
     }
     Pulse(Slot==4?From:To,Colors[Slot],Slot==1 || Slot==6?2.f:1.f);
     if (!Hit) return;
