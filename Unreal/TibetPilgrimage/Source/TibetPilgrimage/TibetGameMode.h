@@ -43,6 +43,7 @@ public:
 private:
     UPROPERTY() TObjectPtr<UTibetSave> Save;
     UPROPERTY() TObjectPtr<AActor> Focus;
+    UPROPERTY() TObjectPtr<AActor> Messenger;
     FString Map, Route, SlotName;
     int32 EnemyHealth = 0;
     float Health = 100, Mana = 100, HurtTimer = 0, Stun = 0, Shield = 0, NoticeUntil = 0;
