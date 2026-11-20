@@ -46,14 +46,15 @@ def generate():
         return param
 
     # A single filtered sample supplies both painted cloud bodies and their cast
-    # silhouette. The texture's UVs use world metres so coverage stays anchored
-    # over the map when the camera turns. The normal shadow pass projects it.
+    # silhouette. Mesh UVs interpolate identically in camera and shadow passes.
+    # Reconstructing world position from a directional shadow-map pixel instead
+    # can sample one point of the texture across the entire courtyard.
     texture = node(unreal.MaterialExpressionTextureObject)
     texture.set_editor_property("texture", density)
     texture.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_GRAYSCALE)
     inputs = {
         "Field": texture,
-        "P": node(unreal.MaterialExpressionWorldPosition),
+        "DeckUV": node(unreal.MaterialExpressionTextureCoordinate),
         "T": node(unreal.MaterialExpressionTime),
         "WeatherStart": scalar("WeatherStart", 0.),
         "FixedTime": scalar("FixedTime", -1.),
@@ -71,7 +72,7 @@ def generate():
 float seconds = FixedTime >= 0.0 ? FixedTime : T + WeatherStart;
 float cloudiness = .5 + .5 * cos((seconds - 60.0) * (6.2831853 / 180.0));
 float threshold = lerp(.84, .29, cloudiness);
-float2 uv = P.xy / 38000.0 + float2(.32, .51) - seconds * float2(.0027, .00085);
+float2 uv = (DeckUV - .5) * (1800.0 / 380.0) + float2(.32, .51) - seconds * float2(.0027, .00085);
 float density = Texture2DSample(Field, FieldSampler, uv).r;
 float opacity = smoothstep(threshold - .08, threshold + .10, density);
 float billow = smoothstep(threshold - .03, threshold + .32, density);
