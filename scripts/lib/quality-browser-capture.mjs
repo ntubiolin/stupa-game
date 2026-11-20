@@ -10,7 +10,7 @@ import { adventureBrowserArgs, startAdventureWithInput } from '../adventure-brow
 
 const season = 'spring';
 const frames = { warmup: 45, sample: 90 };
-const profiles = [
+const defaultProfiles = [
   ['desktop', { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 }],
   ['mobile', { ...devices['Pixel 7 landscape'], viewport: { width: 844, height: 390 }, deviceScaleFactor: 2 }],
 ];
@@ -241,7 +241,7 @@ async function readPngInfo(dir, file) {
 
 export async function runQualityCapture({
   title, envPrefix, defaultOutput, defaultMap, views, mapAssets, prepareMap,
-  mapGroups = { toji: 'Zone_toji' }, sceneSetup,
+  mapGroups = { toji: 'Zone_toji' }, sceneSetup, profiles = defaultProfiles, prepareView,
 }) {
   const base = process.env.STORY_BASE_URL || 'http://127.0.0.1:4173';
   const output = resolve(process.env[envPrefix + '_OUTPUT'] || defaultOutput);
@@ -333,6 +333,7 @@ export async function runQualityCapture({
           }
           activeMap = map;
         }
+        await prepareView?.(page, view);
         await setView(page, view);
         try {
           const { samples, gpuSamples, ...metrics } = await measureView(page, mapGroups);
@@ -343,8 +344,8 @@ export async function runQualityCapture({
           assert.equal(metrics.state.enemiesVisible, false, `${name} ${view.id}: combat enemies were visible`);
           assert.equal(metrics.state.season, season);
           assert(Math.abs(metrics.state.time - view.time) < 1e-8);
-          assert(metrics.state.nightFactor >= (view.time >= 0.8 ? 0.9 : 0) &&
-            metrics.state.nightFactor <= (view.time >= 0.8 ? 1 : 0.1), `${view.id}: unexpected night factor`);
+          const [minNight, maxNight] = view.nightRange ?? (view.time >= 0.8 ? [0.9, 1] : [0, 0.1]);
+          assert(metrics.state.nightFactor >= minNight && metrics.state.nightFactor <= maxNight, `${view.id}: unexpected night factor`);
           assert(metrics.pointLights <= 3, `${name} ${view.id}: added a PointLight`);
           assert(metrics.activePointLights <= 6, `${name} ${view.id}: global PointLight budget exceeded`);
           assert.equal(samples.length, frames.sample);
