@@ -36,7 +36,7 @@ ATibetSkyClock::ATibetSkyClock()
     Moon->SetAtmosphereSunLight(true);
     Moon->SetAtmosphereSunLightIndex(1);
     Moon->SetLightSourceAngle(1.05f);
-    Moon->SetLightColor(FLinearColor(.69,.80,1.),true);
+    Moon->SetLightColor(FLinearColor(.52,.67,.94),true);
     // Shine across the south approach to model the white dome and the gilt rings.
     Moon->SetRelativeRotation(FRotator(-40,32,0));
     Exposure=CreateDefaultSubobject<UPostProcessComponent>(TEXT("Outdoor exposure"));
@@ -133,17 +133,17 @@ void ATibetSkyClock::Apply(float Phase)
     }
     // The outdoor key remains directional at night, while the exposure range
     // below lets the shaded side of landmarks and paths retain their detail.
-    Moon->SetIntensity(18.f*Night);
+    Moon->SetIntensity(5.8f*Night);
     const FLinearColor WindowColor(1.f,.52f,.20f);
     if (WindowPanes) WindowPanes->SetVectorParameterValue(TEXT("EmissiveFactor"), WindowColor * (5.5f * Night));
     if (StreetPaving) StreetPaving->SetVectorParameterValue(TEXT("EmissiveFactor"), WindowColor * (1.30f * Night));
     Moon->SetVisibility(Night>.004f);
-    if(Sky) Sky->SetIntensity(FMath::Lerp(1.05f,1.35f,Day));
+    if(Sky) Sky->SetIntensity(FMath::Lerp(.82f,1.35f,Day));
     if(Fog) Fog->SetFogInscatteringColor(FMath::Lerp(FLinearColor(.009,.018,.058),FLinearColor(.45,.56,.70),Day));
     auto& S=Exposure->Settings;
     S.bOverride_AutoExposureMinBrightness=S.bOverride_AutoExposureMaxBrightness=true;
-    S.AutoExposureMinBrightness=FMath::Lerp(1.6f,6.f,Day);
-    S.AutoExposureMaxBrightness=FMath::Lerp(2.8f,16.f,Day);
+    S.AutoExposureMinBrightness=FMath::Lerp(2.65f,6.f,Day);
+    S.AutoExposureMaxBrightness=FMath::Lerp(3.85f,16.f,Day);
     Stars->SetVisibility(Night>.03f);
     if(StarMaterial) StarMaterial->SetVectorParameterValue(TEXT("Color"),FLinearColor(.69,.80,1.35)*Night);
 }
