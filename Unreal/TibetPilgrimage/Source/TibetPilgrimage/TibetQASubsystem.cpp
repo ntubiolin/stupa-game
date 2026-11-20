@@ -177,7 +177,7 @@ TSharedPtr<SWidget> FindJournalButton(const TSharedRef<SWidget>& Root,FName Tag)
     return nullptr;
 }
 
-bool ClickJournalButton(FName Tag)
+bool HoverJournalButton(FName Tag)
 {
     const auto Window=GEngine->GameViewport->GetWindow();
     if (!Window) return false;
@@ -187,12 +187,12 @@ bool ClickJournalButton(FName Tag)
     const FVector2D Center=Geometry.LocalToAbsolute(Geometry.GetLocalSize()*.5);
     auto& Slate=FSlateApplication::Get();
     // Use the platform cursor and normal Slate dispatch, including viewport capture and hit testing.
+    const FVector2D Previous=Slate.GetCursorPos();
     Slate.SetCursorPos(Center);
-    Slate.OnMouseMove();
-    if (!Slate.GetCursorPos().Equals(Center,2.)) return false;
-    Slate.OnMouseDown(Window->GetNativeWindow(),EMouseButtons::Left);
-    Slate.OnMouseUp(EMouseButtons::Left);
-    return true;
+    const FVector2D At=Slate.GetCursorPos();
+    const TSet<FKey> NoButtons;
+    Slate.ProcessMouseMoveEvent(FPointerEvent(Slate.GetUserIndexForMouse(),FSlateApplication::CursorPointerIndex,At,Previous,NoButtons,EKeys::Invalid,0,FModifierKeysState()));
+    return At.Equals(Center,2.) && Button->IsHovered();
 }
 
 bool TapJournalButton(FName Tag)
@@ -496,34 +496,49 @@ void UTibetQASubsystem::Journal(APlayerController& PC,ATibetGameMode& Mode)
         {
             auto* Viewport=GetWorld()->GetGameViewport();
             if (!PC.bShowMouseCursor || Viewport->GetMouseCaptureMode()!=EMouseCaptureMode::NoCapture ||
-                Viewport->GetMouseLockMode()!=EMouseLockMode::DoNotLock || !ClickJournalButton(TEXT("TibetPackTab")))
+                Viewport->GetMouseLockMode()!=EMouseLockMode::DoNotLock || !HoverJournalButton(TEXT("TibetPackTab")))
             { Finish(false,TEXT("Cursor could not reach the Pack tab")); return; }
         }
         else Tap(EKeys::I);
         break;
     case 6:
+        if (!Touch)
+        {
+            const auto Window=GEngine->GameViewport->GetWindow();
+            const auto Button=FindJournalButton(Window.ToSharedRef(),TEXT("TibetPackTab"));
+            auto& Slate=FSlateApplication::Get();
+            const FVector2D At=Slate.GetCursorPos();
+            const auto Path=Slate.LocateWindowUnderMouse(At,Slate.GetInteractiveTopLevelWindows());
+            if (!Button || !Path.ContainsWidget(Button.Get())) { Finish(false,TEXT("System cursor did not stay over Pack")); return; }
+            const bool Down=Slate.OnMouseDown(Window->GetNativeWindow(),EMouseButtons::Left);
+            const bool Captured=Button->HasMouseCapture(), Hovered=Button->IsHovered();
+            const bool Up=Slate.OnMouseUp(EMouseButtons::Left);
+            Record(FString::Printf(TEXT("pack-click\t%s\t%d\t%d\t%d\t%d"),*At.ToString(),Down,Captured,Hovered,Up));
+        }
+        break;
+    case 7:
         if (HUD->GetJournalPage()!=ETibetPage::Pack) { Finish(false,TEXT("Map to Pack failed")); return; }
         Tap(EKeys::K); break;
-    case 7:
+    case 8:
         SendKey(PC,EKeys::K,false);
         if (HUD->GetJournalPage()!=ETibetPage::Skills) { Finish(false,TEXT("Skills toggle failed")); return; }
         Shot(TEXT("skills")); break;
-    case 8: Tap(EKeys::Escape); break;
-    case 9:
+    case 9: Tap(EKeys::Escape); break;
+    case 10:
         SendKey(PC,EKeys::Escape,false);
         if (HUD->IsJournalOpen() || PC.IsPaused() || GetWorld()->GetGameViewport()->GetMouseCaptureMode()!=EMouseCaptureMode::CaptureDuringRightMouseDown)
         { Finish(false,TEXT("Esc did not restore play and right-drag capture")); return; }
         break;
-    case 10: Tap(EKeys::Escape); break;
-    case 11:
+    case 11: Tap(EKeys::Escape); break;
+    case 12:
         SendKey(PC,EKeys::Escape,false);
         if (HUD->GetJournalPage()!=ETibetPage::Controls) { Finish(false,TEXT("Menu did not reopen")); return; }
         Shot(TEXT("controls")); break;
-    case 12:
+    case 13:
         if (Touch) { if (!TapJournalButton(TEXT("TibetCloseJournal"))) { Finish(false,TEXT("Return touch target missing")); return; } }
         else Tap(EKeys::Escape);
         break;
-    case 13:
+    case 14:
         SendKey(PC,EKeys::Escape,false);
         if (HUD->IsJournalOpen() || PC.IsPaused() || !PC.GetPawn()->GetActorLocation().Equals(ArrivalPosition,.1)
             || Mode.GetMana()!=100) { Finish(false,TEXT("Return leaked input")); return; }
@@ -609,10 +624,12 @@ void UTibetQASubsystem::CameraFollow(APlayerController& PC,ATibetGameMode& Mode)
     const FVector Pos=Pawn->GetActorLocation(), Goal=Mode.GetObjectiveLocation();
     const FRotator CameraView=PC.PlayerCameraManager->GetCameraRotation();
     const auto Error=[&](double Target){return FRotator::NormalizeAxis(CameraView.Yaw-Target);};
-    const auto Next=[&](){++Frames; LastAction=Now;};
+    // Measure motion in simulation time. Screenshot encoding can stall a rendered frame.
+    const double MotionTime=GetWorld()->GetUnpausedTimeSeconds();
+    const auto Next=[&](){++Frames; LastAction=MotionTime;};
     const auto Detail=[&](const TCHAR* Name){Record(FString::Printf(TEXT("%s\t%.2f\t%.2f\t%.2f"),
         Name,CameraView.Yaw,Pawn->GetActorRotation().Yaw,PC.GetControlRotation().Yaw));};
-    const double Held=Now-LastAction;
+    const double Held=MotionTime-LastAction;
     switch (Frames)
     {
     case 0:
@@ -682,6 +699,7 @@ void UTibetQASubsystem::CameraFollow(APlayerController& PC,ATibetGameMode& Mode)
         SendKey(PC,EKeys::E,false); Next(); break;
     case 11:
         if (Held<1.5) break;
+        Detail(TEXT("return-right"));
         if (FMath::Abs(Error(HeadingBeforeDrag.Yaw))>3 || Mode.GetStep()!=0)
         { Finish(false,TEXT("E release failed to return or triggered interaction")); return; }
         HeadingBeforeDrag=CameraView;
