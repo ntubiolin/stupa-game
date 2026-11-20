@@ -39,6 +39,7 @@ import '../../i18n/koyasan.js';
 import { addJapanRouteGate } from '../japanArchitecture.js';
 import { addRakedGravel, createGraniteGeometry, createGraniteMaterial } from '../japanGardenArchitecture.js';
 import { createJapanTreeWind } from '../japanTreeWind.js';
+import { addSeasonalDrift } from '../japanSeasonalDrift.js';
 import { addJapanTrees } from '../japanVegetation.js';
 import { createJapanGravelTile } from '../tojiCourtyard.js';
 import { dressJapanLandmarkGround, lightJapanLandmark } from '../japanLandmarkLighting.js';
@@ -2107,6 +2108,10 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     name: 'Mount Kōya cherries', species: 'cherry', canopyMaterial: koyasanCherryMat, wind: treeWind, disposables,
   });
 
+  const canopyDrift = addSeasonalDrift(root, {
+    cherries, maples, groundHeight: getHeight, lowSpec: ctx.lowSpec, seed: 8731, disposables,
+  });
+
   let appliedKoyasanSeason = null;
   function applyKoyasanSeason(season) {
     if (season === appliedKoyasanSeason) return;
@@ -2287,7 +2292,10 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   // ---------------------------------------------------------------- 9. Per-Frame Animation Update
   function update(dt) {
     const elapsed = state.elapsed || 0;
-    applyKoyasanSeason(state?.time?.season || 'spring');
+    const season = state?.time?.season || 'spring';
+    applyKoyasanSeason(season);
+    const player = state?.player?.position;
+    canopyDrift.update(dt, season, state?.wind, player?.x - ox, player?.z - oz);
 
     treeWind.update(state.wind, elapsed);
 
