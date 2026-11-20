@@ -19,11 +19,14 @@ python3 "$qa/test_package.py" photos --exe "$app" --output "$result/mac"
 python3 "$qa/test_package.py" arrival --exe "$app" --output "$result/arrival"
 python3 "$qa/test_package.py" play --exe "$app" --output "$result/play"
 python3 "$qa/test_package.py" skills --exe "$app" --output "$result/skills"
+python3 "$qa/test_package.py" learned --exe "$app" --output "$result/learned"
 python3 "$qa/test_package.py" journal --exe "$app" --output "$result/journal"
 python3 "$qa/test_package.py" compare --web "$result/web" --mac "$result/mac" --output "$result/comparison"
 ```
 
 arrival 使用新存檔和預設開場鏡頭，確認塔座、塔尖與洛桑都在畫面內，並保存玩家進場原圖。接著透過遊戲輸入實測游標移動、右鍵拖曳，以及放開右鍵後邊走邊移動游標時的鏡頭朝向。
+
+learned 從伏藏第三層走回青浦與博達哈，重開後實際施放上師心咒，另用新存檔核對鎖定狀態及法力。
 
 play 在第一盞酥油燈點亮後重啟遊戲，核對存檔進度與燈芯上的可見火焰，再繼續走完主線及塔林支線。
 
