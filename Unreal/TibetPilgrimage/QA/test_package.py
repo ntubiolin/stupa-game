@@ -87,14 +87,13 @@ def capture(exe, stage, dest, name, mode, level, options, slot, size=(1440, 900)
     target.mkdir()
     # Arrival exercises the default launch map and leaves the pawn camera untouched.
     map_args = [] if mode == "Arrival" else ["/Game/Maps/Tibet/" + level]
-    # Touch emulation uses Slate's native-window hit test. A packaged
-    # Mac offscreen window is invisible to the desktop window search.
-    interactive_touch = mode in ("Journal", "Courtyard") and "-TibetTouch" in options
-    rendering = [] if interactive_touch else ["-RenderOffscreen"]
+    # Native mouse and touch dispatch must find the actual package window on the desktop.
+    interactive_window = mode == "Journal" or (mode == "Courtyard" and "-TibetTouch" in options)
+    rendering = [] if interactive_window else ["-RenderOffscreen"]
     exec_commands = "r.ScreenPercentage 100,r.DynamicRes.OperationMode 0"
     if max_fps:
         exec_commands += f",t.MaxFPS {max_fps}"
-    if interactive_touch:
+    if interactive_window:
         exec_commands += ",SlateDebugger.Event.Start"
     args = [exe, *map_args, "-windowed", *rendering, "-ForceRes", f"-ResX={size[0]}",
             f"-ResY={size[1]}", "-unattended", "-nosplash", "-NoVSync", "-SaveToUserDir", f"-UserDir={stage / 'user'}",
@@ -103,7 +102,7 @@ def capture(exe, stage, dest, name, mode, level, options, slot, size=(1440, 900)
     print(name, flush=True)
     try:
         # Use LaunchServices, as Finder does when the player opens the app bundle.
-        foreground = [] if interactive_touch else ["-g"]
+        foreground = [] if interactive_window else ["-g"]
         cmd = ["open", "-n", "-W", *foreground, "-a", str(exe.parents[2]), "--args", *args[1:]]
         with (target / "launch.log").open("w") as log:
             subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT, check=True,

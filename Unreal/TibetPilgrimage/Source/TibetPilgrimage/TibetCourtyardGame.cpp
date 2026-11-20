@@ -1,5 +1,7 @@
 #include "TibetGameMode.h"
 #include "TibetCharacter.h"
+#include "TibetHUD.h"
+#include "GameFramework/PlayerController.h"
 #include "TibetMacaques.h"
 #include "TibetSkyClock.h"
 #include "Engine/World.h"
@@ -70,11 +72,15 @@ void ATibetGameMode::BeginFeeding()
     Macaques->Attend(FeedTarget);
     if(auto* Pilgrim=Cast<ATibetCharacter>(P)) Pilgrim->CancelGameplayInput();
     bFedThisSession=false; FeedPanel=1;
+    if (auto* PC=GetWorld()->GetFirstPlayerController())
+        if (auto* HUD=PC->GetHUD<ATibetHUD>()) HUD->RefreshInputMode();
 }
 void ATibetGameMode::CloseFeeding()
 {
     if(Macaques) Macaques->Attend(INDEX_NONE);
     FeedPanel=0; FeedTarget=INDEX_NONE;
+    if (auto* PC=GetWorld()->GetFirstPlayerController())
+        if (auto* HUD=PC->GetHUD<ATibetHUD>()) HUD->RefreshInputMode();
 }
 void ATibetGameMode::RewardFeeding()
 {

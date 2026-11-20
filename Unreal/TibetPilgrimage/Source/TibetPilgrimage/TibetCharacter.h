@@ -27,12 +27,7 @@ private:
     bool bAwaitingDragMotion = true;
     double ViewYawOffset = 0.;
     double InteractPressedAt = -1.;
-    double ManualLookGrace = 0.;
-    bool bReturningFromOrbit = false;
-    bool bFollowingTravel = false;
-    bool bHadMoveInput = false;
-    double LastTravelYaw = 0.;
-    void UpdateFollowView(APlayerController& Player, bool bMoveInput, float Dt);
+    void UpdateOrbit(APlayerController& Player, float Dt);
     void PressInteract();
     void ReleaseInteract();
     void UpdateMouseLook(APlayerController& Player);

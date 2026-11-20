@@ -767,9 +767,9 @@ preserved.
 
 室外的 ATibetSkyClock 讀取 UTibetSave 中的時刻與倍率。原生一日 240 秒，起始 07:12，玩家可暫停、選 1× 或 4×，或拖動時刻。伏藏三層保留獨立的燭光曝光。博達哈供燈以位元記錄三個燈位，舊存檔從原任務進度復原。ATibetButterFlame 建立會擺動的燈芯，每個已供養的博達哈燈位最多帶一盞局部光源。布旗沿用原織紋與上緣固定點，以材質變形表現風勢。ATibetMacaques 以共享的關節網格繪製五隻獼猴，原始模型可用 Tools/export_macaque.mjs --check 與網頁版逐位元比對。餵食次數、五輪配對最高分及遊玩次數同存於 UTibetSave。
 
-`ATibetCharacter` 以實際水平速度決定跟隨朝向。鏡頭偏移由 `GetViewRotation()` 提供給攝影機與彈簧臂，持續移動時則以控制器朝向換算 WASD 或觸控方向，讓鏡頭回正時角色仍走直線。玩家可用滑鼠右鍵或觸控拖曳自由觀察，按住 Q／E 暫時左右環視，放開平順回背。輕按 E 與觸控「互動」共用既有任務入口。`UTibetCameraBoom` 處理建築碰撞與回復距離。`UTibetCameraSettings` 將靈敏度和垂直反轉寫入裝置的 GameUserSettings。玩法與輸入的依據見[第三人稱鏡頭](Unreal/TibetPilgrimage/Camera.md)。
+`ATibetCharacter` 沿用網頁智慧防暈模式，行走、側移與後退時都保留玩家選定的鏡頭朝向。鏡頭偏移由 `GetViewRotation()` 提供給攝影機與彈簧臂，WASD 或觸控方向以控制器朝向換算。玩家可用滑鼠右鍵或觸控拖曳自由觀察，按住 Q／E 暫時左右環視，放開平順回到原視角。輕按 E 與觸控「互動」共用既有任務入口。`UTibetCameraBoom` 處理建築碰撞與回復距離。`UTibetCameraSettings` 將靈敏度和垂直反轉寫入裝置的 GameUserSettings。玩法與輸入的依據見[第三人稱鏡頭](Unreal/TibetPilgrimage/Camera.md)。
 
-`STibetPlayOverlay` 透過 `ATibetHUD` 切換遊戲、世界地圖、技能及操作設定，開啟手記時暫停單人遊戲。地圖依原生任務進度標記到訪情形。七格技能列與正式施法共用 `ATibetGameMode` 的技能資料。傷害依實際扣除的生命值發出，HUD 取怪物位置繪製血條、扣血拖尾與傷害數字。`ATibetRitualEffect` 負責招式和受擊的幾何動畫。
+`STibetPlayOverlay` 透過 `ATibetHUD` 切換遊戲、世界地圖、技能及操作設定，開啟手記時暫停單人遊戲。手記和餵猴選單將游標交給 Slate，返回遊戲時恢復右鍵拖曳轉向。地圖依原生任務進度標記到訪情形。七格技能列與正式施法共用 `ATibetGameMode` 的技能資料。傷害依實際扣除的生命值發出，HUD 取怪物位置繪製血條、扣血拖尾與傷害數字。`ATibetRitualEffect` 負責招式和受擊的幾何動畫。
 
 主角實際扣血與任務推進時，`ATibetGameMode` 以遊戲時間記錄 `FTibetPlayerFeedback`。角色模型的受擊後仰、HUD 扣血提示與任務標記依該時間顯示並消退。
 

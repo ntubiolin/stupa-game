@@ -19,7 +19,7 @@ public:
     FSlateFontInfo Font(int32 Size) const;
     bool IsTouch() const { return bTouch; }
     void Show(ETibetPage Page);
-    virtual bool SupportsKeyboardFocus() const override { return Page!=ETibetPage::Play; }
+    virtual bool SupportsKeyboardFocus() const override;
     virtual FReply OnKeyDown(const FGeometry& Geometry,const FKeyEvent& Key) override;
 private:
     TWeakObjectPtr<ATibetGameMode> Mode;

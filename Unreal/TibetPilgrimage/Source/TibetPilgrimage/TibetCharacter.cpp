@@ -90,57 +90,25 @@ FRotator ATibetCharacter::GetViewRotation() const
     return View;
 }
 
-void ATibetCharacter::UpdateFollowView(APlayerController& Player, bool bMoveInput, float Dt)
+void ATibetCharacter::UpdateOrbit(APlayerController& Player, float Dt)
 {
-    const FVector Velocity=GetVelocity();
-    const bool bTravelling=Velocity.SizeSquared2D()>FMath::Square(18.);
-    if (bTravelling) LastTravelYaw=Velocity.Rotation().Yaw;
-
-    const bool Left=Player.IsInputKeyDown(EKeys::Q);
-    const bool Right=InteractPressedAt>=0. && FPlatformTime::Seconds()-InteractPressedAt>=TibetCamera::InteractHoldSeconds;
-    const bool bManual=Player.IsInputKeyDown(EKeys::RightMouseButton) || LookFinger>=0;
-    const bool bOrbit=Left || Right;
-
-    // Rebase when starting a fresh movement gesture. While a direction is held
-    // the control yaw remains the movement basis; visual follow cannot steer it.
-    if (bMoveInput && !bHadMoveInput && !bOrbit && !bReturningFromOrbit)
+    if (Player.IsInputKeyDown(EKeys::RightMouseButton) || LookFinger>=0)
     {
-        Player.SetControlRotation(GetViewRotation());
-        ViewYawOffset=0.;
-    }
-    bHadMoveInput=bMoveInput;
-    if (bManual)
-    {
-        ManualLookGrace=.45;
-        bFollowingTravel=bReturningFromOrbit=false;
-        return;
-    }
-    if (bOrbit)
-    {
-        ViewYawOffset=FRotator::NormalizeAxis(ViewYawOffset+(int(Right)-int(Left))*TibetCamera::OrbitDegreesPerSecond*Dt);
-        bReturningFromOrbit=true;
-        ManualLookGrace=0.;
-        return;
-    }
-    if (ManualLookGrace>0.)
-    {
-        ManualLookGrace=FMath::Max(0.,ManualLookGrace-Dt);
-        return;
-    }
-    if (bTravelling) bFollowingTravel=true;
-    if (!bFollowingTravel && !bReturningFromOrbit) return;
-    const double Target=bReturningFromOrbit && !bTravelling ? GetActorRotation().Yaw : LastTravelYaw;
-    const double View=TibetCamera::FollowYaw(GetViewRotation().Yaw,Target,Dt);
-    ViewYawOffset=FRotator::NormalizeAxis(View-Player.GetControlRotation().Yaw);
-    if (FMath::Abs(FRotator::NormalizeAxis(Target-View))<.05)
-    {
-        bFollowingTravel=bReturningFromOrbit=false;
-        if (!bMoveInput)
+        // Taking over a keyboard orbit with the mouse keeps the currently visible heading.
+        if (ViewYawOffset!=0.)
         {
             Player.SetControlRotation(GetViewRotation());
             ViewYawOffset=0.;
         }
+        return;
     }
+
+    const bool Left=Player.IsInputKeyDown(EKeys::Q);
+    const bool Right=InteractPressedAt>=0. && FPlatformTime::Seconds()-InteractPressedAt>=TibetCamera::InteractHoldSeconds;
+    if (Left || Right)
+        ViewYawOffset=FRotator::NormalizeAxis(ViewYawOffset+(int(Right)-int(Left))*TibetCamera::OrbitDegreesPerSecond*Dt);
+    else if (ViewYawOffset!=0.)
+        ViewYawOffset=TibetCamera::FollowYaw(ViewYawOffset,0.,Dt);
 }
 
 void ATibetCharacter::PressInteract()
@@ -208,7 +176,7 @@ void ATibetCharacter::Tick(float Dt)
         }
     }
     Axis=Axis.GetClampedToMaxSize(1);
-    UpdateFollowView(*PC, !Axis.IsNearlyZero(), Dt);
+    UpdateOrbit(*PC, Dt);
     const FRotationMatrix Axes(FRotator(0,PC->GetControlRotation().Yaw,0));
     AddMovementInput(Axes.GetUnitAxis(EAxis::X),Axis.Y);
     AddMovementInput(Axes.GetUnitAxis(EAxis::Y),Axis.X);
@@ -278,7 +246,6 @@ void ATibetCharacter::CancelGameplayInput()
 {
     // Flush may synthesize an E release. Cancel the gesture before flushing.
     InteractPressedAt=-1.;
-    bHadMoveInput=false;
     MoveFinger=LookFinger=-1;
     bAwaitingDragMotion=true;
     StopJumping();

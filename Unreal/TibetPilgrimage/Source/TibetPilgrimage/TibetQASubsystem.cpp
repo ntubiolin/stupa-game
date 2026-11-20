@@ -177,6 +177,24 @@ TSharedPtr<SWidget> FindJournalButton(const TSharedRef<SWidget>& Root,FName Tag)
     return nullptr;
 }
 
+bool ClickJournalButton(FName Tag)
+{
+    const auto Window=GEngine->GameViewport->GetWindow();
+    if (!Window) return false;
+    const auto Button=FindJournalButton(Window.ToSharedRef(),Tag);
+    if (!Button) return false;
+    const auto Geometry=Button->GetCachedGeometry();
+    const FVector2D Center=Geometry.LocalToAbsolute(Geometry.GetLocalSize()*.5);
+    auto& Slate=FSlateApplication::Get();
+    // Use the platform cursor and normal Slate dispatch, including viewport capture and hit testing.
+    Slate.SetCursorPos(Center);
+    Slate.OnMouseMove();
+    if (!Slate.GetCursorPos().Equals(Center,2.)) return false;
+    Slate.OnMouseDown(Window->GetNativeWindow(),EMouseButtons::Left);
+    Slate.OnMouseUp(EMouseButtons::Left);
+    return true;
+}
+
 bool TapJournalButton(FName Tag)
 {
     auto Window=GEngine->GameViewport->GetWindow();
@@ -439,7 +457,16 @@ void UTibetQASubsystem::Journal(APlayerController& PC,ATibetGameMode& Mode)
         FScreenshotRequest::RequestScreenshot(Screenshot,true,false,false);
     };
     if (!Screenshot.IsEmpty() && IFileManager::Get().FileSize(*Screenshot)<=0) return;
-    auto Tap=[&](FKey Key){SendKey(PC,Key,true);};
+    auto Tap=[&](FKey Key){
+        if (HUD->IsJournalOpen())
+        {
+            const FKeyEvent Event(Key,FModifierKeysState(),0,false,0,0);
+            auto& Slate=FSlateApplication::Get();
+            Slate.ProcessKeyDownEvent(Event);
+            Slate.ProcessKeyUpEvent(Event);
+        }
+        else SendKey(PC,Key,true);
+    };
     const bool Touch=FParse::Param(FCommandLine::Get(),TEXT("TibetTouch"));
     switch (Frames++)
     {
@@ -465,26 +492,38 @@ void UTibetQASubsystem::Journal(APlayerController& PC,ATibetGameMode& Mode)
         if (!PC.GetPawn()->GetActorLocation().Equals(ArrivalPosition,.1) || !PC.GetControlRotation().Equals(HeadingBeforeDrag,.01)
             || Mode.GetSkillState(1).CooldownRemaining>0 || Mode.GetMana()!=100) { Finish(false,TEXT("Gameplay input crossed journal")); return; }
         SendKey(PC,EKeys::W,false); SendKey(PC,EKeys::R,false); SendKey(PC,EKeys::RightMouseButton,false);
-        Tap(EKeys::K); break;
+        if (!Touch)
+        {
+            auto* Viewport=GetWorld()->GetGameViewport();
+            if (!PC.bShowMouseCursor || Viewport->GetMouseCaptureMode()!=EMouseCaptureMode::NoCapture ||
+                Viewport->GetMouseLockMode()!=EMouseLockMode::DoNotLock || !ClickJournalButton(TEXT("TibetPackTab")))
+            { Finish(false,TEXT("Cursor could not reach the Pack tab")); return; }
+        }
+        else Tap(EKeys::I);
+        break;
     case 6:
+        if (HUD->GetJournalPage()!=ETibetPage::Pack) { Finish(false,TEXT("Map to Pack failed")); return; }
+        Tap(EKeys::K); break;
+    case 7:
         SendKey(PC,EKeys::K,false);
         if (HUD->GetJournalPage()!=ETibetPage::Skills) { Finish(false,TEXT("Skills toggle failed")); return; }
         Shot(TEXT("skills")); break;
-    case 7: Tap(EKeys::Escape); break;
-    case 8:
+    case 8: Tap(EKeys::Escape); break;
+    case 9:
         SendKey(PC,EKeys::Escape,false);
-        if (HUD->IsJournalOpen() || PC.IsPaused()) { Finish(false,TEXT("Esc did not restore play")); return; }
+        if (HUD->IsJournalOpen() || PC.IsPaused() || GetWorld()->GetGameViewport()->GetMouseCaptureMode()!=EMouseCaptureMode::CaptureDuringRightMouseDown)
+        { Finish(false,TEXT("Esc did not restore play and right-drag capture")); return; }
         break;
-    case 9: Tap(EKeys::Escape); break;
-    case 10:
+    case 10: Tap(EKeys::Escape); break;
+    case 11:
         SendKey(PC,EKeys::Escape,false);
         if (HUD->GetJournalPage()!=ETibetPage::Controls) { Finish(false,TEXT("Menu did not reopen")); return; }
         Shot(TEXT("controls")); break;
-    case 11:
+    case 12:
         if (Touch) { if (!TapJournalButton(TEXT("TibetCloseJournal"))) { Finish(false,TEXT("Return touch target missing")); return; } }
         else Tap(EKeys::Escape);
         break;
-    case 12:
+    case 13:
         SendKey(PC,EKeys::Escape,false);
         if (HUD->IsJournalOpen() || PC.IsPaused() || !PC.GetPawn()->GetActorLocation().Equals(ArrivalPosition,.1)
             || Mode.GetMana()!=100) { Finish(false,TEXT("Return leaked input")); return; }
@@ -581,76 +620,88 @@ void UTibetQASubsystem::CameraFollow(APlayerController& PC,ATibetGameMode& Mode)
         SendKey(PC,EKeys::D,true); Next(); break;
     case 1:
         // Move the free pointer throughout the strafe. Both the walked path and
-        // the final rendered travel heading must survive these raw mouse events.
+        // the final rendered camera heading must survive these raw mouse events.
         PC.InputKey(FInputKeyEventArgs::CreateSimulated(EKeys::MouseX,IE_Axis,15,1));
         if (Held<1.15) break;
         Detail(TEXT("side-travel"));
         if (FVector::Dist2D(Pos,ArrivalPosition)<180 ||
             FMath::Abs(FRotator::NormalizeAxis((Pos-ArrivalPosition).Rotation().Yaw-HeadingBeforeDrag.Yaw-90))>5 ||
-            FMath::Abs(Error(Pawn->GetVelocity().Rotation().Yaw))>8)
-        { Finish(false,TEXT("Held strafe curved or camera failed to follow travel")); return; }
+            FMath::Abs(Error(HeadingBeforeDrag.Yaw))>.15)
+        { Finish(false,TEXT("Right strafe curved or rotated the camera")); return; }
         SendKey(PC,EKeys::D,false);
         FScreenshotRequest::RequestScreenshot(Output/TEXT("travel.png"),true,false,false);
-        Next(); break;
+        ArrivalPosition=Pos;
+        SendKey(PC,EKeys::A,true); Next(); break;
     case 2:
+        if (Held<.55) break;
+        if (FVector::Dist2D(Pos,ArrivalPosition)<120 || FMath::Abs(Error(HeadingBeforeDrag.Yaw))>.15)
+        { Finish(false,TEXT("Reversing strafe rotated the camera or failed to move")); return; }
+        SendKey(PC,EKeys::A,false); SendKey(PC,EKeys::S,true);
+        ArrivalPosition=Pos; Next(); break;
+    case 3:
+        if (Held<.55) break;
+        if (FVector::Dist2D(Pos,ArrivalPosition)<120 || FMath::Abs(Error(HeadingBeforeDrag.Yaw))>.15)
+        { Finish(false,TEXT("Backing up rotated the camera or failed to move")); return; }
+        SendKey(PC,EKeys::S,false); Next(); break;
+    case 4:
         if (Held<.5) break;
         HeadingBeforeDrag=CameraView;
         SendKey(PC,EKeys::Q,true); Next(); break;
-    case 3:
+    case 5:
         if (Held<.55) break;
         Detail(TEXT("orbit-left"));
         if (Error(HeadingBeforeDrag.Yaw)>-35 || Error(HeadingBeforeDrag.Yaw)<-85)
         { Finish(false,TEXT("Q did not orbit left")); return; }
         HeadingAfterDrag=CameraView;
         SendKey(PC,EKeys::Q,false); Next(); break;
-    case 4:
+    case 6:
         if (Held<.08) break;
         if (FMath::Abs(Error(HeadingBeforeDrag.Yaw))<3 || FMath::Abs(Error(HeadingAfterDrag.Yaw))<2)
         { Finish(false,TEXT("Q release snapped or failed to ease")); return; }
         Next(); break;
-    case 5:
+    case 7:
         if (Held<1.25) break;
         Detail(TEXT("return-left"));
-        if (FMath::Abs(Error(Pawn->GetActorRotation().Yaw))>3)
-        { Finish(false,TEXT("Idle Q release failed to return behind actor")); return; }
+        if (FMath::Abs(Error(HeadingBeforeDrag.Yaw))>3)
+        { Finish(false,TEXT("Q release failed to restore the chosen heading")); return; }
         PC.SetControlRotation((Goal-Pos).GetSafeNormal2D().Rotation());
         SendKey(PC,EKeys::W,true); Next(); break;
-    case 6:
+    case 8:
         if (FVector::Dist2D(Pos,Goal)>150) break;
         SendKey(PC,EKeys::W,false); Next(); break;
-    case 7:
+    case 9:
         if (Held<.5) break;
         HeadingBeforeDrag=CameraView;
         SendKey(PC,EKeys::E,true); Next(); break;
-    case 8:
+    case 10:
         if (Held<.72) break;
         Detail(TEXT("orbit-right"));
         if (Error(HeadingBeforeDrag.Yaw)<35 || Mode.GetStep()!=0)
         { Finish(false,TEXT("Held E did not orbit right or activated dialogue")); return; }
         FScreenshotRequest::RequestScreenshot(Output/TEXT("orbit.png"),true,false,false);
         SendKey(PC,EKeys::E,false); Next(); break;
-    case 9:
+    case 11:
         if (Held<1.5) break;
-        if (FMath::Abs(Error(Pawn->GetActorRotation().Yaw))>3 || Mode.GetStep()!=0)
+        if (FMath::Abs(Error(HeadingBeforeDrag.Yaw))>3 || Mode.GetStep()!=0)
         { Finish(false,TEXT("E release failed to return or triggered interaction")); return; }
         HeadingBeforeDrag=CameraView;
         SendKey(PC,EKeys::E,true); Next(); break;
-    case 10:
+    case 12:
         SendKey(PC,EKeys::M,true); Next(); break;
-    case 11:
+    case 13:
         if (Held<.20) break;
         if (!PC.IsPaused() || Mode.GetStep()!=0) { Finish(false,TEXT("Menu did not cancel pending E interaction")); return; }
         SendKey(PC,EKeys::M,false); SendKey(PC,EKeys::E,false); SendKey(PC,EKeys::Q,true);
         PC.InputKey(FInputKeyEventArgs::CreateSimulated(EKeys::MouseX,IE_Axis,20,1)); Next(); break;
-    case 12:
+    case 14:
         if (Held<.25) break;
         if (!CameraView.Equals(HeadingBeforeDrag,.15)) { Finish(false,TEXT("Menu allowed camera input")); return; }
         SendKey(PC,EKeys::Q,false); SendKey(PC,EKeys::Escape,true); Next(); break;
-    case 13:
+    case 15:
         if (Held<.20) break;
         if (PC.IsPaused() || Mode.GetStep()!=0) { Finish(false,TEXT("Return from menu leaked interaction")); return; }
         SendKey(PC,EKeys::Escape,false); SendKey(PC,EKeys::E,true); Next(); break;
-    case 14:
+    case 16:
         SendKey(PC,EKeys::E,false); Next(); break;
     default:
         if (Held<.25 || FScreenshotRequest::IsScreenshotRequested()) break;
