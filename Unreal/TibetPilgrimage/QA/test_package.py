@@ -44,7 +44,7 @@ def temporary_root(executable):
     root = Path.home() / "Library/Containers" / bundle_id / "Data/tmp"
     if not root.is_dir():
         slot_argument = "-TibetSaveSlot=QA-bootstrap-" + uuid4().hex
-        args = ["open", "-n", "-W", "-a", str(bundle), "--args", "-unattended", "-RenderOffscreen",
+        args = ["open", "-n", "-W", "-g", "-a", str(bundle), "--args", "-unattended", "-RenderOffscreen",
                 "-nosound", "-ExecCmds=quit", slot_argument]
         try:
             subprocess.run(args, cwd=executable.parent, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -87,14 +87,22 @@ def capture(exe, stage, dest, name, mode, level, options, slot, size=(1440, 900)
     target.mkdir()
     # Arrival exercises the default launch map and leaves the pawn camera untouched.
     map_args = [] if mode == "Arrival" else ["/Game/Maps/Tibet/" + level]
-    args = [exe, *map_args, "-windowed", "-RenderOffscreen", "-ForceRes", f"-ResX={size[0]}",
+    # Touch emulation uses Slate's native-window hit test. A packaged
+    # Mac offscreen window is invisible to the desktop window search.
+    interactive_touch = mode == "Journal" and "-TibetTouch" in options
+    rendering = [] if interactive_touch else ["-RenderOffscreen"]
+    exec_commands = "r.ScreenPercentage 100,r.DynamicRes.OperationMode 0"
+    if interactive_touch:
+        exec_commands += ",SlateDebugger.Event.Start"
+    args = [exe, *map_args, "-windowed", *rendering, "-ForceRes", f"-ResX={size[0]}",
             f"-ResY={size[1]}", "-unattended", "-nosplash", "-NoVSync", "-SaveToUserDir", f"-UserDir={stage / 'user'}",
             f"-TibetSaveSlot={slot}", f"-TibetQAStart={level}", f"-TibetQAOutput={output}", f"-TibetQA={mode}",
-            "-ExecCmds=r.ScreenPercentage 100,r.DynamicRes.OperationMode 0", f"-abslog={output / 'game.log'}", *options]
+            f"-ExecCmds={exec_commands}", f"-abslog={output / 'game.log'}", *options]
     print(name, flush=True)
     try:
         # Use LaunchServices, as Finder does when the player opens the app bundle.
-        cmd = ["open", "-n", "-W", "-a", str(exe.parents[2]), "--args", *args[1:]]
+        foreground = [] if interactive_touch else ["-g"]
+        cmd = ["open", "-n", "-W", *foreground, "-a", str(exe.parents[2]), "--args", *args[1:]]
         with (target / "launch.log").open("w") as log:
             subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT, check=True,
                            timeout=1800 if mode == "Campaign" else 300)
