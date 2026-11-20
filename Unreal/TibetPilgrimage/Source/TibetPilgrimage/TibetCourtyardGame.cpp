@@ -123,3 +123,17 @@ FString ATibetGameMode::FeedingText() const
     const FString Feedback=FruitRound ? (LastFruitMatched?Local(TEXT("It liked that!  "),TEXT("牠很喜歡！　")):Local(TEXT("Try another.  "),TEXT("試試另一種。　"))) : FString();
     return Feedback+FString::Printf(TEXT("%d / 5 · "),FruitRound+1)+Local(TEXT("The macaque wants "),TEXT("獼猴想吃"))+FruitName(FruitRequest);
 }
+
+
+bool ATibetGameMode::InscribeDedication(const FString& Pilgrim,const FString& Prayer)
+{
+    if (!Save || bTravel) return false;
+    FTibetDedication Offering;
+    Offering.Pilgrim=Pilgrim.TrimStartAndEnd();
+    Offering.Prayer=Prayer.TrimStartAndEnd();
+    if (Offering.Prayer.IsEmpty() || Offering.Prayer.Len()>120 || Offering.Pilgrim.Len()>24) return false;
+    Save->Dedications.Add(MoveTemp(Offering));
+    if (Store()) return true;
+    Save->Dedications.Pop();
+    return false;
+}

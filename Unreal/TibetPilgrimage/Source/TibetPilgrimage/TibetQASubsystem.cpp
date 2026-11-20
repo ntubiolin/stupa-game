@@ -421,6 +421,16 @@ bool UTibetQASubsystem::TapPlayControl(FName Tag,float XFraction)
     auto& Map=IPlatformInputDeviceMapper::Get();
     const bool bSlider=Tag==TEXT("TibetClockSlider");
     const auto Down=bSlider ? Geometry.LocalToAbsolute(FVector2D(Size.X*.15,Size.Y*.5)) : At;
+    if (!FParse::Param(FCommandLine::Get(),TEXT("TibetTouch")))
+    {
+        const FWidgetPath Path(Window->GetHittestGrid().GetBubblePath(Down,0,false,0));
+        if (!Path.ContainsWidget(Widget.Get())) return false;
+        const TSet<FKey> Pressed{EKeys::LeftMouseButton}, Released;
+        App.RoutePointerDownEvent(Path,FPointerEvent(0,Down,Down,Pressed,EKeys::LeftMouseButton,0,FModifierKeysState()));
+        if (bSlider) App.RoutePointerMoveEvent(Path,FPointerEvent(0,At,Down,Pressed,EKeys::Invalid,0,FModifierKeysState()),false);
+        App.RoutePointerUpEvent(Path,FPointerEvent(0,At,At,Released,EKeys::LeftMouseButton,0,FModifierKeysState()));
+        return true;
+    }
     App.OnTouchStarted(Window->GetNativeWindow(),Down,1,0,Map.GetPrimaryPlatformUser(),Map.GetDefaultInputDevice());
     if(bSlider) App.OnTouchMoved(At,1,0,Map.GetPrimaryPlatformUser(),Map.GetDefaultInputDevice());
     App.OnTouchEnded(At,0,Map.GetPrimaryPlatformUser(),Map.GetDefaultInputDevice());
@@ -775,7 +785,8 @@ void UTibetQASubsystem::Play(APlayerController& PC, ATibetGameMode& Mode)
         return;
     }
     const bool bFight = Kind == TEXT("Combat") || Kind == TEXT("Boss");
-    const double Reach = bFight ? 320 : ((Kind == TEXT("Kora") || Kind == TEXT("Escort") || Kind == TEXT("Reach")) ? 105 : 170);
+    const bool bQuestLamp=GetWorld()->GetMapName()==TEXT("stupa") && Kind==TEXT("Interact");
+    const double Reach = bFight ? 320 : ((bQuestLamp || Kind == TEXT("Kora") || Kind == TEXT("Escort") || Kind == TEXT("Reach")) ? 105 : 170);
     if (FParse::Param(FCommandLine::Get(),TEXT("TibetQAGateEvidence")) &&
         (Kind == TEXT("Gate") || (StartMap == TEXT("chimphu") && Kind == TEXT("Reach"))) &&
         SurveyGate(PC, Goal)) return;
@@ -803,7 +814,7 @@ void UTibetQASubsystem::Play(APlayerController& PC, ATibetGameMode& Mode)
         if (FParse::Param(FCommandLine::Get(),TEXT("TibetQAEncounters")) && CaptureEncounter(PC,Mode)) return;
         if (Kind == TEXT("Gate") && FParse::Param(FCommandLine::Get(),TEXT("TibetQAGateEvidence")))
             Record(FString::Printf(TEXT("enter\t%.1f\t%.1f\t%.1f"), Pos.Z-88, Goal.Z, FVector::Dist2D(Pos,Goal)));
-        Tapped = bFight ? EKeys::SpaceBar : EKeys::E;
+        Tapped = bFight ? EKeys::SpaceBar : (bQuestLamp ? EKeys::F : EKeys::E);
         SendKey(PC,Tapped,true);
         LastAction=Now;
     }

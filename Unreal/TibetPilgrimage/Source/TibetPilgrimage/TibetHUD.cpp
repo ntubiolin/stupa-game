@@ -88,8 +88,10 @@ void ATibetHUD::DrawHUD()
     FVector2D AnimalPixel;
     if(M->MacaquePrompt(AnimalPosition,AnimalMeters) && PC->ProjectWorldLocationToScreen(AnimalPosition,AnimalPixel,true))
     {
-        const FString Label=FString::Printf(TEXT("%s · %d m"),*M->Local(TEXT("Macaque"),TEXT("獼猴")),AnimalMeters);
-        FCanvasTextItem Text(AnimalPixel,FText::FromString(Label),GEngine->GetMediumFont(),FLinearColor(1,.91f,.66f));
+        const FString Action=M->CanFeed() && !Overlay->IsTouch() && !M->AtButterLamp() ?
+            M->Local(TEXT("[F] Feed macaque"),TEXT("[F] 餵獼猴")) : M->Local(TEXT("Macaque"),TEXT("獼猴"));
+        const FString Label=FString::Printf(TEXT("%s · %d m"),*Action,AnimalMeters);
+        FCanvasTextItem Text(AnimalPixel,FText::FromString(Label),Overlay->Font(FMath::RoundToInt(16*HScale)),FLinearColor(1,.91f,.66f));
         Text.bCentreX=true; Text.bOutlined=true;
         Text.OutlineColor=FLinearColor(.06,.04,.03);
         Canvas->DrawItem(Text);
