@@ -457,8 +457,14 @@ void ATibetGameMode::CastSkill(int32 Slot)
     const bool Hit = EnemyMaximum > 0 && Focus && Skill.Power > 0 &&
         FVector::Dist2D(Player, GetObjectiveLocation()) < Skill.Range;
     const FVector From = Player + FVector(0,0,30);
-    const FVector To = Hit ? Focus->GetActorLocation() + FVector(0,0,105) :
-        From + P->GetActorForwardVector() * 340;
+    FVector To = From + P->GetActorForwardVector() * 340;
+    if (Hit)
+    {
+        FVector Center, Extent;
+        Focus->GetActorBounds(false,Center,Extent);
+        const FVector Outward = (Player - Center).GetSafeNormal2D();
+        To = Center + Outward * FMath::Max(Extent.X,Extent.Y) * .84 + FVector(0,0,.16 * Extent.Z);
+    }
     // The web spell system turns the pilgrim toward the acquired target for
     // bolts, phurbas and bells. Keep the player's independent camera heading.
     if (Hit && (Slot == 0 || Slot == 2 || Slot == 3))
@@ -481,7 +487,7 @@ void ATibetGameMode::CastSkill(int32 Slot)
     GetEnemyMeter(Meter);
     DamageCues.Add({Meter.Anchor, Damage, LastHitTime});
     if (auto* Impact = GetWorld()->SpawnActor<ATibetRitualEffect>())
-        Impact->StartImpact(To + (Player - To).GetSafeNormal2D() * 35, Player - To, After == 0, RitualMaterial);
+        Impact->StartImpact(To + (Player - To).GetSafeNormal2D() * 5, Player - To, Slot, After == 0, RitualMaterial);
     if (After == 0)
     {
         FinishingMeter = Meter;
