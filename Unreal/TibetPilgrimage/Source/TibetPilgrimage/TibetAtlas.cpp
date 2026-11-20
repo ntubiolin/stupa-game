@@ -109,6 +109,7 @@ void STibetAtlas::Construct(const FArguments& Args)
     Detail->AddSlot().AutoHeight()[SNew(STextBlock).Font(DetailFont).ColorAndOpacity(Jade).AutoWrapText(true)
         .Text(FText::FromString(Mode->Local(TEXT("◆ Here   ◇ Visited   · Unvisited"),TEXT("◆ 所在地　◇ 已到訪　· 尚未到訪"))))];
     Detail->AddSlot().AutoHeight().Padding(0,8,0,0)[SNew(SButton).Tag(TEXT("TibetAtlasTravel"))
+        .ButtonStyle(&PinStyle()).ButtonColorAndOpacity(Gold)
         .Visibility_Lambda([this](){return Mode.IsValid() && Mode->CanTravelFromAtlas(Selected) ? EVisibility::Visible : EVisibility::Collapsed;})
         .ContentPadding(FMargin(10,5)).HAlign(HAlign_Center)
         .OnClicked_Lambda([this](){
