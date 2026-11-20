@@ -3,6 +3,8 @@
 UE 5.8 原生 Apple Silicon Mac 與 iOS 專案。從本目錄執行下列指令，以 UE Editor 產生關卡及原創美術，再封裝同一組關卡。
 
 ```sh
+npm ci --prefix ../..
+npx --prefix ../.. playwright install chromium
 python3 Tools/tibet.py build-editor
 python3 Tools/tibet.py generate
 python3 Tools/tibet.py play

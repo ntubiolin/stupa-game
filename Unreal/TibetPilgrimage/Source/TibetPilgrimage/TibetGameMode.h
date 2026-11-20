@@ -144,6 +144,10 @@ private:
     float SinceClockSave=0, SinceSkyUpdate=0;
     void RewardFeeding();
     void StartCourtyard();
+    void RefreshScore();
+    FTimerHandle ScoreTimer;
+    FName ScoreName;
+    UPROPERTY() TObjectPtr<class UAudioComponent> ScorePlayer;
     void UpdateClock(float Dt);
     int32 NearestButterLamp(const FVector& Where) const;
     int32 FurthestMap = INDEX_NONE;

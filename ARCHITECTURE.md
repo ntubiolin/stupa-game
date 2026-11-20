@@ -763,6 +763,8 @@ preserved.
 
 `Unreal/TibetPilgrimage` 是西藏路線的原生 UE 5.8 專案。西藏關卡共用 TibetPilgrimage runtime module。編輯器在本機從原始美術產生 Content，Mac 與 iOS 使用同一份 `Config/DefaultGame.ini` 關卡封裝清單。建置與地圖生成入口為 `Tools/tibet.py`。
 
+原生配樂由 `Tools/export_music.mjs` 使用原版 Web Audio 引擎、總譜及人聲庫離線渲染。關卡生成器匯入並封裝為 `/Game/Music` 的循環 SoundWave，`ATibetGameMode` 按區域、任務與廣場日夜選曲，使用 2D AudioComponent 淡入淡出。
+
 `ATibetGameMode` 讀取 `Tools/export_route.mjs` 從原作任務轉出的雙語路線表，由 `ATibetCharacter` 和 `ATibetHUD` 共用同一組互動與技能入口。原生存檔 `UTibetSave` 的預設槽為 `TibetPilgrimage-v1`，記錄各段任務、數量、目前地圖、終章與語言。跨圖於進入前先存檔。QA 使用獨立的具名槽測試關閉重開、主支線和技能。
 
 室外的 ATibetSkyClock 讀取 UTibetSave 中的時刻與倍率。原生一日 240 秒，起始 07:12，玩家可暫停、選 1× 或 4×，或拖動時刻。伏藏三層保留獨立的燭光曝光。博達哈供燈以位元記錄三個燈位，舊存檔從原任務進度復原。ATibetButterFlame 建立會擺動的燈芯，每個已供養的博達哈燈位最多帶一盞局部光源。布旗沿用原織紋與上緣固定點，以材質變形表現風勢。ATibetMacaques 以共享的關節網格繪製五隻獼猴，原始模型可用 Tools/export_macaque.mjs --check 與網頁版逐位元比對。餵食次數、五輪配對最高分及遊玩次數同存於 UTibetSave。

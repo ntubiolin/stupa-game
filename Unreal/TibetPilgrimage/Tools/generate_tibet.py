@@ -13,6 +13,7 @@ sys.path.insert(0, str(TOOLS))
 
 from import_tibet_figures import import_meshes
 from import_tibet_atlas import import_atlas
+from import_tibet_music import import_music
 from migrate_tibet_maps import strip_import_metadata
 from tibet_cave_lighting import dress_passages, wick_material
 from tibet_courtyard_assets import macaques, wind_materials
@@ -179,6 +180,7 @@ def generate():
     actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     import_atlas()
+    import_music()
     import_meshes()
     macaques()
     surfaces = make_surfaces()
