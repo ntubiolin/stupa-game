@@ -15,6 +15,7 @@ from import_tibet_figures import import_meshes
 from import_tibet_atlas import import_atlas
 from import_tibet_music import import_music
 from migrate_tibet_maps import strip_import_metadata
+from tibet_cloud_layer import generate as generate_cloud_layer
 from tibet_cave_lighting import dress_passages, wick_material
 from tibet_courtyard_assets import macaques, wind_materials
 from tibet_landscapes import MAPS, landscape
@@ -181,6 +182,7 @@ def generate():
     levels = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
     actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
     assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
+    generate_cloud_layer()
     import_atlas()
     import_music()
     import_meshes()

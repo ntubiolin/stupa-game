@@ -14,6 +14,8 @@ public:
     void Apply(float Phase);
     static float Daylight(float Phase);
 private:
+    UPROPERTY() TObjectPtr<class UStaticMeshComponent> Clouds;
+    UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> CloudMaterial;
     UPROPERTY() TObjectPtr<class UDirectionalLightComponent> Sun;
     UPROPERTY() TObjectPtr<class UDirectionalLightComponent> Moon;
     UPROPERTY() TObjectPtr<class USkyLightComponent> Sky;
