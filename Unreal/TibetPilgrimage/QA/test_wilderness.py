@@ -1,6 +1,9 @@
 """Validate the wild encounter meshes and optionally exercise a real Mac package."""
 import argparse
 import json
+from functools import lru_cache
+from itertools import product
+import math
 from pathlib import Path
 import re
 import sys
@@ -33,22 +36,59 @@ def validate_hits(log):
     return defeated
 
 
+def match_rim(w, h, pixel, points):
+    if len(points) < 12:
+        raise ValueError("Too few projected halo samples")
+    cx = sum(x for x, _ in points) / len(points)
+    cy = sum(y for _, y in points) / len(points)
+    offsets = [(x-cx, y-cy) for x,y in points]
+
+    @lru_cache(maxsize=None)
+    def orange(x, y):
+        if not (0 <= x < w and 0 <= y < h):
+            return False
+        r, g, b = pixel(x, y)
+        return r > 160 and r > 1.32*g and g > 1.20*b
+
+    def ink(x, y):
+        x, y = round(x), round(y)
+        return any(orange(x+dx,y+dy) for dx,dy in ((0,0),(-2,0),(2,0),(0,-2),(0,2)))
+
+    # UE projects during the game tick. The async screenshot contains the next
+    # rendered camera pose. Fit one common offset/scale, never individual dots.
+    best = 0
+    for dx,dy in product((0,-8,8,-16,16,-24,24), repeat=2):
+        for scale in (1.,.94,1.06,.88,1.12,1.18):
+            hits = 0
+            quarters = set()
+            for i,(x,y) in enumerate(offsets):
+                if (ink(cx+dx+x*scale, cy+dy+y*scale) and
+                        not ink(cx+dx+x*scale*1.30, cy+dy+y*scale*1.30)):
+                    hits += 1
+                    quarters.add(4*i//len(offsets))
+            if len(quarters)>=3:
+                best = max(best,hits)
+    if best < len(points)*.50:
+        raise ValueError(f"No distinct boss foot halo near its projected rim ({best}/{len(points)})")
+    return best,len(points)
+
+
 def visible_rim(frame, rows):
     w,h,pixel = bitmap(frame)
-    detected = total = 0
-    for tag, *point in rows:
-        if tag != "rim": continue
-        x,y = [int(float(v)) for v in point]
-        if not (5 <= x < w-5 and 5 <= y < h-5): continue
-        total += 1
-        colors = [pixel(i,j) for i in range(x-3,x+4) for j in range(y-3,y+4)]
-        if any(r>160 and r>1.32*g and g>1.20*b for r,g,b in colors): detected += 1
-    if total < 12 or detected < total*.35:
-        raise ValueError(f"Boss foot halo was not visible at the projected rim ({detected}/{total})")
-    return detected, total
+    points = [(float(row[1]),float(row[2])) for row in rows if row[0]=="rim"]
+    return match_rim(w,h,pixel,points)
 
 
 class WildernessTests(unittest.TestCase):
+    def test_halo_must_form_an_outline_near_the_boss(self):
+        points = [(280+100*math.cos(i*math.tau/32),160+30*math.sin(i*math.tau/32)) for i in range(32)]
+        def painted(x,y):
+            radius = ((x-296)/106)**2 + ((y-152)/32)**2
+            return (241,100,26) if .87 < radius < 1.13 else (86,90,82)
+        self.assertGreaterEqual(match_rim(560,320,painted,points)[0],26)
+        for background in ((86,90,82),(241,100,26)):
+            with self.assertRaises(ValueError): match_rim(560,320,lambda x,y:background,points)
+
     def test_assets_available_to_import(self):
         figures = PROJECT / "Assets/Figures"
         counts = json.loads((figures/"triangle-counts.json").read_text())
