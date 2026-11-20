@@ -11,6 +11,7 @@
 #include "Framework/Application/SlateApplication.h"
 #include "GenericPlatform/GenericPlatformInputDeviceMapper.h"
 #include "Widgets/SWindow.h"
+#include "Widgets/Input/SButton.h"
 #include "Input/HittestGrid.h"
 #include "Widgets/Text/STextBlock.h"
 #include "Engine/Texture2D.h"
@@ -431,6 +432,29 @@ void UTibetQASubsystem::PackJourney(APlayerController& PC, ATibetGameMode& Mode)
     case 22: Key(EKeys::Escape); ++Frames; break;
     default: Finish(!HUD->IsJournalOpen() && !PC.IsPaused(),TEXT("restored pack and chart input")); break;
     }
+}
+
+bool UTibetQASubsystem::CheckPracticeShortcut(FName Tag, const FString& ExpectedLabel)
+{
+    const auto Window=GEngine->GameViewport->GetWindow();
+    const auto Widget=Window ? FindJournalButton(Window.ToSharedRef(),Tag) : nullptr;
+    if (Widget && Widget->GetType()==FName(TEXT("SButton")))
+    {
+        const auto& Content=StaticCastSharedPtr<SButton>(Widget)->GetContent();
+        const auto Bounds=Widget->GetCachedGeometry().GetLayoutBoundingRect();
+        const auto View=Window->GetCachedGeometry().GetLayoutBoundingRect();
+        if (Content->GetType()==FName(TEXT("STextBlock")) &&
+            StaticCastSharedRef<STextBlock>(Content)->GetText().ToString()==ExpectedLabel &&
+            Bounds.Left>=View.GetCenter().X && Bounds.Right<=View.Right && Bounds.Top>=View.Top &&
+            Bounds.Bottom<=View.GetCenter().Y && Bounds.GetSize().GetMin()>4)
+        {
+            Record(FString::Printf(TEXT("shortcut\t%s\t%s\t%.0f,%.0f,%.0f,%.0f"),
+                *Tag.ToString(),*ExpectedLabel,Bounds.Left-View.Left,Bounds.Top-View.Top,Bounds.Right-View.Left,Bounds.Bottom-View.Top));
+            return true;
+        }
+    }
+    Finish(false,FString::Printf(TEXT("Expected upper-right control %s reading %s"),*Tag.ToString(),*ExpectedLabel));
+    return false;
 }
 
 bool UTibetQASubsystem::TapPlayControl(FName Tag,float XFraction)

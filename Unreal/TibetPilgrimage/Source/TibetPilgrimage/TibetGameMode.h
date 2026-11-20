@@ -94,6 +94,7 @@ public:
     FString TimeLabel() const;
     bool CanFeed() const;
     bool AtButterLamp() const;
+    bool InteractTargetsLamp() const;
     void OfferNearbyLamp();
     void QuickPractice();
     TConstArrayView<FTibetDedication> Dedications() const
@@ -148,6 +149,7 @@ public:
 private:
     enum class EInteraction { None, Grove, Gate, Talk, Use };
     EInteraction InteractionAt(const FVector& PlayerLocation) const;
+    int32 LampForInteraction(const FVector& PlayerLocation, EInteraction Action) const;
     FString ActionLabel(EInteraction Action) const;
     UPROPERTY() TObjectPtr<class UMaterialInterface> RitualMaterial;
     UPROPERTY() TObjectPtr<UTibetSave> Save;
