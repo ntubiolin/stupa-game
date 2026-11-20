@@ -30,6 +30,7 @@ import { TOJI_MAP } from '../../data/maps/toji.js';
 import { i18n } from '../../i18n.js';
 import '../../i18n/toji.js';
 import { addJapanRouteGate } from '../japanArchitecture.js';
+import { createJapanTreeWind } from '../japanTreeWind.js';
 import { addJapanTrees } from '../japanVegetation.js';
 import { createTojiCourtyard } from '../tojiCourtyard.js';
 import { dressJapanLandmarkGround, lightJapanLandmark } from '../japanLandmarkLighting.js';
@@ -444,6 +445,7 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
   const colliders = [];
   const interactables = [];
   const disposables = [];
+  const treeWind = createJapanTreeWind(origin);
   const fallbackLandmarkColliders = [];
 
   function registerCollider(shape) {
@@ -1935,10 +1937,10 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
   disposables.push(blossomMat, mapleMat);
   const onGround = tree => ({ ...tree, y: getHeight(ox + tree.x, oz + tree.z) });
   const cherries = addJapanTrees(root, cherryTrees.map(onGround), {
-    name: 'Tō-ji weeping cherries', species: 'weepingCherry', canopyMaterial: blossomMat, disposables,
+    name: 'Tō-ji weeping cherries', species: 'weepingCherry', canopyMaterial: blossomMat, wind: treeWind, disposables,
   });
   const maples = addJapanTrees(root, mapleTrees.map(onGround), {
-    name: 'Tō-ji maples', species: 'maple', canopyMaterial: mapleMat, disposables,
+    name: 'Tō-ji maples', species: 'maple', canopyMaterial: mapleMat, wind: treeWind, disposables,
   });
   const dummy = new THREE.Object3D();
 
@@ -2170,6 +2172,7 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
       return lm ? { key: lm.promptKey } : null;
     },
     update(dt, elapsed = state?.elapsed || 0) {
+      treeWind.update(state?.wind, elapsed);
 
       // Subtle sacred pulse on the Five-Story Pagoda crowning jewel & Kōdō Garuda flame halos
       const jewelPulse = 1.0 + Math.sin(elapsed * 2.4) * 0.1;

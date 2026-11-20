@@ -301,7 +301,7 @@ function deciduousModel(species) {
  * spatially culled batches with a simpler distant model. Seasonal trees share their
  * map's palette material so the existing tint and emissive hooks still apply.
  */
-export function addJapanTrees(parent, trees, { name, species, canopyMaterial, disposables }) {
+export function addJapanTrees(parent, trees, { name, species, canopyMaterial, disposables, wind }) {
   if (!trees.length) return null;
   const cedar = species === 'cedar';
   const bark = createBarkTexture();
@@ -322,6 +322,14 @@ export function addJapanTrees(parent, trees, { name, species, canopyMaterial, di
   foliageMaterial.side = THREE.DoubleSide;
   foliageMaterial.alphaTest = 0.43;
   foliageMaterial.vertexColors = true;
+
+  const treeHeight = cedar ? 20 : 4.5;
+  if (wind) {
+    wind.bendMaterial(woodMaterial, treeHeight);
+    wind.bendMaterial(foliageMaterial, treeHeight);
+  }
+  const woodShadows = wind?.shadowMaterials(treeHeight, disposables);
+  const leafShadows = wind?.shadowMaterials(treeHeight, disposables);
 
   const model = cedar ? cedarModel(false) : deciduousModel(species);
   const distantModel = cedar ? cedarModel(true) : null;
@@ -369,6 +377,10 @@ export function addJapanTrees(parent, trees, { name, species, canopyMaterial, di
       trunk.receiveShadow = isNear;
       crown.castShadow = isNear;
       crown.receiveShadow = isNear;
+      if (isNear && wind) {
+        Object.assign(trunk, woodShadows);
+        Object.assign(crown, leafShadows);
+      }
       level.add(trunk, crown);
       resources.push(trunk, crown);
       return [trunk, crown];
@@ -403,6 +415,8 @@ export function addJapanTrees(parent, trees, { name, species, canopyMaterial, di
     });
     for (const mesh of lod ? [nearWood, nearFoliage, farWood, farFoliage] : [nearWood, nearFoliage]) {
       mesh.computeBoundingSphere();
+      // At maximum wind the tallest cedar tip moves just under one metre.
+      if (wind) mesh.boundingSphere.radius += 1;
     }
   }
 
