@@ -129,6 +129,41 @@ def chorten(s, x, y, z, h=3):
     )
 
 
+def whitewashed_dome(s, x, y):
+    radius, base = 11.9, 2.02
+
+    def shell(azimuth, latitude, offset=0):
+        unit = (
+            math.cos(latitude) * math.cos(azimuth),
+            math.cos(latitude) * math.sin(azimuth),
+            math.sin(latitude),
+        )
+        return tuple(c + n * (radius + offset) for c, n in zip((x, y, base), unit)), unit
+
+    for row in range(24):
+        for side in range(120):
+            coords = ((side, row), (side + 1, row), (side + 1, row + 1), (side, row + 1))
+            if row == 23:
+                coords = coords[:3]
+            points, normals = zip(*(shell(a * TAU / 120, b * math.pi / 48) for a, b in coords))
+            s.face("lime", points, normals)
+    # Saffron offerings are thrown onto the whitewash in broad, imperfect lotus-petal strokes.
+    for petal in range(10):
+
+        def edge(i):
+            t = i / 32
+            azimuth = (petal + t) * TAU / 10
+            spread = (0.024 + 0.018 * math.sin(math.pi * t)) * (0.85 + 0.26 * noise(petal, i))
+            latitude = 0.08 + (0.37 + 0.08 * noise(petal, 7)) * math.sin(math.pi * t) ** 0.82
+            return (shell(azimuth, latitude - spread, 0.016), shell(azimuth, latitude + spread, 0.016))
+
+        for i in range(32):
+            lo, hi = edge(i)
+            nx, ny = edge(i + 1)
+            pts, norms = zip(lo, nx, ny, hi)
+            s.face("saffron", pts, norms, 0.82 + 0.17 * noise(i, petal))
+
+
 def boudha(s):
     x, y = 0, 34
     # The east/west and north/south cross terraces leave a circular ambulatory at the base.
@@ -137,9 +172,7 @@ def boudha(s):
         for w, d in ((span, span * 0.69), (span * 0.69, span)):
             s.box("lime", x, y, 0.68 * i, w, d, 0.67)
             s.box("ochre", x, y, 0.68 * i + 0.04, w + 0.05, d + 0.05, 0.09)
-    R = 11.9
-    profile = [(R * math.sin(t * math.pi / 36), R * math.cos(t * math.pi / 36)) for t in range(19)]
-    s.rings("lime", x, y, 2.02, profile, 96)
+    whitewashed_dome(s, x, y)
     for i in range(64):
         a = i * TAU / 64
         u, v = x + 16.6 * math.sin(a), y + 16.6 * math.cos(a)
@@ -157,7 +190,7 @@ def boudha(s):
             )
     # Harmika, eyes and thirteen stepped spire rings.
     h = 13.48
-    s.box("lime", x, y, h, 4.7, 4.7, 3.15)
+    s.box("gold", x, y, h, 4.7, 4.7, 3.15)
     for base in (h, h + 2.99):
         s.box("gold", x, y, base, 5.11, 5.11, 0.20)
     for face in range(4):
@@ -171,6 +204,22 @@ def boudha(s):
             )
 
         for sign in (-1, 1):
+            # Ivory infill follows the eye's almond contour against the gilt harmika.
+            for j in range(10):
+                a, b = j / 10, (j + 1) / 10
+
+                def eyelid(t, upper):
+                    curve = math.sin(t * math.pi)
+                    return pt(
+                        sign * (0.17 + t * 1.84),
+                        1.71 + (0.26 * curve + 0.08 * t if upper else -0.18 * curve),
+                        0.024,
+                    )
+
+                face = [eyelid(a, False), eyelid(b, False), eyelid(b, True), eyelid(a, True)]
+                if j == 0:
+                    face = face[:3]
+                s.face("lime", face if sign > 0 else face[::-1])
             for offset, thickness, style in ((0, 0.063, "blue"), (0.47, 0.078, "dark")):
                 for j in range(9):
                     t1 = j / 9
@@ -207,14 +256,15 @@ def boudha(s):
         for a, b in zip(pts, pts[1:]):
             s.beam("ochre", a, b, 0.054, 6)
     for i in range(13):
-        r = 2.5 - i * 0.151
+        r = (2.50 - i * 0.151) * math.sqrt(2)
         s.rings(
             "gold",
             x,
             y,
             h + 3.19 + i * 0.53,
             [(0, r), (0.12, r), (0.48, r * 0.84), (0.53, r * 0.82)],
-            48,
+            4,
+            angle=math.pi / 4,
         )
     z = h + 10.08
     s.rings(
@@ -225,6 +275,12 @@ def boudha(s):
         [(0, 0.48), (0.25, 1.48), (0.47, 1.74), (0.59, 1.59), (0.81, 0.52), (1.22, 0.25), (1.7, 0)],
         48,
     )
+    for i in range(32):
+        a = i * TAU / 32
+        end = (x + 1.64 * math.cos(a), y + 1.64 * math.sin(a), z + 0.42)
+        tip = (end[0], end[1], end[2] - 0.21 - 0.055 * math.cos(a * 4))
+        s.beam("bronze", end, tip, 0.024, 5)
+        s.rings("gold", *tip, [(-0.105, 0.058), (0, 0.028)], 8)
     for i in range(12):
         a = TAU * i / 12
         flags(

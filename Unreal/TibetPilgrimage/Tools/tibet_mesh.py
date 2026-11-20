@@ -18,6 +18,7 @@ def normal(a, b, c):
 
 # sRGB paint samples; texture roughness, metal, emission and nominal grain.
 SURFACES = {
+    "saffron": ("d5a653", 0.9, 0, 0, "plaster"),
     "lime": ("dfd7c4", 0.89, 0, 0, "plaster"),
     "ochre": ("bc7142", 0.83, 0, 0, "plaster"),
     "red": ("903d34", 0.85, 0, 0, "plaster"),
