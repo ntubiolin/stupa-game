@@ -36,7 +36,8 @@ Vite + Three.js, vanilla JS (ES modules), no external 3D/audio assets — everyt
 | `src/world/japanLandmarkLighting.js` | World | Kōdō, Gojū-no-tō, and Konpon Daitō interior and eave shading, localized ground contact, and mobile material quality |
 | `src/world/japanLandmarkLoader.js` | World | Atomic GLB landmark replacement and owned-resource disposal, including late load responses |
 | `src/world/japanGardenArchitecture.js` | World | Deterministic gravel/bump textures, instanced fractured granite and curved cypress-bark roofs |
-| `src/world/japanVegetation.js` | World | Instanced cedar and seasonal trees, original cutout textures, spatial chunks and distance LOD |
+| `src/world/japanVegetation.js` | World | Instanced cedar and seasonal trees, three seeded deciduous branching forms, original cutout textures, spatial chunks and distance LOD |
+| `src/world/japanUnderstory.js` | World | Seeded moss and sedge colonies in Tō-ji garden beds and along the Kōya cedar avenue. Local height samples orient each instance, with half density on low-spec devices |
 | `src/data/japanCampaign.js`, `src/systems/japanCampaign.js`, `src/gameplay/japanCampaignModels.js`, `src/ui/japanCampaign.js` | Gameplay | Thirty ordered Japan objectives, regional NPCs, local lamp, encounter markers and mobile tracker; isolated campaign save |
 | `src/data/japanSkills.js`, `src/player/japanPilgrim.js`, `src/gameplay/skills/japanSkillVisuals.js`, `src/gameplay/skills/kukaiCompanion.js` | Gameplay | Regional player outfit, seven Shingon ability forms, shared combat rules and temporary Kūkai follower |
 | `src/world/maps/sandbox.js` | World | debug sandbox arena with flat ground, scattered rocks, trial stone circle, Mani cairn (lazy-loaded) |

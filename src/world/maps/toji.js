@@ -31,6 +31,7 @@ import { i18n } from '../../i18n.js';
 import '../../i18n/toji.js';
 import { addJapanRouteGate } from '../japanArchitecture.js';
 import { addJapanTrees } from '../japanVegetation.js';
+import { addJapanUnderstory } from '../japanUnderstory.js';
 import { createTojiCourtyard } from '../tojiCourtyard.js';
 import { dressJapanLandmarkGround, lightJapanLandmark } from '../japanLandmarkLighting.js';
 
@@ -1869,7 +1870,7 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
   // ---------------------------------------------------------------- 10. Weeping Cherry (`不二櫻`) & Crimson Japanese Maples (`紅葉`) InstancedMeshes
   // Tree locations: iconic Fuji-zakura (`不二櫻`) at `(24, 6)` + cherry & maple trees around Hyōtan-ike & precinct
   const cherryTrees = [
-    { x: 24.0, z: 6.0, scale: 1.45 }, // Iconic Fuji-zakura weeping cherry NW of Gojū-no-tō
+    { x: 24.0, z: 6.0, scale: 1.45, form: 0, yaw: Math.PI }, // Iconic Fuji-zakura weeping cherry NW of Gojū-no-tō
     { x: 25.5, z: -8.0, scale: 1.15 },
     { x: 45.5, z: -6.5, scale: 1.10 },
     { x: 46.0, z: 28.0, scale: 1.20 },
@@ -1889,6 +1890,16 @@ export function createMap(ctx, mapDef = TOJI_MAP) {
     { x: 18.0, z: 56.0, scale: 1.10 },
   ];
 
+  // Dress the pond garden and the Fuji-zakura root bed. Keep the sandō,
+  // pagoda courtyard, bridge and water free of planting.
+  addJapanUnderstory(root, {
+    beds: [...cherryTrees, ...mapleTrees].filter(tree => tree.x > 20 && tree.z <= 6),
+    heightAt: (x, z) => getHeight(ox + x, oz + z),
+    canPlant: (x, z) => x > 19 && (z < 0 || Math.hypot(x - 24, z - 6) < 2.5)
+      && Math.hypot(x - 36, z + 11) > 9.2 && Math.hypot(x - 35, z + 22) > 7.5
+      && !(Math.abs(x - 36) < 2.5 && z > -6) && !(Math.abs(z + 16.8) < 1.8 && Math.abs(x - 35.5) < 4.8),
+    seed: 2931, lowSpec: ctx.lowSpec, disposables,
+  });
   const trunkGeos = [];
   for (const t of [...cherryTrees, ...mapleTrees]) {
     registerCollider({

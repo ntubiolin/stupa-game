@@ -55,26 +55,37 @@ function createSprayTexture(kind) {
       }
     }
   } else {
-    // Compact clusters soften the contour when several cards overlap around a twig.
+    // A spray follows one twig from left to right. Open gaps between the
+    // side shoots and clear margins keep overlapping cards from reading as sheets.
     const frost = kind === 'frost';
-    const clusters = [[52, 53], [48, 81], [79, 47], [83, 79], [104, 67], [22, 65], [67, 102], [61, 27]];
-    for (const [cx, cy] of clusters) {
-      for (let i = 0; i < (frost ? 5 : 25); i++) {
-        const angle = rng() * TAU;
-        const spread = Math.sqrt(rng()) * 21;
-        const x = cx + Math.cos(angle) * spread;
-        const y = cy + Math.sin(angle) * spread * 0.8;
-        const shade = Math.round(154 + rng() * 101);
-        if (kind === 'blossom') {
-          const petal = 1.7 + rng() * 2.4;
-          for (let p = 0; p < 5; p++) {
-            const a = p / 5 * TAU;
-            stamp(x + petal * Math.cos(a), y + petal * Math.sin(a), petal, petal, shade);
+    const blossom = kind === 'blossom';
+    const spineY = t => 64 + Math.sin(t * Math.PI) * 8;
+    for (let i = 0; i < 8; i++) {
+      const t = i / 8, next = (i + 1) / 8;
+      line(7 + t * 106, spineY(t), 7 + next * 106, spineY(next), 1.25 - t * 0.7, 132);
+    }
+    for (let shoot = 0; shoot < 12; shoot++) {
+      const t = (shoot + 1) / 14;
+      const x = 7 + t * 106, y = spineY(t);
+      const side = shoot % 2 ? 1 : -1;
+      const spread = (21 + 26 * Math.sin(t * Math.PI)) * (0.8 + 0.2 * rng());
+      const dx = 9 + (1 - t) * 19, dy = side * spread;
+      line(x, y, x + dx, y + dy, 0.95, 142);
+      for (let i = 0; i < (frost ? 3 : 10); i++) {
+        const u = 0.19 + 0.81 * rng();
+        const cx = x + u * dx + (rng() - 0.5) * 13;
+        const cy = y + u * dy + (rng() - 0.5) * 12;
+        const shade = Math.round(165 + rng() * 90);
+        if (blossom) {
+          const r = 1.4 + rng() * 1.85;
+          for (let petal = 0; petal < 5; petal++) {
+            const angle = petal / 5 * TAU + u;
+            stamp(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r, r, r, shade);
           }
-          stamp(x, y, 1.35, 1.35, 160);
+          stamp(cx, cy, 1, 1, 154);
         } else {
-          const leaf = frost ? 1.7 + rng() * 1.1 : 2.9 + rng() * 3.8;
-          stamp(x, y, leaf * (0.75 + rng() * 0.85), leaf, shade);
+          const r = frost ? 1.25 : 2.35 + rng() * 2.1;
+          stamp(cx, cy, r * 1.3, r * 0.78, shade);
         }
       }
     }
@@ -188,6 +199,42 @@ function spray(writer, start, end, width, roll, shade, curl = 0) {
   }
 }
 
+// Continuous, low buttresses: a curved ridge widens against the trunk,
+// flattens along the ground and sinks below the soil before each tip.
+function appendRoots(wood, seed, size) {
+  const rng = seededRandom(seed);
+  for (let i = 0; i < 5; i++) {
+    const angle = i * GOLDEN_ANGLE + (rng() - 0.5) * 0.65;
+    const reach = size * (1.05 + rng() * 0.70);
+    const curve = (rng() - 0.5) * 1.05;
+    const flare = size * (0.34 + rng() * 0.23);
+    let last = [];
+    for (let segment = 0; segment <= 5; segment++) {
+      const t = segment / 5, a = angle + curve * t;
+      const radius = 0.045 + reach * t;
+      const width = size * (0.19 * (1 - t) ** 1.2 + 0.018);
+      const height = flare * (1 - t) ** 3 + size * 0.14 * (1 - t);
+      const row = [];
+      for (let j = 0; j <= 4; j++) {
+        const arc = j * Math.PI / 4;
+        const across = Math.cos(arc), up = Math.sin(arc);
+        const n = new THREE.Vector3(-Math.sin(a) * across, up + 0.2, Math.cos(a) * across).normalize();
+        const pos = new THREE.Vector3(
+          Math.cos(a) * radius - Math.sin(a) * width * across,
+          up * height - 0.045 - 0.09 * t * t,
+          Math.sin(a) * radius + Math.cos(a) * width * across,
+        );
+        row.push(wood.vertex(pos, n, 0.70 + 0.25 * up, j / 4, t));
+        if (segment && j) {
+          wood.triangle(last[j - 1], row[j - 1], row[j]);
+          wood.triangle(last[j - 1], row[j], last[j]);
+        }
+      }
+      last = row;
+    }
+  }
+}
+
 function cedarModel(distant) {
   const wood = geometryWriter();
   const needles = geometryWriter();
@@ -199,13 +246,7 @@ function cedarModel(distant) {
   stem(wood, foot, waist, 0.59, 0.30, distant ? 5 : 8);
   stem(wood, waist, shoulder, 0.30, 0.13, distant ? 5 : 8);
   stem(wood, shoulder, leader, 0.13, 0.016, distant ? 5 : 6);
-  if (!distant) {
-    for (let i = 0; i < 4; i++) {
-      const a = i * TAU / 4 + 0.3;
-      const root = new THREE.Vector3(Math.cos(a) * 0.96, -0.37, Math.sin(a) * 0.96);
-      stem(wood, new THREE.Vector3(0, 0.70, 0), root, 0.22, 0.03, 4);
-    }
-  }
+  if (!distant) appendRoots(wood, 856, 1.25);
 
   for (let i = 0; i < 25; i++) {
     const t = i / 24;
@@ -249,14 +290,19 @@ function cedarModel(distant) {
   return [wood.finish(), needles.finish()];
 }
 
-function deciduousModel(species) {
+function deciduousModel(species, form) {
   const wood = geometryWriter();
   const foliage = geometryWriter();
-  const rng = seededRandom({ maple: 6241, cherry: 5317, weepingCherry: 2401 }[species]);
+  const seed = { maple: 6241, cherry: 5317, weepingCherry: 2401 }[species] + form * 701;
+  const rng = seededRandom(seed);
   const weeping = species === 'weepingCherry';
   const base = new THREE.Vector3(0, -0.11, 0);
-  const fork = new THREE.Vector3(0.18, 1.65, -0.14);
-  const crown = new THREE.Vector3(-0.25, 2.94, 0.17);
+  // Low fork with a sweeping bough, upright leader, and compact open crown.
+  const forkHeight = [1.22, 2.05, 1.58][form];
+  const crownBias = [0.78, -0.28, 0.19][form];
+  const fork = new THREE.Vector3(crownBias * 0.44, forkHeight, -0.14);
+  const crown = new THREE.Vector3(crownBias, forkHeight + 1.34, 0.17);
+  appendRoots(wood, seed, form === 0 ? 1.15 : 0.84);
   stem(wood, base, fork, 0.30, 0.19, 8);
   stem(wood, fork, crown, 0.19, 0.047, 7);
 
@@ -271,12 +317,12 @@ function deciduousModel(species) {
 
   for (let branch = 0; branch < 9; branch++) {
     const a = branch * GOLDEN_ANGLE + (rng() - 0.5) * 0.63;
-    const y = 2.2 + rng() * 1.11;
-    const length = 1.65 + rng() * 1.25;
+    const y = forkHeight + 0.58 + rng() * 1.11;
+    const length = (1.65 + rng() * 1.25) * (1 + crownBias * 0.64 * Math.cos(a));
     const start = fork.clone().lerp(crown, 0.15 + rng() * 0.7);
-    const elbow = new THREE.Vector3(Math.cos(a) * length * 0.53, y + 0.68, Math.sin(a) * length * 0.53);
+    const elbow = new THREE.Vector3(start.x + Math.cos(a) * length * 0.53, y + 0.68, Math.sin(a) * length * 0.53);
     const end = new THREE.Vector3(
-      Math.cos(a + 0.12) * length, y + (weeping ? 0.56 : 0.98), Math.sin(a + 0.12) * length
+      crown.x + Math.cos(a + 0.12) * length, y + (weeping ? 0.56 : 0.98), Math.sin(a + 0.12) * length
     );
     stem(wood, start, elbow, 0.10, 0.058, 5);
     stem(wood, elbow, end, 0.058, 0.014, 4);
@@ -323,14 +369,16 @@ export function addJapanTrees(parent, trees, { name, species, canopyMaterial, di
   foliageMaterial.alphaTest = 0.43;
   foliageMaterial.vertexColors = true;
 
-  const model = cedar ? cedarModel(false) : deciduousModel(species);
+  const models = cedar ? [cedarModel(false)] : [0, 1, 2].map(form => deciduousModel(species, form));
   const distantModel = cedar ? cedarModel(true) : null;
   const batches = new Map();
-  for (const tree of trees) {
+  for (const [index, tree] of trees.entries()) {
+    const form = tree.form ?? (index % models.length);
     const ix = cedar ? Math.floor(tree.x / CEDAR_CHUNK_SIZE) : 0;
     const iz = cedar ? Math.floor(tree.z / CEDAR_CHUNK_SIZE) : 0;
-    const key = ix + ':' + iz;
+    const key = form + ':' + ix + ':' + iz;
     if (!batches.has(key)) batches.set(key, {
+      form,
       x: cedar ? (ix + 0.5) * CEDAR_CHUNK_SIZE : 0,
       z: cedar ? (iz + 0.5) * CEDAR_CHUNK_SIZE : 0,
       trees: [],
@@ -341,7 +389,7 @@ export function addJapanTrees(parent, trees, { name, species, canopyMaterial, di
   const rng = seededRandom(31847);
   const dummy = new THREE.Object3D();
   const tint = new THREE.Color();
-  const resources = [bark, woodMaterial, leaves, ...model];
+  const resources = [bark, woodMaterial, leaves, ...models.flat()];
   if (!canopyMaterial) resources.push(foliageMaterial);
   if (blossoms) resources.push(blossoms);
   if (frost) resources.push(frost);
@@ -374,7 +422,7 @@ export function addJapanTrees(parent, trees, { name, species, canopyMaterial, di
       return [trunk, crown];
     }
 
-    const [nearWood, nearFoliage] = meshes(near, model, true);
+    const [nearWood, nearFoliage] = meshes(near, models[batch.form], true);
     let farWood, farFoliage;
     if (lod) {
       const distant = new THREE.Group();

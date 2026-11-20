@@ -39,6 +39,7 @@ import '../../i18n/koyasan.js';
 import { addJapanRouteGate } from '../japanArchitecture.js';
 import { addRakedGravel, createGraniteGeometry, createGraniteMaterial } from '../japanGardenArchitecture.js';
 import { addJapanTrees } from '../japanVegetation.js';
+import { addJapanUnderstory } from '../japanUnderstory.js';
 import { createJapanGravelTile } from '../tojiCourtyard.js';
 import { dressJapanLandmarkGround, lightJapanLandmark } from '../japanLandmarkLighting.js';
 
@@ -1650,16 +1651,24 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   const CEDAR_COUNT = 96;
   const cedarRng = seededRandom(8160);
   const cedars = [];
-  for (let i = 0; i < 320 && cedars.length < CEDAR_COUNT; i++) {
-    const cedarIdx = cedars.length;
+  // Plant in irregular groves along both sides, with gaps at the river and
+  // monuments. Each rejected candidate advances to a fresh position.
+  const groveCenters = [];
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 10; i++) {
+      groveCenters.push({
+        x: 48 + side * (8.5 + cedarRng() * 10),
+        z: 31 - i * 11.7 + (cedarRng() - 0.5) * 6,
+      });
+    }
+  }
+  for (let i = 0; i < 960 && cedars.length < CEDAR_COUNT; i++) {
     let cx;
     let cz;
-    if (cedarIdx < 76) {
-      // Dense millennium cedar avenue flanking Okunoin path (x = 48)
-      const side = cedarIdx % 2 === 0 ? -1 : 1;
-      const row = Math.floor(cedarIdx / 2);
-      cx = 48 + side * (5.2 + cedarRng() * 14.5);
-      cz = 40 - (row / 38) * 112 + (cedarRng() - 0.5) * 2.4;
+    if (cedars.length < 76) {
+      const center = groveCenters[i % groveCenters.length];
+      cx = center.x + (cedarRng() - 0.5) * 6.8;
+      cz = center.z + (cedarRng() - 0.5) * 9.6;
     } else {
       // Sacred cedars framing Danjō Garan & Kongōbu-ji perimeter
       const ang = cedarRng() * TWO_PI;
@@ -1672,6 +1681,10 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
     if (Math.hypot(cx - 48, cz - -42) < 10.5) continue;
     if (Math.hypot(cx - 48, cz - -66) < 10.5) continue;
     if (Math.abs(cx - 0) < 7 && cz > 65) continue;
+
+    if (Math.abs(cx - 48) < 4.8 && cz > -82 && cz < 46) continue;
+    if (cz > 37 && cz < 46 && cx > -65 && cx < 53) continue;
+    if (cedars.some(tree => Math.hypot(tree.x - cx, tree.z - cz) < 2.65)) continue;
 
     const cy = getHeight(cx, cz);
     const sc = 0.78 + cedarRng() * 0.55;
@@ -2101,6 +2114,17 @@ export function createMap(ctx, mapDef = KOYASAN_MAP) {
   });
   const cherries = addJapanTrees(root, koyasanCherrySpots.map(onGround), {
     name: 'Mount Kōya cherries', species: 'cherry', canopyMaterial: koyasanCherryMat, disposables,
+  });
+
+  addJapanUnderstory(root, {
+    beds: [
+      ...cedars.filter(tree => tree.x > 28 && tree.x < 74 && tree.z > -74 && tree.z < 34),
+      ...koyasanMapleSpots.filter(([x, z]) => Math.abs(x) > 24 && z >= 32).map(onGround),
+    ],
+    heightAt: getHeight,
+    canPlant: (x, z) => z < 37 && Math.abs(x - 48) > 4 && Math.abs(z + 16) > 5
+      && Math.hypot(x - 48, z + 42) > 11 && Math.hypot(x - 48, z + 66) > 11,
+    seed: 9913, lowSpec: ctx.lowSpec, disposables,
   });
 
   let appliedKoyasanSeason = null;
