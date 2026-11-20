@@ -83,6 +83,77 @@ void ATibetCharacter::TurnView(APlayerController& Player, FVector2D Degrees)
         Settings->GetSensitivity(), Settings->IsVerticalInverted()));
 }
 
+FRotator ATibetCharacter::GetViewRotation() const
+{
+    FRotator View=Super::GetViewRotation();
+    View.Yaw=FRotator::NormalizeAxis(View.Yaw+ViewYawOffset);
+    return View;
+}
+
+void ATibetCharacter::UpdateFollowView(APlayerController& Player, bool bMoveInput, float Dt)
+{
+    const FVector Velocity=GetVelocity();
+    const bool bTravelling=Velocity.SizeSquared2D()>FMath::Square(18.);
+    if (bTravelling) LastTravelYaw=Velocity.Rotation().Yaw;
+
+    const bool Left=Player.IsInputKeyDown(EKeys::Q);
+    const bool Right=InteractPressedAt>=0. && FPlatformTime::Seconds()-InteractPressedAt>=TibetCamera::InteractHoldSeconds;
+    const bool bManual=Player.IsInputKeyDown(EKeys::RightMouseButton) || LookFinger>=0;
+    const bool bOrbit=Left || Right;
+
+    // Rebase when starting a fresh movement gesture. While a direction is held
+    // the control yaw remains the movement basis; visual follow cannot steer it.
+    if (bMoveInput && !bHadMoveInput && !bOrbit && !bReturningFromOrbit)
+    {
+        Player.SetControlRotation(GetViewRotation());
+        ViewYawOffset=0.;
+    }
+    bHadMoveInput=bMoveInput;
+    if (bManual)
+    {
+        ManualLookGrace=.45;
+        bFollowingTravel=bReturningFromOrbit=false;
+        return;
+    }
+    if (bOrbit)
+    {
+        ViewYawOffset=FRotator::NormalizeAxis(ViewYawOffset+(int(Right)-int(Left))*TibetCamera::OrbitDegreesPerSecond*Dt);
+        bReturningFromOrbit=true;
+        ManualLookGrace=0.;
+        return;
+    }
+    if (ManualLookGrace>0.)
+    {
+        ManualLookGrace=FMath::Max(0.,ManualLookGrace-Dt);
+        return;
+    }
+    if (bTravelling) bFollowingTravel=true;
+    if (!bFollowingTravel && !bReturningFromOrbit) return;
+    const double Target=bReturningFromOrbit && !bTravelling ? GetActorRotation().Yaw : LastTravelYaw;
+    const double View=TibetCamera::FollowYaw(GetViewRotation().Yaw,Target,Dt);
+    ViewYawOffset=FRotator::NormalizeAxis(View-Player.GetControlRotation().Yaw);
+    if (FMath::Abs(FRotator::NormalizeAxis(Target-View))<.05)
+    {
+        bFollowingTravel=bReturningFromOrbit=false;
+        if (!bMoveInput)
+        {
+            Player.SetControlRotation(GetViewRotation());
+            ViewYawOffset=0.;
+        }
+    }
+}
+
+void ATibetCharacter::PressInteract()
+{
+    if (!JournalOpen()) InteractPressedAt=FPlatformTime::Seconds();
+}
+void ATibetCharacter::ReleaseInteract()
+{
+    const double Pressed=InteractPressedAt;
+    InteractPressedAt=-1.;
+    if (Pressed>=0. && FPlatformTime::Seconds()-Pressed<TibetCamera::InteractHoldSeconds) DoInteract();
+}
+
 void ATibetCharacter::BeginPlay()
 {
     Super::BeginPlay();
@@ -111,8 +182,6 @@ void ATibetCharacter::Tick(float Dt)
     auto* PC = Cast<APlayerController>(Controller);
     if (!PC || JournalOpen()) return;
     UpdateMouseLook(*PC);
-    const FRotator Yaw(0,PC->GetControlRotation().Yaw,0);
-    const FRotationMatrix Axes(Yaw);
     FVector2D Axis(PC->IsInputKeyDown(EKeys::D)-PC->IsInputKeyDown(EKeys::A),
         PC->IsInputKeyDown(EKeys::W)-PC->IsInputKeyDown(EKeys::S));
     bool Down = false;
@@ -139,6 +208,8 @@ void ATibetCharacter::Tick(float Dt)
         }
     }
     Axis=Axis.GetClampedToMaxSize(1);
+    UpdateFollowView(*PC, !Axis.IsNearlyZero(), Dt);
+    const FRotationMatrix Axes(FRotator(0,PC->GetControlRotation().Yaw,0));
     AddMovementInput(Axes.GetUnitAxis(EAxis::X),Axis.Y);
     AddMovementInput(Axes.GetUnitAxis(EAxis::Y),Axis.X);
     if (GetActorLocation().Z < -400)
@@ -157,7 +228,8 @@ void ATibetCharacter::Tick(float Dt)
 void ATibetCharacter::SetupPlayerInputComponent(UInputComponent* Input)
 {
     Super::SetupPlayerInputComponent(Input);
-    Input->BindKey(EKeys::E,IE_Pressed,this,&ATibetCharacter::DoInteract);
+    Input->BindKey(EKeys::E,IE_Pressed,this,&ATibetCharacter::PressInteract);
+    Input->BindKey(EKeys::E,IE_Released,this,&ATibetCharacter::ReleaseInteract);
     Input->BindKey(EKeys::L,IE_Pressed,this,&ATibetCharacter::Language);
     Input->BindKey(EKeys::M,IE_Pressed,this,&ATibetCharacter::OpenMap).bExecuteWhenPaused=true;
     Input->BindKey(EKeys::K,IE_Pressed,this,&ATibetCharacter::OpenSkills).bExecuteWhenPaused=true;
@@ -194,6 +266,9 @@ bool ATibetCharacter::JournalOpen() const
 }
 void ATibetCharacter::CancelGameplayInput()
 {
+    // Flush may synthesize an E release. Cancel the gesture before flushing.
+    InteractPressedAt=-1.;
+    bHadMoveInput=false;
     MoveFinger=LookFinger=-1;
     bAwaitingDragMotion=true;
     StopJumping();

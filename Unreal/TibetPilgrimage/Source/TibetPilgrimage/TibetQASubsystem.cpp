@@ -84,6 +84,7 @@ void UTibetQASubsystem::Tick(float)
     }
     if (Task != TEXT("Campaign") && World->GetMapName() != StartMap) { Finish(false, TEXT("Unexpected map: ") + World->GetMapName()); return; }
     if (Task == TEXT("Arrival")) Arrival(*PC);
+    else if (Task == TEXT("CameraFollow")) CameraFollow(*PC,*Mode);
     else if (Task == TEXT("Journal")) Journal(*PC,*Mode);
     else if (Task == TEXT("Photo")) Photo(*PC);
     else if (Task == TEXT("Play") || Task == TEXT("Campaign") || Task == TEXT("GroveEntry") || Task == TEXT("Skills")) Play(*PC, *Mode);
@@ -285,7 +286,8 @@ void UTibetQASubsystem::Arrival(APlayerController& PC)
     }
     if (Frames == 20)
     {
-        if (!PC.GetControlRotation().Equals(HeadingBeforeDrag, .05))
+        if (!PC.GetControlRotation().Equals(HeadingBeforeDrag, .05) ||
+            !PC.PlayerCameraManager->GetCameraRotation().Equals(HeadingBeforeDrag, .05))
         { Finish(false, TEXT("Free mouse movement rotated the view")); return; }
         SendKey(PC, EKeys::RightMouseButton, true);
     }
@@ -307,9 +309,110 @@ void UTibetQASubsystem::Arrival(APlayerController& PC)
     {
         SendKey(PC, EKeys::D, false);
         Record(TEXT("released-walking\t") + PC.GetControlRotation().ToCompactString());
-        const bool bStable = PC.GetControlRotation().Equals(HeadingAfterDrag, .05);
+        // The steering basis and pitch stay fixed while the rendered yaw follows travel.
+        const bool bStable = PC.GetControlRotation().Equals(HeadingAfterDrag, .05)
+            && FMath::IsNearlyEqual(PC.PlayerCameraManager->GetCameraRotation().Pitch,HeadingAfterDrag.Pitch,.05);
         Finish(bStable && IFileManager::Get().FileSize(*Screenshot) > 0,
-            bStable ? TEXT("arrival and mouse controls") : TEXT("Released mouse or walking rotated the view"));
+            bStable ? TEXT("arrival and mouse controls") : TEXT("Free mouse changed pitch or movement steering"));
+    }
+}
+
+// Drive the real movement and E bindings. Observe the final rendered camera,
+// rather than the controller yaw retained as the player's movement reference.
+void UTibetQASubsystem::CameraFollow(APlayerController& PC,ATibetGameMode& Mode)
+{
+    const double Now=FPlatformTime::Seconds();
+    if (Now-Began>35) { Finish(false,TEXT("Camera follow timed out")); return; }
+    if (Now-Began<2.) return;
+    APawn* Pawn=PC.GetPawn();
+    const FVector Pos=Pawn->GetActorLocation(), Goal=Mode.GetObjectiveLocation();
+    const FRotator CameraView=PC.PlayerCameraManager->GetCameraRotation();
+    const auto Error=[&](double Target){return FRotator::NormalizeAxis(CameraView.Yaw-Target);};
+    const auto Next=[&](){++Frames; LastAction=Now;};
+    const auto Detail=[&](const TCHAR* Name){Record(FString::Printf(TEXT("%s\t%.2f\t%.2f\t%.2f"),
+        Name,CameraView.Yaw,Pawn->GetActorRotation().Yaw,PC.GetControlRotation().Yaw));};
+    const double Held=Now-LastAction;
+    switch (Frames)
+    {
+    case 0:
+        HeadingBeforeDrag=CameraView; ArrivalPosition=Pos;
+        SendKey(PC,EKeys::D,true); Next(); break;
+    case 1:
+        // Move the free pointer throughout the strafe. Both the walked path and
+        // the final rendered travel heading must survive these raw mouse events.
+        PC.InputKey(FInputKeyEventArgs::CreateSimulated(EKeys::MouseX,IE_Axis,15,1));
+        if (Held<1.15) break;
+        Detail(TEXT("side-travel"));
+        if (FVector::Dist2D(Pos,ArrivalPosition)<180 ||
+            FMath::Abs(FRotator::NormalizeAxis((Pos-ArrivalPosition).Rotation().Yaw-HeadingBeforeDrag.Yaw-90))>5 ||
+            FMath::Abs(Error(Pawn->GetVelocity().Rotation().Yaw))>8)
+        { Finish(false,TEXT("Held strafe curved or camera failed to follow travel")); return; }
+        SendKey(PC,EKeys::D,false);
+        FScreenshotRequest::RequestScreenshot(Output/TEXT("travel.png"),true,false,false);
+        Next(); break;
+    case 2:
+        if (Held<.5) break;
+        HeadingBeforeDrag=CameraView;
+        SendKey(PC,EKeys::Q,true); Next(); break;
+    case 3:
+        if (Held<.55) break;
+        Detail(TEXT("orbit-left"));
+        if (Error(HeadingBeforeDrag.Yaw)>-35 || Error(HeadingBeforeDrag.Yaw)<-85)
+        { Finish(false,TEXT("Q did not orbit left")); return; }
+        HeadingAfterDrag=CameraView;
+        SendKey(PC,EKeys::Q,false); Next(); break;
+    case 4:
+        if (Held<.08) break;
+        if (FMath::Abs(Error(HeadingBeforeDrag.Yaw))<3 || FMath::Abs(Error(HeadingAfterDrag.Yaw))<2)
+        { Finish(false,TEXT("Q release snapped or failed to ease")); return; }
+        Next(); break;
+    case 5:
+        if (Held<1.25) break;
+        Detail(TEXT("return-left"));
+        if (FMath::Abs(Error(Pawn->GetActorRotation().Yaw))>3)
+        { Finish(false,TEXT("Idle Q release failed to return behind actor")); return; }
+        PC.SetControlRotation((Goal-Pos).GetSafeNormal2D().Rotation());
+        SendKey(PC,EKeys::W,true); Next(); break;
+    case 6:
+        if (FVector::Dist2D(Pos,Goal)>150) break;
+        SendKey(PC,EKeys::W,false); Next(); break;
+    case 7:
+        if (Held<.5) break;
+        HeadingBeforeDrag=CameraView;
+        SendKey(PC,EKeys::E,true); Next(); break;
+    case 8:
+        if (Held<.72) break;
+        Detail(TEXT("orbit-right"));
+        if (Error(HeadingBeforeDrag.Yaw)<35 || Mode.GetStep()!=0)
+        { Finish(false,TEXT("Held E did not orbit right or activated dialogue")); return; }
+        FScreenshotRequest::RequestScreenshot(Output/TEXT("orbit.png"),true,false,false);
+        SendKey(PC,EKeys::E,false); Next(); break;
+    case 9:
+        if (Held<1.5) break;
+        if (FMath::Abs(Error(Pawn->GetActorRotation().Yaw))>3 || Mode.GetStep()!=0)
+        { Finish(false,TEXT("E release failed to return or triggered interaction")); return; }
+        HeadingBeforeDrag=CameraView;
+        SendKey(PC,EKeys::E,true); Next(); break;
+    case 10:
+        SendKey(PC,EKeys::M,true); Next(); break;
+    case 11:
+        if (Held<.20) break;
+        if (!PC.IsPaused() || Mode.GetStep()!=0) { Finish(false,TEXT("Menu did not cancel pending E interaction")); return; }
+        SendKey(PC,EKeys::M,false); SendKey(PC,EKeys::E,false); SendKey(PC,EKeys::Q,true);
+        PC.InputKey(FInputKeyEventArgs::CreateSimulated(EKeys::MouseX,IE_Axis,20,1)); Next(); break;
+    case 12:
+        if (Held<.25) break;
+        if (!CameraView.Equals(HeadingBeforeDrag,.15)) { Finish(false,TEXT("Menu allowed camera input")); return; }
+        SendKey(PC,EKeys::Q,false); SendKey(PC,EKeys::Escape,true); Next(); break;
+    case 13:
+        if (Held<.20) break;
+        if (PC.IsPaused() || Mode.GetStep()!=0) { Finish(false,TEXT("Return from menu leaked interaction")); return; }
+        SendKey(PC,EKeys::Escape,false); SendKey(PC,EKeys::E,true); Next(); break;
+    case 14:
+        SendKey(PC,EKeys::E,false); Next(); break;
+    default:
+        if (Held<.25 || FScreenshotRequest::IsScreenshotRequested()) break;
+        Finish(Mode.GetStep()==1,TEXT("Camera follow and contextual tap")); break;
     }
 }
 

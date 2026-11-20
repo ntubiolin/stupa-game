@@ -80,7 +80,7 @@ def package_record(executable, output):
     path.write_text(json.dumps(record, indent=2))
 
 
-def capture(exe, stage, dest, name, mode, level, options, slot, size=(1440, 900)):
+def capture(exe, stage, dest, name, mode, level, options, slot, size=(1440, 900), max_fps=None):
     output = stage / name
     output.mkdir()
     target = dest / name
@@ -92,6 +92,8 @@ def capture(exe, stage, dest, name, mode, level, options, slot, size=(1440, 900)
     interactive_touch = mode == "Journal" and "-TibetTouch" in options
     rendering = [] if interactive_touch else ["-RenderOffscreen"]
     exec_commands = "r.ScreenPercentage 100,r.DynamicRes.OperationMode 0"
+    if max_fps:
+        exec_commands += f",t.MaxFPS {max_fps}"
     if interactive_touch:
         exec_commands += ",SlateDebugger.Event.Start"
     args = [exe, *map_args, "-windowed", *rendering, "-ForceRes", f"-ResX={size[0]}",
@@ -211,7 +213,7 @@ def compare(web, mac, output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["photos", "arrival", "play", "skills", "learned", "journal", "compare"])
+    parser.add_argument("action", choices=["photos", "arrival", "camera", "play", "skills", "learned", "journal", "compare"])
     parser.add_argument("--exe", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--web", type=Path)
@@ -233,12 +235,22 @@ def main():
         (stage/"user").mkdir()
         # Unique across invocations, including packages that resolve user saves under Library.
         slot = "QA-" + stage.name
-        if args.action == "arrival":
+        if args.action in ("arrival", "camera"):
             capture(exe,stage,output,"arrival","Arrival","stupa",[],slot)
             frame = output / "arrival/arrival.png"
             shot_data(frame)
             if landmark_detail(frame) < MIN_LANDMARK_DETAIL:
                 raise ValueError("Arrival frame lacks the pilgrim and plaza")
+            if args.action == "camera":
+                for fps in (30, 60):
+                    name = f"follow-{fps}hz"
+                    events = capture(exe, stage, output, name, "CameraFollow", "stupa", [],
+                                     slot+"-"+name, max_fps=fps)
+                    samples = {row[0] for row in events}
+                    if not {"side-travel", "orbit-left", "return-left", "orbit-right"} <= samples:
+                        raise ValueError(f"Missing camera angle observations in {name}")
+                    if shot_data(output/name/"travel.png") == shot_data(output/name/"orbit.png"):
+                        raise ValueError(f"Camera views are identical in {name}")
         elif args.action == "journal":
             for name, options, size in [
                 ("desktop-zh", [], (1440, 900)),

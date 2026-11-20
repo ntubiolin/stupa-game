@@ -11,6 +11,7 @@ class TIBETPILGRIMAGE_API ATibetCharacter : public ACharacter
 public:
     ATibetCharacter();
     virtual void SetPlayerDefaults() override;
+    virtual FRotator GetViewRotation() const override;
     virtual void Tick(float DeltaSeconds) override;
     void CancelGameplayInput();
     virtual void SetupPlayerInputComponent(UInputComponent* Input) override;
@@ -24,6 +25,16 @@ private:
     FVector2D Thumb, Drag;
     int32 MoveFinger = -1, LookFinger = -1;
     bool bAwaitingDragMotion = true;
+    double ViewYawOffset = 0.;
+    double InteractPressedAt = -1.;
+    double ManualLookGrace = 0.;
+    bool bReturningFromOrbit = false;
+    bool bFollowingTravel = false;
+    bool bHadMoveInput = false;
+    double LastTravelYaw = 0.;
+    void UpdateFollowView(APlayerController& Player, bool bMoveInput, float Dt);
+    void PressInteract();
+    void ReleaseInteract();
     void UpdateMouseLook(APlayerController& Player);
     void TurnView(APlayerController& Player, FVector2D Degrees);
     void TouchDown(ETouchIndex::Type Index, FVector Position);

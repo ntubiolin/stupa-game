@@ -260,7 +260,7 @@ FString ATibetGameMode::Status(bool bTouchControls) const
         const EInteraction Action=InteractionAt(P->GetActorLocation());
         if (Action!=EInteraction::None)
         {
-            S+=bTouchControls ? Local(TEXT("\nTap Act · "),TEXT("\n點選「互動」・")) : TEXT("\n[E] ");
+            S+=bTouchControls ? Local(TEXT("\nTap Act · "),TEXT("\n點選「互動」・")) : Local(TEXT("\nTap E · "),TEXT("\n輕按 E・"));
             S+=ActionLabel(Action);
         }
     }
