@@ -33,7 +33,7 @@ def add_lighting(unreal, actors):
     origin = unreal.Vector()
     actor(actors, unreal.SkyAtmosphere, "Toji atmosphere", origin)
     sun = actor(actors, unreal.DirectionalLight, "Toji solar key", origin,
-                unreal.Rotator(pitch=-42, yaw=35), "Toji.Sun")
+                unreal.Rotator(pitch=-41.56, yaw=-54.07), "Toji.Sun")
     sunlight = sun.get_component_by_class(unreal.DirectionalLightComponent)
     set_settings(sunlight, mobility=unreal.ComponentMobility.MOVABLE, intensity=35000,
                  use_temperature=True, temperature=5700, atmosphere_sun_light=True,

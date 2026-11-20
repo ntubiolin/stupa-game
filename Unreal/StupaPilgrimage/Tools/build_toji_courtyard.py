@@ -109,7 +109,7 @@ def rectangle(mesh, x0, y0, x1, y1, z, uv_scale):
     mesh.add(points, ((0, 1, 2, 3),), [(x / uv_scale, y / uv_scale) for x, y, _ in points])
 
 
-def stone(mesh, rng, x, y, width, length, bottom, top, uv_scale=1):
+def stone(mesh, rng, x, y, width, length, bottom, top, uv_scale=1, style=0):
     """Straight split edges with irregular clipped corners and rounded shoulders."""
     w, l = width / 2, length / 2
     a, b, c, d = [rng.uniform(0.06, 0.19) for _ in range(4)]
@@ -126,17 +126,17 @@ def stone(mesh, rng, x, y, width, length, bottom, top, uv_scale=1):
              for j in (0, 8) for i in range(8)]
     faces.append(tuple(range(16, 24)))
     mesh.add(points, faces, [((u + 0.48 * z) / uv_scale, (v + 0.73 * z) / uv_scale)
-                            for u, v, z in points])
+                            for u, v, z in points], style)
 
 
-def tube(mesh, joints, radii, offset):
-    sides = 8
+def tube(mesh, joints, radii, offset, sides=8):
     rings = []
+    axis = Vector((1, 0, 0))
     for i, (joint, radius) in enumerate(zip(joints, radii)):
         tangent = (joints[min(i + 1, len(joints) - 1)] - joints[max(0, i - 1)]).normalized()
-        axis = Vector((0, 0, 1)).cross(tangent)
+        axis = axis - tangent * axis.dot(tangent)
         if axis.length < 0.01:
-            axis = Vector((1, 0, 0)).cross(tangent)
+            axis = Vector((0, 1, 0)).cross(tangent)
         axis.normalize()
         other = tangent.cross(axis)
         ring = []
@@ -153,47 +153,139 @@ def tube(mesh, joints, radii, offset):
               for joint in joints for k in range(stride)], smooth=True)
 
 
-def leaf(mesh, rng, location, size, style):
-    angle = rng.uniform(0, math.tau)
-    axis = Vector((math.cos(angle), math.sin(angle), rng.uniform(-1, 1))).normalized()
-    tangent = Vector((-math.sin(angle), math.cos(angle), rng.uniform(-0.6, 0.6))) * size
-    direction = axis * size
-    points = [location - direction, location + direction * 0.12 + tangent * 0.52,
-              location + direction, location + direction * 0.12 - tangent * 0.52,
-              location + Vector((0, 0, 0.20 * size))]
-    mesh.add(points, [(4, (j + 1) % 4, j) for j in range(4)],
-             [(0, 0.5), (0.55, 1), (1, 0.5), (0.55, 0), (0.50, 0.5)], style, True)
+def masked_material(name, rgb, alpha, fill=0):
+    mat = material(name, (0.5, 0.5, 0.5), 0.88)
+    mat.use_backface_culling = False
+    image = bpy.data.images.new(name + "_Mask", alpha.shape[1], alpha.shape[0], alpha=True)
+    image.pixels.foreach_set(np.dstack((rgb, alpha)).astype(np.float32).ravel())
+    image.pack()
+    nodes = mat.node_tree.nodes
+    links = mat.node_tree.links
+    texture = nodes.new("ShaderNodeTexImage")
+    texture.image = image
+    texture.extension = "EXTEND"
+    cutoff = nodes.new("ShaderNodeMath")
+    cutoff.operation = "GREATER_THAN"
+    cutoff.inputs[1].default_value = 0.45
+    surface = nodes["Principled BSDF"].inputs
+    links.new(texture.outputs["Color"], surface["Base Color"])
+    if fill:
+        # Equalize lighting between distant crossed cards. A restrained
+        # luminance contribution complements the normal-based direct light.
+        links.new(texture.outputs["Color"], surface["Emission Color"])
+        surface["Emission Strength"].default_value = fill
+    links.new(texture.outputs["Alpha"], cutoff.inputs[0])
+    links.new(cutoff.outputs[0], nodes["Principled BSDF"].inputs["Alpha"])
+    return mat
 
 
-def tree(rng, wood, leaves, x, y, h, is_cherry, palette_first):
+def blossom_atlas():
+    """Paint four original corymbs, each with five notched petals per flower."""
+    rng = random.Random(SEED + 1)
+    n = 256
+    x, y = np.meshgrid(np.linspace(-1, 1, n), np.linspace(-1, 1, n))
+    rgba = np.zeros((2 * n, 2 * n, 4))
+    for tile in range(4):
+        row, col = divmod(tile, 2)
+        layer = rgba[row*n:(row+1)*n, col*n:(col+1)*n]
+        layer[..., :3] = (0.78, 0.43, 0.49)
+        rng.seed(SEED + 30 + tile)
+        for i in range(9):
+            angle = i * 2.39996 + rng.uniform(-0.16, 0.16)
+            r = (i / 8) ** 0.55 * rng.uniform(0.53, 0.70)
+            cx, cy = math.cos(angle) * r, math.sin(angle) * r
+            size = rng.uniform(0.16, 0.24)
+            if i:
+                along = (cx*x + cy*y) / r
+                across = (cy*x - cx*y) / r
+                pedicel = (abs(across - 0.015*np.sin(along*9)) < 0.017 - along*0.013)
+                layer[pedicel & (along >= -0.025) & (along < r)] = (0.19, 0.063, 0.042, 1)
+            for petal in range(5):
+                theta = petal * math.tau / 5 + angle
+                u = ((x - cx) * math.cos(theta) + (y - cy) * math.sin(theta)) / size
+                v = ((y - cy) * math.cos(theta) - (x - cx) * math.sin(theta)) / size
+                contour = ((u - 0.56) / 0.49)**2 + (v / 0.42)**2
+                notch = (u > 1 - 0.10 * np.exp(-30 * v*v))
+                shape = (contour < 1) & ~notch
+                vein = np.exp(-abs(v + 0.10 * np.sin(12*u)) * 55)
+                glow = np.clip(u * 0.95 + 0.12 - vein * 0.11, 0, 1)
+                layer[shape, :3] = np.stack((0.53 + glow*0.42, 0.19 + glow*0.67, 0.29 + glow*0.57), -1)[shape]
+                layer[shape, 3] = 1
+            center = (x - cx)**2 + (y - cy)**2 < (size * 0.18)**2
+            layer[center] = (0.65, 0.32, 0.16, 1)
+            for j in range(11):
+                a = j * 2.39996
+                d = size * rng.uniform(0.07, 0.23)
+                pollen = (x - cx - math.cos(a)*d)**2 + (y - cy - math.sin(a)*d)**2 < (size * 0.027)**2
+                layer[pollen] = (0.80, 0.61, 0.25, 1)
+    return masked_material("Fuji_zakura_Petals_and_Pedicels", rgba[..., :3], rgba[..., 3])
+
+
+def foliage_card(mesh, rng, center, radius, style, tile=None):
+    phi = rng.uniform(0, math.tau)
+    along = Vector((math.cos(phi), math.sin(phi), rng.uniform(-0.65, 0.65))).normalized()
+    across = Vector((-math.sin(phi), math.cos(phi), rng.uniform(-0.85, 0.85))).normalized()
+    if tile is not None:
+        row, col = divmod(tile, 2)
+        points = [center + radius*(u*along + v*across) for u,v in ((-1,-1), (1,-1), (1,1), (-1,1))]
+        points.append(center + radius * Vector((0, 0, 0.12)))
+        uvs = [((col+u)/2, (row+v)/2) for u,v in ((0.01,0.01),(0.99,0.01),(0.99,0.99),(0.01,0.99),(0.50,0.50))]
+        mesh.add(points, [(4, j, (j+1)%4) for j in range(4)], uvs, style, True)
+    else:
+        points = [center + radius*(u*along + v*across) for u,v in
+                  ((0,0),(.26,-.29),(.54,-.32),(1,0),(.61,.25),(.26,.30))]
+        points.append(center + radius*(.53*along + Vector((0, 0, 0.13))))
+        mesh.add(points, [(6,j,(j+1)%6) for j in range(6)], [(0,0)]*7, style, True)
+
+
+def tree(rng, wood, leaves, x, y, h, is_cherry, hero=False):
     root = Vector((x, y, -0.05))
     crown = root + Vector((rng.uniform(-0.6, 0.6), rng.uniform(-0.5, 0.5), h))
-    trunk = [root, root.lerp(crown, 0.26) + Vector((0.10, -0.12, 0)),
-             root.lerp(crown, 0.56) + Vector((-0.16, 0.07, 0)), crown]
-    tube(wood, trunk, [h * 0.055, h * 0.037, h * 0.024, 0.022], rng.random())
+    trunk = [root, root.lerp(crown, 0.12) + Vector((0.16, -0.09, 0)),
+             root.lerp(crown, 0.30) + Vector((0.24, 0.04, 0)),
+             root.lerp(crown, 0.46) + Vector((-0.02, 0.09, 0)),
+             root.lerp(crown, 0.61) + Vector((-0.17, 0.20, 0)),
+             root.lerp(crown, 0.80) + Vector((0.10, 0.02, 0)), crown]
+    tube(wood, trunk, [h*0.060, h*0.041, h*0.035, h*0.031, h*0.022, h*0.014, 0.013], rng.random())
+    for i in range(5):
+        angle = i * math.tau / 5 + rng.uniform(-0.21, 0.21)
+        root_tip = root + Vector((math.cos(angle), math.sin(angle), -0.15)) * rng.uniform(0.65, 1.13)
+        tube(wood, [root+Vector((0,0,0.31)), root.lerp(root_tip,0.66), root_tip], [0.125,0.07,0.018], rng.random())
     twist = rng.uniform(0, math.tau)
-    for i in range(8):
+    branches = 8 if hero else 7
+    sprays = 7 if hero else 5
+    twigs = 7 if hero else 4
+    for i in range(branches):
         angle = twist + i * 2.39996
         outward = Vector((math.cos(angle), math.sin(angle), 0))
         sideways = Vector((-outward.y, outward.x, 0))
-        start = trunk[1].lerp(trunk[2], rng.uniform(0.5, 1.5) + i * 0.07)
+        start = trunk[2+i//2].lerp(trunk[3+i//2], rng.uniform(0.12, 0.88))
         end = crown + outward * h * rng.uniform(0.25, 0.48) + Vector((0, 0, h * rng.uniform(-0.23, 0.05)))
-        middle = start.lerp(end, 0.56) + sideways * rng.uniform(-0.35, 0.35)
-        tube(wood, [start, middle, end], [h * 0.019, h * 0.010, 0.011], rng.random())
-        for j in range(7):
-            origin = middle.lerp(end, 0.08 + j / 8)
-            radial = sideways * rng.uniform(-1.1, 1.1) + outward * rng.uniform(0.3, 0.9)
+        shoulder = start.lerp(end, 0.24) - outward * 0.22 + Vector((0, 0, 0.17))
+        middle = start.lerp(end, 0.58) + sideways * rng.uniform(-0.46, 0.46)
+        tube(wood, [start, shoulder, middle, end], [h * 0.021, h * 0.015, h * 0.009, 0.011], rng.random())
+        for j in range(sprays):
+            origin = middle.lerp(end, 0.08 + j / (sprays + 1))
+            fan = (-1 if j % 2 else 1) * rng.uniform(0.69, 1.50)
+            radial = sideways * fan + outward * rng.uniform(0.20, 0.75)
             # Weeping cherries curve down at the tips. Maples keep a flatter
             # tier of sideward sprays.
             bend = origin + radial * 0.74 + Vector((0, 0, rng.uniform(0.16, 0.48)))
-            tip = bend + radial * 0.53 + Vector((0, 0, rng.uniform(-2.2, -0.55) if is_cherry else rng.uniform(-0.25, 0.2)))
+            tip = bend + radial * 0.53 + Vector((0, 0, rng.uniform(-2.35, -0.72) if is_cherry else rng.uniform(-0.25, 0.2)))
             tube(wood, [origin, bend, tip], [0.029, 0.015, 0.003], rng.random())
-            for _ in range(28):
-                center = bend.lerp(tip, rng.random())
-                center += Vector(tuple(rng.gauss(0, sigma) for sigma in (0.27, 0.27, 0.19)))
-                style = palette_first + rng.randrange(3)
-                size = rng.uniform(0.09, 0.24) if is_cherry else rng.uniform(0.10, 0.22)
-                leaf(leaves, rng, center, size, style)
+            for k in range(twigs):
+                origin = bend.lerp(tip, (k + 1) / (twigs + 1))
+                reach = rng.uniform(0.19, 0.46)
+                side = -1 if k % 2 else 1
+                twig = origin + reach*(side*sideways + 0.44*outward) + Vector((0,0,-reach*0.84))
+                tube(wood, [origin, origin.lerp(twig, 0.64), twig], [0.008, 0.004, 0.0017], rng.random(), sides=4)
+                clusters = 3 if is_cherry else 4
+                for m in range(clusters):
+                    center = origin.lerp(twig, 0.56 + m * (0.40 / (clusters - 1)))
+                    if is_cherry:
+                        foliage_card(leaves, rng, center, rng.uniform(0.16, 0.24), 0, rng.randrange(4))
+                    else:
+                        foliage_card(leaves, rng, center, rng.uniform(0.15, 0.27), 1 + rng.randrange(3))
 
 
 def build():
@@ -210,7 +302,13 @@ def build():
     rectangle(ground, -240, -240, 240, 240, -0.034, 2)
     ground.create([moss])
     court = Mesh("Toji_Gravel_Court")
-    rectangle(court, -21, -45, 21, 42, -0.022, 1.1)
+    for i in range(116):
+        south, north = -45 + i*0.75, -45 + (i+1)*0.75
+        left, right = court_edges(south)
+        next_left, next_right = court_edges(north)
+        points = [(left,south,-0.022),(right,south,-0.022),
+                  (next_right,north,-0.022),(next_left,north,-0.022)]
+        court.add(points, [(0,1,2,3)], [(x/1.1,y/1.1) for x,y,_ in points])
     rectangle(court, -4.22, -83, 4.22, -45, -0.022, 1.1)
     rectangle(court, 21, -28.8, 38.4, -23.2, -0.022, 1.1)
     court.create([gravel])
@@ -231,8 +329,8 @@ def build():
                   1.334, 1.353, -0.085, rng.uniform(0.002, 0.020))
     for i in range(100):
         side = rng.choice((-1, 1))
-        x = rng.uniform(20.94, 21.03) * side
         y = rng.uniform(-42, 40)
+        x = court_edges(y)[side == 1] + rng.uniform(-0.13, 0.11)
         stone(paving, rng, x, y, rng.uniform(0.10, 0.24), rng.uniform(0.14, 0.47), -0.06,
               rng.uniform(0.014, 0.051), 0.8)
     paving.create([granite])
@@ -243,74 +341,149 @@ def build():
         (-25, 4, 6.8, False), (-22, -44, 6.3, False), (18, 56, 6.6, False),
         (46, 28, 7.0, True), (-36, -12, 9, False), (38, -40, 8, False),
     )
-    colors = ((0.66, 0.38, 0.41), (0.79, 0.53, 0.55), (0.48, 0.24, 0.26),
-              (0.12, 0.14, 0.04), (0.19, 0.22, 0.065), (0.24, 0.26, 0.075))
-    leaf_materials = [material(f"Toji_{'Cherry' if i < 3 else 'Maple'}_{i % 3}", rgb, 0.84)
-                      for i, rgb in enumerate(colors)]
+    colors = ((0.12, 0.14, 0.04), (0.19, 0.22, 0.065), (0.24, 0.26, 0.075))
+    leaf_materials = [blossom_atlas()] + [material(f"Toji_Maple_{i}", rgb, 0.84)
+                                          for i, rgb in enumerate(colors)]
     for mat in leaf_materials:
         mat.use_backface_culling = False
     for group_start in range(0, len(trees), 3):
         wood = Mesh(f"Toji_Tree_Branches_{group_start // 3}")
         sprigs = Mesh(f"Toji_Tree_Foliage_{group_start // 3}")
         for x, south, h, is_cherry in trees[group_start:group_start + 3]:
-            tree(rng, wood, sprigs, x, -south, h, is_cherry, 0 if is_cherry else 3)
+            tree(rng, wood, sprigs, x, -south, h, is_cherry, hero=(x, south) == (24, 6))
         wood.create([bark])
         sprigs.create(leaf_materials)
 
 
-    ridges = Mesh("Toji_Grove_Understory")
-    for i in range(90):
-        azimuth = i * math.tau / 90
-        distance = rng.uniform(89, 123)
-        foliage_mound(ridges, rng, math.cos(azimuth) * distance, math.sin(azimuth) * distance,
-                      -0.24, rng.uniform(6, 12), rng.uniform(1.9, 4.2), 0)
-    ridges.create([moss])
-    backdrop = Mesh("Toji_Distant_Kyoto_Grove")
-    # Compound lumpy silhouettes in two depth bands beyond the playable court.
-    # Angular and vertical jitter break straight lines across the horizon.
-    for ring in range(2):
-        for i in range(76):
-            angle = i * math.tau / 76 + rng.uniform(-0.044, 0.044)
-            distance = rng.uniform(77, 92) + ring * 39
-            # Keep the approach open around the gate axis.
-            if math.sin(angle) < -0.93 and abs(math.cos(angle)) < 0.13:
+    add_verge(rng, moss, gravel)
+    add_wooded_ridge(rng, moss)
+
+
+def court_edges(y):
+    return (-21 + 0.58*math.sin(y*0.18) + 0.21*math.sin(y*0.97),
+             21 + 0.52*math.sin(y*0.20) + 0.22*math.cos(y*0.91))
+
+
+def add_verge(rng, moss, gravel):
+    verge = Mesh("Toji_Field_Stone_and_Moss_Edges")
+    soil = texture_material("Toji_Damp_Root_Soil", ((0.055,0.032,0.013), (0.18,0.115,0.059)),
+                            (7,9), 2.1, 0.96, 9, resolution=256)
+    grass = Mesh("Toji_Verge_Sedge_and_Moss")
+    colors = ((0.08,0.12,0.024),(0.14,0.17,0.042),(0.19,0.19,0.060))
+    grass_materials = [material(f"Toji_Sedge_{i}", c, 0.93) for i,c in enumerate(colors)]
+    for m in grass_materials:
+        m.use_backface_culling = False
+    for _ in range(1100):
+        side = rng.choice((-1,1))
+        y = rng.uniform(-45,42)
+        x = court_edges(y)[side == 1] + side * rng.gauss(0.18,1.13)
+        radius = rng.uniform(0.045,0.42)
+        # Keep dressed path and model access route bare.
+        if x > 0 and -29.0 < y < -23.0:
+            continue
+        if rng.random() < 0.55:
+            # Sparse embedded stones and shallower dark damp grit between them.
+            stone(verge, rng, x, y, radius * 1.36, radius * 1.21, -0.044,
+                  rng.uniform(-0.019, -0.008), 0.66, rng.randrange(3))
+        else:
+            for _ in range(rng.randint(6,12)):
+                angle = rng.uniform(0, math.tau)
+                lean = rng.uniform(0.023,0.12)
+                wide = rng.uniform(0.006,0.022)
+                height = rng.uniform(0.032,0.17)
+                px, py = x+rng.gauss(0,radius*.26), y+rng.gauss(0,radius*.26)
+                bend = (px+math.cos(angle)*lean,py+math.sin(angle)*lean,height)
+                grass.add([(px-math.sin(angle)*wide,py+math.cos(angle)*wide,-0.018),
+                           (px+math.sin(angle)*wide,py-math.cos(angle)*wide,-0.018),
+                           bend],[(0,1,2)],[(0,0),(1,0),(.5,1)],rng.randrange(3))
+    # Break larger stretches of lawn with irregular groups, especially where
+    # the roots meet the ground on the visible approach.
+    for x, y in [(24, -6), (25.5, 8), (-22, -24), (23, -19), (25, -18)]:
+        for _ in range(38):
+            px, py = x + rng.gauss(0, 0.88), y + rng.gauss(0, 1.08)
+            radius = rng.uniform(0.03, 0.18)
+            stone(verge, rng, px, py, radius * 1.7, radius, -0.053,
+                  rng.uniform(-0.022, -0.009), 0.66, rng.choice((0, 0, 1)))
+    verge.create([moss,soil,gravel])
+    grass.create(grass_materials)
+
+
+def add_wooded_ridge(rng, moss):
+    ridge = Mesh("Toji_Rolling_Wooded_Ridge")
+    forest = Mesh("Toji_Distant_Cryptomeria")
+    count = 160
+    bands = (83, 98, 111, 128, 147, 166, 181)
+    profile = (0, 1.7, 5.1, 12.2, 8.4, 2.0, 0)
+    points = []
+    for r, h in zip(bands,profile):
+        for i in range(count):
+            theta = i * math.tau / count
+            slope = .86 + .26*math.sin(theta*5) + .12*math.sin(theta*11+.7)
+            points.append((r*math.cos(theta),r*math.sin(theta),h*slope-.035))
+    faces = [(row*count+i,(row+1)*count+i,(row+1)*count+(i+1)%count,
+              row*count+(i+1)%count) for row in range(len(bands)-1) for i in range(count)]
+    ridge.add(points,faces,[(x/4,y/4) for x,y,_ in points],smooth=True)
+    ridge.create([moss])
+    # Contiguous, stratified canopies with tapering non-convex tiers.
+    for row, trees_in_band in enumerate((151, 175, 168, 164)):
+        for i in range(trees_in_band):
+            theta = (i + rng.uniform(-0.72, 0.72)) * math.tau / trees_in_band
+            radius = bands[row+1]+rng.uniform(-3.5,3.5)
+            if math.sin(theta) < -0.96 and abs(math.cos(theta)) < 0.14:
                 continue
-            x = math.cos(angle) * distance
-            y = math.sin(angle) * distance
-            height = rng.uniform(4.3, 10) + 2 * ring
-            radius = rng.uniform(1.6, 3.2)
-            foliage_mound(backdrop, rng, x, y, height * 0.19, radius * 1.36, height * 0.33,
-                          ring * 3 + rng.randrange(3))
-            for _ in range(rng.randint(5, 8)):
-                foliage_mound(backdrop, rng, x + rng.uniform(-radius, radius),
-                              y + rng.uniform(-radius, radius), height * rng.uniform(0.35, 0.80),
-                              radius * rng.uniform(0.35, 0.89), height * rng.uniform(0.24, 0.37),
-                              ring * 3 + rng.randrange(3))
-    distant_colors = ((0.036, 0.057, 0.021), (0.047, 0.068, 0.029), (0.057, 0.081, 0.032),
-                      (0.041, 0.065, 0.038), (0.053, 0.072, 0.043), (0.048, 0.078, 0.053))
-    backdrop.create([texture_material(f"Toji_Grove_{i}",
-                                      (tuple(v * 0.55 for v in c), tuple(v * 1.30 for v in c)),
-                                      (8, 9), 1.1, 0.95, i + 12, resolution=128)
-                     for i, c in enumerate(distant_colors)])
+            height = rng.uniform(4.8,9.4)
+            base = (radius*math.cos(theta),radius*math.sin(theta),
+                    profile[row+1]*(.86+.26*math.sin(theta*5)+.12*math.sin(theta*11+.7))-.4)
+            distant_cedar(forest, rng, base, height, rng.uniform(2.7, 4.1), rng.randrange(4))
+    forest.create([cedar_atlas()])
 
 
-def foliage_mound(mesh, rng, x, y, z, radius, height, style):
-    sides = 9
-    points = [(x, y, z - height)]
-    for row, latitude in enumerate((-0.9, -0.48, 0, 0.53, 0.94)):
-        for i in range(sides):
-            angle = (i + 0.4 * (row % 2)) * math.tau / sides
-            r = math.cos(latitude) * radius * rng.uniform(0.81, 1.17)
-            points.append((x + r * math.cos(angle), y + r * math.sin(angle),
-                           z + height * math.sin(latitude) + rng.uniform(-0.18, 0.18) * height))
-    points.append((x + rng.uniform(-0.32, 0.32) * radius, y, z + height))
-    faces = [(0, 1 + (i + 1) % sides, 1 + i) for i in range(sides)]
-    faces.extend((1 + row * sides + i, 1 + row * sides + (i + 1) % sides,
-                  1 + (row + 1) * sides + (i + 1) % sides, 1 + (row + 1) * sides + i)
-                 for row in range(4) for i in range(sides))
-    faces.extend((1 + 4 * sides + i, 1 + 4 * sides + (i + 1) % sides, len(points) - 1)
-                 for i in range(sides))
-    mesh.add(points, faces, [(u / 3, v / 3) for u, v, _ in points], style, True)
+def cedar_atlas():
+    """Needle sprays painted in fine irregular shelves for the wooded ridge."""
+    rng = random.Random(SEED + 9)
+    n = 256
+    rgba = np.zeros((2*n, 2*n, 4))
+    for tile in range(4):
+        row, col = divmod(tile, 2)
+        layer = rgba[row*n:(row+1)*n, col*n:(col+1)*n]
+        layer[..., :3] = (0.052, 0.090, 0.043)
+        trunk = rng.randint(123, 132)
+        layer[5:230, trunk-1:trunk+2] = (0.048, 0.034, 0.019, 1)
+        for tier in range(32):
+            stem = 26 + tier * 6 + rng.randint(-3, 3)
+            width = (1 - (stem - 24) / 228)**0.72 * rng.uniform(57, 107)
+            for side in (-1, 1):
+                span = width * rng.uniform(0.73, 1.05)
+                tint = rng.uniform(0.62, 1.36)
+                for twig in range(29):
+                    progress = twig / 29
+                    x = trunk + side * span * progress + rng.uniform(-4, 4)
+                    y = stem + 11 * progress - 9 * progress**2 + rng.uniform(-4, 4)
+                    for _ in range(8):
+                        px = int(x + rng.gauss(0, 2.1))
+                        py = int(y + rng.gauss(0, 2.8))
+                        if 4 <= px < n-4 and 4 <= py < n-4:
+                            color = tint * rng.uniform(0.76, 1.24)
+                            layer[py-1:py+2, px:px+2] = (0.042*color, 0.091*color, 0.044*color, 1)
+        for y in range(215, 248):
+            width = max(1, (250-y) // 4)
+            for x in range(trunk-width, trunk+width+1):
+                if rng.random() > 0.17:
+                    layer[y, x] = (0.053, 0.104, 0.049, 1)
+    return masked_material("Toji_Cryptomeria_Needle_Shelves", rgba[..., :3], rgba[..., 3], fill=0.20)
+
+
+def distant_cedar(mesh, rng, base, height, spread, tile):
+    row, col = divmod(tile, 2)
+    root = Vector(base)
+    up = Vector((rng.uniform(-0.58, 0.58), rng.uniform(-0.58, 0.58), height))
+    azimuth = rng.uniform(0, math.tau)
+    for i in range(3):
+        angle = azimuth + i * math.pi / 3
+        across = Vector((math.cos(angle), math.sin(angle), 0)) * spread
+        points = (root-across, root+across, root+up+across, root+up-across)
+        uv = [((col+u)/2, (row+v)/2) for u,v in ((0.01,0.01),(0.99,0.01),(0.99,0.99),(0.01,0.99))]
+        mesh.add(points, [(0,1,2,3)], uv)
 
 
 def main():
