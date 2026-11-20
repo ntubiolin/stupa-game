@@ -415,6 +415,37 @@ def grove(s):
 def cave(s, floor):
     style = ("quartz", "ice", "amber")[floor - 1]
     wall = ("shale", "shale", "stone")[floor - 1]
+    # A continuous inward-facing vault closes the room behind the arched ribs.
+    # The crown undulates with the strata and the side edges descend into the crags.
+    sections = []
+    for j in range(27):
+        north = -35 + j * 2.8
+        curve = []
+        for k in range(17):
+            t = k * math.pi / 16
+            east = 13.5 * math.cos(t)
+            height = 0.2 + 13.4 * math.sin(t) ** 0.68
+            height += math.sin(t) * (1.5 * noise(k, j) - 0.85 + 0.65 * math.sin(north * 0.22))
+            curve.append((east, north, height))
+        sections.append(curve)
+    for a, b in zip(sections, sections[1:]):
+        for k in range(16):
+            s.face(wall, [a[k], a[k + 1], b[k + 1], b[k]])
+    s.face(wall, sections[0][::-1])
+    s.face(wall, sections[-1])
+    for i in range(30):
+        east = (-1 if i % 2 else 1) * (4.0 + 3 * noise(i, floor))
+        north = -26 + i * 2.0
+        top = 13.9 - abs(east) * 0.19 + 0.4 * math.sin(north * 0.22)
+        length = 1.2 + noise(floor, i) * 2.4
+        s.rings(
+            style if floor == 2 and i % 3 == 0 else wall,
+            east,
+            north,
+            top - length,
+            [(0, 0.024), (0.7 * length, 0.38), (length, 0.62)],
+            7,
+        )
     for side in (-1, 1):
         for j in range(15):
             x = side * (11 + 2 * noise(j, floor))

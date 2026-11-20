@@ -1,6 +1,8 @@
 """Editor entry point for the eleven cooked Tibet pilgrimage levels."""
 
+import json
 from pathlib import Path
+import struct
 import sys
 
 import unreal
@@ -41,6 +43,22 @@ def lighting(levels, actors, stage):
     light.set_editor_property("use_temperature", True)
     light.set_editor_property("temperature", 6900 if stage == "terma2" else 5150)
     light.set_editor_property("atmosphere_sun_light", True)
+    if cave:
+        # An indirect fill models reflected mineral light in the enclosed walkable vault.
+        # A shadow-free directional fill works on the forward mobile renderer as well.
+        glow = place(
+            levels,
+            actors,
+            unreal.DirectionalLight,
+            "Reflected mineral light",
+            rot=unreal.Rotator(pitch=-27, yaw=143),
+        )
+        bounced = glow.get_component_by_class(unreal.DirectionalLightComponent)
+        bounced.set_editor_property("mobility", unreal.ComponentMobility.MOVABLE)
+        bounced.set_editor_property("intensity", 165)
+        bounced.set_editor_property("cast_shadows", False)
+        bounced.set_editor_property("use_temperature", True)
+        bounced.set_editor_property("temperature", 3900 if stage == "terma3" else 8400)
     sky = place(levels, actors, unreal.SkyLight, "Skylight")
     fill = sky.get_component_by_class(unreal.SkyLightComponent)
     fill.set_editor_property("mobility", unreal.ComponentMobility.MOVABLE)
@@ -86,6 +104,14 @@ def populate(levels, actors, stage, source, surfaces):
     # Interchange glTF east initially lies along Unreal +X. Rotate east into +Y, north into +X.
     placement = unreal.Transform(unreal.Vector(), unreal.Rotator(yaw=90), unreal.Vector(1, 1, 1))
     slot_hits = set()
+    mesh_editor = unreal.get_editor_subsystem(unreal.StaticMeshEditorSubsystem)
+    with source.open("rb") as glb:
+        header = glb.read(20)
+        manifest = json.loads(glb.read(struct.unpack_from("<I", header, 12)[0]))
+    expected_triangles = {
+        mesh["name"]: sum(manifest["accessors"][p["indices"]]["count"] // 3 for p in mesh["primitives"])
+        for mesh in manifest["meshes"]
+    }
     count = 0
     for a in loaded:
         parent = a.get_attach_parent_actor()
@@ -98,6 +124,20 @@ def populate(levels, actors, stage, source, surfaces):
             if not mesh:
                 continue
             count += 1
+            # Interchange in UE 5.8 enables Nanite even in a non-Nanite project. Its
+            # default fallback discarded most flags, window reveals and spire rings.
+            settings = mesh_editor.get_nanite_settings(mesh)
+            settings.set_editor_property("enabled", False)
+            settings.set_editor_property("fallback_relative_error", 0.0)
+            settings.set_editor_property("fallback_percent_triangles", 1.0)
+            mesh_editor.set_nanite_settings(mesh, settings, True)
+            rendered = mesh.get_num_triangles(0)
+            authored = expected_triangles[mesh.get_name()]
+            if rendered < authored * 0.95:
+                raise RuntimeError(
+                    f"{stage}/{mesh.get_name()} retained {rendered}/{authored} triangles"
+                )
+            unreal.log(f"TIBET_MESH_LOD0 {stage}/{mesh.get_name()} {rendered}/{authored}")
             if "vegetation" in mesh.get_name().lower():
                 part.set_collision_profile_name("NoCollision")
             else:
