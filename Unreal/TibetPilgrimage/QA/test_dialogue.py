@@ -20,8 +20,11 @@ def speeches():
         assert len(fields) == 7 and all(fields), row
         _, _, en, zh, person, en_name, zh_name = fields
         assert '[[' not in en + zh and en_name != zh_name and en != zh and person, row
+        assert not re.search(r'[\u0f00-\u0fff]', en + zh), row
         rows.append((en, zh))
     assert len(rows) == 22
+    assert len({en for en, _ in rows}) == len(rows), 'Duplicate English speech in TibetRoute.inl'
+    assert len({zh for _, zh in rows}) == len(rows), 'Duplicate Chinese speech in TibetRoute.inl'
     return rows
 
 

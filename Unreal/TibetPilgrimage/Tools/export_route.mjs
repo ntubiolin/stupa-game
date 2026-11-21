@@ -4,17 +4,68 @@ import {i18n} from '../../../src/i18n.js';
 const custom = (kind, en, zh, count = 1) => ({kind, en, zh, count});
 const maps = new Map();
 const dialogue = {
-  'prologue': ['prologue.vowIntro.1','prologue.vowLegend.1','prologue.northIntro.1','prologue.northReport.1'],
-  'ch1': ['ch1.elder.droughtIntro.1','ch1.elder.droughtReport.1','ch1.vision.lampsTalk.1','ch1.messenger.start.1','ch1.vision.scrollsDeliver.1','ch1.vision.kilayaComplete.1'],
-  'ch2': ['ch2.envoy.n1','ch2.vision.n1'],
-  'ch3': ['ch3.keeper.valleyIntro.1','ch3.herder.yaksReport.1','ch3.vision.shampoComplete.1'],
-  'ch4': ['ch4.shanta.foundation.1','ch4.king.foundation.1','ch4.shanta.samyeComplete.1','ch4.shanta.samyeComplete.1'],
-  'ch5': ['ch5.tsogyal.intro.1','ch5.tsogyal.report.1','ch5.oldLama.epilogue.1'],
+  'prologue': [
+    ['prologue.vowIntro.1', 'prologue.vowIntro.2'],
+    ['prologue.vowLegend.1', 'prologue.vowLegend.2', 'prologue.vowLegend.3', 'prologue.vowLegend.4', 'prologue.vowLegend.5'],
+    ['prologue.northIntro.1', 'prologue.northIntro.2'],
+    ['prologue.northReport.1', 'prologue.northReport.2', 'prologue.northReport.3'],
+  ],
+  'ch1': [
+    ['ch1.elder.droughtIntro.1', 'ch1.elder.droughtIntro.2'],
+    ['ch1.elder.droughtReport.1', 'ch1.elder.droughtReport.2'],
+    ['ch1.vision.lampsTalk.1', 'ch1.vision.lampsTalk.2', 'ch1.vision.lampsTalk.3'],
+    ['ch1.messenger.start.1', 'ch1.messenger.start.2'],
+    ['ch1.vision.scrollsDeliver.1', 'ch1.vision.scrollsDeliver.2', 'ch1.vision.scrollsDeliver.3'],
+    ['ch1.vision.kilayaComplete.1', 'ch1.vision.kilayaComplete.2', 'ch1.vision.kilayaComplete.3'],
+  ],
+  'ch2': [
+    ['ch2.envoy.n1', 'ch2.envoy.n2', 'ch2.envoy.n3', 'ch2.envoy.n4'],
+    ['ch2.vision.n1', 'ch2.vision.n2', 'ch2.vision.n3'],
+  ],
+  'ch3': [
+    ['ch3.keeper.valleyIntro.1', 'ch3.keeper.valleyIntro.2', 'ch3.keeper.valleyIntro.3'],
+    ['ch3.herder.yaksReport.1', 'ch3.herder.yaksReport.2'],
+    ['ch3.vision.shampoComplete.1', 'ch3.vision.shampoComplete.2', 'ch3.vision.shampoComplete.3'],
+  ],
+  'ch4': [
+    ['ch4.shanta.foundation.1', 'ch4.shanta.foundation.2', 'ch4.shanta.foundation.3'],
+    ['ch4.king.foundation.1', 'ch4.king.foundation.2'],
+    ['ch4.vision.samye', 'ch4.shanta.samyeComplete.1'],
+    ['ch4.shanta.samyeComplete.2'],
+  ],
+  'ch5': [
+    ['ch5.tsogyal.intro.1', 'ch5.tsogyal.intro.2', 'ch5.tsogyal.intro.3'],
+    ['ch5.tsogyal.report.1', 'ch5.tsogyal.report.2', 'ch5.tsogyal.report.3'],
+    ['ch5.oldLama.epilogue.1', 'ch5.oldLama.epilogue.2', 'ch5.oldLama.epilogue.3'],
+  ],
 };
-const glossary = {trisongDetsen:['Trisong Detsen','赤松德贊'],samye:['Samye','桑耶寺'],samyeName:['Samye','桑耶寺'],samyeMandala:['mandala','壇城']};
-function speech(dict, key, lang) {
-  return dict['dlg.'+key].replace(/\[\[codex:\w+\|([^\]]+)\]\]/g, '$1').replace(/\[\[codex:(\w+)\]\]/g, (_, id) =>
-    dict['codex.'+id+'.title'] || glossary[id]?.[lang] || id);
+const glossary = {
+  trisongDetsen: ['Trisong Detsen', '赤松德贊'],
+  samye: ['Samye', '桑耶寺'],
+  samyeName: ['Samye', '桑耶寺'],
+  samyeMandala: ['mandala', '壇城'],
+  sevenTestedMen: ['Seven Tested Men', '桑耶七覺士'],
+  terma: ['Terma', '伏藏'],
+  terton: ['Tertön', '伏藏師'],
+};
+function cleanCodexTitle(title, lang) {
+  if (lang === 1) return title.replace(/\s*[（(][^）)]*[）)]/g, '').trim();
+  return title.replace(/\s*\([^)]*[\u0F00-\u0FFF][^)]*\)/g, '').trim();
+}
+function speechLine(dict, key, lang) {
+  const raw = dict['dlg.' + key];
+  if (!raw) throw Error('Missing dialogue key: dlg.' + key);
+  return raw
+    .replace(/\[\[codex:\w+\|([^\]]+)\]\]/g, '$1')
+    .replace(/\[\[codex:(\w+)\]\]/g, (_, id) => {
+      if (glossary[id]?.[lang]) return glossary[id][lang];
+      const title = dict['codex.' + id + '.title'] || dict['codex.entry.' + id + '.title'];
+      return title ? cleanCodexTitle(title, lang) : id;
+    });
+}
+function speech(dict, keys, lang) {
+  const list = Array.isArray(keys) ? keys : [keys];
+  return list.map(key => speechLine(dict, key, lang)).join(lang === 1 ? '' : ' ');
 }
 function append(map, step) { if (!maps.has(map)) maps.set(map, []); maps.get(map).push(step); }
 for (const file of ['prologue', 'ch1', 'ch2', 'ch3', 'ch4', 'ch5']) {
@@ -50,7 +101,7 @@ for (const file of ['prologue', 'ch1', 'ch2', 'ch3', 'ch4', 'ch5']) {
     }
     if(step.id==='clear_terma_1') {
       entry.en='Enter the Terma Realm beneath the hermitage';
-      entry.zh='由青浦山腳的入口進入伏藏秘境';
+      entry.zh='前往青朴北崖石門進入伏藏秘境';
     }
     append(map,entry);
   }
