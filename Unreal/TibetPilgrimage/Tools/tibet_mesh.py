@@ -190,7 +190,7 @@ class Scene:
         ):
             self.face(mat, [pts[i] for i in face])
 
-    def rings(self, mat, x, y, z, profile, sides=32, ratio=1, jitter=0, angle=0):
+    def rings(self, mat, x, y, z, profile, sides=32, ratio=1, jitter=0, angle=0, *, cap_bottom=False):
         """Lathed or faceted surface from a sequence of (height, radius) rings."""
         rows = []
         for row, (h, r) in enumerate(profile):
@@ -209,6 +209,8 @@ class Scene:
                     self.face(mat, [lo[i], lo[j], hi[i]])
                 else:
                     self.face(mat, [lo[i], lo[j], hi[j], hi[i]])
+        if cap_bottom and profile[0][1] > 0:
+            self.face(mat, rows[0][::-1])
         if profile[-1][1] > 0:
             self.face(mat, rows[-1])
 
