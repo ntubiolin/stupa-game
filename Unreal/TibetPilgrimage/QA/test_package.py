@@ -12,6 +12,7 @@ import signal
 import struct
 import subprocess
 import tempfile
+import time
 from uuid import uuid4
 from pathlib import Path
 from urllib.parse import quote
@@ -30,6 +31,22 @@ def stop_timed_out_launch(executable, unique_argument):
                 os.kill(int(fields[0]), signal.SIGTERM)
             except ProcessLookupError:
                 pass
+
+
+def wait_for_prior_qa_exit(executable, timeout=3.0, interval=0.15):
+    """Wait briefly for any prior exiting QA process of the same executable to terminate."""
+    prefix = str(executable) + " "
+    deadline = time.monotonic() + timeout
+    while True:
+        running = False
+        for line in subprocess.check_output(["ps", "-axo", "pid=,command="], text=True).splitlines():
+            fields = line.strip().split(maxsplit=1)
+            if len(fields) == 2 and fields[1].startswith(prefix) and " -TibetQA=" in fields[1]:
+                running = True
+                break
+        if not running or time.monotonic() >= deadline:
+            return
+        time.sleep(interval)
 
 
 def temporary_root(executable):
@@ -100,18 +117,29 @@ def capture(exe, stage, dest, name, mode, level, options, slot, size=(1440, 900)
             f"-TibetSaveSlot={slot}", f"-TibetQAStart={level}", f"-TibetQAOutput={output}", f"-TibetQA={mode}",
             f"-ExecCmds={exec_commands}", f"-abslog={output / 'game.log'}", *options]
     print(name, flush=True)
-    try:
-        # Use LaunchServices, as Finder does when the player opens the app bundle.
-        foreground = [] if interactive_window else ["-g"]
-        cmd = ["open", "-n", "-W", *foreground, "-a", str(exe.parents[2]), "--args", *args[1:]]
-        with (target / "launch.log").open("w") as log:
-            subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT, check=True,
-                           timeout=1800 if mode == "Campaign" else 300)
-    except subprocess.TimeoutExpired:
-        stop_timed_out_launch(exe, f"-TibetQAOutput={output}")
-        raise
-    finally:
-        shutil.copytree(output, target, dirs_exist_ok=True)
+    # Use LaunchServices, as Finder does when the player opens the app bundle.
+    foreground = [] if interactive_window else ["-g"]
+    cmd = ["open", "-n", "-W", *foreground, "-a", str(exe.parents[2]), "--args", *args[1:]]
+    for attempt in range(1, 4):
+        wait_for_prior_qa_exit(exe)
+        try:
+            with (target / "launch.log").open("w") as log:
+                subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT, check=True,
+                               timeout=1800 if mode == "Campaign" else 300)
+        except subprocess.TimeoutExpired:
+            stop_timed_out_launch(exe, f"-TibetQAOutput={output}")
+            raise
+        finally:
+            shutil.copytree(output, target, dirs_exist_ok=True)
+        if not (target / "events.tsv").is_file() and not (output / "game.log").is_file() and attempt < 3:
+            print(f"Retrying {name}: LaunchServices exited before engine startup (attempt {attempt}/3)", flush=True)
+            shutil.rmtree(output, ignore_errors=True)
+            shutil.rmtree(target, ignore_errors=True)
+            time.sleep(0.5)
+            output.mkdir()
+            target.mkdir()
+            continue
+        break
     events = [s.split("\t") for s in (target / "events.tsv").read_text().splitlines()]
     if not events or events[-1][0] != 'pass':
         raise ValueError(f"Missing completion evidence in {target}")
