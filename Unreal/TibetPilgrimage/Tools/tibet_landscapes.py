@@ -142,6 +142,7 @@ def whitewashed_dome(s, x, y, base, radius, height):
         pos = (x + radius * c * ca, y + radius * c * sa, base + height * sn)
         return tuple(p + v * offset for p, v in zip(pos, n)), n
 
+    s.face("whitewash", [shell(side * TAU / 120, 0)[0] for side in reversed(range(120))])
     for row in range(24):
         for side in range(120):
             coords = ((side, row), (side + 1, row), (side + 1, row + 1), (side, row + 1))
@@ -457,8 +458,8 @@ def boudha(s):
                     height * 0.43,
                     a,
                 )
-    s.rings("whitewash", x, y, z, [(0, 10.67), (0.14, 10.72), (0.40, 10.50)], 96)
-    s.rings("giltpaint", x, y, z + 0.40, [(0, 10.53), (0.13, 10.52), (0.18, 10.36)], 96)
+    s.rings("whitewash", x, y, z, [(0, 10.67), (0.14, 10.72), (0.40, 10.50)], 96, cap_bottom=True)
+    s.rings("giltpaint", x, y, z + 0.40, [(0, 10.53), (0.13, 10.52), (0.18, 10.36)], 96, cap_bottom=True)
     whitewashed_dome(s, x, y, z + 0.56, 10.36, 8.15)
 
     # Recessed wheel bays follow the existing circular ambulatory.
@@ -510,6 +511,7 @@ def boudha(s):
             [(0, r), (0.09, r * 1.01), (0.20, r * 0.985), (0.61, r * 0.87), (0.65, r * 0.86)],
             4,
             angle=math.pi / 4,
+            cap_bottom=True,
         )
     z = spire + 13 * 0.65
     s.rings(
@@ -528,17 +530,18 @@ def boudha(s):
             (1.01, 0.38),
         ],
         48,
+        cap_bottom=True,
     )
-    s.rings("giltpaint", x, y, z + 0.40, [(0, 1.68), (0.07, 1.82), (0.11, 1.80)], 48)
+    s.rings("giltpaint", x, y, z + 0.40, [(0, 1.68), (0.07, 1.82), (0.11, 1.80)], 48, cap_bottom=True)
     s.rings(
-        "gold", x, y, z + 1, [(0, 0.27), (0.18, 0.33), (0.35, 0.12), (0.53, 0.24), (0.94, 0)], 32
+        "gold", x, y, z + 1, [(0, 0.27), (0.18, 0.33), (0.35, 0.12), (0.53, 0.24), (0.94, 0)], 32, cap_bottom=True
     )
     for i in range(32):
         a = i * TAU / 32
         end = (x + 1.71 * math.cos(a), y + 1.71 * math.sin(a), z + 0.48)
         tip = (end[0], end[1], end[2] - 0.22 - 0.055 * math.cos(a * 4))
         s.beam("bronze", end, tip, 0.024, 5)
-        s.rings("gold", *tip, [(-0.105, 0.058), (0, 0.028)], 8)
+        s.rings("gold", *tip, [(-0.105, 0.058), (0, 0.028)], 8, cap_bottom=True)
     boudha_flags(s, x, y, spire, z)
 
     windows = []
