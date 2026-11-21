@@ -1,0 +1,13 @@
+[
+  {"id":"stupa","title":"博達哈佛塔","webEye":[19,10,23],"webLook":[0,14,0],"ueEye":[300,1420,720],"ueLook":[3400,0,1170]},
+  {"id":"grove","title":"行者塔林","webEye":[18,11,-20],"webLook":[0,2,0],"ueEye":[-350,1080,790],"ueLook":[1600,0,270]},
+  {"id":"wild","title":"喜馬拉雅原野","webEye":[21,10,32],"webLook":[0,3,-12],"ueEye":[-820,400,520],"ueLook":[2190,0,380]},
+  {"id":"pharping","title":"楊烈雪修行洞","webEye":[14,5.2,-27],"webLook":[20,3.5,-44],"ueEye":[475,525,465],"ueLook":[3100,-270,460]},
+  {"id":"mangyul","title":"芒域山口","webEye":[10,19,-48],"webLook":[0,15,-65],"ueEye":[-430,500,430],"ueLook":[1820,0,340]},
+  {"id":"yarlung","title":"雅隆雍布拉康","webEye":[-30,10.2,32],"webLook":[-45,9.2,20],"ueEye":[170,-1580,660],"ueLook":[3500,0,1110]},
+  {"id":"samye","title":"桑耶寺烏孜大殿","webEye":[31,22,46],"webLook":[0,6,0],"ueEye":[-100,1920,1670],"ueLook":[3800,0,600]},
+  {"id":"chimphu","title":"青樸石窟","webEye":[12,11,5],"webLook":[0,8,-19],"ueEye":[200,1080,510],"ueLook":[2990,-260,750]},
+  {"id":"terma1","title":"伏藏第一層","floor":1,"webEye":[4.5,2.8,4.5],"webLook":[-1,1.4,-1],"ueEye":[-940,230,255],"ueLook":[2310,0,310]},
+  {"id":"terma2","title":"伏藏第二層","floor":2,"webEye":[4.5,2.8,4.5],"webLook":[-1,1.4,-1],"ueEye":[-435,-360,260],"ueLook":[2390,0,315]},
+  {"id":"terma3","title":"伏藏第三層","floor":3,"webEye":[4.5,2.8,4.5],"webLook":[-1,1.4,-1],"ueEye":[90,260,210],"ueLook":[2360,0,390]}
+]

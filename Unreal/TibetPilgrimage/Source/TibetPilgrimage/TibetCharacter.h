@@ -1,0 +1,52 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/Character.h"
+#include "TibetCharacter.generated.h"
+
+UCLASS()
+class TIBETPILGRIMAGE_API ATibetCharacter : public ACharacter
+{
+    GENERATED_BODY()
+public:
+    ATibetCharacter();
+    virtual void SetPlayerDefaults() override;
+    virtual FRotator GetViewRotation() const override;
+    virtual void Tick(float DeltaSeconds) override;
+    void CancelGameplayInput();
+    void RespawnAtStart();
+    FVector GetStartLocation() const { return Start; }
+    FRotator GetStartRotation() const { return StartRotation; }
+    virtual void SetupPlayerInputComponent(UInputComponent* Input) override;
+protected:
+    virtual void BeginPlay() override;
+private:
+    UPROPERTY() TObjectPtr<USceneComponent> Figure;
+    UPROPERTY() TArray<USceneComponent*> Joints;
+    FVector Start = FVector(-2000.f, 0.f, 100.f);
+    FRotator StartRotation = FRotator::ZeroRotator;
+    float WalkPhase = 0;
+    FVector2D Thumb, Drag;
+    int32 MoveFinger = -1, LookFinger = -1;
+    bool bAwaitingDragMotion = true;
+    double ViewYawOffset = 0.;
+    double InteractPressedAt = -1.;
+    void UpdateOrbit(APlayerController& Player, float Dt);
+    void PressInteract();
+    void ReleaseInteract();
+    void UpdateMouseLook(APlayerController& Player);
+    void TurnView(APlayerController& Player, FVector2D Degrees);
+    void TouchDown(ETouchIndex::Type Index, FVector Position);
+    void TouchUp(ETouchIndex::Type Index, FVector Position);
+    void FeedMonkey();
+    void DoInteract();
+    void DoCast(int32 Skill);
+    void Language();
+    void OpenMap();
+    void OpenPack();
+    void UseQuickSlot();
+    void OpenSkills();
+    void ToggleMenu();
+    void TryJump();
+    bool JournalOpen() const;
+};

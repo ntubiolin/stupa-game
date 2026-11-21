@@ -758,3 +758,27 @@ preserved.
 - A browser installation ID is owned by `ctx.save.getInstallationIdAsync()` in the separate `stupa.installation.v1` key. It survives save reset/import, stays out of backup/cloud-save documents, and uses Web Locks to avoid first-load tab races.
 - `analytics_daily_aliases` binds a same-day guest installation to the authenticated account. Retries, reloads, concurrent tabs, stale guest requests, and authenticated use across devices stay idempotent. Switching between two accounts counts each account once.
 - Collection begins when the analytics tables are first deployed. Existing cloud saves are not used as historical backfill. Run `npm run analytics:report -- YYYY-MM-DD` on the backend host to read `{ collectionSince, day, googleUsers, dau }`. Anonymous players who clear site storage receive a new installation ID and may count again.
+
+## Unreal 蓮師巡禮
+
+`Unreal/TibetPilgrimage` 是西藏路線的原生 UE 5.8 專案。西藏關卡共用 TibetPilgrimage runtime module。編輯器在本機從原始美術產生 Content，Mac 與 iOS 使用同一份 `Config/DefaultGame.ini` 關卡封裝清單。建置與地圖生成入口為 `Tools/tibet.py`。
+
+原生配樂由 `Tools/export_music.mjs` 使用原版 Web Audio 引擎、總譜及人聲庫離線渲染。關卡生成器匯入並封裝為 `/Game/Music` 的循環 SoundWave，`ATibetGameMode` 按區域、任務與廣場日夜選曲，使用 2D AudioComponent 淡入淡出。
+
+`ATibetGameMode` 讀取 `Tools/export_route.mjs` 從原作任務轉出的雙語路線表，由 `ATibetCharacter` 和 `ATibetHUD` 共用同一組互動與技能入口。原生存檔 `UTibetSave` 的預設槽為 `TibetPilgrimage-v1`，記錄各段任務、數量、目前地圖、終章與語言。跨圖於進入前先存檔。QA 使用獨立的具名槽測試關閉重開、主支線和技能。
+
+`Tools/tibet_cloud_layer.py` 會將可平鋪的雲量遮罩製成 `M_CloudLayer`。八張戶外地圖的 `ATibetSkyClock` 使用同一層雲的透明度繪製天空與太陽投影。每三分鐘從疏雲漸變為多雲再放晴，雲場飄移的位置跨地圖連續。雲影隨日光減弱，伏藏三層由各自的室內照明負責。
+
+室外的 ATibetSkyClock 讀取 UTibetSave 中的時刻與倍率。原生一日 240 秒，起始 07:12，玩家可暫停、選 1× 或 4×，或拖動時刻。伏藏三層保留獨立的燭光曝光。博達哈供燈依三個不同燈位的點亮狀態累計，任務前供燈也計入。舊存檔的順序計數僅於首次載入時轉入燈位記錄。ATibetButterFlame 建立會擺動的燈芯，每個已供養的博達哈燈位最多帶一盞局部光源。布旗沿用原織紋與上緣固定點，以材質變形表現風勢。ATibetMacaques 以共享的關節網格繪製五隻獼猴，原始模型可用 Tools/export_macaque.mjs --check 與網頁版逐位元比對。餵食次數、五輪配對最高分及遊玩次數同存於 UTibetSave。點燈後可進入手記的回向頁，或按 F 快速供燈。南側已有燈火的銅燈桌也可添油。回向署名與祈願保存在同一個本機存檔的 Dedications 陣列，舊存檔從空白回向紀錄開始。
+
+`ATibetCharacter` 沿用網頁智慧防暈模式，行走、側移與後退時都保留玩家選定的鏡頭朝向。鏡頭偏移由 `GetViewRotation()` 提供給攝影機與彈簧臂，WASD 或觸控方向以控制器朝向換算。玩家可用滑鼠右鍵或觸控拖曳自由觀察，按住 Q／E 暫時左右環視，放開平順回到原視角。輕按 E 與觸控「互動」共用既有任務入口。`UTibetCameraBoom` 處理建築碰撞與回復距離。`UTibetCameraSettings` 將靈敏度和垂直反轉寫入裝置的 GameUserSettings。玩法與輸入的依據見[第三人稱鏡頭](Unreal/TibetPilgrimage/Camera.md)。
+
+`STibetPlayOverlay` 透過 `ATibetHUD` 切換遊戲、世界地圖、技能及操作設定，開啟手記時暫停單人遊戲。手記和餵猴選單將游標交給 Slate，返回遊戲時恢復右鍵拖曳轉向。地圖依原生任務進度標記到訪情形。七格技能列與正式施法共用 `ATibetGameMode` 的技能資料。傷害依實際扣除的生命值發出，HUD 取怪物位置繪製血條、扣血拖尾與傷害數字。`ATibetRitualEffect` 負責招式和受擊的幾何動畫。
+
+主角實際扣血與任務推進時，`ATibetGameMode` 以遊戲時間記錄 `FTibetPlayerFeedback`。角色模型的受擊後仰、HUD 扣血提示與任務標記依該時間顯示並消退。
+
+網頁與 UE 各功能的對應、已驗證的操作與尚缺的模組列於[西藏 UE 移植驗收](Unreal/TibetPilgrimage/QA/Module-audit.md)。
+
+原生手記的唐卡世界地圖由 `Tools/export_atlas.mjs` 讀取網頁 `WORLD_ROUTE_NODES`、雙語說明及長卷繪製器輸出。九個可選站點對應十一張關卡，伏藏三層共用一站。匯入後的 UI 貼圖隨 `/Game/Journal` 封裝，路線及目前位置由 Slate 依實際旅程繪製。
+
+原生行囊透過 `ATibetGameMode` 讀取任務進度，依序開放序章主手法器、北郊首次調伏的副手鈴、尋回的朝聖地圖及桑耶守夜法衣。裝備套用於傷害與體力／法力上限，快捷位可使用甘露丸或展開已取得的地圖。`UTibetSave` 保存裝備、快捷選擇與丸數，既有存檔會從原本的路線進度取得對應道具。
