@@ -118,11 +118,11 @@ def house(s, x, y, z, w, d, h, body="lime", temple=False):
         (0.52, 0.24, 0.08, "whitewash"),
     ):
         s.box(m, x, y, z + h + a, w + b, d + b, t)
-    # Corner gilded gyeltsen victory banners on temples and shrines
-    for sx in (-1, 1):
-        for sy in (-1, 1):
-            if temple or sy < 0:
-                gyeltsen(s, x + sx * (w * 0.48), y + sy * (d * 0.48), z + h + 0.60, 0.95 if temple else 0.72)
+    # Corner gilded gyeltsen victory banners on flat Tibetan monastery roofs (pitched roofs have corner finials)
+    if not temple:
+        for sx in (-1, 1):
+            for sy in (-1, 1):
+                gyeltsen(s, x + sx * (w * 0.48), y + sy * (d * 0.48), z + h + 0.60, 0.78)
     # Each opening has a deep black trapezoidal Tibetan 'baka' surround, silk 'shambu' valance and cross mullion.
     levels = max(1, int(h / 3.0))
     for floor in range(levels):
@@ -986,16 +986,32 @@ def cave(s, floor):
     s.face(wall, sections[0][::-1])
     s.face(wall, sections[-1])
 
-    # Flush Sacred Floor Mandala & Nave Runner (z <= 0.015m — 100% clear for capsule_clear & VAULT stairs!)
+    # Flush Zero-Step Sacred Floor Mandala & Nave Runner (pure upward s.face inlays at z <= 0.005m, zero vertical lips!)
     for seg in range(18):
         ny = -20.0 + seg * 1.65
-        s.box("stone", 0, ny, 0.004, 3.4, 1.48, 0.008)
-        s.box(trim_mat, 0, ny, 0.008, 0.42, 1.48, 0.006)
-    for ring_r, r_mat in ((4.8, "stone"), (3.8, trim_mat), (2.9, pillar_mat)):
-        s.rings(r_mat, 0, 2.0, 0.006, [(0, ring_r), (0.008, ring_r)], 32)
+        if abs(ny - 2.0) < 4.9:
+            continue
+        s.face("stone", [(-1.7, ny - 0.74, 0.002), (1.7, ny - 0.74, 0.002), (1.7, ny + 0.74, 0.002), (-1.7, ny + 0.74, 0.002)])
+        s.face(trim_mat, [(-0.22, ny - 0.74, 0.003), (0.22, ny - 0.74, 0.003), (0.22, ny + 0.74, 0.003), (-0.22, ny + 0.74, 0.003)])
+    for r_in, r_out, r_mat in ((3.85, 4.80, "stone"), (2.95, 3.82, trim_mat), (0.35, 2.92, pillar_mat)):
+        for i in range(48):
+            a0, a1 = i * TAU / 48, (i + 1) * TAU / 48
+            s.face(r_mat, [
+                (r_in * math.cos(a0), 2.0 + r_in * math.sin(a0), 0.002),
+                (r_out * math.cos(a0), 2.0 + r_out * math.sin(a0), 0.002),
+                (r_out * math.cos(a1), 2.0 + r_out * math.sin(a1), 0.002),
+                (r_in * math.cos(a1), 2.0 + r_in * math.sin(a1), 0.002),
+            ])
     for spoke in range(8):
-        sa = spoke * TAU / 8
-        s.beam(trim_mat, (0, 2.0, 0.012), (4.6 * math.cos(sa), 2.0 + 4.6 * math.sin(sa), 0.012), 0.08, 4)
+        a0 = spoke * TAU / 8
+        amid = a0 + TAU / 16
+        a1 = (spoke + 1) * TAU / 8
+        s.face("gold" if floor == 3 else trim_mat, [
+            (0, 2.0, 0.004),
+            (2.1 * math.cos(a0), 2.0 + 2.1 * math.sin(a0), 0.004),
+            (3.7 * math.cos(amid), 2.0 + 3.7 * math.sin(amid), 0.004),
+            (2.1 * math.cos(a1), 2.0 + 2.1 * math.sin(a1), 0.004),
+        ])
 
     # Luminous ceiling stalactites & crystal chandeliers (high in vault crown z > 9m)
     for i in range(32):
@@ -1234,11 +1250,14 @@ def landscape(stage):
         # Himalayan Trail ("喜馬拉雅古道 — 傾斜瑪尼堆與雪山巨石陣"):
         #Keep (-9, 9) landmark height > 2m for verify_world.py!
         chorten(s, -9, 9, 0, 4.1)
-        # Flush mountain flagstone path winding northward (z <= 0.012m, 100% walkable)
+        # Flush zero-lip mountain flagstone path winding northward (pure upward s.face at z=0.004m)
         for step in range(28):
             py = -20.0 + step * 1.45
             px = 0.85 * math.sin(step * 0.32)
-            s.box("stone" if step % 2 == 0 else "paving", px, py, 0.004, 2.35, 1.12, 0.008, 0.08 * math.cos(step))
+            s.face("stone" if step % 2 == 0 else "paving", [
+                (px - 1.18, py - 0.56, 0.004), (px + 1.18, py - 0.56, 0.004),
+                (px + 1.18, py + 0.56, 0.004), (px - 1.18, py + 0.56, 0.004),
+            ])
         # Iconic Tilted Mani Stone Cairns ("傾斜瑪尼堆") & Pass Lungta Poles outside nav corridor
         mani_wall(s, -8.4, 1.5, 0, 4.8, 0.28)
         mani_wall(s, 8.6, 5.5, 0, 5.2, -0.22)
