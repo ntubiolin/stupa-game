@@ -122,3 +122,45 @@ def south_approach(s):
         for j in range(4):
             s.face("stone" if j % 2 else "ochre",
                    [(x, y, 0.008), outline[j], outline[(j+1) % 4]])
+
+    # Concentric inlaid kora stone path & south lotus compass rose (flush at z <= 0.009m, 100% walkable)
+    for r_in, r_out, mat in ((21.8, 24.2, "stone"), (24.25, 24.55, "ochre"), (21.45, 21.75, "ochre")):
+        for i in range(64):
+            a0, a1 = i * math.tau / 64, (i + 1) * math.tau / 64
+            p0 = (r_in * math.sin(a0), 34 + r_in * math.cos(a0), 0.005)
+            p1 = (r_out * math.sin(a0), 34 + r_out * math.cos(a0), 0.005)
+            p2 = (r_out * math.sin(a1), 34 + r_out * math.cos(a1), 0.005)
+            p3 = (r_in * math.sin(a1), 34 + r_in * math.cos(a1), 0.005)
+            s.face(mat, [p0, p1, p2, p3])
+    for i in range(8):
+        a0 = i * math.tau / 8
+        a_mid = a0 + math.tau / 16
+        a1 = (i + 1) * math.tau / 8
+        s.face("giltpaint" if i % 2 == 0 else "vermillion", [
+            (0, 4.0, 0.008),
+            (2.1 * math.cos(a0), 4.0 + 2.1 * math.sin(a0), 0.008),
+            (3.2 * math.cos(a_mid), 4.0 + 3.2 * math.sin(a_mid), 0.008),
+            (2.1 * math.cos(a1), 4.0 + 2.1 * math.sin(a1), 0.008),
+        ])
+
+    # Pair of traditional Himalayan whitewashed Sang Juniper Incense Kilns ("煨桑爐") flanking outer plaza
+    for side in (-1, 1):
+        kx, ky = side * 12.8, 5.2
+        s.rings("stone", kx, ky, -0.01, [(0, 1.15), (0.28, 1.12)], 12)
+        s.rings("whitewash", kx, ky, 0.27, [
+            (0, 0.98), (0.85, 0.92), (1.35, 0.68), (1.95, 0.42), (2.45, 0.26)
+        ], 12)
+        s.rings("penma", kx, ky, 1.12, [(0, 0.88), (0.18, 0.86)], 12)
+        s.rings("gold", kx, ky, 2.45, [(0, 0.30), (0.12, 0.34), (0.36, 0.06)], 12)
+        # Glowing juniper ember hearth facing the kora approach
+        s.box("dark", kx - side * 0.72, ky, 0.62, 0.32, 0.56, 0.58)
+        s.box("ember", kx - side * 0.65, ky, 0.68, 0.22, 0.42, 0.24)
+
+    # Ornate Newar-Tibetan Ajima Protector Shrine Pavilion on the west courtyard edge (clear of kora & sightlines)
+    ax, ay = -16.8, 13.5
+    s.box("stone", ax, ay, -0.01, 3.2, 3.2, 0.42)
+    s.box("cinnabar", ax, ay, 0.41, 2.4, 2.4, 2.25)
+    s.box("gold", ax + 1.22, ay, 0.65, 0.12, 1.15, 1.65)
+    for tier, (tw, th, tz) in enumerate(((3.6, 0.65, 2.66), (2.7, 0.58, 3.45))):
+        s.rings("gold" if tier else "ochre", ax, ay, tz, [(0, tw * 0.68), (th, tw * 0.22)], 4, angle=math.pi / 4)
+    s.rings("gold", ax, ay, 4.03, [(0, 0.18), (0.22, 0.24), (0.62, 0)], 12)

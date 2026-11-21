@@ -70,34 +70,83 @@ def slope_roof(s, x, y, z, w, d, h):
     s.beam("bronze", (x - w * 0.29, y, z + h), (x + w * 0.29, y, z + h), 0.15)
 
 
+def gyeltsen(s, x, y, z, h=1.15):
+    """Traditional Tibetan cylindrical gilded victory banner ('gyeltsen') on monastery roof corners."""
+    s.rings("bronze", x, y, z, [(0, 0.14), (0.10, 0.16), (0.14, 0.11)], 12)
+    for tier in range(3):
+        zh = z + 0.14 + tier * (h * 0.24)
+        col = "gold" if tier != 1 else "cinnabar"
+        s.rings(col, x, y, zh, [(0, 0.13 - tier * 0.015), (h * 0.21, 0.15 - tier * 0.015)], 14)
+    s.rings("gold", x, y, z + 0.14 + h * 0.72, [(0, 0.16), (0.12, 0.05), (0.28, 0)], 14)
+
+
+def dharma_wheel_deer(s, x, y, z):
+    """Iconic Golden Dharma Wheel flanked by Twin Kneeling Deer ('Chökhor', crowning Samye & major temples)."""
+    s.box("gold", x, y, z, 2.2, 0.42, 0.18)
+    # Upright 8-spoked Dharma wheel in XZ plane facing south (-Y)
+    cz = z + 0.88
+    for i in range(16):
+        a0, a1 = i * TAU / 16, (i + 1) * TAU / 16
+        s.beam("gold", (x + 0.62 * math.cos(a0), y, cz + 0.62 * math.sin(a0)),
+               (x + 0.62 * math.cos(a1), y, cz + 0.62 * math.sin(a1)), 0.055, 6)
+        if i % 2 == 0:
+            s.beam("gold", (x, y, cz), (x + 0.60 * math.cos(a0), y, cz + 0.60 * math.sin(a0)), 0.028, 5)
+    s.rings("gold", x, y, z + 0.18, [(0, 0.24), (0.14, 0.18)], 12)
+    for side in (-1, 1):
+        dx = x + side * 0.92
+        s.box("gold", dx, y, z + 0.18, 0.46, 0.22, 0.24)
+        s.beam("gold", (dx - side * 0.16, y, z + 0.38), (dx - side * 0.26, y, z + 0.72), 0.065, 6)
+        s.box("gold", dx - side * 0.28, y, z + 0.68, 0.18, 0.12, 0.12)
+
+
 def house(s, x, y, z, w, d, h, body="lime", temple=False):
-    s.box("stone", x, y, z, w + 0.25, d + 0.25, 0.4)
-    s.box(body, x, y, z + 0.4, w, d, h - 0.4)
+    s.box("stone", x, y, z, w + 0.34, d + 0.34, 0.42)
+    s.box(body, x, y, z + 0.42, w, d, max(0.4, h - 0.82))
+    # Authentic Tibetan 'penma' dark-crimson tamarisk frieze crowned with golden brass 'melong' mirrors
+    frieze_h = min(0.58, max(0.32, h * 0.14))
+    s.box("penma", x, y, z + h - frieze_h, w + 0.10, d + 0.10, frieze_h)
+    medallions = max(2, int(w / 2.6))
+    for front in (-1, 1):
+        fy = y + front * (d / 2 + 0.07)
+        for m_idx in range(medallions):
+            mx = x + ((m_idx + 0.5) / medallions - 0.5) * (w * 0.86)
+            s.box("gold", mx, fy, z + h - frieze_h * 0.68, 0.24, 0.05, 0.24)
     for a, b, t, m in (
-        (0.03, 0.22, 0.21, "dark"),
-        (0.24, 0.50, 0.19, "maroon"),
-        (0.43, 0.30, 0.13, "ochre"),
+        (0.02, 0.26, 0.18, "dark"),
+        (0.20, 0.54, 0.19, "maroon"),
+        (0.39, 0.38, 0.13, "gold" if temple else "ochre"),
+        (0.52, 0.24, 0.08, "whitewash"),
     ):
         s.box(m, x, y, z + h + a, w + b, d + b, t)
-    # Each opening has a deep black surround, clay sill, painted lintel and a fine cross mullion.
+    # Corner gilded gyeltsen victory banners on temples and shrines
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            if temple or sy < 0:
+                gyeltsen(s, x + sx * (w * 0.48), y + sy * (d * 0.48), z + h + 0.60, 0.95 if temple else 0.72)
+    # Each opening has a deep black trapezoidal Tibetan 'baka' surround, silk 'shambu' valance and cross mullion.
     levels = max(1, int(h / 3.0))
     for floor in range(levels):
-        hei = z + 0.9 + floor * 2.8
+        hei = z + 0.86 + floor * 2.75
+        if hei + 1.45 > z + h - frieze_h:
+            continue
         for front in (-1, 1):
             fy = y + front * (d / 2 + 0.03)
-            for i in range(max(1, int(w / 2.7))):
-                n = max(1, int(w / 2.7))
+            n = max(1, int(w / 2.7))
+            for i in range(n):
                 fx = x + ((i + 0.5) / n - 0.5) * w
-                s.box("dark", fx, fy, hei, 1.02, 0.15, 1.38)
-                s.box("glass", fx, fy + front * 0.09, hei + 0.13, 0.78, 0.04, 1.13)
+                s.box("dark", fx, fy, hei, 1.08, 0.15, 1.42)
+                s.box("litglass" if (i + floor) % 3 == 0 else "glass", fx, fy + front * 0.09, hei + 0.13, 0.78, 0.04, 1.13)
                 s.box("wood", fx, fy + front * 0.15, hei + 0.12, 0.06, 0.05, 1.16)
                 s.box("wood", fx, fy + front * 0.15, hei + 0.79, 0.78, 0.05, 0.065)
-                s.box("maroon", fx, fy, hei + 1.36, 1.30, 0.36, 0.14)
-                s.box("ochre", fx, fy, hei - 0.08, 1.16, 0.22, 0.11)
-    s.box("dark", x, y - d / 2 - 0.11, z + 0.04, 1.30, 0.24, 2.02)
-    s.box("wood", x, y - d / 2 - 0.25, z + 0.08, 1.04, 0.07, 1.86)
+                s.box("yellowCloth" if temple else "redCloth", fx, fy + front * 0.17, hei + 1.16, 0.84, 0.07, 0.18)
+                s.box("maroon", fx, fy, hei + 1.38, 1.34, 0.38, 0.14)
+                s.box("ochre", fx, fy, hei - 0.08, 1.18, 0.22, 0.11)
+    # Ornate Tibetan portico entrance facing south (-Y)
+    s.box("dark", x, y - d / 2 - 0.11, z + 0.04, 1.54, 0.24, 2.12)
+    s.box("cinnabar", x, y - d / 2 - 0.22, z + 0.08, 1.16, 0.09, 1.94)
+    s.box("gold", x, y - d / 2 - 0.24, z + 2.02, 1.68, 0.34, 0.18)
     if temple:
-        slope_roof(s, x, y, z + h + 0.55, w + 1.4, d + 1.4, max(1.2, min(3.2, w * 0.17)))
+        slope_roof(s, x, y, z + h + 0.60, w + 1.5, d + 1.5, max(1.25, min(3.2, w * 0.18)))
 
 
 def chorten(s, x, y, z, h=3):
@@ -405,17 +454,21 @@ def boudha_townhouse(s, x, y, angle, index, width):
             box("wood", tx, fy - 0.24, z + 1.36, w - 0.14, 0.075, 0.07)
             box("dark", tx, fy, z + 0.39, w + 0.18, 0.46, 0.10)
             box("maroon", tx, fy, z + 1.87, w + 0.28, 0.52, 0.12)
-    # Upper roof cap and a few timber galleries under shallow canvas canopies.
-    box("wood", 0, 0, height - 0.12, width + 0.12, depth + 0.12, 0.15)
-    box("ochre", 0, 0, height, width + 0.30, depth + 0.32, 0.16)
-    box(body, 0, front + 0.13, height + 0.14, width, 0.24, 0.41)
-    box("giltpaint", 0, front + 0.13, height + 0.52, width + 0.09, 0.31, 0.08)
+    # Upper roof cap, rooftop Tibetan dharma-wheel shrine parapet & timber shopfront canopies.
+    box("penma", 0, 0, height - 0.36, width + 0.04, depth + 0.04, 0.26)
+    box("wood", 0, 0, height - 0.10, width + 0.16, depth + 0.16, 0.15)
+    box("ochre", 0, 0, height + 0.04, width + 0.32, depth + 0.34, 0.16)
+    box(body, 0, front + 0.13, height + 0.18, width, 0.24, 0.44)
+    box("giltpaint", 0, front + 0.13, height + 0.60, width + 0.12, 0.32, 0.09)
+    if index % 2 == 0:
+        box("gold", 0, front + 0.08, height + 0.69, 0.52, 0.16, 0.42)
     if index % 3 != 1:
         box(
-            ("maroon", "green", "ochre")[index % 3], 0, front - 0.30, 2.12, width - 0.28, 0.67, 0.14
+            ("maroon", "green", "ochre")[index % 3], 0, front - 0.34, 2.14, width - 0.22, 0.74, 0.14
         )
+        box("yellowCloth" if index % 2 == 0 else "redCloth", 0, front - 0.68, 2.00, width - 0.30, 0.08, 0.16)
         for tx in (-0.45 * width, 0.45 * width):
-            box("wood", tx, front - 0.51, 0.30, 0.12, 0.12, 1.83)
+            box("wood", tx, front - 0.51, 0.30, 0.12, 0.12, 1.84)
 
     return lit_windows
 
@@ -609,119 +662,313 @@ def rock(s, x, y, z, r, h, seed, mat="shale"):
     )
 
 
+def mani_wall(s, x, y, z, length, yaw=0):
+    """Carved Tibetan Mani stone wall ('瑪尼牆') stacked with polychrome Om Mani Padme Hum slate tablets."""
+    s.box("stone", x, y, z, length, 0.92, 0.78, yaw)
+    s.box("shale", x, y, z + 0.78, length + 0.14, 1.04, 0.14, yaw)
+    ca, sa = math.cos(yaw), math.sin(yaw)
+    slabs = max(3, int(length / 0.75))
+    colors = ("lapis", "vermillion", "whitewash", "giltpaint", "turquoise")
+    for i in range(slabs):
+        t = ((i + 0.5) / slabs - 0.5) * (length * 0.88)
+        sx, sy = x + t * ca, y + t * sa
+        s.box(colors[i % 5], sx, sy, z + 0.92, 0.56, 0.18, 0.46, yaw + 0.08 * math.sin(i))
+
+
 def hermitage(s, rng):
-    for i in range(25):
-        x = (i % 7 - 3) * 7 + rng.uniform(-2, 2)
-        y = 31 + (i // 7) * 6 + rng.uniform(-2, 2)
-        if -9 < x < 3:
-            y = max(y, 32.5)  # Leave a continuous floor right up to the inner cave wall.
-        h = (y - 20) * 0.7 + rng.uniform(2, 7)
-        rock(s, x, y, 0, 5.5, h, i, "stone" if i % 4 else "shale")
+    # Ch.5 Chimphu Hermitage ("青朴聖地"): Steep red-ochre Mount Nari cliffs ("Drakmar"),
+    # cliffside meditation huts on timber stilts, Sacred Turquoise Amrita Spring ("青朴甘露泉"), and Dakini lungta.
+    for i in range(28):
+        x = (i % 7 - 3) * 7 + rng.uniform(-1.8, 1.8)
+        y = 31 + (i // 7) * 6 + rng.uniform(-1.6, 1.6)
+        if -9.5 < x < 3.5:
+            y = max(y, 32.8)  # Leave a continuous floor right up to the inner CHIMPHU cave wall.
+        h = (y - 19) * 0.76 + rng.uniform(3, 8.5)
+        cliff_mat = ("ochre", "red", "stone", "shale")[i % 4]
+        rock(s, x, y, 0, 5.8, h, i, cliff_mat)
+    # Keep (-14, 20) landmark height > 2m for verify_world.py!
     for i, (x, y, z) in enumerate(
-        ((-14, 20, 0), (12, 21, 0), (-9, 27, 3.6), (9, 30, 6.2), (3, 36, 9.7), (-17, 36, 9))
+        ((-14, 20, 0), (12.5, 21, 0), (-9.5, 27, 3.6), (9.5, 30, 6.2), (3, 36, 9.7), (-17, 36, 9))
     ):
-        house(s, x, y, z, 5, 3.8, 2.7, "lime", i == 4)
-        chorten(s, x + 3, y - 2, z, 2.05)
-    flags(s, (-16, 24, 7), (15, 30, 10), 30, 3)
+        if z > 0.5:
+            # Cliffside timber retreat deck & wooden access ladder
+            s.box("wood", x, y - 2.3, z - 0.18, 5.6, 1.4, 0.18)
+            for lx in (-2.2, 0, 2.2):
+                s.beam("wood", (x + lx, y - 2.8, max(0, z - 3.8)), (x + lx, y - 2.8, z), 0.09, 6)
+        house(s, x, y, z, 5.2, 3.9, 2.85, "lime" if i % 2 == 0 else "ochre", i in (1, 4))
+        chorten(s, x + (3.4 if x > 0 else -3.4), y - 2.0, z, 2.25)
+    # Sacred Chimphu Turquoise Amrita Spring ("青朴甘露泉") on the west terrace (outside central nav lane!)
+    sx, sy = -10.8, 8.2
+    s.rings("stone", sx, sy, -0.02, [(0, 3.1), (0.28, 2.95), (0.34, 2.55)], 24)
+    s.rings("turquoise", sx, sy, 0.20, [(0, 2.48), (0.04, 2.48)], 24)
+    rock(s, sx - 2.4, sy + 1.4, 0, 1.9, 3.4, 71, "red")
+    s.beam("wood", (sx - 1.5, sy + 0.9, 1.35), (sx - 0.5, sy + 0.3, 1.05), 0.08, 8)
+    s.beam("turquoise", (sx - 0.5, sy + 0.3, 1.02), (sx - 0.4, sy + 0.2, 0.22), 0.06, 8)
+    mani_wall(s, 10.5, 9.5, 0, 5.2, 0.35)
+    flags(s, (-16, 20, 8.4), (14, 22, 8.8), 28, 1.3)
+    flags(s, (-16, 26, 9.2), (15, 31, 11.2), 32, 2.2)
 
 
 def pharping(s):
-    for j in range(17):
-        x = (j - 8) * 3.2
-        rock(s, x, 39 + math.sin(j * 0.9) * 2, 0, 5, 12 + 4 * math.cos(j * 0.66), j)
-    house(s, -10, 25, 0, 10, 6, 6.4, "ochre", True)
-    house(s, 8, 30, 0, 7, 4.8, 4.65, "red", True)
-    s.rings("water", -10, 13, 0.045, [(0, 3.2), (0.02, 3.2)], 40, 0.67)
-    flags(s, (-15, 25, 9), (11, 30, 8), 25, 2)
+    # Ch.1 Pharping & Yanglesho/Asura Sacred Caves ("帕平與楊烈雪雙聖洞"):
+    # Stratified Himalayan limestone crags, Vajrayogini & Ralo monasteries, and Three Ancient Naga Springs ("三處古泉眼")!
+    for j in range(19):
+        x = (j - 9) * 3.1
+        rock(s, x, 39.5 + math.sin(j * 0.9) * 2, 0, 5.4, 13.5 + 4.5 * math.cos(j * 0.66), j,
+             "stone" if j % 3 == 0 else "shale")
+    # Flanking cliff buttresses framing YANGLESHO (east=-0.5, start=15, width=6.2 -> clear [-3.6, +2.6])
+    for side, cx in ((-1, -6.2), (1, 5.4)):
+        rock(s, cx, 21.5, 0, 2.4, 8.5, 40 + side, "shale")
+    # Vajrayogini Temple at (-10, 25) (preserves LANDMARKS["pharping"] = (2500, -1000)!) & Ralo Shrine at (8.5, 29.5)
+    house(s, -10, 25, 0, 10.2, 6.2, 6.6, "cinnabar", True)
+    dharma_wheel_deer(s, -10, 21.8, 7.2)
+    house(s, 8.5, 29.5, 0, 7.4, 5.0, 4.85, "ochre", True)
+    chorten(s, -16.5, 19.5, 0, 3.4)
+    chorten(s, 14.5, 21.5, 0, 3.1)
+    # Three Ancient Naga Spring Cisterns ("三處古泉眼") rescued from the Naga Drought Spirit!
+    for idx, (wx, wy, wr) in enumerate(((-10.2, 13.0, 2.85), (-12.8, 5.2, 2.15), (10.6, 11.8, 2.35))):
+        s.rings("stone", wx, wy, -0.02, [(0, wr + 0.45), (0.32, wr + 0.38), (0.38, wr)], 24)
+        s.rings("giltpaint", wx, wy, 0.36, [(0, wr + 0.16), (0.06, wr + 0.14)], 24)
+        s.rings("turquoise", wx, wy, 0.22, [(0, wr - 0.04), (0.04, wr - 0.04)], 24)
+        # Carved stone Naga serpent-hood water spout on north rim
+        s.rings("stone", wx, wy + wr, 0.36, [(0, 0.34), (0.65, 0.28), (1.05, 0.42), (1.28, 0.12)], 10)
+        s.rings("gold", wx, wy + wr - 0.15, 0.92, [(0, 0.12), (0.14, 0.08)], 10)
+    mani_wall(s, -9.8, -4.5, 0, 4.6, 0.18)
+    flags(s, (-15.5, 24.5, 9.2), (12.0, 29.5, 8.4), 28, 2.1)
+    flags(s, (-6.0, 16.5, 6.8), (5.2, 16.5, 6.8), 16, 0.85)
 
 
 def peak_palace(s):
-    # Palace has a long low hall adjoining a taller narrow watchtower on one ridge spur.
-    for i, (r, h) in enumerate(((14, 3.4), (10.8, 4.5), (8.4, 3.1))):
-        z = (0, 3.4, 7.9)[i]
-        s.rings("stone", -2, 35, z, [(0, r), (h * 0.63, r * 0.84), (h, r * 0.70)], 19, 0.67, 0.22, 0.36)
-    house(s, -3.5, 35, 10.8, 8.3, 5.8, 4.5, "lime", True)
-    house(s, 2.5, 35, 10.6, 4.8, 4.6, 10.7, "lime", True)
+    # Ch.3 Yarlung Valley & Yumbu Lagang ("雅隆河谷與吐蕃第一宮殿雍布拉康"):
+    # Towering battered whitewashed fortress & watchtower on red-ochre Mount Tashi Tsering spur,
+    # golden highland barley terraces ("青稞梯田"), turquoise Yarlung river, bridge & Sheldrak Crystal Cave!
+    for i, (r, h, mat) in enumerate(((15.2, 3.6, "ochre"), (11.6, 4.6, "stone"), (8.8, 3.2, "ochre"))):
+        z = (0, 3.5, 8.0)[i]
+        s.rings(mat, -1.8, 35, z, [(0, r), (h * 0.63, r * 0.85), (h, r * 0.72)], 21, 0.68, 0.20, 0.36)
+    # Fortress rampart curtain wall along the ridge crest
+    s.box("whitewash", -1.2, 31.2, 8.2, 13.5, 0.85, 2.6)
+    s.box("penma", -1.2, 31.2, 10.5, 13.6, 0.92, 0.38)
+    # Main Palace Hall & Iconic Tall Watchtower at (2.5, 35) (preserves LANDMARKS["yarlung"] = (3500, 250)!)
+    house(s, -3.6, 35, 10.8, 8.6, 6.0, 4.8, "whitewash", True)
+    house(s, 2.5, 35, 10.6, 5.0, 4.8, 11.2, "whitewash", True)
+    dharma_wheel_deer(s, -3.6, 31.9, 16.2)
+    # Sweeping ceremonial zig-zag stone stair ascending the spur (west of SHELDRAK at east=6.8)
     for j in range(29):
         t = j / 28
-        s.box("stone", -11 + 5 * t, 17 + t * 14, t * 5.7, 1.9, 0.68, 0.21)
-    for i in range(6):
-        s.box("grass", -19 - i * 1.7, 11 + i * 3, 0.04, 9, 2.4, 0.04)
-    for j in range(9):
-        s.box("wood", 13, 1 + j * 0.91, 0.9, 2.65, 0.88, 0.18)
-    for x in (11.7, 14.3):
-        s.beam("wood", (x, 0.6, 1.75), (x, 9, 1.75), 0.078)
-        for j in range(5):
-            s.box("wood", x, 0.7 + j * 2, 0.4, 0.13, 0.13, 1.4)
-    s.box("water", 13, 4, 0.02, 17, 3, 0.02)
+        s.box("stone", -11.5 + 5.2 * t, 17 + t * 14, t * 5.9, 2.2, 0.74, 0.24)
+        if j % 4 == 0:
+            s.box("whitewash", -12.6 + 5.2 * t, 17 + t * 14, t * 5.9, 0.36, 0.74, 0.68)
+    # Stepped Golden-Ripe Highland Barley Terraces ("青稞梯田") with stone retaining walls on west valley
+    for i in range(7):
+        tx, ty, tz = -18.5 - i * 1.8, 8 + i * 3.4, i * 0.42
+        s.box("stone", tx, ty, -0.05, 10.5, 2.8, tz + 0.38)
+        s.box("barley" if i % 2 == 0 else "grass", tx, ty, tz + 0.33, 10.2, 2.55, 0.12)
+    chorten(s, -13.5, 10.5, 0, 3.8)
+    # Shimmering Turquoise Yarlung River, Cantilevered Timber Bridge & Prayer-Wheel Pavilion on east valley
+    s.box("turquoise", 14.5, 4.5, 0.015, 9.5, 38.0, 0.03)
+    for side_r in (-4.9, 4.9):
+        s.box("stone", 14.5 + side_r, 4.5, 0.01, 0.65, 38.0, 0.14)
+    for j in range(11):
+        s.box("wood", 14.5, -0.5 + j * 0.92, 0.92, 3.4, 0.88, 0.18)
+    for x in (12.9, 16.1):
+        s.beam("cinnabar", (x, -0.8, 1.82), (x, 9.2, 1.82), 0.085)
+        for j in range(6):
+            s.box("wood", x, -0.6 + j * 1.95, 0.35, 0.16, 0.16, 1.52)
+    flags(s, (12.9, -0.6, 2.4), (16.1, 9.2, 2.4), 16, 0.55)
+    # Prismatic Quartz Crystals flanking Sheldrak Crystal Cave ("謝札水晶洞", east=6.8, start=13.6, width=5.6)
+    for side, cx in ((-1, 3.2), (1, 10.4)):
+        for k in range(3):
+            s.rings("quartz" if k % 2 == 0 else "ice", cx + side * k * 0.55, 14.2 + k * 1.1, 0,
+                    [(0, 0.38), (0.35, 0.48), (1.8 + k * 0.45, 0.26), (2.5 + k * 0.5, 0)], 6)
 
 
 def samye(s):
+    # Ch.4 Samye Monastery ("桑耶寺 — 須彌山宇宙大壇城"):
+    # Three-Story Three-Style Utse Central Cathedral (Tibetan, Tang Chinese, Indian) + Dharma Wheel & Deer,
+    # Four Colored Directional Stupas (White SE, Red SW, Black NW, Green NE), Sun/Moon Chapels,
+    # 1,008-Chorten Circular Chakri Wall, and Red Mount Hepo Ri on the east!
     x, y = 0, 38
-    house(s, x, y, 0, 15.6, 13.4, 4.3, "lime")
-    house(s, x, y, 4.85, 12.4, 10.5, 3.35, "red")
-    house(s, x, y, 8.75, 9, 7.5, 2.85, "ochre", True)
-    for dx, dy, col in ((-14, -7, "lime"), (14, -7, "red"), (-14, 8, "shale"), (14, 8, "green")):
-        s.rings(
-            col, x + dx, y + dy, 0, [(0, 1.45), (0.65, 1.35), (1.4, 0.94), (2.17, 1.2), (2.8, 0.71)], 28
-        )
-        chorten(s, x + dx, y + dy, 2.74, 2.6)
-    for i in range(55):
-        a = TAU * i / 55
-        u, v = x + 27 * math.sin(a), y + 22 * math.cos(a)
-        if v < y and abs(u) < 3.7:
+    # Flush concentric Mandala stone courtyard rings (z <= 0.01m, 100% walkable across all Kora 0..7 legs!)
+    for r_in, r_out, mat in ((11.5, 12.2, "giltpaint"), (19.5, 20.4, "ochre"), (26.2, 27.8, "stone")):
+        for i in range(64):
+            a0, a1 = i * TAU / 64, (i + 1) * TAU / 64
+            s.face(mat, [
+                (x + r_in * 1.18 * math.sin(a0), y + r_in * math.cos(a0), 0.006),
+                (x + r_out * 1.18 * math.sin(a0), y + r_out * math.cos(a0), 0.006),
+                (x + r_out * 1.18 * math.sin(a1), y + r_out * math.cos(a1), 0.006),
+                (x + r_in * 1.18 * math.sin(a1), y + r_in * math.cos(a1), 0.006),
+            ])
+    # Story 1 (Tibetan Whitewashed Stone & Crimson Penma), Story 2 (Tang Cinnabar Pavilion), Story 3 (Indian Golden Roof)
+    house(s, x, y, 0, 16.4, 14.0, 4.5, "whitewash")
+    slope_roof(s, x, y, 4.85, 17.8, 15.2, 0.95)
+    house(s, x, y, 5.15, 12.8, 10.8, 3.55, "cinnabar")
+    slope_roof(s, x, y, 9.05, 14.2, 12.0, 0.92)
+    house(s, x, y, 9.30, 9.2, 7.6, 3.05, "ochre", True)
+    dharma_wheel_deer(s, x, y - 3.9, 13.0)
+    # Twin gilded Doring edict pillars flanking the south portico of Utse (y=29.2, clear of Kora r=27)
+    for sx in (-4.8, 4.8):
+        s.box("stone", x + sx, y - 8.4, 0, 1.1, 1.1, 0.55)
+        s.rings("cinnabar", x + sx, y - 8.4, 0.55, [(0, 0.34), (3.8, 0.28)], 16)
+        s.rings("gold", x + sx, y - 8.4, 4.35, [(0, 0.42), (0.35, 0.48), (0.85, 0)], 16)
+
+    # Four Iconic Colored Stupas of Samye (White SE, Red SW, Black NW, Green NE) inside the Kora ring
+    four_stupas = (
+        (13.8, -7.2, "whitewash", "gold"),     # SE White Stupa (Vairocana)
+        (-13.8, -7.2, "vermillion", "gold"),   # SW Red Stupa (Amitabha)
+        (-13.8, 8.2, "dark", "bronze"),        # NW Black Stupa (Akshobhya)
+        (13.8, 8.2, "turquoise", "gold"),      # NE Green Stupa (Amoghasiddhi)
+    )
+    for dx, dy, col, spire_col in four_stupas:
+        sx, sy = x + dx, y + dy
+        for step in range(3):
+            w_st = 4.2 - step * 0.55
+            s.box(col, sx, sy, step * 0.48, w_st, w_st, 0.48)
+        s.rings(col, sx, sy, 1.44, [(0, 1.48), (0.55, 1.32), (1.35, 1.52), (2.25, 1.18), (2.75, 0.68)], 28)
+        s.box(spire_col, sx, sy, 4.19, 1.25, 1.25, 0.58)
+        for ring_i in range(9):
+            rr = 0.62 - ring_i * 0.048
+            s.rings(spire_col, sx, sy, 4.77 + ring_i * 0.20, [(0, rr), (0.18, rr * 0.78)], 16)
+        s.rings("gold", sx, sy, 6.57, [(0, 0.42), (0.18, 0.46), (0.65, 0)], 16)
+
+    # Four Continent Ling Chapels (placed strictly inside Kora orbit rx=27, ry=32.5 -> |east| <= 20, 31 <= y <= 46)
+    for u, v, c_body in ((-19.2, 31.2, "whitewash"), (19.2, 31.2, "whitewash"),
+                         (-17.5, 45.2, "ochre"), (17.5, 45.2, "ochre")):
+        house(s, u, v, 0, 6.2, 5.4, 3.2, c_body, True)
+    # Circular Chakri Perimeter Wall crowned with miniature white chortens, placed strictly INSIDE outer Lingkhor Kora
+    # (rx_east = 27.2 < 30.0, ry_north = 22.0 < 24.9) so Kora 0..7 walks cleanly around the outside of the Chakri wall!
+    for i in range(60):
+        a = TAU * i / 60
+        u, v = x + 27.2 * math.sin(a), y + 22.0 * math.cos(a)
+        if v < y and abs(u) < 4.5:
             continue
-        s.box("lime", u, v, 0, 3.3, 0.62, 1.5, -a)
-        s.box("maroon", u, v, 1.5, 3.3, 0.76, 0.20, -a)
-        if i % 2 == 0:
-            chorten(s, u, v, 1.7, 0.93)
-    for u, v in ((-19, 31), (19, 31), (-17, 45), (17, 45)):
-        house(s, u, v, 0, 6.4, 5.7, 3.0, "lime", True)
+        s.box("whitewash", u, v, 0, 3.3, 0.64, 1.62, -a)
+        s.box("penma", u, v, 1.62, 3.35, 0.76, 0.22, -a)
+        chorten(s, u, v, 1.84, 0.94)
+    # Sacred Red Mount Hepo Ri ("哈波日神山") rising on the east horizon with Lungta flags
+    for k in range(5):
+        rock(s, 45 + k * 2.5, 28 + k * 5.5, 0, 9.5 - k * 0.8, 18.0 - abs(k - 2) * 3.2, 90 + k, "ochre")
+    flags(s, (13.8, 30.8, 6.4), (x, y - 6.8, 8.8), 18, 1.1)
+    flags(s, (-13.8, 30.8, 6.4), (x, y - 6.8, 8.8), 18, 1.1)
 
 
 def camp(s):
+    # Ch.2 Mangyul Gungthang Pass ("芒域山口"):
+    # Summit Latse Stone Cairns ("拉則神堆") with wooden arrows & 5-color Lungta canopy,
+    # Tibetan Royal Envoy Pavilion & Black Yak-Hair Nomad Tents ("黑犛牛帳") with glowing hearth,
+    # and Twelve Tenma Crystal Weather Altars ("十二丹瑪祭壇") flanking the windswept pass!
+    # Keep (13, 17) landmark height > 2m for verify_world.py!
     for x in (-13, 13):
-        s.beam("wood", (x, 17, 0), (x, 17, 6.6), 0.17, 10)
-        for i in range(5):
-            r = 1.55 - i * 0.24
-            rock(s, x, 17, i * 0.43, r, 0.64, i)
-    flags(s, (-13, 17, 6.3), (13, 17, 6.3), 28, 1.68)
-    for i in range(3):
-        x = 15 + i * 5
-        y = 24 - i * 3
+        s.beam("wood", (x, 17, 0), (x, 17, 7.2), 0.19, 10)
+        s.rings("gold", x, 17, 7.2, [(0, 0.22), (0.35, 0.08), (0.65, 0)], 10)
+        for i in range(6):
+            r = 1.85 - i * 0.24
+            rock(s, x, 17, i * 0.44, r, 0.68, i, "stone" if i % 2 == 0 else "shale")
+        # Ritual wooden arrows ("mda'-dar") planted in the Latse cairn
+        for k in range(6):
+            ang = k * TAU / 6
+            s.beam("cinnabar", (x + 0.5 * math.cos(ang), 17 + 0.5 * math.sin(ang), 1.8),
+                   (x + 1.35 * math.cos(ang), 17 + 1.35 * math.sin(ang), 4.6), 0.035, 6)
+    flags(s, (-13, 17, 6.8), (13, 17, 6.8), 32, 1.75)
+    flags(s, (-13, 17, 6.6), (-18, 26, 3.8), 18, 1.1)
+    flags(s, (13, 17, 6.6), (20, 25, 3.8), 18, 1.1)
+
+    # Tibetan Royal Envoy Ba Salnang's Brocade Pavilion + Glowing Campfire Brazier
+    rx, ry = 11.8, 24.5
+    s.rings("cinnabar", rx, ry, 0, [(0, 3.2), (1.85, 3.1), (3.35, 0.45)], 8, angle=math.pi / 8)
+    s.rings("gold", rx, ry, 1.82, [(0, 3.18), (0.14, 3.16)], 8, angle=math.pi / 8)
+    s.rings("gold", rx, ry, 3.35, [(0, 0.46), (0.45, 0)], 8)
+    # Stone hearth with glowing juniper/yak-dung embers & bronze tea kettle
+    hx, hy = 8.8, 20.2
+    s.rings("stone", hx, hy, 0, [(0, 0.92), (0.34, 0.86)], 12)
+    s.rings("ember", hx, hy, 0.24, [(0, 0.64), (0.14, 0.38), (0.28, 0)], 10)
+    for leg in range(3):
+        la = leg * TAU / 3
+        s.beam("dark", (hx + 0.68 * math.cos(la), hy + 0.68 * math.sin(la), 0), (hx, hy, 1.18), 0.035, 6)
+    s.rings("bronze", hx, hy, 0.58, [(0, 0.24), (0.16, 0.32), (0.30, 0.22)], 12)
+
+    # Authentic Black Yak-Hair Nomad Tents ("SBra-gur") pitched on the eastern leeward slope
+    for i, (tx, ty) in enumerate(((17.5, 22.0), (22.5, 17.5), (-18.5, 21.5))):
         for v in (-1, 1):
-            s.face(
-                "ochre",
-                [
-                    (x + v * 2.3, y - 2.2, 0),
-                    (x + v * 2.3, y + 2.2, 0),
-                    (x, y + 2.2, 3),
-                    (x, y - 2.2, 3),
-                ],
-            )
-        for v in (-1, 1):
-            s.beam("wood", (x, y + v * 2.3, 0), (x, y + v * 2.3, 3.16), 0.065)
-        s.beam("wood", (x, y - 2.4, 3.08), (x, y + 2.4, 3.08), 0.078)
-    chorten(s, -15, 27, 0, 4.1)
+            s.face("yakTent", [
+                (tx + v * 2.6, ty - 2.4, 0), (tx + v * 2.6, ty + 2.4, 0),
+                (tx + v * 0.35, ty + 2.1, 2.75), (tx + v * 0.35, ty - 2.1, 2.75),
+            ])
+            s.beam("dark", (tx + v * 2.6, ty, 0.8), (tx + v * 3.8, ty, 0), 0.024, 5)
+        s.box("whiteCloth", tx, ty - 2.42, 0.2, 0.95, 0.08, 1.85)
+        s.beam("wood", (tx, ty - 2.45, 0), (tx, ty - 2.45, 3.15), 0.07)
+        s.beam("wood", (tx, ty + 2.45, 0), (tx, ty + 2.45, 3.15), 0.07)
+        s.beam("wood", (tx, ty - 2.5, 2.95), (tx, ty + 2.5, 2.95), 0.08)
+
+    # Twelve Tenma Snow-Goddess Crystal Oath Altars flanking the pass trail (|east| >= 7.8)
+    for idx in range(6):
+        for side in (-1, 1):
+            ax = side * (8.2 + (idx % 2) * 2.4)
+            ay = -9.0 + idx * 4.2
+            rock(s, ax, ay, 0, 0.95, 1.15, 200 + idx * 2 + side, "stone")
+            s.rings("ice", ax, ay, 0.95, [(0, 0.28), (0.55, 0.18), (0.95, 0)], 6)
+    chorten(s, -15.5, 27.5, 0, 4.4)
+    mani_wall(s, -9.2, 9.5, 0, 4.8, -0.25)
 
 
 def grove(s):
-    s.rings("paving", 0, 16, 0.01, [(0, 8.9), (0.06, 8.9)], 56)
+    # Pilgrim's Stupa Grove ("行者塔林 — 八大善逝如來佛塔曼荼羅"):
+    # Concentric stone-and-gold lotus mandala plaza, Central Jarung Vow Stupa + 8 Distinct Tathagata Stupas,
+    # 4 carved stone butter-lamp offering pillars, Mani stone walls, and south Tibetan gateway!
+    # Keep (0, 16) landmark height > 2m and central south approach clear!
+    s.rings("paving", 0, 16, 0.01, [(0, 10.4), (0.05, 10.4)], 64)
+    s.rings("ochre", 0, 16, 0.055, [(0, 9.6), (0.015, 9.6)], 64)
+    s.rings("whitewash", 0, 16, 0.062, [(0, 5.2), (0.012, 5.2)], 48)
     for i in range(8):
-        x, y = 7.5 * math.cos(TAU * i / 8), 16 + 7.5 * math.sin(TAU * i / 8)
-        chorten(s, x, y, 0.065, 2.2 + 0.5 * (i % 3))
-    s.rings("bronze", 0, 16, 0.06, [(0, 2.2), (0.19, 2.24), (0.23, 1.93)], 40)
-    chorten(s, 0, 16, 0.3, 5.7)
-    flags(s, (-11, 21, 5), (11, 21, 5), 24, 1.45)
-    for x in (-11, 11):
-        s.beam("wood", (x, 21, 0), (x, 21, 5.18), 0.10)
+        a0 = i * TAU / 8
+        amid = a0 + TAU / 16
+        a1 = (i + 1) * TAU / 8
+        s.face("giltpaint" if i % 2 == 0 else "vermillion", [
+            (0, 16, 0.078),
+            (3.4 * math.cos(a0), 16 + 3.4 * math.sin(a0), 0.078),
+            (4.8 * math.cos(amid), 16 + 4.8 * math.sin(amid), 0.078),
+            (3.4 * math.cos(a1), 16 + 3.4 * math.sin(a1), 0.078),
+        ])
+    for i in range(8):
+        ang = TAU * i / 8 + math.pi / 8
+        x, y = 8.2 * math.cos(ang), 16 + 8.2 * math.sin(ang)
+        s.rings("stone", x, y, 0.05, [(0, 1.35), (0.28, 1.25)], 16)
+        chorten(s, x, y, 0.33, 2.8 + 0.35 * (i % 2))
+    # Central Enlightenment Great Chorten at (0, 16)
+    s.rings("stone", 0, 16, 0.06, [(0, 2.75), (0.26, 2.62)], 40)
+    s.rings("gold", 0, 16, 0.32, [(0, 2.35), (0.18, 2.22)], 40)
+    chorten(s, 0, 16, 0.50, 6.2)
+    # Overhead 5-color Lungta garlands radiating from the central stupa spire (z = 5.2 -> 4.6m, full clearance!)
+    for i in range(8):
+        ang = TAU * i / 8 + math.pi / 8
+        px, py = 11.2 * math.cos(ang), 16 + 11.2 * math.sin(ang)
+        s.beam("cinnabar", (px, py, 0), (px, py, 4.8), 0.09, 8)
+        s.rings("gold", px, py, 4.8, [(0, 0.16), (0.32, 0)], 10)
+        flags(s, (0, 16, 5.6), (px, py, 4.6), 14, 0.55)
+    # Four stone butter-lamp offering pillars outside the stupa ring
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            lx, ly = sx * 9.8, 16 + sy * 9.8
+            s.rings("stone", lx, ly, 0, [(0, 0.45), (1.15, 0.32), (1.30, 0.48)], 12)
+            s.rings("bronze", lx, ly, 1.30, [(0, 0.38), (0.18, 0.42)], 16)
+            s.rings("lampFlame", lx, ly, 1.48, [(0, 0.09), (0.14, 0.12), (0.32, 0)], 9)
+    mani_wall(s, -13.2, 14.0, 0, 7.5, math.pi / 2)
+    mani_wall(s, 13.2, 14.0, 0, 7.5, math.pi / 2)
+    # Ceremonial Tibetan gateway flanking south approach at x = ±6.8, y = 2.5 (leaves 11m central lane clear!)
+    for sx in (-6.8, 6.8):
+        s.box("whitewash", sx, 2.5, 0, 1.6, 1.6, 3.6)
+        s.box("penma", sx, 2.5, 3.6, 1.75, 1.75, 0.42)
+        chorten(s, sx, 2.5, 4.02, 1.65)
 
 
 def cave(s, floor):
+    # Ch.5 Three Terma Sanctuaries:
+    # Floor 1: Turquoise Dakini Grotto ("空行母松石窟")
+    # Floor 2: Sapphire Vajra Crystal Sanctum ("金剛藍晶聖殿")
+    # Floor 3: Zangdok Palri Copper-Colored Mountain Golden Vault ("銅色吉祥山黃金伏藏壇城")
     style = ("quartz", "ice", "amber")[floor - 1]
     wall = ("shale", "shale", "stone")[floor - 1]
-    # A continuous inward-facing vault closes the room behind the arched ribs.
-    # The crown undulates with the strata and the side edges descend into the crags.
+    pillar_mat = ("cinnabar", "lapis", "cinnabar")[floor - 1]
+    trim_mat = ("turquoise", "ice", "gold")[floor - 1]
     sections = []
     for j in range(27):
         north = -35 + j * 2.8
@@ -738,71 +985,95 @@ def cave(s, floor):
             s.face(wall, [a[k], a[k + 1], b[k + 1], b[k]])
     s.face(wall, sections[0][::-1])
     s.face(wall, sections[-1])
-    for i in range(30):
-        east = (-1 if i % 2 else 1) * (4.0 + 3 * noise(i, floor))
+
+    # Flush Sacred Floor Mandala & Nave Runner (z <= 0.015m — 100% clear for capsule_clear & VAULT stairs!)
+    for seg in range(18):
+        ny = -20.0 + seg * 1.65
+        s.box("stone", 0, ny, 0.004, 3.4, 1.48, 0.008)
+        s.box(trim_mat, 0, ny, 0.008, 0.42, 1.48, 0.006)
+    for ring_r, r_mat in ((4.8, "stone"), (3.8, trim_mat), (2.9, pillar_mat)):
+        s.rings(r_mat, 0, 2.0, 0.006, [(0, ring_r), (0.008, ring_r)], 32)
+    for spoke in range(8):
+        sa = spoke * TAU / 8
+        s.beam(trim_mat, (0, 2.0, 0.012), (4.6 * math.cos(sa), 2.0 + 4.6 * math.sin(sa), 0.012), 0.08, 4)
+
+    # Luminous ceiling stalactites & crystal chandeliers (high in vault crown z > 9m)
+    for i in range(32):
+        east = (-1 if i % 2 else 1) * (3.6 + 3.4 * noise(i, floor))
         north = -26 + i * 2.0
         top = 13.9 - abs(east) * 0.19 + 0.4 * math.sin(north * 0.22)
-        length = 1.2 + noise(floor, i) * 2.4
+        length = 1.4 + noise(floor, i) * 2.5
         s.rings(
-            style if floor == 2 and i % 3 == 0 else wall,
+            style if i % 2 == 0 else wall,
             east,
             north,
             top - length,
-            [(0, 0.024), (0.7 * length, 0.38), (length, 0.62)],
+            [(0, 0.024), (0.7 * length, 0.36), (length, 0.62)],
             7,
         )
+    # Lateral cavern crags & glowing mineral crystal formations (|east| >= 8.5, clear of lanterns & VAULT!)
     for side in (-1, 1):
         for j in range(15):
             x = side * (11 + 2 * noise(j, floor))
             y = -29 + j * 4
             rock(s, x, y, -0.25, 3.0 + noise(j, 3), 7.3 + noise(j, 4) * 3, j, wall)
-            if j % 2 == 0:
-                for i in range(3):
-                    r = 0.4 + noise(i, j) * 0.65
-                    s.rings(
-                        style,
-                        x - side * (2 + i * 0.5),
-                        y + i * 0.43,
-                        0,
-                        [(0, r * 0.65), (0.25, r), (2.1 + i * 0.65, r * 0.8), (3.1 + i * 0.73, 0)],
-                        6,
-                    )
+            for i in range(3):
+                r = 0.42 + noise(i, j) * 0.68
+                s.rings(
+                    style,
+                    x - side * (1.8 + i * 0.48),
+                    y + i * 0.45,
+                    0,
+                    [(0, r * 0.65), (0.25, r), (2.3 + i * 0.68, r * 0.78), (3.4 + i * 0.75, 0)],
+                    6,
+                )
+    # Carved Tibetan Temple Columns & Ribbed Vault Arches along the cavern nave
     for k in range(5):
         y = -13 + k * 9
         for side in (-1, 1):
             x = side * 8.8
-            s.box(wall, x, y, 0, 1.7, 2.1, 6.4)
-            s.box(style, x, y, 5.8, 1.95, 2.34, 0.25)
+            s.box("stone", x, y, 0, 2.05, 2.35, 0.55)
+            s.box(pillar_mat, x, y, 0.55, 1.62, 1.95, 5.25)
+            s.box("gold", x, y, 5.50, 1.88, 2.22, 0.30)
+            s.box(style, x, y, 5.80, 2.05, 2.42, 0.28)
             for j in range(7):
                 a = (j / 7) * math.pi / 2
                 b = ((j + 1) / 7) * math.pi / 2
                 s.beam(
-                    wall,
+                    "penma" if floor == 3 else wall,
                     (side * 8.8 * math.cos(a), y, 6.4 + 3.9 * math.sin(a)),
                     (side * 8.8 * math.cos(b), y, 6.4 + 3.9 * math.sin(b)),
-                    0.76,
+                    0.72,
                     8,
                 )
-        if floor == 3:
-            for side in (-1, 1):
-                chorten(s, side * 7.5, y + 2, 0, 2)
+            if floor == 3 or k % 2 == 1:
+                chorten(s, side * 7.5, y + 2, 0, 2.25)
+
+    # Grand Sanctuary Centerpiece at (0, 24) (strictly 2.1m < height_at(0, 24) < 9.5m for verify_world.py!)
     if floor == 3:
         for j in range(4):
-            s.box("bronze", 0, 24, j * 0.35, 9 - j * 1.3, 9 - j * 1.3, 0.34)
-        chorten(s, 0, 24, 1.4, 7.8)
+            s.box("gold" if j % 2 else "cinnabar", 0, 24, j * 0.36, 9.2 - j * 1.35, 9.2 - j * 1.35, 0.35)
+        chorten(s, 0, 24, 1.44, 7.6)
+        for ang_i in range(4):
+            ca, sa = math.cos(ang_i * TAU / 4 + math.pi / 4), math.sin(ang_i * TAU / 4 + math.pi / 4)
+            chorten(s, 3.6 * ca, 24 + 3.6 * sa, 0.36, 2.4)
     else:
-        for j in range(9):
-            x = (j % 3 - 1) * 1.7
-            y = 23 + j // 3 * 1.7
+        s.rings("stone", 0, 24, 0, [(0, 4.2), (0.45, 3.9)], 16)
+        s.rings("gold", 0, 24, 0.45, [(0, 3.6), (0.22, 3.4)], 16)
+        # Central sacred crystal mandala spire at exact (0, 24) reaching ~7.8m (< 10m trace ceiling!)
+        s.rings(style, 0, 24, 0.67, [(0, 1.45), (0.8, 1.65), (4.8, 1.12), (7.1, 0)], 8, 1, 0.08, floor)
+        for j in range(8):
+            ang = j * TAU / 8
+            cx, cy = 2.6 * math.cos(ang), 24 + 2.6 * math.sin(ang)
             s.rings(
-                style,
-                x,
-                y,
-                0,
-                [(0, 1), (0.6, 1.27), (4 + noise(j, 0) * 2, 0.93), (5.8 + noise(j, 0) * 2, 0)],
+                style if j % 2 == 0 else trim_mat,
+                cx,
+                cy,
+                0.45,
+                [(0, 0.72), (0.5, 0.92), (2.9 + noise(j, floor) * 1.4, 0.58), (4.4 + noise(j, floor) * 1.4, 0)],
                 6,
                 1,
-                0.17,
+                0.15,
                 j,
             )
     for j in range(7):
@@ -960,20 +1231,44 @@ def landscape(stage):
     elif stage == "mangyul":
         camp(s)
     elif stage == "wild":
-        chorten(s, -9, 9, 0, 3.6)
+        # Himalayan Trail ("喜馬拉雅古道 — 傾斜瑪尼堆與雪山巨石陣"):
+        #Keep (-9, 9) landmark height > 2m for verify_world.py!
+        chorten(s, -9, 9, 0, 4.1)
+        # Flush mountain flagstone path winding northward (z <= 0.012m, 100% walkable)
+        for step in range(28):
+            py = -20.0 + step * 1.45
+            px = 0.85 * math.sin(step * 0.32)
+            s.box("stone" if step % 2 == 0 else "paving", px, py, 0.004, 2.35, 1.12, 0.008, 0.08 * math.cos(step))
+        # Iconic Tilted Mani Stone Cairns ("傾斜瑪尼堆") & Pass Lungta Poles outside nav corridor
+        mani_wall(s, -8.4, 1.5, 0, 4.8, 0.28)
+        mani_wall(s, 8.6, 5.5, 0, 5.2, -0.22)
+        for side in (-1, 1):
+            s.beam("wood", (side * 10.5, 14.5, 0), (side * 10.5, 14.5, 6.4), 0.14, 8)
+            rock(s, side * 10.5, 14.5, 0, 1.45, 1.25, 50 + side, "stone")
+        flags(s, (-10.5, 14.5, 6.1), (10.5, 14.5, 6.1), 26, 1.45)
+        # Glacial Megalith Boss Ring around (0, 24) framing the Snow Migoi King arena
+        s.rings("stone", 0, 22, 0.005, [(0, 6.8), (0.008, 6.8)], 32)
+        for k in range(8):
+            ang = k * TAU / 8 + 0.2
+            mx, my = 8.4 * math.cos(ang), 22.0 + 7.2 * math.sin(ang)
+            if my < 14.5 and abs(mx) < 5.5:
+                continue
+            rock(s, mx, my, 0, 1.35, 3.8 + (k % 2) * 0.9, 80 + k, "shale")
+            s.rings("ice", mx, my, 2.8, [(0, 0.42), (1.1, 0.18), (1.6, 0)], 6)
         for j in range(20):
             r = 2.6 + 1.4 * rng.random()
             rock(
                 s,
-                (-1 if j % 2 else 1) * (6 + j * 0.55),
+                (-1 if j % 2 else 1) * (7.5 + j * 0.55),
                 21 + j * 0.76,
                 0,
                 r,
-                2.6 + rng.random() * 5.3,
+                2.8 + rng.random() * 5.4,
                 j,
+                "snow" if j > 12 else "shale",
             )
         for j in range(3):
-            chorten(s, 11 + j * 3, 23 + j * 2, 0, 2.5 + j * 0.32)
+            chorten(s, 11 + j * 3, 23 + j * 2, 0, 2.6 + j * 0.35)
     else:
         cave(s, int(stage[-1]))
     build_passages(s, stage)

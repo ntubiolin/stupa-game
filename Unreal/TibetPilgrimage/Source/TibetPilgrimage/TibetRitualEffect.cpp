@@ -95,120 +95,177 @@ struct FSurface
     }
 };
 
-void Hum(FSurface& Body, FSurface& Rim)
+void Hum(FSurface& Body, FSurface& Rim, FSurface& Crown)
 {
-    // A pointed comet with two tapered spiral streamers, travelling along local +X.
-    Body.Leaf({-88,0,0}, {31,0,0}, {0,23,0}, {0,0,22});
-    Body.Leaf({-77,0,0}, {31,0,0}, {0,0,22}, {0,-21,0});
+    // Five-pronged Tibetan Vajra Bolt ("吽字光彈") with golden central prong & twin turquoise mantra helices
+    Body.Leaf({-92,0,0}, {38,0,0}, {0,21,0}, {0,0,18});
+    Body.Leaf({-82,0,0}, {38,0,0}, {0,0,20}, {0,-18,0});
+    for (int32 K = 0; K < 4; ++K)
+    {
+        const double A = K * UE_HALF_PI + UE_PI * .25;
+        const FVector Out(0, FMath::Cos(A), FMath::Sin(A));
+        Crown.Stroke({-16, 0, 0}, FVector(12, 0, 0) + Out * 22, 2.2);
+        Crown.Stroke(FVector(12, 0, 0) + Out * 22, {42, 0, 0}, 2.0);
+    }
+    Crown.Hoop({-18, 0, 0}, {0, 1, 0}, {0, 0, 1}, 18, 2.2);
     for (int32 J = 0; J < 2; ++J)
     {
-        FVector Last(-110,0,0);
-        for (int32 I = 1; I <= 24; ++I)
+        FVector Last(-112,0,0);
+        for (int32 I = 1; I <= 26; ++I)
         {
-            const double T = I / 24., A = 8 * T + J * UE_PI, R = 17 * FMath::Sin(T * UE_PI);
-            const FVector Next(-110 + 128 * T, R * FMath::Cos(A), R * FMath::Sin(A));
-            Rim.Stroke(Last, Next, 1.1 + 1.3 * T);
+            const double T = I / 26., A = 9.0 * T + J * UE_PI, R = 19 * FMath::Sin(T * UE_PI);
+            const FVector Next(-112 + 138 * T, R * FMath::Cos(A), R * FMath::Sin(A));
+            Rim.Stroke(Last, Next, 1.3 + 1.4 * T);
             Last = Next;
         }
     }
 }
 
-void Chant(FSurface& Body, FSurface& Rim)
+void Chant(FSurface& Body, FSurface& Rim, FSurface& Crown)
 {
-    Body.Hoop(FVector::ZeroVector, FVector::ForwardVector, FVector::RightVector, 124, 2.7);
-    Rim.Hoop(FVector::ZeroVector, FVector::ForwardVector, FVector::RightVector, 119, 1);
+    // Oṃ Maṇi Padme Hūṃ Six-Syllable Lotus Dharma Wheel ("六字大明咒")
+    Body.Hoop(Up * 6, FVector::ForwardVector, FVector::RightVector, 128, 3.2);
+    Rim.Hoop(Up * 8, FVector::ForwardVector, FVector::RightVector, 120, 1.6);
+    Rim.Hoop(Up * 10, FVector::ForwardVector, FVector::RightVector, 62, 2.0);
     for (int32 J = 0; J < 6; ++J)
     {
-        const FVector R = Radial(J * UE_TWO_PI / 6), Side = Up ^ R;
-        Body.Leaf(R * 55, R * 113, Side * 17, Up * 9);
-        Rim.Leaf(R * 115, R * 143 + Up * 8, Side * 6, Up * 6);
+        const double A = J * UE_TWO_PI / 6;
+        const FVector R = Radial(A), Side = Up ^ R;
+        Body.Leaf(R * 36 + Up * 4, R * 116 + Up * 14, Side * 22, Up * 12);
+        Rim.Leaf(R * 112 + Up * 8, R * 148 + Up * 22, Side * 8, Up * 9);
+        Rim.Stroke(R * 24 + Up * 8, R * 120 + Up * 8, 1.8);
+        const FVector Mid = Radial(A + UE_PI / 6) * 92 + Up * 24;
+        Crown.Hoop(Mid, FVector::ForwardVector, FVector::RightVector, 11, 2.6);
+        Crown.Leaf(Mid - Up * 10, Mid + Up * 18, Side * 6, R * 5);
     }
 }
 
-void Phurba(FSurface& Body, FSurface& Rim)
+void Phurba(FSurface& Body, FSurface& Rim, FSurface& Crown)
 {
-    Body.Profile({{0,-90},{4,-69},{16,13},{8,22},{0,23}}, 3);
-    Rim.Profile({{7,15},{19,20},{18,25},{7,29},{9,43},{5,50}}, 10);
+    // Wrathful Three-Bladed Vajrakilaya Ritual Dagger ("普巴金剛橛") + Triangular Dharmadhatu Seal
+    Body.Profile({{0,-94},{5,-72},{19,14},{10,24},{0,26}}, 3);
+    Rim.Profile({{8,16},{21,22},{20,28},{9,32},{12,48},{6,56}}, 12);
     for (int32 I = 0; I < 3; ++I)
     {
-        const FVector R = Radial(I * UE_TWO_PI / 3);
-        Rim.Leaf(Up * 48, Up * 81, (Up ^ R) * 4, R * 15);
+        const FVector R = Radial(I * UE_TWO_PI / 3), NextR = Radial((I + 1) * UE_TWO_PI / 3);
+        Rim.Leaf(Up * 50, Up * 88, (Up ^ R) * 6, R * 18);
+        Crown.Stroke(R * 58 - Up * 82, NextR * 58 - Up * 82, 3.0);
+        Crown.Leaf(R * 42 - Up * 82, R * 84 - Up * 66, (Up ^ R) * 9, Up * 14);
     }
-    Body.Profile({{4,46},{6,60},{0,85}}, 8);
+    Crown.Hoop(-Up * 82, FVector::ForwardVector, FVector::RightVector, 64, 2.4);
+    Body.Profile({{5,50},{8,66},{0,94}}, 8);
 }
 
-void Bell(FSurface& Body, FSurface& Rim)
+void Bell(FSurface& Body, FSurface& Rim, FSurface& Crown)
 {
-    // The flared instrument hangs to one side of the three advancing sound fronts.
-    Body.Profile({{0,22},{7,19},{10,9},{12,-8},{15,-19},{26,-31},{27,-35},{21,-35}}, 24);
-    Rim.Profile({{5,19},{6,33},{11,38},{5,43},{0,50}}, 12);
+    // Tibetan Prajñā Ghanta Ritual Bell ("金剛鈴退散") + Three Sonic Dharma Rings
+    Body.Profile({{0,24},{8,20},{11,10},{14,-8},{18,-20},{28,-33},{30,-37},{23,-37}}, 24);
+    Rim.Profile({{6,20},{7,34},{13,40},{6,46},{0,56}}, 12);
     for (int32 I = 0; I < 3; ++I)
     {
-        const double R = 58 + 44 * I;
-        // Vertical waves read from the player's shoulder even on a bright ground plane.
-        Rim.Hoop(FVector(R * .48,0,0), FVector::RightVector, Up, R * .42, 2.4,
-                 -.45 * UE_PI, .45 * UE_PI);
-        Rim.Hoop(FVector(R * .48,0,0), FVector::RightVector, Up, R * .42, 2.4,
-                 .55 * UE_PI, 1.45 * UE_PI);
+        const double R = 56 + 46 * I;
+        const FVector WaveCenter(R * .52, 0, 0);
+        Rim.Hoop(WaveCenter, FVector::RightVector, Up, R * .44, 2.6, -.46 * UE_PI, .46 * UE_PI);
+        Rim.Hoop(WaveCenter, FVector::RightVector, Up, R * .44, 2.6, .54 * UE_PI, 1.46 * UE_PI);
+        Crown.Hoop(WaveCenter, FVector::RightVector, Up, R * .36, 1.5);
     }
 }
 
-void Lotus(FSurface& Body, FSurface& Rim)
+void Lotus(FSurface& Body, FSurface& Rim, FSurface& Crown)
 {
-    for (int32 I = 0; I < 9; ++I)
+    // Translucent 12-Petal Sacred Padma Protection Shield ("蓮華護盾")
+    for (int32 I = 0; I < 12; ++I)
     {
-        FVector R = Radial(I * UE_TWO_PI / 9), Side = Up ^ R;
-        Body.Leaf(R * 26, R * 81 + Up * 69, Side * 19, R * 14);
-        R = Radial((I + .5) * UE_TWO_PI / 9);
-        Rim.Leaf(R * 30, R * 92 + Up * 38, (Up ^ R) * 15, R * 11);
+        FVector R = Radial(I * UE_TWO_PI / 12), Side = Up ^ R;
+        Body.Leaf(R * 28, R * 86 + Up * 78, Side * 21, R * 16);
+        R = Radial((I + .5) * UE_TWO_PI / 12);
+        Rim.Leaf(R * 32, R * 96 + Up * 44, (Up ^ R) * 15, R * 12);
     }
-    Rim.Hoop(Up * 3, FVector::ForwardVector, FVector::RightVector, 34, 2);
-}
-
-void Invocation(FSurface& Body, FSurface& Rim)
-{
-    const FVector Center(0,0,130);
-    Rim.Hoop(Center, FVector::RightVector, Up, 72, 3);
-    Body.Hoop(Center, FVector::RightVector, Up, 79, 1.8, .13 * UE_PI, .87 * UE_PI);
-    for (int32 I = 0; I < 9; ++I)
+    Rim.Hoop(Up * 6, FVector::ForwardVector, FVector::RightVector, 88, 2.2);
+    Crown.Hoop(Up * 46, FVector::ForwardVector, FVector::RightVector, 92, 1.8);
+    for (int32 K = 0; K < 8; ++K)
     {
-        const double A = I * UE_PI / 8;
-        const FVector R(0, FMath::Cos(A), FMath::Sin(A)), Side(0,-R.Z,R.Y);
-        Body.Leaf(Center + R * 71, Center + R * (94 + 7 * (I % 2)), Side * 6, FVector(7,0,0));
+        const FVector R = Radial(K * UE_TWO_PI / 8);
+        Crown.Leaf(R * 86 + Up * 42, R * 98 + Up * 58, (Up ^ R) * 5, Up * 6);
     }
 }
 
-void Guru(FSurface& Body, FSurface& Rim)
+void Invocation(FSurface& Body, FSurface& Rim, FSurface& Crown)
 {
-    Body.Hoop(FVector::ZeroVector, FVector::ForwardVector, FVector::RightVector, 107, 3.5);
+    // Twelve Tenma Snow-Goddess Protector Summon ("護法召喚")
+    const FVector BackCenter(-18, 0, 128);
+    Rim.Hoop(BackCenter, FVector::RightVector, Up, 76, 3.2);
+    Crown.Hoop(BackCenter, FVector::RightVector, Up, 54, 2.0);
+    Body.Hoop(Up * 6, FVector::ForwardVector, FVector::RightVector, 68, 2.8);
+    for (int32 I = 0; I < 12; ++I)
+    {
+        const double A = I * UE_TWO_PI / 12;
+        const FVector R(0, FMath::Cos(A), FMath::Sin(A)), Side(0, -R.Z, R.Y);
+        Body.Leaf(BackCenter + R * 72, BackCenter + R * (98 + 10 * (I % 2)), Side * 7, FVector(-6, 0, 0));
+        const FVector GroundR = Radial(A);
+        Crown.Leaf(GroundR * 48 + Up * 4, GroundR * 78 + Up * 16, (Up ^ GroundR) * 8, Up * 6);
+    }
+    Crown.Hoop({64, 0, 96}, FVector::ForwardVector, FVector::RightVector, 58, 2.6, -UE_PI * .38, UE_PI * .38);
+}
+
+void Guru(FSurface& Body, FSurface& Rim, FSurface& Crown)
+{
+    // Twelve-Syllable Vajra Guru Mantra ("上師心咒 — 嗡阿吽班雜咕嚕貝瑪悉地吽")
+    Rim.Hoop(Up * 8, FVector::ForwardVector, FVector::RightVector, 126, 3.8);
+    Rim.Hoop(Up * 10, FVector::ForwardVector, FVector::RightVector, 74, 2.4);
+    for (int32 J = 0; J < 12; ++J)
+    {
+        const FVector R = Radial(J * UE_TWO_PI / 12);
+        Rim.Stroke(R * 22 + Up * 9, R * 124 + Up * 9, 2.0);
+        Body.Leaf(R * 68 + Up * 6, R * 144 + Up * 28, (Up ^ R) * 15, Up * 12);
+    }
     for (int32 J = 0; J < 8; ++J)
     {
-        const FVector R = Radial(J * UE_TWO_PI / 8);
-        Rim.Leaf(R * 65, R * 125 + Up * 16, (Up ^ R) * 12, Up * 8);
+        const FVector R = Radial((J + .5) * UE_TWO_PI / 8);
+        Body.Leaf(R * 54 + Up * 10, R * 128 + Up * 165, (Up ^ R) * 16, R * 22);
     }
-    for (int32 J = 0; J < 6; ++J)
+    for (int32 J = 0; J < 5; ++J)
     {
-        const FVector R = Radial(J * UE_TWO_PI / 6);
-        Body.Leaf(R * 52 + Up * 6, R * 125 + Up * 191, (Up ^ R) * 15, R * 21);
-    }
-    for (int32 J = 0; J < 3; ++J)
-    {
-        FVector Last = Radial(J * UE_TWO_PI / 3) * 93;
+        FVector Last = Radial(J * UE_TWO_PI / 5) * 104 + Up * 12;
         for (int32 I = 1; I <= 28; ++I)
         {
             const double T = I / 28.;
-            const FVector Next = Radial(J * UE_TWO_PI / 3 + 5 * T) * (93 - 75 * T) + Up * (T * 308);
-            Body.Stroke(Last, Next, 7 - 3 * T);
+            const FVector Next = Radial(J * UE_TWO_PI / 5 + 5.2 * T) * (104 - 78 * T) + Up * (12 + T * 248);
+            Crown.Stroke(Last, Next, 5.2 - 2.4 * T);
             Last = Next;
         }
     }
-    Rim.Profile({{0,258},{14,289},{6,309},{0,331}}, 6);
+    Crown.Hoop(Up * 238, FVector::ForwardVector, FVector::RightVector, 46, 2.6);
+    Rim.Profile({{0,242},{18,268},{8,288},{0,312}}, 8);
 }
 
-const FLinearColor Fill[] = {{.004f,.37f,.62f},{.96f,.30f,.015f},{.035f,.055f,.63f},
-    {.84f,.36f,.035f},{.72f,.055f,.29f},{.035f,.44f,.23f},{.26f,.022f,.65f}};
-const FLinearColor Edge[] = {{.12f,1.05f,1.12f},{1.40f,.81f,.17f},{1.04f,.50f,.08f},
-    {1.40f,1.03f,.42f},{1.17f,.36f,.59f},{1.20f,.89f,.35f},{1.05f,.22f,.55f}};
+const FLinearColor Fill[] = {
+    {.04f, .52f, .88f, .78f},  // 0 Hum Bolt: Deep Vajra Turquoise-Sapphire
+    {.96f, .38f, .06f, .76f},  // 1 Six-Syllable: Cinnabar-Saffron Lotus
+    {.10f, .16f, .78f, .86f},  // 2 Phurba: Wrathful Lapis-Indigo Iron
+    {.92f, .48f, .08f, .78f},  // 3 Ghanta Bell: Burnished Bronze-Amber
+    {.86f, .14f, .38f, .52f},  // 4 Lotus Shield: Silky Translucent Padma Ruby-Rose
+    {.06f, .62f, .52f, .76f},  // 5 Dharmapala: Glacial Himalayan Turquoise
+    {.78f, .14f, .28f, .74f},  // 6 Vajra Guru: Padma Crimson-Magenta Brilliance
+};
+const FLinearColor Edge[] = {
+    {.28f, 1.35f, 1.45f, .95f}, // 0 Diamond-Cyan Rim
+    {1.48f, 1.05f, .26f, .95f}, // 1 Sacred Gold Rim
+    {1.35f, .72f, .16f, .96f},  // 2 Gilt Vajra Hilt
+    {1.48f, 1.15f, .46f, .94f}, // 3 Golden Bell Sonic Rim
+    {1.38f, .88f, .32f, .88f},  // 4 Golden Lotus Filaments
+    {1.38f, 1.08f, .38f, .94f}, // 5 Oath Gold Sunburst
+    {1.55f, 1.18f, .32f, .96f}, // 6 Pure-Vision Burnished Gold
+};
+const FLinearColor Accent[] = {
+    {1.42f, 1.12f, .36f, .94f}, // 0 Golden Vajra Prong Head
+    {.24f, 1.28f, 1.15f, .90f}, // 1 Turquoise Mani Jewels
+    {1.55f, .22f, .08f, .90f},  // 2 Crimson Wisdom-Fire Seal
+    {.28f, 1.25f, 1.18f, .84f}, // 3 Turquoise Prajna Harmonics
+    {.26f, 1.28f, 1.12f, .82f}, // 4 Turquoise Seed-Syllable Crown
+    {.55f, 1.35f, 1.55f, .88f}, // 5 Snow-Crystal Oath Pedestal & Crescent
+    {.28f, 1.38f, 1.22f, .88f}, // 6 Rainbow Turquoise Thigle Spirals
+};
 
 void Impact(FSurface& Body, FSurface& Rim, int32 SourceSlot)
 {
@@ -254,6 +311,13 @@ ATibetRitualEffect::ATibetRitualEffect()
     Motif->SetGenerateOverlapEvents(false);
     Motif->SetCastShadow(false);
     Motif->SetCanEverAffectNavigation(false);
+
+    Aura = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("Ritual crown aura"));
+    Aura->SetupAttachment(Motif);
+    Aura->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    Aura->SetGenerateOverlapEvents(false);
+    Aura->SetCastShadow(false);
+    Aura->SetCanEverAffectNavigation(false);
 }
 
 void ATibetRitualEffect::Start(int32 SkillSlot, const FVector& From, const FVector& To, APawn* Caster,
@@ -262,39 +326,56 @@ void ATibetRitualEffect::Start(int32 SkillSlot, const FVector& From, const FVect
     Slot = SkillSlot; Origin = From; Target = To; Source = Caster;
     Facing = (To - From).GetSafeNormal2D().Rotation();
     const FVector Side = FRotationMatrix(Facing).GetUnitAxis(EAxis::Y);
-    const float Lifetimes[] = {.79f,.90f,1.12f,.90f,6.f,1.65f,1.38f};
+    const float Lifetimes[] = {.79f,.92f,1.15f,.92f,6.f,1.68f,1.45f};
     Duration = Lifetimes[Slot];
-    FSurface Body, Rim;
+    FSurface Body, Rim, Crown;
     switch (Slot)
     {
     case 0:
-        Hum(Body, Rim);
+        Hum(Body, Rim, Crown);
         Origin += Side * 54 + Up * 22;
         BuildBoltTrail(Material);
         break;
-    case 1: Chant(Body, Rim); Origin = Caster->GetActorLocation() - Up * 78; break;
-    case 2: Phurba(Body, Rim); break;
-    case 3: Bell(Body, Rim); Origin += Side * 58; break;
-    case 4: Lotus(Body, Rim); break;
+    case 1: Chant(Body, Rim, Crown); Origin = Caster->GetActorLocation() - Up * 78; break;
+    case 2: Phurba(Body, Rim, Crown); break;
+    case 3: Bell(Body, Rim, Crown); Origin += Side * 58; break;
+    case 4: Lotus(Body, Rim, Crown); break;
     case 5:
     {
-        Invocation(Body, Rim);
-        Origin = Caster->GetActorLocation() + Side * 139 + Facing.Vector() * 58 - Up * 86;
+        Invocation(Body, Rim, Crown);
+        Origin = Caster->GetActorLocation() + Side * 136 + Facing.Vector() * 64 - Up * 84;
         auto* Figure = NewObject<UStaticMeshComponent>(this);
         Figure->SetupAttachment(Motif);
         Figure->SetStaticMesh(LoadObject<UStaticMesh>(nullptr,TEXT("/Game/Figures/Tenma.Tenma")));
-        Figure->SetRelativeRotation(FRotator(0,90,0));
+        // Blender -Y forward imports to UE +Y; -90 deg Yaw aligns Tenma forward (+X) toward the enemy!
+        Figure->SetRelativeRotation(FRotator(0,-90,0));
         Figure->SetCollisionEnabled(ECollisionEnabled::NoCollision);
         Figure->SetGenerateOverlapEvents(false);
         Figure->SetCastShadow(false);
         Figure->RegisterComponent();
         break;
     }
-    case 6: Guru(Body, Rim); break;
+    case 6:
+    {
+        Guru(Body, Rim, Crown);
+        Origin = (Caster ? Caster->GetActorLocation() : Target) + Facing.Vector() * 145 - Up * 82;
+        auto* Vision = NewObject<UStaticMeshComponent>(this);
+        Vision->SetupAttachment(Motif);
+        Vision->SetStaticMesh(LoadObject<UStaticMesh>(nullptr,TEXT("/Game/Figures/GuruVision.GuruVision")));
+        Vision->SetRelativeLocation(FVector(0, 0, 8));
+        Vision->SetRelativeRotation(FRotator(0, -90, 0));
+        Vision->SetRelativeScale3D(FVector(1.08f));
+        Vision->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        Vision->SetGenerateOverlapEvents(false);
+        Vision->SetCastShadow(false);
+        Vision->RegisterComponent();
+        break;
+    }
     default: Destroy(); return;
     }
     Body.Install(Motif, 0, Material, Fill[Slot]);
     Rim.Install(Motif, 1, Material, Edge[Slot]);
+    Crown.Install(Aura, 0, Material, Accent[Slot]);
     SetLifeSpan(Duration);
     Animate();
 }
@@ -458,9 +539,9 @@ void ATibetRitualEffect::Animate()
         Scale = FVector(.74 + .28 * FMath::Sin(T * UE_PI)) * (.60 + .40 * Fade);
         break;
     case 6:
-        At = Target - Up * 109;
-        Rotation.Yaw += 80 * Rise;
-        Scale = FVector(1.06 + .46 * Rise, 1.06 + .46 * Rise, 1.02 + .38 * Rise) * (.45 + .55 * Fade);
+        At = Origin + Up * (6 * Rise);
+        if (Aura) Aura->SetRelativeRotation(FRotator(0, 95 * Rise, 0));
+        Scale = FVector(.92 + .24 * Rise, .92 + .24 * Rise, .94 + .20 * Rise) * (.55 + .45 * Fade);
         break;
     case EnemyWindup:
         Rotation.Yaw += 30 * Rise;

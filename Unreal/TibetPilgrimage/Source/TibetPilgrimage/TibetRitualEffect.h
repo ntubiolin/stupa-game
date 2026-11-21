@@ -25,6 +25,7 @@ public:
 
 private:
     UPROPERTY() TObjectPtr<UProceduralMeshComponent> Motif;
+    UPROPERTY() TObjectPtr<UProceduralMeshComponent> Aura;
     UPROPERTY() TObjectPtr<UProceduralMeshComponent> BoltTrail;
     TWeakObjectPtr<APawn> Source;
     FVector Origin, Target;

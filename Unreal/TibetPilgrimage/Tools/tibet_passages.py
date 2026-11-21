@@ -107,6 +107,14 @@ def threshold(s, p, open_back):
             s.face("stone", [v[j] for j in f])
     s.box("shale", p.east, p.front + p.landing / 2, p.floor + 3.87,
           p.width + .95, p.landing + .52, .85)
+    # Ornate Tibetan sacred cave threshold: crimson penma lintel, gilt sun-moon mirror & carved side pilasters
+    s.box("penma", p.east, p.front - .22, p.floor + 3.55, p.width + 1.05, .28, .36)
+    s.box("gold", p.east, p.front - .34, p.floor + 3.90, p.width + 1.15, .32, .09)
+    s.rings("gold", p.east, p.front - .38, p.floor + 3.62, [(0, .24), (.06, .24)], 16)
+    for side in (-1, 1):
+        px = p.east + side * (p.width / 2 + .36)
+        s.box("cinnabar", px, p.front - .14, p.floor, .34, .38, 3.55)
+        s.box("gold", px, p.front - .16, p.floor + 3.35, .42, .44, .20)
     if not open_back:
         s.box("shale", p.east, p.front + p.landing + .40, p.floor, p.width + .55, .80, 4.0)
 

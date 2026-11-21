@@ -18,8 +18,8 @@ namespace
 struct FAtlasNode { float X, Y; const TCHAR *En, *Zh, *DetailEn, *DetailZh; };
 #include "TibetAtlasNodes.inl"
 
-const FLinearColor Gold(FColor(242,195,95)), Jade(FColor(128,233,203)), Paper(FColor(246,228,197));
-const FLinearColor Ink(FColor(45,34,32));
+const FLinearColor Gold(FColor(242,195,95)), Jade(FColor(102,228,198)), Paper(FColor(248,236,210));
+const FLinearColor Ink(FColor(20,24,36,240)), SelectedPin(FColor(124,36,32,248));
 const FButtonStyle& PinStyle()
 {
     static const FSlateBrush Tile = *FCoreStyle::Get().GetBrush("WhiteBrush");
@@ -85,9 +85,13 @@ void STibetAtlas::Construct(const FArguments& Args)
             .ContentPadding(0).IsFocusable(false).HAlign(HAlign_Center).VAlign(VAlign_Top)
             .ButtonColorAndOpacity(FLinearColor::Transparent)
             .OnClicked_Lambda([this,I](){Selected=I; bWriteFailed=false; return FReply::Handled();})
-            [SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush")).Padding(FMargin(Compact?4:8,2))
-                .BorderBackgroundColor_Lambda([this,I](){return Selected==I ? FLinearColor(FColor(109,53,30)) : Ink;})
-                [SNew(STextBlock).Font(PinFont).Text(FText::FromString(Caption)).ColorAndOpacity(Here?Jade:Visited?Gold:Paper)]];
+            [SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush")).Padding(1)
+                .BorderBackgroundColor_Lambda([this,I,Here](){
+                    return Selected==I ? Gold : (Here ? Jade : FLinearColor(FColor(168,132,74,175)));
+                })
+                [SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush")).Padding(FMargin(Compact?4:8,2))
+                    .BorderBackgroundColor_Lambda([this,I](){return Selected==I ? SelectedPin : Ink;})
+                    [SNew(STextBlock).Font(PinFont).Text(FText::FromString(Caption)).ColorAndOpacity(Here?Jade:Visited?Gold:Paper)]]];
         Pins->AddSlot().Anchors(FAnchors(Node.X,Node.Y)).Offset(FMargin(0)).Alignment(FVector2D(.5,0)).AutoSize(true)
             [SNew(SBox).MinDesiredWidth(44).MinDesiredHeight(Compact?44:27)[Pin]];
     }

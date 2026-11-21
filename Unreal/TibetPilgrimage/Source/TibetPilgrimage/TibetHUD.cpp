@@ -120,16 +120,30 @@ void ATibetHUD::DrawHUD()
     if (HasEnemy && PC->ProjectWorldLocationToScreen(Meter.Anchor, At, true) &&
         At.X > 0 && At.X < Canvas->SizeX && At.Y < Canvas->SizeY - 8)
     {
-        const float Width = 117 * HScale, Height = 10 * HScale;
-        const float X = FMath::Clamp(float(At.X) - Width * .5f, 6.f, Canvas->SizeX - Width - 6.f);
-        const float Y = FMath::Clamp(float(At.Y), 18.f, Canvas->SizeY - 20.f);
-        const FLinearColor Frame(.095f,.066f,.069f,.94f);
-        DrawRect(Frame, X-2, Y-2, Width+4, Height+4);
-        DrawRect(FLinearColor(.23f,.14f,.15f), X, Y, Width, Height);
-        DrawRect(FLinearColor(1,.73f,.31f), X, Y, Width * Meter.Trailing / Meter.Maximum, Height);
-        DrawRect(FLinearColor(.83f,.19f,.18f), X, Y, Width * Meter.Health / Meter.Maximum, Height);
+        const bool bBossBar = Meter.Maximum >= 5;
+        const float Width = (bBossBar ? 148.f : 122.f) * HScale, Height = (bBossBar ? 12.f : 10.f) * HScale;
+        const float X = FMath::Clamp(float(At.X) - Width * .5f, 8.f, Canvas->SizeX - Width - 8.f);
+        const float Y = FMath::Clamp(float(At.Y), 24.f, Canvas->SizeY - 22.f);
+        const FLinearColor OuterGold(.88f, .68f, .28f, .95f);
+        const FLinearColor Frame(.07f, .05f, .08f, .95f);
+        DrawRect(OuterGold, X-3, Y-3, Width+6, Height+6);
+        DrawRect(Frame, X-1.5f, Y-1.5f, Width+3, Height+3);
+        DrawRect(FLinearColor(.20f, .10f, .12f), X, Y, Width, Height);
+        DrawRect(FLinearColor(1.f, .76f, .32f), X, Y, Width * Meter.Trailing / Meter.Maximum, Height);
+        DrawRect(bBossBar ? FLinearColor(.88f, .16f, .14f) : FLinearColor(.82f, .22f, .20f),
+                 X, Y, Width * Meter.Health / Meter.Maximum, Height);
         for (int32 I = 1; I < Meter.Maximum; ++I)
-            DrawRect(Frame, X + Width * I / Meter.Maximum, Y + Height * .59f, HScale, Height * .41f);
+            DrawRect(Frame, X + Width * I / Meter.Maximum, Y + Height * .55f, HScale, Height * .45f);
+        if (bBossBar)
+        {
+            const FString Tag = M->Local(TEXT("◆ Dharmapala / Boss ◆"), TEXT("◆ 護法試煉・首領 ◆"));
+            FCanvasTextItem CrownText(FVector2D(At.X, Y - 18.f * HScale), FText::FromString(Tag),
+                Overlay->Font(FMath::RoundToInt(12 * HScale)), FLinearColor(1.f, .86f, .46f));
+            CrownText.bCentreX = true;
+            CrownText.bOutlined = true;
+            CrownText.OutlineColor = FLinearColor(.05f, .02f, .02f);
+            Canvas->DrawItem(CrownText);
+        }
     }
     const float Now = GetWorld()->GetTimeSeconds();
     const auto& Feedback = M->GetPlayerFeedback();
@@ -182,11 +196,12 @@ void ATibetHUD::DrawHUD()
             FLinearColor(1.f,.90f,.64f));
         const FVector2D Size = FSlateApplication::Get().GetRenderer()->GetFontMeasureService()->Measure(Label, Key.SlateFontInfo.GetValue());
         const FVector2D Corner(At.X - Size.X * .5 - 7, At.Y - Size.Y - 6);
-        if (Corner.X >= 0 && Corner.Y >= 0 && Corner.X+Size.X+14 < Canvas->SizeX && At.Y < Canvas->SizeY)
+        if (Corner.X >= 0 && Corner.Y >= 0 && Corner.X+Size.X+16 < Canvas->SizeX && At.Y < Canvas->SizeY)
         {
-            DrawRect(FLinearColor(.045f,.055f,.05f,.95f), Corner.X, Corner.Y, Size.X+14, Size.Y+6);
+            DrawRect(FLinearColor(.88f,.68f,.28f,.92f), Corner.X-1.5f, Corner.Y-1.5f, Size.X+19, Size.Y+11);
+            DrawRect(FLinearColor(.06f,.08f,.13f,.95f), Corner.X, Corner.Y, Size.X+16, Size.Y+8);
             bDrewInteraction = true;
-            Key.Position = Corner + FVector2D(7,3);
+            Key.Position = Corner + FVector2D(8,4);
             Canvas->DrawItem(Key);
             return;
         }

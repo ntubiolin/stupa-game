@@ -12,15 +12,19 @@
 
 namespace
 {
-const FLinearColor TimePanel(FColor(27,37,37,245)), Cream(FColor(248,231,193));
+const FLinearColor TimePanel(FColor(18, 24, 36, 244)),
+    GoldRim(FColor(224, 176, 86, 200)),
+    RateIdle(FColor(34, 44, 62)),
+    RateActive(FColor(238, 189, 98)),
+    Cream(FColor(248, 236, 208));
 const FSlateBrush* PanelBrush() {return FCoreStyle::Get().GetBrush("WhiteBrush");}
 }
 TSharedRef<SWidget> STibetPlayOverlay::CourtyardControls()
 {
     auto Content=SNew(SVerticalBox);
-    Content->AddSlot().AutoHeight().HAlign(HAlign_Fill)
+    Content->AddSlot().AutoHeight().HAlign(HAlign_Fill).Padding(0,1,0,2)
         [SNew(STextBlock).Text_Lambda([this](){return FText::FromString(Mode->TimeLabel());})
-         .Font(Font(14)).ColorAndOpacity(Cream).AutoWrapText(false).Justification(ETextJustify::Center)];
+         .Font(Font(13)).ColorAndOpacity(RateActive).AutoWrapText(false).Justification(ETextJustify::Center)];
     auto Rates=SNew(SHorizontalBox);
     const int32 Values[]={0,1,4};
     const FName Tags[]={TEXT("TibetClockPause"),TEXT("TibetClockNormal"),TEXT("TibetClockFast")};
@@ -32,19 +36,19 @@ TSharedRef<SWidget> STibetPlayOverlay::CourtyardControls()
             return Rate?Caption:Local(TEXT("Pause"),TEXT("暫停"));});
         Rates->AddSlot().FillWidth(1).Padding(1,1)[SNew(SBox).MinDesiredHeight(bTouch?44.f:30.f)
             [SNew(SBorder).BorderImage(PanelBrush()).Padding(0)
-             .BorderBackgroundColor_Lambda([this,Rate](){return Mode->ClockRate()==Rate?
-                 FLinearColor(FColor(244,197,112)):FLinearColor(FColor(48,64,63));})
+             .BorderBackgroundColor_Lambda([this,Rate](){return Mode->ClockRate()==Rate?RateActive:RateIdle;})
              [SNew(SButton).ButtonStyle(&FCoreStyle::Get().GetWidgetStyle<FButtonStyle>("NoBorder"))
               .Tag(Tags[I]).IsFocusable(false).HAlign(HAlign_Center).VAlign(VAlign_Center)
               .ContentPadding(0).ToolTipText(Description).AccessibleText(Description)
               .OnClicked_Lambda([this,Rate](){Mode->SetClockRate(Rate);return FReply::Handled();})
               [SNew(STextBlock).Text(Caption).Font(Font(14)).AutoWrapText(false)
                .ColorAndOpacity_Lambda([this,Rate](){return FSlateColor(Mode->ClockRate()==Rate?
-                   FLinearColor(FColor(31,39,38)):Cream);})]]]];
+                   FLinearColor(FColor(28,18,12)):Cream);})]]]];
     }
     Content->AddSlot().AutoHeight()[Rates];
     Content->AddSlot().AutoHeight().Padding(5,2)
         [SNew(SSlider).Tag(TEXT("TibetClockSlider")).StepSize(.002f)
+         .SliderBarColor(RateIdle).SliderHandleColor(RateActive)
          .Value_Lambda([this](){return Mode->SolarPhase();})
          .AccessibleText(Local(TEXT("Time of day"),TEXT("市區時刻")))
          .OnValueChanged_Lambda([this](float V){Mode->SetSolarPhase(V,false);})
@@ -67,7 +71,8 @@ TSharedRef<SWidget> STibetPlayOverlay::CourtyardControls()
             FSimpleDelegate::CreateLambda([this](){Mode->QuickPractice();}),false,TEXT("TibetQuickOffering"))];
     Content->AddSlot().AutoHeight()[LampActions];
     return SNew(SBox).WidthOverride(bTouch?163.f:190.f)
-        [SNew(SBorder).BorderImage(PanelBrush()).BorderBackgroundColor(TimePanel).Padding(4)[Content]];
+        [SNew(SBorder).BorderImage(PanelBrush()).BorderBackgroundColor(GoldRim).Padding(1)
+         [SNew(SBorder).BorderImage(PanelBrush()).BorderBackgroundColor(TimePanel).Padding(4)[Content]]];
 }
 
 TSharedRef<SWidget> STibetPlayOverlay::FeedingMenu()
