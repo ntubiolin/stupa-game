@@ -81,12 +81,13 @@ const FResidentPlacement CastPlacements[] = {
 };
 const FVector MessengerDestination(1370,-65,0);
 const FVector GroveGate(-1860,-480,0);
-// The three quest bowls have individual wicks. The bronze table on the
-// southern approach already has lit lamps in the plaza mesh.
-constexpr int32 SouthLampTable = 3;
+// Stable bit positions in ButterLampMask. Only the first three advance the quest.
+constexpr int32 QuestLampCount = 3;
+constexpr int32 CourtyardLampCount = QuestLampCount + 3;
 FVector StupaLampLocation(int32 Index)
 {
-    if (Index==SouthLampTable) return FVector(-1080,615,0);
+    if (Index>=QuestLampCount)
+        return FVector(-1080+59*(Index-QuestLampCount-1),615,0);
     return FVector(1430+70*Index,-360+320*Index,0);
 }
 const FString Cylinder=TEXT("/Engine/BasicShapes/Cylinder.Cylinder");
@@ -476,7 +477,7 @@ void UTibetSave::ResolveReturnOnArrival(const FString& Destination)
 
 int32 UTibetSave::NextUnlitLamp() const
 {
-    for (int32 I=0; I<SouthLampTable; ++I)
+    for (int32 I=0; I<QuestLampCount; ++I)
         if (!(ButterLampMask & (1u<<I))) return I;
     return INDEX_NONE;
 }
@@ -511,13 +512,14 @@ bool UTibetSave::ReconcileLampQuest()
 
 void ATibetGameMode::RestoreStupaFlames()
 {
-    for (int32 I=0; I<3; ++I)
+    for (int32 I=0; I<CourtyardLampCount; ++I)
     {
         const uint8 Bit=1u<<I;
         if (!(Save->ButterLampMask & Bit) || (SpawnedLampMask & Bit)) continue;
         auto* Flame=GetWorld()->SpawnActor<ATibetButterFlame>(StupaLampLocation(I)+FVector(0,0,126.5),FRotator::ZeroRotator);
         if (!Flame) continue;
-        Flame->LightCourtyardBowl();
+        // The three quest pedestals share the plaza's three-light budget.
+        if (I<QuestLampCount) Flame->LightCourtyardBowl();
         Flame->Tags.Add(TEXT("StupaLampFlame"));
         SpawnedLampMask |= Bit;
     }
@@ -527,7 +529,7 @@ int32 ATibetGameMode::NearestButterLamp(const FVector& Where) const
     int32 Result=INDEX_NONE;
     double Best=220;
     if (Map==TEXT("stupa"))
-        for(int32 I=0;I<=SouthLampTable;++I)
+        for(int32 I=0;I<CourtyardLampCount;++I)
         {
             const double D=FVector::Dist2D(Where,StupaLampLocation(I));
             if(D<Best) { Best=D; Result=I; }
@@ -688,14 +690,13 @@ void ATibetGameMode::QuickPractice()
 void ATibetGameMode::OfferButter(int32 Lamp,bool bOpenDedication)
 {
     if (!Save || bTravel) return;
-    const bool bTable=Lamp==SouthLampTable;
-    const bool bLit=bTable || (Save->ButterLampMask & (1u<<Lamp));
+    const bool bLit=(Save->ButterLampMask & (1u<<Lamp))!=0;
     // A held or repeated key must not refill a lamp every frame.
     const float Now=GetWorld()->GetTimeSeconds();
     if (!bLit || Now-LastButterOffer>=.6f)
     {
         LastButterOffer=Now;
-        if (!bTable) Save->ButterLampMask |= 1u<<Lamp;
+        Save->ButterLampMask |= 1u<<Lamp;
         RestoreStupaFlames();
         Mana=FMath::Min(MaxMana(),Mana+15.f);
         SetNotice(bLit ? Local(TEXT("Fresh butter feeds the flame."),TEXT("添入酥油，燈火明亮。")) :

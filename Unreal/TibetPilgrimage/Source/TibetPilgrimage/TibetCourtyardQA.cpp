@@ -58,6 +58,43 @@ void UTibetQASubsystem::Courtyard(APlayerController& PC,ATibetGameMode& Mode)
         }
         return;
     }
+    if (FParse::Param(FCommandLine::Get(),TEXT("TibetQASouthLamp")))
+    {
+        // Centre of the three bronze bowls on the entrance table.
+        const FVector Wick(-1080,615,116.5);
+        const bool bCentreLit=Lamps.Num()==1 && Lamp &&
+            Lamp->GetActorLocation().Equals(Wick+FVector(0,0,10),.5) &&
+            !Lamp->FindComponentByClass<UPointLightComponent>();
+        if (Task==TEXT("CourtyardResume"))
+        {
+            Finish(bCentreLit,TEXT("Only the offered table wick survives relaunch"));
+            return;
+        }
+        if (CourtyardStep==0)
+        {
+            if (!Lamps.IsEmpty()) { Finish(false,TEXT("Fresh offering table is already lit")); return; }
+            Mode.SetClockRate(0);
+            Mode.SetSolarPhase(.5f,true);
+            if (!Move(FVector(-1080,505,0),20)) return;
+            View({-1080,795,172},Wick+FVector(0,0,12));
+            Next();
+        }
+        else if (Now-CourtyardSince>.8)
+        {
+            switch (CourtyardStep)
+            {
+            case 1: Shot(TEXT("south-lamp-unlit"),false); break;
+            case 2: Stroke(EKeys::F,true); break;
+            case 3: Stroke(EKeys::F,false); break;
+            case 4:
+                if (!bCentreLit) { Finish(false,TEXT("F did not light the nearest table wick")); return; }
+                Shot(TEXT("south-lamp-lit"),false); break;
+            default: Finish(true,TEXT("Table offering lights its own wick")); return;
+            }
+            Next();
+        }
+        return;
+    }
     if(Task==TEXT("CourtyardResume"))
     {
         Finish(Mode.ClockRate()==0 && Mode.SolarPhase()>.81f && Mode.SolarPhase()<.96f &&
