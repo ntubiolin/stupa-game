@@ -36,6 +36,10 @@ def generate():
         path = f"{DIRECTORY}/{name}"
         result = (assets.load_asset(path) if assets.does_asset_exist(path)
                   else tools.create_asset(name, DIRECTORY, unreal.Material, unreal.MaterialFactoryNew()))
+        # Detach old outputs before UE recompiles individual intermediate graph edits.
+        for prop in (unreal.MaterialProperty.MP_OPACITY, unreal.MaterialProperty.MP_EMISSIVE_COLOR,
+                     unreal.MaterialProperty.MP_BASE_COLOR):
+            graph.disconnect_material_property(result, prop)
         graph.delete_all_material_expressions(result)
         return result
 
@@ -85,7 +89,9 @@ def generate():
         return mask
 
     def save_material():
-        graph.recompile_material(material)
+        errors = graph.recompile_material(material)
+        if errors:
+            raise RuntimeError(f"{material.get_name()} failed to compile: {list(errors)}")
         if not assets.save_loaded_asset(material, only_if_is_dirty=False):
             raise RuntimeError(f"Could not save {material.get_name()}")
 
