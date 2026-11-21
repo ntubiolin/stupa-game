@@ -14,13 +14,17 @@ public:
     virtual FRotator GetViewRotation() const override;
     virtual void Tick(float DeltaSeconds) override;
     void CancelGameplayInput();
+    void RespawnAtStart();
+    FVector GetStartLocation() const { return Start; }
+    FRotator GetStartRotation() const { return StartRotation; }
     virtual void SetupPlayerInputComponent(UInputComponent* Input) override;
 protected:
     virtual void BeginPlay() override;
 private:
     UPROPERTY() TObjectPtr<USceneComponent> Figure;
     UPROPERTY() TArray<USceneComponent*> Joints;
-    FVector Start;
+    FVector Start = FVector(-2000.f, 0.f, 100.f);
+    FRotator StartRotation = FRotator::ZeroRotator;
     float WalkPhase = 0;
     FVector2D Thumb, Drag;
     int32 MoveFinger = -1, LookFinger = -1;

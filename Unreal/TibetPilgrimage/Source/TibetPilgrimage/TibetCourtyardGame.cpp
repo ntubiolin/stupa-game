@@ -78,6 +78,9 @@ void ATibetGameMode::BeginFeeding()
 void ATibetGameMode::CloseFeeding()
 {
     if(Macaques) Macaques->Attend(INDEX_NONE);
+    if(FeedPanel!=0)
+        if(auto* Pilgrim=Cast<ATibetCharacter>(UGameplayStatics::GetPlayerPawn(this,0)))
+            Pilgrim->CancelGameplayInput();
     FeedPanel=0; FeedTarget=INDEX_NONE;
     if (auto* PC=GetWorld()->GetFirstPlayerController())
         if (auto* HUD=PC->GetHUD<ATibetHUD>()) HUD->RefreshInputMode();
@@ -87,7 +90,7 @@ void ATibetGameMode::RewardFeeding()
     const auto* P=UGameplayStatics::GetPlayerPawn(this,0);
     if(bFedThisSession || !P || !Macaques || !Macaques->Offer(FeedTarget,P->GetActorLocation())) return;
     bFedThisSession=true; ++Save->MonkeysFed;
-    Mana=FMath::Min(100.f,Mana+10);
+    RestoreMana(FeedingManaReward);
     SetNotice(Local(TEXT("The macaque takes the banana."),TEXT("獼猴接住香蕉，開心地吃了起來。")));
 }
 void ATibetGameMode::QuickFeed()

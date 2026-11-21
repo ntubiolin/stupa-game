@@ -43,7 +43,9 @@ void ATibetGameMode::RefreshWilderness(int32 Remaining)
             const int32 Index=(Completed+I)%UE_ARRAY_COUNT(Kinds);
             const auto& Type=Kinds[Index];
             const FString Mesh=FString::Printf(TEXT("/Game/Figures/%s.%s"),Type.Mesh,Type.Mesh);
-            AActor* Actor=MeshActor(Camps[Index],Mesh,FVector::OneVector);
+            FVector SpawnAt=Camps[Index];
+            if (FMath::IsNearlyZero(SpawnAt.Z)) SpawnAt.Z=GroundHeight(SpawnAt);
+            AActor* Actor=MeshActor(SpawnAt,Mesh,FVector::OneVector);
             if (!Actor) continue;
             Actor->Tags.Append({TEXT("TibetWildEnemy"),Type.Tag});
             Actor->SetActorRotation(FRotator(0,-90,0));
@@ -99,5 +101,20 @@ FString ATibetGameMode::EnemyLabel() const
 {
     for (const FTibetWildEnemy& Member : WildernessPack)
         if (Member.Actor.Get()==Focus) return Local(Kinds[Member.Kind].English,Kinds[Member.Kind].Chinese);
+    const bool bBoss = GetObjectiveKind() == TEXT("Boss");
+    if (Map == TEXT("wild") && bBoss) return Local(TEXT("Migoi King"), TEXT("雪人王"));
+    if (Map == TEXT("pharping"))
+        return bBoss ? Local(TEXT("Drought Lord"), TEXT("旱障魔主")) : Local(TEXT("Drought Sprite"), TEXT("旱魅"));
+    if (Map == TEXT("mangyul") && bBoss) return Local(TEXT("Twelve Tenma"), TEXT("十二丹瑪"));
+    if (Map == TEXT("yarlung"))
+        return bBoss ? Local(TEXT("Yarlha Shampo"), TEXT("雅拉香波白犛牛")) : Local(TEXT("Wild Yak"), TEXT("野犛牛"));
+    if (Map == TEXT("samye"))
+    {
+        if (bBoss) return Local(TEXT("Pehar Gyalpo"), TEXT("白哈爾王"));
+        return GetStep() == 2 ? Local(TEXT("Night Spirit"), TEXT("夜襲鬼神")) : Local(TEXT("Hepo Ri Spirit"), TEXT("八部鬼神"));
+    }
+    if (Map == TEXT("terma1")) return Local(TEXT("Cave Sentinel"), TEXT("岩窟守衛"));
+    if (Map == TEXT("terma2")) return Local(TEXT("Crystal Spirit"), TEXT("水晶精靈"));
+    if (Map == TEXT("terma3")) return Local(TEXT("Terma Guardian"), TEXT("伏藏守護者"));
     return Local(TEXT("Spirit"),TEXT("靈障"));
 }

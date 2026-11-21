@@ -130,6 +130,11 @@ public:
     float GetMana() const { return Mana; }
     float MaxHealth() const;
     float MaxMana() const;
+    static constexpr float FeedingManaReward = 10.f;
+    static constexpr float HumBoltManaRestore = 2.f;
+    static float ClampRestoredMana(float CurrentMana, float Gain, float MaximumMana);
+    static FString CombatFigureModel(const FString& MapName, bool bBoss, int32 Step, int32 Progress);
+    void RestoreMana(float Amount);
     bool OwnsItem(ETibetItem Item) const;
     bool IsEquipped(ETibetItem Item) const;
     ETibetItem QuickItem() const;
@@ -191,6 +196,7 @@ private:
     bool bEnemyWindingUp = false;
     TWeakObjectPtr<class ATibetRitualEffect> WindupEffect;
     void CancelEnemyWindup();
+    void RespawnPlayer(APawn& Player);
     void UpdateEnemyAttack(APawn& Player, bool bBoss, float Dt);
     FTibetPlayerFeedback PlayerFeedback;
     TArray<FTibetDamageCue> DamageCues;
@@ -212,6 +218,7 @@ private:
     bool bTravel = false, bEscorting = false;
     AActor* MeshActor(const FVector& Position, const FString& MeshPath, const FVector& Scale,
         const FLinearColor* Color = nullptr);
+    double GroundHeight(const FVector& Location) const;
     FVector Anchor() const;
     void PopulateResidents();
     AActor* ActiveResident() const;
@@ -229,5 +236,6 @@ private:
     void MoveToNextMap();
     void SetNotice(const FString& Line);
     void Pulse(const FVector& At, const FLinearColor& Color, float Magnitude);
+    friend struct FTibetGameplayTestAccessor;
 };
 
