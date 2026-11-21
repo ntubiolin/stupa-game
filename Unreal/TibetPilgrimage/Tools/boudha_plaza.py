@@ -1,4 +1,4 @@
-"""Paving, a timber resting place and lit offerings on the south approach."""
+"""Paving, a timber resting place and offering bowls on the south approach."""
 
 import math
 
@@ -87,7 +87,7 @@ def south_approach(s):
             s.beam("maroon", (eave, y + dy, 2.41), (x, y + dy, 2.90), 0.074, 4)
     s.beam("ochre", (x, y - 2.26, 2.92), (x, y + 2.26, 2.92), 0.11, 8)
 
-    # Small bronze butter lamps are already alight on this offering table.
+    # Each bronze bowl starts with an unlit wick. The offering spawns its flame.
     x, y = 6.15, -10.8
     for dy in (-0.59, 0.59):
         s.box("stone", x, y + dy, -0.01, 0.52, 0.23, 0.65)
@@ -96,7 +96,7 @@ def south_approach(s):
         s.rings("bronze", x, y + dy, 0.78,
                 [(0, 0.17), (0.04, 0.17), (0.09, 0.075), (0.16, 0.07),
                  (0.22, 0.15), (0.32, 0.22), (0.34, 0.22)], 12)
-        s.rings("amber", x, y + dy, 1.12, [(0, 0.029), (0.037, 0.043), (0.13, 0)], 6)
+        s.rings("dark", x, y + dy, 1.12, [(0, 0.024), (0.045, 0.017)], 8)
 
     # Quest lamps, in authoring metres (east, north). StupaLampLocation in
     # TibetGameMode places each persistent flame directly on its cotton wick.

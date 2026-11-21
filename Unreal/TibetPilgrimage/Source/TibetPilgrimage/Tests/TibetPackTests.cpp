@@ -34,8 +34,10 @@ bool FTibetLampQuestTest::RunTest(const FString&)
     constexpr int32 LampStep=2;
     auto* Save=NewObject<UTibetSave>();
     Save->ReconcileLampQuest();
-    Save->ButterLampMask=4; // third bowl offered before the quest
+    Save->ButterLampMask=0b111000; // all three entrance table bowls
     Save->Steps.Add(Stupa,LampStep);
+    TestFalse(TEXT("Table offerings do not advance the quest"),Save->ReconcileLampQuest());
+    Save->ButterLampMask|=4; // third quest bowl offered
     Save->ReconcileLampQuest();
     TestEqual(TEXT("Pre-quest offering counts"),Save->Counts.FindRef(Stupa),1);
     TestEqual(TEXT("Guide points to an unlit bowl"),Save->NextUnlitLamp(),0);
@@ -43,7 +45,7 @@ bool FTibetLampQuestTest::RunTest(const FString&)
     Save->ButterLampMask|=2;
     Save->ReconcileLampQuest();
     TestEqual(TEXT("Two distinct bowls"),Save->Counts.FindRef(Stupa),2);
-    TestEqual(TEXT("Out-of-order offerings do not light the first bowl"),int32(Save->ButterLampMask),6);
+    TestEqual(TEXT("Out-of-order offerings do not light the first bowl"),int32(Save->ButterLampMask),0b111110);
     Save->ButterLampMask|=1;
     Save->ReconcileLampQuest();
     TestEqual(TEXT("Three reverse-order offerings complete the quest"),Save->Steps.FindRef(Stupa),LampStep+1);

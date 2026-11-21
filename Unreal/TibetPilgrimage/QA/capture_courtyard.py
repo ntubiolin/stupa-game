@@ -36,6 +36,17 @@ def compare_light_and_wind(day_a, day_b, night):
     return values
 
 
+def table_flame_pixels(directory):
+    # Fixed camera aims at the centre wick. Compare its emission to the same
+    # bowl before the offering, keeping the two neighbouring bowls out of view here.
+    before,after=[bitmap(directory/f"south-lamp-{state}.png",(480,300))[2] for state in ("unlit","lit")]
+    brighter=sum(1 for x in range(222,258) for y in range(120,174)
+                 for r,g,b in [after(x,y)] if r>180 and r>g+12 and g>b+15 and r>before(x,y)[0]+35)
+    if brighter<15:
+        raise ValueError(f"No visible flame above the offered table bowl: {brighter} brighter warm pixels")
+    return brighter
+
+
 def visible_offering(path):
     # The fixed three-quarter camera puts the palm between the eyes and the
     # near edge of the silhouette. Sample the yellow peel in that region.
@@ -112,6 +123,9 @@ def main():
     with tempfile.TemporaryDirectory(prefix="tibet-courtyard-",dir=temporary_root(exe)) as temp:
         root=Path(temp);(root/"user").mkdir()
         slot="QA-"+root.name
+        capture(exe,root,output,"south-table","Courtyard","stupa",["-TibetQASouthLamp"],slot+"-table")
+        table_pixels=table_flame_pixels(output/"south-table")
+        capture(exe,root,output,"south-table-resume","CourtyardResume","stupa",["-TibetQASouthLamp"],slot+"-table")
         events=capture(exe,root,output,"play","Courtyard","stupa",[],slot,size=(1440,900))
         if not any(row[0]=="clock" and 3.5<float(row[1])<4.5 for row in events):
             raise ValueError("No measured 4× world clock")
@@ -139,7 +153,7 @@ def main():
             vault[phase]=candlelight(output/name/"capture.png")
         if abs(vault["day"]["floorMedian"]-vault["night"]["floorMedian"])>8:
             raise ValueError(f"Outdoor clock changed the underground illumination: {vault}")
-        (output/"courtyard.json").write_text(json.dumps({"images":hashes,"motion":motion,"vault":vault,"bananaPixels":peel,"clockControls":controls},indent=2))
+        (output/"courtyard.json").write_text(json.dumps({"southTableFlamePixels":table_pixels,"images":hashes,"motion":motion,"vault":vault,"bananaPixels":peel,"clockControls":controls},indent=2))
 
 
 if __name__=="__main__":
