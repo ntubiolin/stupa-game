@@ -17,15 +17,26 @@ def generate():
 
     graph = unreal.MaterialEditingLibrary
     graph.delete_all_material_expressions(material)
-    tint = graph.create_material_expression(material, unreal.MaterialExpressionVectorParameter, -480, 0)
+    # Two-sided unlit translucent material with EyeAdaptationInverse so Tibetan sacred mandalas,
+    # lotus shields and mantras glow luminously under both 35,000-lux snow glare and dark terma vaults.
+    material.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    material.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+    material.set_editor_property("two_sided", True)
+
+    tint = graph.create_material_expression(material, unreal.MaterialExpressionVectorParameter, -520, 0)
     tint.set_editor_property("parameter_name", "Color")
-    tint.set_editor_property("default_value", unreal.LinearColor(0.87, 0.43, 0.065, 1.0))
-    glow = graph.create_material_expression(material, unreal.MaterialExpressionMultiply, -210, 150)
-    glow.set_editor_property("const_b", 0.40)
+    tint.set_editor_property("default_value", unreal.LinearColor(0.95, 0.52, 0.12, 0.88))
+
+    glow = graph.create_material_expression(material, unreal.MaterialExpressionMultiply, -300, 0)
+    glow.set_editor_property("const_b", 1.35)
+    adapt = graph.create_material_expression(material, unreal.MaterialExpressionEyeAdaptationInverse, -120, 0)
+    adapt_in = str(graph.get_material_expression_input_names(adapt)[0])
+
     connected = (
-        graph.connect_material_property(tint, "", unreal.MaterialProperty.MP_BASE_COLOR),
-        graph.connect_material_expressions(tint, "", glow, "A"),
-        graph.connect_material_property(glow, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR),
+        graph.connect_material_expressions(tint, "RGB", glow, "A"),
+        graph.connect_material_expressions(glow, "", adapt, adapt_in),
+        graph.connect_material_property(adapt, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR),
+        graph.connect_material_property(tint, "A", unreal.MaterialProperty.MP_OPACITY),
     )
     if not all(connected):
         raise RuntimeError(f"Could not connect the Color parameter in {path}")
