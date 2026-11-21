@@ -3,11 +3,11 @@
 #include "Engine/StaticMesh.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
+#include "Components/DecalComponent.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/ExponentialHeightFogComponent.h"
 #include "Components/PostProcessComponent.h"
 #include "Components/SkyLightComponent.h"
-#include "Components/StaticMeshComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Engine/DirectionalLight.h"
 #include "Engine/ExponentialHeightFog.h"
@@ -19,7 +19,7 @@
 ATibetSkyClock::ATibetSkyClock()
 {
     RootComponent=CreateDefaultSubobject<USceneComponent>(TEXT("Sky"));
-    // A single cloud deck also casts the sun's moving shadow over raised scenery.
+    // Cloud coverage modulates the sunlight separately from the painted sky.
     Clouds = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Drifting cloud layer"));
     Clouds->SetupAttachment(RootComponent);
     Clouds->SetMobility(EComponentMobility::Movable);
@@ -28,13 +28,14 @@ ATibetSkyClock::ATibetSkyClock()
     Clouds->SetGenerateOverlapEvents(false);
     Clouds->SetRelativeLocation(FVector(0, 0, 8200));
     Clouds->SetRelativeScale3D(FVector(1800, 1800, 1));
-    Clouds->bCastShadowAsTwoSided = true;
+    Clouds->SetCastShadow(false);
     Moon=CreateDefaultSubobject<UDirectionalLightComponent>(TEXT("Moonlight"));
     Moon->SetupAttachment(RootComponent);
     Moon->SetMobility(EComponentMobility::Movable);
     Moon->SetCastShadows(false);
     Moon->SetAtmosphereSunLight(true);
     Moon->SetAtmosphereSunLightIndex(1);
+    Moon->SetAtmosphereSunDiskColorScale(FLinearColor::Black);
     Moon->SetLightSourceAngle(1.05f);
     Moon->SetLightColor(FLinearColor(.52,.67,.94),true);
     // Shine across the south approach to model the white dome and the gilt rings.
@@ -46,27 +47,63 @@ ATibetSkyClock::ATibetSkyClock()
     Stars->SetupAttachment(RootComponent);
     Stars->SetCastShadow(false);
     Stars->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    Crescent = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("Crescent moon"));
+    Crescent->SetupAttachment(RootComponent);
+    Crescent->SetCastShadow(false);
+    Crescent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    Crescent->SetCanEverAffectNavigation(false);
 }
 
 void ATibetSkyClock::BeginPlay()
 {
     Super::BeginPlay();
+    if(TActorIterator<ADirectionalLight> It{GetWorld()}; It) Sun=It->FindComponentByClass<UDirectionalLightComponent>();
     auto* CloudSurface = LoadObject<UMaterialInterface>(nullptr,
         TEXT("/Game/Figures/Materials/M_CloudLayer.M_CloudLayer"));
     if (ensureMsgf(CloudSurface, TEXT("Generate the Tibet outdoor cloud material before play")))
     {
         Clouds->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane")));
         CloudMaterial = Clouds->CreateDynamicMaterialInstance(0, CloudSurface);
-        // Material time restarts on travel. Preserve the weather front's position across maps.
+        if (Sun)
+        {
+            const bool bMobile = GetWorld()->GetFeatureLevel() < ERHIFeatureLevel::SM5;
+            auto* Shadow = LoadObject<UMaterialInterface>(nullptr, bMobile
+                ? TEXT("/Game/Figures/Materials/M_CloudShadeDecal.M_CloudShadeDecal")
+                : TEXT("/Game/Figures/Materials/M_CloudShadow.M_CloudShadow"));
+            if (ensure(Shadow))
+            {
+                CloudShadow = UMaterialInstanceDynamic::Create(Shadow, this);
+                if (bMobile)
+                {
+                    // The forward mobile renderer supports projected color decals.
+                    auto* Shade = NewObject<UDecalComponent>(this);
+                    Shade->SetupAttachment(RootComponent);
+                    Shade->SetRelativeRotation(FRotator(-90, 0, 0));
+                    Shade->DecalSize = FVector(8200, 90000, 90000);
+                    Shade->SetFadeScreenSize(0);
+                    Shade->SetDecalMaterial(CloudShadow);
+                    Shade->RegisterComponent();
+                }
+                else
+                {
+                    Sun->SetLightFunctionMaterial(CloudShadow);
+                    Sun->SetLightFunctionFadeDistance(90000.f);
+                }
+            }
+        }
+        // Both materials share one weather clock across travel and deterministic captures.
         const double Start = FPlatformTime::Seconds() - GStartTime - GetWorld()->GetTimeSeconds();
-        CloudMaterial->SetScalarParameterValue(TEXT("WeatherStart"), static_cast<float>(Start));
+        for (auto* Material : {CloudMaterial.Get(), CloudShadow.Get()})
+        {
+            if (!Material) continue;
+            Material->SetScalarParameterValue(TEXT("WeatherStart"), static_cast<float>(Start));
 #if !UE_BUILD_SHIPPING
-        float FixedTime;
-        if (FParse::Value(FCommandLine::Get(), TEXT("TibetWeatherTime="), FixedTime))
-            CloudMaterial->SetScalarParameterValue(TEXT("FixedTime"), FixedTime);
+            float FixedTime;
+            if (FParse::Value(FCommandLine::Get(), TEXT("TibetWeatherTime="), FixedTime))
+                Material->SetScalarParameterValue(TEXT("FixedTime"), FixedTime);
 #endif
+        }
     }
-    if(TActorIterator<ADirectionalLight> It{GetWorld()}; It) Sun=It->FindComponentByClass<UDirectionalLightComponent>();
     if(TActorIterator<ASkyLight> It{GetWorld()}; It) Sky=It->GetLightComponent();
     if(TActorIterator<AExponentialHeightFog> It{GetWorld()}; It) Fog=It->GetComponent();
     TArray<FVector> Points;
@@ -85,14 +122,43 @@ void ATibetSkyClock::BeginPlay()
             Faces.Append({Start,Start+1+(I+1)%Sides,Start+1+I});
         }
     };
+    const FVector MoonDirection = -Moon->GetForwardVector();
+    constexpr double SkyRadius = 38000;
+    constexpr double MoonRadius = 1150;
     for(int32 I=0;I<290;++I)
     {
         const FVector Dir=Random.VRand();
-        if(Dir.Z>.12) Disc(Dir,Random.FRandRange(19,53),4);
+        if(Dir.Z>.12 && FVector::DistSquared(Dir, MoonDirection) > FMath::Square((MoonRadius + 53) / SkyRadius)) Disc(Dir,Random.FRandRange(19,53),4);
     }
     Stars->CreateMeshSection_LinearColor(0,Points,Faces,{},{},{},{},false);
+    // Project the bright limb and the elliptical terminator onto the night sky.
+    // They meet at each horn. The open side shows the sky through the crescent.
+    Points.Reset();
+    Faces.Reset();
+    const FVector Right = FVector::CrossProduct(FVector::UpVector, MoonDirection).GetSafeNormal()
+        .RotateAngleAxis(18, MoonDirection);
+    const FVector Up = FVector::CrossProduct(MoonDirection, Right);
+    const FVector Center = MoonDirection * SkyRadius;
+    Points.Add(Center - Up * MoonRadius);
+    constexpr int32 Slices = 40;
+    for (int32 Slice = 1; Slice < Slices; ++Slice)
+    {
+        const double Angle = UE_PI * (double(Slice) / Slices - .5);
+        const FVector Row = Center + Up * (MoonRadius * FMath::Sin(Angle));
+        const FVector Width = Right * (MoonRadius * FMath::Cos(Angle));
+        const int32 Outer = Points.Add(Row + Width);
+        Points.Add(Row + Width * .52);
+        if (Slice == 1) Faces.Append({0, Outer + 1, Outer});
+        else Faces.Append({Outer - 2, Outer - 1, Outer, Outer, Outer - 1, Outer + 1});
+    }
+    const int32 Tip = Points.Add(Center + Up * MoonRadius);
+    Faces.Append({Tip - 2, Tip - 1, Tip});
+    Crescent->CreateMeshSection_LinearColor(0, Points, Faces, {}, {}, {}, {}, false);
     if(auto* Material=LoadObject<UMaterialInterface>(nullptr,TEXT("/Game/Figures/Materials/M_TravelGlow.M_TravelGlow")))
+    {
         StarMaterial=Stars->CreateDynamicMaterialInstance(0,Material);
+        CrescentMaterial=Crescent->CreateDynamicMaterialInstance(0,Material);
+    }
 
     bWhitewashedPlaza = UGameplayStatics::GetCurrentLevelName(this) == TEXT("stupa");
     TArray<AActor*> Shopfronts;
@@ -129,6 +195,16 @@ void ATibetSkyClock::Apply(float Phase)
     {
         Sun->SetWorldRotation(FRotator(-FMath::RadiansToDegrees(FMath::Asin(Elevation))*.78f,
             24+180*(Phase-.30f),0));
+        if (CloudShadow)
+        {
+            // Intersect the sun ray with the cloud deck. Fade long projections
+            // near the horizon so the accelerated solar clock cannot sweep shade over the map.
+            const FVector ToSun = -Sun->GetForwardVector();
+            const double Z = FMath::Max(ToSun.Z, .40);
+            CloudShadow->SetVectorParameterValue(TEXT("Projection"), FLinearColor(
+                ToSun.X / Z, ToSun.Y / Z, Clouds->GetComponentLocation().Z));
+            CloudShadow->SetScalarParameterValue(TEXT("ShadowStrength"), FMath::SmoothStep(.18, .55, ToSun.Z));
+        }
         Sun->SetIntensity(35000*Day);
         Sun->SetTemperature(FMath::Lerp(3900.f,5650.f,FMath::Clamp(Elevation*2.9f,0.f,1.f)));
     }
@@ -145,6 +221,9 @@ void ATibetSkyClock::Apply(float Phase)
     S.bOverride_AutoExposureMinBrightness=S.bOverride_AutoExposureMaxBrightness=true;
     S.AutoExposureMinBrightness=FMath::Lerp(bWhitewashedPlaza ? 2.65f : 2.05f,6.f,Day);
     S.AutoExposureMaxBrightness=FMath::Lerp(bWhitewashedPlaza ? 3.85f : 3.25f,16.f,Day);
+    Crescent->SetVisibility(Night > .03f);
+    if (CrescentMaterial)
+        CrescentMaterial->SetVectorParameterValue(TEXT("Color"), FLinearColor(2.4f, 2.20f, 1.80f) * Night);
     Stars->SetVisibility(Night>.03f);
     if(StarMaterial) StarMaterial->SetVectorParameterValue(TEXT("Color"),FLinearColor(.69,.80,1.35)*Night);
 }

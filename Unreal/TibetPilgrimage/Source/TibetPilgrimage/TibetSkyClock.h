@@ -16,6 +16,7 @@ public:
 private:
     UPROPERTY() TObjectPtr<class UStaticMeshComponent> Clouds;
     UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> CloudMaterial;
+    UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> CloudShadow;
     UPROPERTY() TObjectPtr<class UDirectionalLightComponent> Sun;
     UPROPERTY() TObjectPtr<class UDirectionalLightComponent> Moon;
     UPROPERTY() TObjectPtr<class USkyLightComponent> Sky;
@@ -23,6 +24,8 @@ private:
     UPROPERTY() TObjectPtr<class UPostProcessComponent> Exposure;
     UPROPERTY() TObjectPtr<class UProceduralMeshComponent> Stars;
     UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> StarMaterial;
+    UPROPERTY() TObjectPtr<class UProceduralMeshComponent> Crescent;
+    UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> CrescentMaterial;
     bool bWhitewashedPlaza = false;
     UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> WindowPanes;
     UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> StreetPaving;
