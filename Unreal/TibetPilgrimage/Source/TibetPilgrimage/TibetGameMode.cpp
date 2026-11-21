@@ -179,6 +179,45 @@ void ATibetGameMode::StartPlay()
     Refresh();
 }
 
+double ATibetGameMode::GroundHeight(const FVector& Location) const
+{
+    if (!GetWorld()) return Location.Z;
+    FHitResult Floor;
+    const FCollisionObjectQueryParams StaticWorld(ECC_WorldStatic);
+    if (GetWorld()->LineTraceSingleByObjectType(Floor, Location + FVector(0,0,120),
+        Location - FVector(0,0,120), StaticWorld) && Floor.ImpactNormal.Z >= .70)
+        return Floor.ImpactPoint.Z;
+    return Location.Z;
+}
+
+float ATibetGameMode::ClampRestoredMana(float CurrentMana, float Gain, float MaximumMana)
+{
+    return FMath::Clamp(CurrentMana + Gain, 0.f, MaximumMana);
+}
+
+void ATibetGameMode::RestoreMana(float Amount)
+{
+    Mana = ClampRestoredMana(Mana, Amount, MaxMana());
+}
+
+FString ATibetGameMode::CombatFigureModel(const FString& MapName, bool bBoss, int32 Step, int32 Progress)
+{
+    if (MapName == TEXT("yarlung")) return TEXT("RiverYak");
+    if (MapName == TEXT("pharping")) return TEXT("DroughtSpirit");
+    if (MapName == TEXT("mangyul")) return bBoss ? TEXT("Tenma") : TEXT("SnowMigoi");
+    if (MapName == TEXT("samye"))
+    {
+        if (bBoss) return TEXT("Pehar");
+        static const TCHAR* SamyeCycle[] = {TEXT("Preta"), TEXT("TsenRider"), TEXT("DroughtSpirit")};
+        return SamyeCycle[FMath::Abs(Step + Progress) % UE_ARRAY_COUNT(SamyeCycle)];
+    }
+    if (MapName == TEXT("terma1")) return (FMath::Abs(Progress) % 2) ? TEXT("Preta") : TEXT("DroughtSpirit");
+    if (MapName == TEXT("terma2")) return (FMath::Abs(Progress) % 2) ? TEXT("SnowMigoi") : TEXT("Preta");
+    if (MapName == TEXT("terma3")) return TEXT("Guardian");
+    if (MapName == TEXT("wild")) return TEXT("SnowKing");
+    return TEXT("Guardian");
+}
+
 void ATibetGameMode::PopulateResidents()
 {
     UE_LOG(LogTemp, Display, TEXT("TIBET_RESIDENT_LEVEL map=%s route=%s"), *Map, *Route);
@@ -203,11 +242,7 @@ void ATibetGameMode::PopulateResidents()
         const FVector* Marker = Resident.Marker ? PassageSockets.Find(FName(Resident.Marker)) : nullptr;
         if (Marker) Location = *Marker;
         // Some cave thresholds and shrine platforms sit above the generated ground plane.
-        FHitResult Floor;
-        const FCollisionObjectQueryParams StaticWorld(ECC_WorldStatic);
-        if (!Marker && GetWorld()->LineTraceSingleByObjectType(Floor, Location + FVector(0,0,120),
-            Location - FVector(0,0,120), StaticWorld) && Floor.ImpactNormal.Z >= .70)
-            Location.Z = Floor.ImpactPoint.Z;
+        if (!Marker) Location.Z = GroundHeight(Location);
         const FString Path = FString::Printf(TEXT("/Game/Figures/%s.%s"), Resident.Model, Resident.Model);
         AActor* Actor = MeshActor(Location, Path, FVector::OneVector);
         if (!ensureMsgf(Actor, TEXT("Missing resident mesh %s"), *Path)) continue;
@@ -570,25 +605,22 @@ void ATibetGameMode::Refresh()
     }
     else if (K==EObjective::Combat || K==EObjective::Boss)
     {
-        FString Model;
-        if (Map==TEXT("yarlung")) Model=TEXT("RiverYak");
-        else if (Map==TEXT("pharping")) Model=TEXT("DroughtSpirit");
-        else if (Map==TEXT("mangyul") && K==EObjective::Boss) Model=TEXT("Tenma");
-        else if (Map==TEXT("samye") && K==EObjective::Boss) Model=TEXT("Pehar");
-        else if (Map==TEXT("wild") || Map==TEXT("mangyul")) Model=TEXT("SnowKing");
-        else Model=TEXT("Guardian");
-        EnemyMaximum = K==EObjective::Boss ? 9 : 3;
+        const bool bBoss = K==EObjective::Boss;
+        const FString Model = CombatFigureModel(Map, bBoss, GetStep(), GetStepProgress());
+        EnemyMaximum = bBoss ? 9 : 3;
         EnemyHealth = EnemyMaximum;
         EnemyTrailing = EnemyHealth;
         HurtTimer=1.3f;
+        FVector SpawnAt = At;
+        if (FMath::IsNearlyZero(SpawnAt.Z)) SpawnAt.Z = GroundHeight(SpawnAt);
         const FString Path=FString::Printf(TEXT("/Game/Figures/%s.%s"),*Model,*Model);
-        Focus=MeshActor(At,Path,FVector(K==EObjective::Boss?1.48:1));
+        Focus=MeshActor(SpawnAt,Path,FVector(bBoss?1.48:1));
         if (Focus) Focus->SetActorRotation(FRotator(0,-90,0));
-        if (Focus && K==EObjective::Boss)
+        if (Focus && bBoss)
         {
             FActorSpawnParameters Spawn;
             Spawn.Owner=Focus;
-            if (auto* Halo=GetWorld()->SpawnActor<ATibetBossHalo>(At+FVector(0,0,6), FRotator::ZeroRotator, Spawn))
+            if (auto* Halo=GetWorld()->SpawnActor<ATibetBossHalo>(SpawnAt+FVector(0,0,6), FRotator::ZeroRotator, Spawn))
                 Halo->AttachToActor(Focus,FAttachmentTransformRules::KeepWorldTransform);
         }
     }
@@ -942,6 +974,8 @@ void ATibetGameMode::CastSkill(int32 Slot)
 
     const int32 Before = EnemyMaximum > 0 ? EnemyHealth : 0;
     const int32 Damage = Hit ? FMath::Min(Before, Skill.Power + int(IsEquipped(ETibetItem::Vajra))) : 0;
+    if (Slot == 0 && Damage > 0)
+        RestoreMana(HumBoltManaRestore);
     // Snapshot actual loss before advancing the route or replacing a defeated actor.
     const int32 After = Before - Damage;
     UE_LOG(LogTemp, Display,
@@ -1044,6 +1078,31 @@ void ATibetGameMode::CancelEnemyWindup()
     bEnemyWindingUp = false;
 }
 
+void ATibetGameMode::RespawnPlayer(APawn& Player)
+{
+    CancelEnemyWindup();
+    if (auto* Pilgrim = Cast<ATibetCharacter>(&Player))
+    {
+        Pilgrim->RespawnAtStart();
+    }
+    else
+    {
+        FVector Location(-2000.f, 0.f, 100.f);
+        FRotator Rotation = FRotator::ZeroRotator;
+        if (const AActor* PlayerStart = FindPlayerStart(Player.GetController()))
+        {
+            Location = PlayerStart->GetActorLocation();
+            Rotation = PlayerStart->GetActorRotation();
+        }
+        Player.TeleportTo(Location, Rotation);
+    }
+    Health = MaxHealth();
+    Mana = MaxMana();
+    HealTicks.Reset();
+    Refresh();
+    SetNotice(Local(TEXT("Restored at the trailhead."),TEXT("已在登山口恢復。")));
+}
+
 void ATibetGameMode::UpdateEnemyAttack(APawn& Player, bool bBoss, float Dt)
 {
     constexpr float Radius = 200.f;
@@ -1080,9 +1139,7 @@ void ATibetGameMode::UpdateEnemyAttack(APawn& Player, bool bBoss, float Dt)
     PlayerFeedback.RecordHit(GetWorld()->GetTimeSeconds(), Before, Health);
     if (Health <= 0)
     {
-        Player.TeleportTo(FVector(-2000,0,100),FRotator::ZeroRotator);
-        Health=MaxHealth(); Mana=MaxMana(); HealTicks.Reset(); Refresh();
-        SetNotice(Local(TEXT("Restored at the trailhead."),TEXT("已在登山口恢復。")));
+        RespawnPlayer(Player);
     }
 }
 

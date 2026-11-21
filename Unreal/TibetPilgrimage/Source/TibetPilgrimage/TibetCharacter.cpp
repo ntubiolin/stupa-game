@@ -126,6 +126,7 @@ void ATibetCharacter::BeginPlay()
 {
     Super::BeginPlay();
     Start = GetActorLocation();
+    StartRotation = GetActorRotation();
     const TCHAR* Parts[] = {TEXT("Pilgrim"), TEXT("PilgrimLeftLeg"), TEXT("PilgrimLeftSleeve"), TEXT("PilgrimRightLeg"), TEXT("PilgrimRightSleeve")};
     const FVector Pivots[] = {{0,0,0},{0,-12,84},{0,-23,135},{0,12,84},{0,23,135}};
     for (int32 i = 0; i < UE_ARRAY_COUNT(Parts); ++i)
@@ -180,11 +181,7 @@ void ATibetCharacter::Tick(float Dt)
     const FRotationMatrix Axes(FRotator(0,PC->GetControlRotation().Yaw,0));
     AddMovementInput(Axes.GetUnitAxis(EAxis::X),Axis.Y);
     AddMovementInput(Axes.GetUnitAxis(EAxis::Y),Axis.X);
-    if (GetActorLocation().Z < -400)
-    {
-        GetCharacterMovement()->StopMovementImmediately();
-        TeleportTo(Start, FRotator::ZeroRotator);
-    }
+    if (GetActorLocation().Z < -400) RespawnAtStart();
     const float Speed=GetVelocity().Size2D();
     WalkPhase += Dt*Speed*.025;
     if (const auto* Mode = GetWorld()->GetAuthGameMode<ATibetGameMode>())
@@ -254,6 +251,11 @@ void ATibetCharacter::CancelGameplayInput()
     auto* PC=Cast<APlayerController>(Controller);
     if (PC && PC->PlayerInput) PC->PlayerInput->FlushPressedKeys();
 }
+void ATibetCharacter::RespawnAtStart()
+{
+    if (auto* Move = GetCharacterMovement()) Move->StopMovementImmediately();
+    TeleportTo(Start, StartRotation);
+}
 void ATibetCharacter::OpenMap()
 {
     if(auto* M=GetWorld()->GetAuthGameMode<ATibetGameMode>(); M && M->FeedingPanel()) return;
@@ -261,6 +263,7 @@ void ATibetCharacter::OpenMap()
 }
 void ATibetCharacter::OpenPack()
 {
+    if(auto* M=GetWorld()->GetAuthGameMode<ATibetGameMode>(); M && M->FeedingPanel()) return;
     if (auto* HUD=Cast<ATibetHUD>(GetController<APlayerController>()->GetHUD())) HUD->ToggleJournal(ETibetPage::Pack);
 }
 void ATibetCharacter::UseQuickSlot()
