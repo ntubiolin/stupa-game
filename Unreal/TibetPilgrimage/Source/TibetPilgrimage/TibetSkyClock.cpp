@@ -147,7 +147,7 @@ void ATibetSkyClock::BeginPlay()
         const FVector Row = Center + Up * (MoonRadius * FMath::Sin(Angle));
         const FVector Width = Right * (MoonRadius * FMath::Cos(Angle));
         const int32 Outer = Points.Add(Row + Width);
-        Points.Add(Row + Width * .22);
+        Points.Add(Row + Width * .52);
         if (Slice == 1) Faces.Append({0, Outer + 1, Outer});
         else Faces.Append({Outer - 2, Outer - 1, Outer, Outer, Outer - 1, Outer + 1});
     }

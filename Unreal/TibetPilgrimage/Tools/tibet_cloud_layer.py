@@ -5,7 +5,7 @@ import unreal
 
 DIRECTORY = "/Game/Figures/Materials"
 
-# Both materials use centimeters in world XY, and the same continuous weather clock.
+# The sky and its projected shadows share world XY coordinates and a continuous weather clock.
 # At 380 metres per texture repeat, this wind moves about 27 cm/s.
 WEATHER = """
 float seconds = FixedTime >= 0.0 ? FixedTime : T + WeatherStart;
@@ -114,10 +114,11 @@ return float4(lerp(moonlitColor, daylightColor, Day), opacity * lerp(.56, .90, D
     # uses a translucent decal on the same receivers, with the same soft mask.
     for mobile in (False, True):
         material = make_material("M_CloudShadeDecal" if mobile else "M_CloudShadow")
-        material.set_editor_property("material_domain", unreal.MaterialDomain.MD_DEFERRED_DECAL
-                                     if mobile else unreal.MaterialDomain.MD_LIGHT_FUNCTION)
         if mobile:
             material.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+            material.set_editor_property("material_domain", unreal.MaterialDomain.MD_DEFERRED_DECAL)
+        else:
+            material.set_editor_property("material_domain", unreal.MaterialDomain.MD_LIGHT_FUNCTION)
         inputs = weather_inputs()
         projection = node(unreal.MaterialExpressionVectorParameter)
         projection.set_editor_property("parameter_name", "Projection")
