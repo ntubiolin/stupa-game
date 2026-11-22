@@ -48,9 +48,11 @@ private:
     FVector2D Thumb, Drag;
     int32 MoveFinger = -1, LookFinger = -1;
     bool bAwaitingDragMotion = true;
+    bool bPendingBehindAlign = false;
     double ViewYawOffset = 0.;
     double InteractPressedAt = -1.;
     void UpdateOrbit(APlayerController& Player, float Dt);
+    void UpdateBehindFollow(APlayerController& Player, FVector2D Axis, float Dt);
     void PressInteract();
     void ReleaseInteract();
     void UpdateMouseLook(APlayerController& Player);
