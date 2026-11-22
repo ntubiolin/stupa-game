@@ -80,6 +80,14 @@ export function createApiMiddleware(store = getDefaultStore(), wsHub = null) {
   let activeWsHub = wsHub;
   const communityRateBuckets = new Map();
   const saveRateBuckets = new Map();
+  const desktopAuthTickets = new Map();
+
+  function pruneDesktopTickets() {
+    const now = Date.now();
+    for (const [key, entry] of desktopAuthTickets.entries()) {
+      if (now - entry.createdAt > 5 * 60 * 1000) desktopAuthTickets.delete(key);
+    }
+  }
 
   function getClientIp(req) {
     const xff = req.headers?.['x-forwarded-for'];
@@ -309,6 +317,81 @@ export function createApiMiddleware(store = getDefaultStore(), wsHub = null) {
         authenticated: Boolean(user),
         user,
       });
+      return true;
+    }
+
+    // Desktop / Unreal Engine Google Sign-In browser handoff (`/api/auth/desktop-*`)
+    if (pathname === '/api/auth/desktop-start' && req.method === 'GET') {
+      pruneDesktopTickets();
+      const ticket = (url.searchParams.get('ticket') || '').trim();
+      if (!/^[A-Za-z0-9_-]{12,96}$/.test(ticket)) {
+        sendJson(res, { ok: false, error: 'invalid-ticket' }, 400);
+        return true;
+      }
+      if (desktopAuthTickets.size < 500 && !desktopAuthTickets.has(ticket)) {
+        desktopAuthTickets.set(ticket, { createdAt: Date.now(), status: 'pending' });
+      }
+      const clientId = (process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '').trim();
+      setCorsHeaders(res);
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.end(`<!doctype html><html><head><meta charset="utf-8"><title>蓮師足跡 · Google 雲端存檔登入</title>
+<style>body{background:#101520;color:#f8efda;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
+.card{background:#1e2636;border:1.5px solid #dab65c;padding:28px 32px;max-width:420px;text-align:center}
+h1{color:#eebd62;font-size:20px;margin:0 0 12px}p{color:#c2bca8;font-size:14px;line-height:1.6}
+button{background:#661c1a;color:#f8efda;border:1px solid #eebd62;padding:10px 18px;font-size:14px;cursor:pointer;margin-top:12px}
+input{width:100%;box-sizing:border-box;padding:8px;margin-top:8px;background:#101520;color:#f8efda;border:1px solid #556}</style>
+${clientId ? '<script src="https://accounts.google.com/gsi/client" async defer></script>' : ''}</head>
+<body><div class="card"><h1>◆ 蓮師足跡 · Google 雲端登入</h1><p id="msg">登入後將自動把雲端存檔憑證傳回桌面版遊戲。</p>
+${clientId ? `<div id="g_id_onload" data-client_id="${clientId.replace(/"/g, '&quot;')}" data-callback="onGoogleCredential"></div><div class="g_id_signin" data-type="standard"></div>` : `<input id="email" type="email" placeholder="pilgrim@gmail.com" value="pilgrim@gmail.com"/><input id="name" type="text" placeholder="行者法號 / 顯示名稱" value="蓮師行者"/><button onclick="devLogin()">於本機開發伺服器登入並連結遊戲</button>`}
+</div><script>
+const ticket = ${JSON.stringify(ticket)};
+async function finishAuth(payload) {
+  const r = await fetch('/api/auth/google', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  const d = await r.json();
+  if (!d.ok) { document.getElementById('msg').textContent = '登入失敗：' + (d.error || 'unknown'); return; }
+  await fetch('/api/auth/desktop-complete', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ticket, sessionToken:d.sessionToken, user:d.user})});
+  document.getElementById('msg').textContent = '✅ 已成功連結桌面版《蓮師足跡》！您現在可以關閉此分頁返回遊戲。';
+}
+window.onGoogleCredential = (resp) => finishAuth({credential: resp.credential});
+window.devLogin = () => finishAuth({devProfile:{email:document.getElementById('email').value, name:document.getElementById('name').value}});
+</script></body></html>`);
+      return true;
+    }
+
+    if (pathname === '/api/auth/desktop-complete' && req.method === 'POST') {
+      pruneDesktopTickets();
+      const body = await readJsonBody(req);
+      const ticket = typeof body?.ticket === 'string' ? body.ticket.trim() : '';
+      const entry = desktopAuthTickets.get(ticket);
+      if (!entry || typeof body?.sessionToken !== 'string' || !body.sessionToken) {
+        sendJson(res, { ok: false, error: 'invalid-or-expired-ticket' }, 400);
+        return true;
+      }
+      desktopAuthTickets.set(ticket, {
+        createdAt: entry.createdAt,
+        status: 'complete',
+        sessionToken: body.sessionToken,
+        user: body.user || null,
+      });
+      sendJson(res, { ok: true });
+      return true;
+    }
+
+    if (pathname === '/api/auth/desktop-poll' && req.method === 'GET') {
+      pruneDesktopTickets();
+      const ticket = (url.searchParams.get('ticket') || '').trim();
+      const entry = desktopAuthTickets.get(ticket);
+      if (!entry) {
+        sendJson(res, { ok: false, status: 'expired' }, 404);
+        return true;
+      }
+      if (entry.status !== 'complete') {
+        sendJson(res, { ok: true, status: 'pending' });
+        return true;
+      }
+      desktopAuthTickets.delete(ticket);
+      sendJson(res, { ok: true, status: 'complete', sessionToken: entry.sessionToken, user: entry.user });
       return true;
     }
 

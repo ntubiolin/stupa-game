@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 
-enum class ETibetItem : uint8 { Amrita, Vajra, Bell, Robe, Map, Count };
+enum class ETibetItem : uint8 { Amrita, Vajra, Bell, Robe, Map, Thangka, Count };
 
 struct FTibetItemInfo
 {
