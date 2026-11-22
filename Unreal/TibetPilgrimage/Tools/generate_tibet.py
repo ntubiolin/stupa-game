@@ -14,6 +14,7 @@ sys.path.insert(0, str(TOOLS))
 from import_tibet_figures import import_meshes
 from import_tibet_atlas import import_atlas
 from import_tibet_music import import_music
+from import_tibet_voices import import_voices
 from migrate_tibet_maps import strip_import_metadata
 from tibet_cloud_layer import generate as generate_cloud_layer
 from tibet_cave_lighting import dress_passages, wick_material
@@ -186,6 +187,7 @@ def generate():
     generate_cloud_layer()
     import_atlas()
     import_music()
+    import_voices()
     import_meshes()
     macaques()
     surfaces = make_surfaces()
