@@ -73,6 +73,24 @@ struct FTibetWildEnemy
     float StunnedUntil = 0.f;
 };
 
+struct FTibetResidentState
+{
+    FName Id;
+    TWeakObjectPtr<AActor> Actor;
+    TWeakObjectPtr<class ATibetGuruHalo> GuruHalo;
+    FVector Home = FVector::ZeroVector;
+    double FloorZ = 0.0;
+    bool bFixedSocketFloor = false;
+    bool bIsGuruVision = false;
+    uint8 Routine = 0;
+    int32 WaypointIndex = 0;
+    float PauseRemaining = 0.f;
+    float WalkPhase = 0.f;
+    float SpeedAlpha = 0.f;
+    float HeadingYaw = -180.f;
+    float PhaseSeed = 0.f;
+};
+
 UCLASS()
 class TIBETPILGRIMAGE_API ATibetGameMode : public AGameModeBase
 {
@@ -163,6 +181,9 @@ public:
     FString CloudStatusText() const;
     void SpeakSkyGuruBlessing();
     bool HasSkyGuruManifested() const { return SkyGuru != nullptr; }
+    static constexpr float GuruLevitationHeight = 46.f;
+    static bool IsGuruVisionId(FName Id);
+    bool IsGuruVisionManifested(FName Id) const;
     FString AreaName() const;
     int32 CurrentAreaIndex() const;
     FString AreaName(int32 Index) const;
@@ -182,16 +203,24 @@ private:
     UPROPERTY() TObjectPtr<AActor> Focus;
     UPROPERTY() TObjectPtr<AActor> SkyGuru;
     UPROPERTY() TObjectPtr<AActor> SkyGuruMandala;
+    UPROPERTY() TObjectPtr<class ATibetGuruHalo> SkyGuruHalo;
+    UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> SkyGuruAuraMaterial;
     UPROPERTY() TObjectPtr<class UTexture2D> KeepsakeTexture;
     FString CloudMessage, PendingAuthTicket;
     FTimerHandle AuthPollTimer;
     int32 AuthPollAttempts = 0;
     void EnsureSkyGuru();
+    void UpdateSkyGuruRadiance(float Now);
     void PollGoogleDesktopAuth();
     void ApplyLoadedSaveAndReload(UTibetSave* Loaded);
     void BeginCustomDialogue(const TCHAR* SpeakerEn, const TCHAR* SpeakerZh, const TCHAR* SpeechEn, const TCHAR* SpeechZh, const TCHAR* InSpeakerId = nullptr, const TCHAR* InCueBase = nullptr);
     UPROPERTY() TObjectPtr<AActor> Messenger;
     UPROPERTY() TMap<FName, TObjectPtr<AActor>> Residents;
+    TArray<FTibetResidentState> ResidentStates;
+    void RegisterSpawnedResident(FName Id, AActor* Actor, const FVector& ResolvedFloorPos, bool bFixedSocketFloor);
+    void UpdateResidentVisibility();
+    void UpdateResidents(float Dt, const FVector* PilgrimOverride = nullptr);
+    double GetResidentFloorZ(const AActor* ResidentActor) const;
     FString Map, Route, SlotName;
     TMap<FName, FVector> PassageSockets;
     int32 LitCaveLamps = 0;
@@ -273,6 +302,7 @@ private:
     void SetNotice(const FString& Line);
     void Pulse(const FVector& At, const FLinearColor& Color, float Magnitude);
     friend struct FTibetGameplayTestAccessor;
+    friend struct FTibetResidentTestAccessor;
     friend struct FTibetDialogueTestAccessor;
     friend struct FTibetMangyulTestAccessor;
 };
