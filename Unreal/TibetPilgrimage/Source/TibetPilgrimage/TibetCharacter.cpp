@@ -111,6 +111,39 @@ void ATibetCharacter::UpdateOrbit(APlayerController& Player, float Dt)
         ViewYawOffset=TibetCamera::FollowYaw(ViewYawOffset,0.,Dt);
 }
 
+void ATibetCharacter::UpdateBehindFollow(APlayerController& Player, FVector2D Axis, float Dt)
+{
+    const bool Left = Player.IsInputKeyDown(EKeys::Q);
+    const bool Right = InteractPressedAt >= 0. && FPlatformTime::Seconds() - InteractPressedAt >= TibetCamera::InteractHoldSeconds;
+    const bool bManualLook = Player.IsInputKeyDown(EKeys::RightMouseButton) || LookFinger >= 0 || Player.IsLookInputIgnored();
+    if (bManualLook || Left || Right)
+    {
+        bPendingBehindAlign = false;
+        return;
+    }
+    if (ViewYawOffset != 0.) return;
+
+    const double Lateral = FMath::Abs(Axis.X);
+    if (Lateral <= TibetCamera::LateralInputDeadzone && Axis.Y < -TibetCamera::LateralInputDeadzone)
+    {
+        bPendingBehindAlign = false;
+        return;
+    }
+    if (Lateral > TibetCamera::LateralInputDeadzone) bPendingBehindAlign = true;
+    if (!bPendingBehindAlign) return;
+
+    FRotator Control = Player.GetControlRotation();
+    const double CharacterYaw = GetActorRotation().Yaw;
+    Control.Yaw = TibetCamera::AutoBehindYaw(
+        Control.Yaw, Axis, CharacterYaw, GetVelocity().Size2D(), Dt, bPendingBehindAlign);
+    Player.SetControlRotation(Control);
+    if (Lateral <= TibetCamera::LateralInputDeadzone &&
+        FMath::Abs(FRotator::NormalizeAxis(CharacterYaw - Control.Yaw)) < .5)
+    {
+        bPendingBehindAlign = false;
+    }
+}
+
 void ATibetCharacter::PressInteract()
 {
     if (!JournalOpen()) InteractPressedAt=FPlatformTime::Seconds();
@@ -265,6 +298,7 @@ void ATibetCharacter::Tick(float Dt)
     const FRotationMatrix Axes(FRotator(0,PC->GetControlRotation().Yaw,0));
     AddMovementInput(Axes.GetUnitAxis(EAxis::X),Axis.Y);
     AddMovementInput(Axes.GetUnitAxis(EAxis::Y),Axis.X);
+    UpdateBehindFollow(*PC, Axis, Dt);
     if (GetActorLocation().Z < -400) RespawnAtStart();
     const FVector Velocity = GetVelocity();
     const float Speed = Velocity.Size2D();
@@ -350,6 +384,7 @@ void ATibetCharacter::CancelGameplayInput()
 {
     // Flush may synthesize an E release. Cancel the gesture before flushing.
     InteractPressedAt=-1.;
+    bPendingBehindAlign=false;
     MoveFinger=LookFinger=-1;
     bAwaitingDragMotion=true;
     StopJumping();
@@ -361,6 +396,8 @@ void ATibetCharacter::CancelGameplayInput()
 void ATibetCharacter::RespawnAtStart()
 {
     LandTimer = 0.f;
+    bPendingBehindAlign = false;
+    ViewYawOffset = 0.;
     CurrentPose = FTibetLimbPose{};
     if (auto* Move = GetCharacterMovement()) Move->StopMovementImmediately();
     TeleportTo(Start, StartRotation);

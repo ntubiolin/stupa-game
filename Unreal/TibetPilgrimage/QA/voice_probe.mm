@@ -1,13 +1,30 @@
-// Run by test_dialogue.py. Render the game's actual configured utterance to offline PCM on this Mac.
+// Run by test_dialogue.py and test_voice_casting.py.
+// Inspects role-matched Apple voice selection or renders configured utterances to offline PCM.
 #import "../Source/TibetPilgrimage/Apple/TibetVoice.mm"
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 int main(int argc, const char** argv)
 {
-    if (argc != 3) return 2;
     @autoreleasepool {
-        auto* line = Utterance([NSString stringWithUTF8String:argv[2]], strcmp(argv[1], "en") == 0);
+        if (argc == 4 && std::strcmp(argv[1], "--inspect") == 0)
+        {
+            const bool english = std::strcmp(argv[2], "en") == 0;
+            TibetVoice::FVoiceSelection info{};
+            if (!TibetVoice::InspectNativeVoice(argv[3], english, info)) return 3;
+            std::printf("speaker=%s language=%s gender=%s pitch=%.2f rate=%.2f id=%s voice=%s\n",
+                argv[3], info.Language, info.Gender, info.Pitch, info.RateMultiplier, info.VoiceId, info.VoiceName);
+            return 0;
+        }
+
+        if (argc != 3 && argc != 4) return 2;
+        const bool english = std::strcmp(argv[1], "en") == 0;
+        const char* speaker = argc == 4 ? argv[2] : "oldLama";
+        const char* utf8 = argc == 4 ? argv[3] : argv[2];
+
+        TibetVoice::FVoiceSelection info{};
+        auto* line = Utterance([NSString stringWithUTF8String:utf8], english, speaker, &info);
         if (!line) return 3;
         auto* synth = [[AVSpeechSynthesizer alloc] init];
         __block double energy = 0, seconds = 0;
@@ -31,9 +48,10 @@ int main(int argc, const char** argv)
         const auto* until = [NSDate dateWithTimeIntervalSinceNow:20];
         while (!done && [until timeIntervalSinceNow] > 0)
             [[NSRunLoop mainRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:.05]];
-        double rms = samples ? sqrt(energy / samples) : 0;
-        printf("%s language=%s duration=%.2fs rms=%.4f samples=%llu\n", argv[1],
-            line.voice.language.UTF8String, seconds, rms, samples);
+        double rms = samples ? std::sqrt(energy / samples) : 0;
+        std::printf("%s speaker=%s gender=%s id=%s language=%s pitch=%.2f duration=%.2fs rms=%.4f samples=%llu\n",
+            argv[1], speaker, info.Gender, info.VoiceId, line.voice.language.UTF8String,
+            info.Pitch, seconds, rms, samples);
         [synth release];
         return seconds > 2 && rms > .005 && samples > 20000 ? 0 : 1;
     }
