@@ -698,7 +698,7 @@ bool FTibetCombatExtras::TryGetChapterCombatAnchor(const FString& MapName, int32
     const int32 SafeCount = FMath::Max(0, Count);
     if (MapName == TEXT("wild") && bBoss)
     {
-        OutAnchor = FVector(2150, 0, 0);
+        OutAnchor = FVector(920, 0, 0);
         return true;
     }
     if (MapName == TEXT("pharping") && !bBoss && Step == 1)

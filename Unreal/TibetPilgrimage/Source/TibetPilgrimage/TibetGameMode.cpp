@@ -980,6 +980,7 @@ FString ATibetGameMode::DialoguePage() const
 
 void ATibetGameMode::SetDialogueWord(int32 Offset)
 {
+    if (bDialoguePaused) return;
     if (!bSpokenWord)
     {
         const auto& VoiceInfo = TibetVoice::LastSelection();
