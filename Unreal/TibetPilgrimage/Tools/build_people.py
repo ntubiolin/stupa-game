@@ -119,6 +119,38 @@ def legs(x, trousers, leather, garter=None):
     ]
 
 
+def pilgrim_thigh(x, trousers):
+    """Upper leg from hip (z=.84) to knee pivot (z=.47) with a smooth rounded patella cap."""
+    return [
+        loft("Upper thigh trouser", [
+            (.468, .068, .074, x, 0), (.53, .071, .076, x, -.002),
+            (.62, .066, .069, x, -.002), (.73, .054, .056, x, -.001),
+            (.84, .044, .046, x, 0)
+        ], trousers, 36, .003),
+        oval("Knee joint", (x, 0, .47), (.068, .074, .068), trousers),
+    ]
+
+
+def pilgrim_calf(x, trousers, leather, garter=None):
+    """Lower leg from knee pivot (z=.47) down through tapered trouser, woven garter, and traditional lham boot."""
+    felt = garter or trousers
+    return [
+        loft("Lower calf trouser", [
+            (.25, .048, .056, x, 0), (.31, .052, .058, x, 0), (.34, .064, .072, x, 0),
+            (.42, .069, .075, x, 0), (.47, .0675, .0735, x, 0), (.492, .060, .065, x, 0)
+        ], trousers, 36, .003),
+        loft("Traditional lham boot", [
+            (.012, .062, .122, x, .044), (.036, .069, .132, x, .042),
+            (.068, .069, .124, x, .036), (.095, .060, .098, x, .022),
+            (.145, .055, .069, x, .006), (.275, .061, .069, x, 0),
+            (.312, .068, .075, x, 0), (.328, .067, .075, x, 0)
+        ], leather, 36, .002),
+        loft("Woven boot garter", [
+            (.278, .064, .072, x, 0), (.305, .070, .077, x, 0)
+        ], felt, 32),
+    ]
+
+
 def band(name, z, width, depth, height, material):
     return loft(name, [(z, width, depth, 0, -.005), (z + height, width + .001, depth + .001, 0, -.005)], material, 48)
 
@@ -213,7 +245,8 @@ def build_people():
     pilgrim.append(oval("Pouch brass clasp", (.168, -.035, .935), (.018, .016, .018), gold))
     for label, side in (("Left", -1), ("Right", 1)):
         for suffix, parts in (
-            ("Leg", legs(side * .12, indigo, boot, cinnabar)),
+            ("Leg", pilgrim_thigh(side * .12, indigo)),
+            ("Calf", pilgrim_calf(side * .12, indigo, boot, cinnabar)),
             ("Sleeve", travel_sleeve(side, linen, indigo, skin)),
         ):
             name = "Pilgrim" + label + suffix

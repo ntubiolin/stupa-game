@@ -187,11 +187,14 @@ def injury_edge_fraction(image):
 
 
 def landmark_detail(image):
-    with tempfile.TemporaryDirectory() as tmp:
-        bitmap = Path(tmp) / "sample.bmp"
-        subprocess.run(["sips", "-s", "format", "bmp", "-z", "120", "192", str(image), "--out", str(bitmap)],
-                       check=True, stdout=subprocess.DEVNULL)
-        data = bitmap.read_bytes()
+    data = Path(image).read_bytes()
+    if not (len(data) >= 30 and data[:2] == b"BM"
+            and struct.unpack_from("<iiHH", data, 18)[:2] in ((192, 120), (192, -120))):
+        with tempfile.TemporaryDirectory() as tmp:
+            bitmap = Path(tmp) / "sample.bmp"
+            subprocess.run(["sips", "-s", "format", "bmp", "-z", "120", "192", str(image), "--out", str(bitmap)],
+                           check=True, stdout=subprocess.DEVNULL)
+            data = bitmap.read_bytes()
     offset = struct.unpack_from("<I", data, 10)[0]
     width, height, planes, bits = struct.unpack_from("<iiHH", data, 18)
     if (data[:2] != b"BM" or width != 192 or abs(height) != 120 or planes != 1 or bits not in (24, 32)):

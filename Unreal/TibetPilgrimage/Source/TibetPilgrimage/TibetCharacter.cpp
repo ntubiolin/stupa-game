@@ -122,28 +122,112 @@ void ATibetCharacter::ReleaseInteract()
     if (Pressed>=0. && FPlatformTime::Seconds()-Pressed<TibetCamera::InteractHoldSeconds) DoInteract();
 }
 
+FTibetLimbPose ATibetCharacter::ComputeLimbPose(
+    float WalkPhase, float GroundSpeed, bool bFalling, float VerticalVelocity, float LandAlpha)
+{
+    FTibetLimbPose Pose;
+    if (bFalling)
+    {
+        // In UE (+X Forward, +Y Right, +Z Up), FRotationMatrix(FRotator(Pitch, 0, 0)) maps a downward
+        // limb (0, 0, -L) to (+L*sin(Pitch), 0, -L*cos(Pitch)) and an upward torso (0, 0, +H) to
+        // (-H*sin(Pitch), 0, +H*cos(Pitch)). Thus +HipPitch raises the thigh forward, -KneePitch bends
+        // the shin/boot backward (anatomical knee flexion), +ArmPitch lifts sleeves forward/up, and
+        // -TorsoPitch leans the pilgrim forward into the leap.
+        if (VerticalVelocity >= 0.f)
+        {
+            const float Alpha = FMath::SmoothStep(0.f, 260.f, VerticalVelocity);
+            Pose.LeftHipPitch = FMath::Lerp(36.f, 46.f, Alpha);
+            Pose.LeftKneePitch = FMath::Lerp(-52.f, -68.f, Alpha);
+            Pose.RightHipPitch = FMath::Lerp(20.f, 28.f, Alpha);
+            Pose.RightKneePitch = FMath::Lerp(-44.f, -54.f, Alpha);
+            Pose.LeftArmPitch = FMath::Lerp(28.f, 36.f, Alpha);
+            Pose.RightArmPitch = FMath::Lerp(24.f, 28.f, Alpha);
+            Pose.TorsoPitch = FMath::Lerp(-5.f, -8.f, Alpha);
+        }
+        else
+        {
+            const float Alpha = FMath::SmoothStep(0.f, 260.f, -VerticalVelocity);
+            Pose.LeftHipPitch = FMath::Lerp(36.f, 22.f, Alpha);
+            Pose.LeftKneePitch = FMath::Lerp(-52.f, -30.f, Alpha);
+            Pose.RightHipPitch = FMath::Lerp(20.f, 14.f, Alpha);
+            Pose.RightKneePitch = FMath::Lerp(-44.f, -44.f, Alpha);
+            Pose.LeftArmPitch = FMath::Lerp(28.f, 18.f, Alpha);
+            Pose.RightArmPitch = FMath::Lerp(24.f, 22.f, Alpha);
+            Pose.TorsoPitch = FMath::Lerp(-5.f, -3.f, Alpha);
+        }
+        return Pose;
+    }
+
+    const float StrideAlpha = FMath::Clamp(GroundSpeed / 480.f, 0.f, 1.f);
+    if (StrideAlpha > 0.f)
+    {
+        const float LeftSin = FMath::Sin(WalkPhase);
+        const float RightSin = -LeftSin;
+        const auto StrideKneeFlex = [](float Phase)
+        {
+            const float Swing = FMath::Max(0.f, FMath::Cos(Phase - 0.45f));
+            const float Reach = 0.5f + 0.5f * FMath::Sin(Phase);
+            return -FMath::Min(30.f, 22.5f * Swing + 8.5f * Reach);
+        };
+        Pose.LeftHipPitch = LeftSin * 21.f * StrideAlpha;
+        Pose.RightHipPitch = RightSin * 21.f * StrideAlpha;
+        Pose.LeftKneePitch = StrideKneeFlex(WalkPhase) * StrideAlpha;
+        Pose.RightKneePitch = StrideKneeFlex(WalkPhase + UE_PI) * StrideAlpha;
+        Pose.LeftArmPitch = -LeftSin * 19.f * StrideAlpha;
+        Pose.RightArmPitch = LeftSin * 19.f * StrideAlpha;
+        Pose.TorsoPitch = -2.5f * StrideAlpha;
+    }
+
+    const float ClampedLand = FMath::Clamp(LandAlpha, 0.f, 1.f);
+    if (ClampedLand > 0.f)
+    {
+        const float Cushion = FMath::Sin(ClampedLand * UE_PI);
+        Pose.LeftHipPitch += 24.f * Cushion;
+        Pose.RightHipPitch += 24.f * Cushion;
+        Pose.LeftKneePitch = FMath::Clamp(Pose.LeftKneePitch - 42.f * Cushion, -75.f, 0.f);
+        Pose.RightKneePitch = FMath::Clamp(Pose.RightKneePitch - 42.f * Cushion, -75.f, 0.f);
+        Pose.LeftArmPitch += 14.f * Cushion;
+        Pose.RightArmPitch += 14.f * Cushion;
+        Pose.TorsoPitch -= 6.f * Cushion;
+        Pose.FigureZOffset = -9.f * Cushion;
+    }
+
+    return Pose;
+}
+
+void ATibetCharacter::Landed(const FHitResult& Hit)
+{
+    Super::Landed(Hit);
+    LandTimer = LandCushionDuration;
+}
+
 void ATibetCharacter::BeginPlay()
 {
     Super::BeginPlay();
     Start = GetActorLocation();
     StartRotation = GetActorRotation();
-    const TCHAR* Parts[] = {TEXT("Pilgrim"), TEXT("PilgrimLeftLeg"), TEXT("PilgrimLeftSleeve"), TEXT("PilgrimRightLeg"), TEXT("PilgrimRightSleeve")};
-    const FVector Pivots[] = {{0,0,0},{0,-12,84},{0,-23,135},{0,12,84},{0,23,135}};
-    for (int32 i = 0; i < UE_ARRAY_COUNT(Parts); ++i)
+    auto AttachPart = [this](USceneComponent* Parent, const FVector& Pivot, const TCHAR* MeshName)
     {
         auto* Joint = NewObject<USceneComponent>(this);
-        Joint->SetupAttachment(Figure);
-        Joint->SetRelativeLocation(Pivots[i]);
+        Joint->SetupAttachment(Parent);
+        Joint->SetRelativeLocation(Pivot);
         Joint->RegisterComponent();
-        if (i) Joints.Add(Joint);
         auto* Body = NewObject<UStaticMeshComponent>(this);
         Body->SetupAttachment(Joint);
-        Body->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, *FString::Printf(TEXT("/Game/Figures/%s.%s"),Parts[i],Parts[i])));
+        Body->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, *FString::Printf(TEXT("/Game/Figures/%s.%s"), MeshName, MeshName)));
         Body->SetCollisionEnabled(ECollisionEnabled::NoCollision);
         // FBX imports the Blender forward axis as -Y. Turn it to UE +X, with left limbs on -Y.
-        Body->SetRelativeRotation(FRotator(0,90,0));
+        Body->SetRelativeRotation(FRotator(0.f, 90.f, 0.f));
         Body->RegisterComponent();
-    }
+        return Joint;
+    };
+    AttachPart(Figure, FVector(0.f, 0.f, 0.f), TEXT("Pilgrim"));
+    LeftLegJoint = AttachPart(Figure, FVector(0.f, -12.f, 84.f), TEXT("PilgrimLeftLeg"));
+    RightLegJoint = AttachPart(Figure, FVector(0.f, 12.f, 84.f), TEXT("PilgrimRightLeg"));
+    LeftCalfJoint = AttachPart(LeftLegJoint, FVector(0.f, 0.f, -37.f), TEXT("PilgrimLeftCalf"));
+    RightCalfJoint = AttachPart(RightLegJoint, FVector(0.f, 0.f, -37.f), TEXT("PilgrimRightCalf"));
+    LeftSleeveJoint = AttachPart(Figure, FVector(0.f, -23.f, 135.f), TEXT("PilgrimLeftSleeve"));
+    RightSleeveJoint = AttachPart(Figure, FVector(0.f, 23.f, 135.f), TEXT("PilgrimRightSleeve"));
 }
 void ATibetCharacter::Tick(float Dt)
 {
@@ -182,19 +266,42 @@ void ATibetCharacter::Tick(float Dt)
     AddMovementInput(Axes.GetUnitAxis(EAxis::X),Axis.Y);
     AddMovementInput(Axes.GetUnitAxis(EAxis::Y),Axis.X);
     if (GetActorLocation().Z < -400) RespawnAtStart();
-    const float Speed=GetVelocity().Size2D();
-    WalkPhase += Dt*Speed*.025;
+    const FVector Velocity = GetVelocity();
+    const float Speed = Velocity.Size2D();
+    const bool bFalling = GetCharacterMovement() && GetCharacterMovement()->IsFalling();
+    if (!bFalling)
+    {
+        WalkPhase += Dt * Speed * .025f;
+        LandTimer = FMath::Max(0.f, LandTimer - Dt);
+    }
+    else
+    {
+        LandTimer = 0.f;
+    }
+    const float LandAlpha = bFalling ? 0.f : (LandTimer / LandCushionDuration);
+    const FTibetLimbPose TargetPose = ComputeLimbPose(WalkPhase, Speed, bFalling, Velocity.Z, LandAlpha);
+    constexpr float InterpSpeed = 16.f;
+    CurrentPose.LeftHipPitch = FMath::FInterpTo(CurrentPose.LeftHipPitch, TargetPose.LeftHipPitch, Dt, InterpSpeed);
+    CurrentPose.RightHipPitch = FMath::FInterpTo(CurrentPose.RightHipPitch, TargetPose.RightHipPitch, Dt, InterpSpeed);
+    CurrentPose.LeftKneePitch = FMath::FInterpTo(CurrentPose.LeftKneePitch, TargetPose.LeftKneePitch, Dt, InterpSpeed);
+    CurrentPose.RightKneePitch = FMath::FInterpTo(CurrentPose.RightKneePitch, TargetPose.RightKneePitch, Dt, InterpSpeed);
+    CurrentPose.LeftArmPitch = FMath::FInterpTo(CurrentPose.LeftArmPitch, TargetPose.LeftArmPitch, Dt, InterpSpeed);
+    CurrentPose.RightArmPitch = FMath::FInterpTo(CurrentPose.RightArmPitch, TargetPose.RightArmPitch, Dt, InterpSpeed);
+    CurrentPose.TorsoPitch = FMath::FInterpTo(CurrentPose.TorsoPitch, TargetPose.TorsoPitch, Dt, InterpSpeed);
+    CurrentPose.FigureZOffset = FMath::FInterpTo(CurrentPose.FigureZOffset, TargetPose.FigureZOffset, Dt, InterpSpeed);
+
+    float Recoil = 0.f;
     if (const auto* Mode = GetWorld()->GetAuthGameMode<ATibetGameMode>())
-    {
-        const float Recoil = Mode->GetPlayerFeedback().Flinch(GetWorld()->GetTimeSeconds());
-        // Move the figure within its capsule. The camera and collision stay steady.
-        Figure->SetRelativeRotation(FRotator(-22.f * Recoil, 0.f, 9.f * Recoil));
-    }
-    for (int32 i=0; i<Joints.Num(); ++i)
-    {
-        const float Sign = (i == 0 || i == 3) ? 1 : -1;
-        Joints[i]->SetRelativeRotation(FRotator(Sign * FMath::Sin(WalkPhase)*19*FMath::Min(Speed/480.f,1.f),0,0));
-    }
+        Recoil = Mode->GetPlayerFeedback().Flinch(GetWorld()->GetTimeSeconds());
+    // Move the figure within its capsule. The camera and collision stay steady.
+    Figure->SetRelativeLocation(FVector(0.f, 0.f, -88.f + CurrentPose.FigureZOffset));
+    Figure->SetRelativeRotation(FRotator(CurrentPose.TorsoPitch - 22.f * Recoil, 0.f, 9.f * Recoil));
+    if (LeftLegJoint) LeftLegJoint->SetRelativeRotation(FRotator(CurrentPose.LeftHipPitch, 0.f, 0.f));
+    if (RightLegJoint) RightLegJoint->SetRelativeRotation(FRotator(CurrentPose.RightHipPitch, 0.f, 0.f));
+    if (LeftCalfJoint) LeftCalfJoint->SetRelativeRotation(FRotator(CurrentPose.LeftKneePitch, 0.f, 0.f));
+    if (RightCalfJoint) RightCalfJoint->SetRelativeRotation(FRotator(CurrentPose.RightKneePitch, 0.f, 0.f));
+    if (LeftSleeveJoint) LeftSleeveJoint->SetRelativeRotation(FRotator(CurrentPose.LeftArmPitch, 0.f, 0.f));
+    if (RightSleeveJoint) RightSleeveJoint->SetRelativeRotation(FRotator(CurrentPose.RightArmPitch, 0.f, 0.f));
 }
 void ATibetCharacter::SetupPlayerInputComponent(UInputComponent* Input)
 {
@@ -253,6 +360,8 @@ void ATibetCharacter::CancelGameplayInput()
 }
 void ATibetCharacter::RespawnAtStart()
 {
+    LandTimer = 0.f;
+    CurrentPose = FTibetLimbPose{};
     if (auto* Move = GetCharacterMovement()) Move->StopMovementImmediately();
     TeleportTo(Start, StartRotation);
 }
