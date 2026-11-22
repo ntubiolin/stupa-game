@@ -16,7 +16,6 @@ const FWildKind Kinds[] = {
     {TEXT("tsen"),TEXT("TsenRider"),TEXT("Tsen Rider"),TEXT("赤甲贊騎"),155.f},
     {TEXT("migoi"),TEXT("SnowMigoi"),TEXT("Migoi"),TEXT("雪人"),95.f}
 };
-const FVector Camps[] = {{-185,-260,0},{125,240,0},{410,-390,0}};
 }
 
 void ATibetGameMode::RefreshWilderness(int32 Remaining)
@@ -40,16 +39,16 @@ void ATibetGameMode::RefreshWilderness(int32 Remaining)
         const int32 Count=FMath::Min(3, Remaining);
         for (int32 I=0; I<Count; ++I)
         {
-            const int32 Index=(Completed+I)%UE_ARRAY_COUNT(Kinds);
-            const auto& Type=Kinds[Index];
+            const int32 SpeciesIndex=(Completed+I)%UE_ARRAY_COUNT(Kinds);
+            const auto& Type=Kinds[SpeciesIndex];
             const FString Mesh=FString::Printf(TEXT("/Game/Figures/%s.%s"),Type.Mesh,Type.Mesh);
-            FVector SpawnAt=Camps[Index];
+            FVector SpawnAt=FTibetCombatExtras::WildernessCamp(Completed+I);
             if (FMath::IsNearlyZero(SpawnAt.Z)) SpawnAt.Z=GroundHeight(SpawnAt);
             AActor* Actor=MeshActor(SpawnAt,Mesh,FVector::OneVector);
             if (!Actor) continue;
             Actor->Tags.Append({TEXT("TibetWildEnemy"),Type.Tag});
             Actor->SetActorRotation(FRotator(0,-90,0));
-            WildernessPack.Add({Actor,Index});
+            WildernessPack.Add({Actor,SpeciesIndex});
         }
     }
     const APawn* Player=UGameplayStatics::GetPlayerPawn(this,0);
@@ -71,11 +70,16 @@ void ATibetGameMode::UpdateWilderness(const FVector& Player, float Dt)
         // A small preference for the current opponent keeps its health bar steady.
         const double Score=Distance-(Actor==Focus ? 85. : 0.);
         if (Score<Best) { Closest=&Member; Best=Score; }
-        if (Actor!=Focus && Now>=Member.StunnedUntil && Distance>360 && Distance<950)
+        const double StopDist = (Member.Kind == 1) ? 560.0 : 360.0;
+        if (Actor!=Focus && Now>=Member.StunnedUntil && Distance>StopDist && Distance<1050)
         {
             const FVector Dir=Delta.GetSafeNormal2D();
-            Actor->AddActorWorldOffset(Dir*FMath::Min<double>(Distance-360,Dt*Kinds[Member.Kind].ChaseSpeed*.55f));
+            Actor->AddActorWorldOffset(Dir*FMath::Min<double>(Distance-StopDist,Dt*Kinds[Member.Kind].ChaseSpeed*.55f));
             Actor->SetActorRotation(FRotator(0,Dir.Rotation().Yaw+90,0));
+        }
+        if (Actor != Focus && Dt > 0.f)
+        {
+            FTibetCombatExtras::UpdateMonsterKinematics(*this, CombatExtras, *Actor, 0.f, Dt);
         }
     }
     if (!Closest || Focus==Closest->Actor.Get()) return;

@@ -94,13 +94,35 @@ def build():
         horse.append(ribbon("Crimson war pennant",
             [(bx * 1.15, -.22, 2.12), (bx * 1.34, -.28, 2.48)],
             [(bx * 1.25, -.48, 2.04), (bx * 1.44, -.56, 2.40)], banner_red))
-    # Left shield + Right barbed crimson-gold lance
-    horse.append(oval("Round gilt buckler", (-.42, .22, 1.56), (.04, .22, .22), gold))
-    horse += [
-        cord("Spirit lance shaft", [(.37, .12, .62), (.37, .34, 2.35)], .024, coal),
-        ribbon("Lance silk streamer", [(.37, .31, 2.12), (.37, .33, 2.28)], [(.48, .12, 1.98), (.52, .16, 2.18)], banner_red),
-        horn("Barbed gilt lance tip", [(.37, .33, 2.32), (.37, .35, 2.44), (.37, .38, 2.72)], [.028, .078, .003], gold, 8),
+    # Left gilt buckler on forearm + Sculpted Gilded Tibetan Recurve War-Bow, Quiver & Nocked Spirit Arrow
+    horse.append(oval("Round gilt buckler", (-.41, .16, 1.58), (.038, .19, .19), gold))
+    bow_limb = [
+        (-.24, .18, 1.16), (-.31, .28, 1.26), (-.36, .39, 1.40),
+        (-.33, .35, 1.56),
+        (-.36, .39, 1.72), (-.31, .28, 1.86), (-.22, .17, 1.97),
     ]
+    horse += [
+        horn("Tibetan recurve war-bow", bow_limb, [.012, .022, .028, .032, .028, .022, .012], red, 10),
+        oval("Gilt bow grip", (-.33, .35, 1.56), (.038, .040, .068), gold),
+        horn("Lower gilt siyah tip", [(-.31, .28, 1.26), (-.24, .18, 1.16), (-.20, .12, 1.12)], [.020, .014, .005], gold, 8),
+        horn("Upper gilt siyah tip", [(-.31, .28, 1.86), (-.22, .17, 1.97), (-.18, .11, 2.02)], [.020, .014, .005], gold, 8),
+        cord("Taut golden bowstring", [(-.21, .14, 1.13), (.12, .10, 1.56), (-.19, .13, 2.00)], .0065, gold, 2),
+        # Nocked blazing crimson-gold spirit arrow aimed forward
+        cord("Nocked spirit arrow shaft", [(.12, .10, 1.56), (-.33, .36, 1.56), (-.48, .66, 1.56)], .010, ember, 2),
+        horn("Barbed spirit arrowhead", [(-.46, .62, 1.56), (-.50, .69, 1.56), (-.57, .82, 1.56)], [.016, .042, .003], gold, 8),
+        ribbon("Arrow crimson fletching", [(.11, .10, 1.585), (.02, .16, 1.575)], [(.11, .10, 1.535), (.02, .16, 1.545)], banner_red),
+        # Lacquered hip quiver bristling with extra feathered war-arrows + stirrup-holstered spirit lance
+        horn("Lacquered war quiver", [(.28, -.16, 1.14), (.32, -.24, 1.38), (.35, -.30, 1.60)], [.052, .062, .068], red, 12),
+        oval("Quiver gilt rim", (.35, -.30, 1.60), (.072, .072, .022), gold),
+        cord("Spirit lance shaft", [(.37, -.08, .62), (.39, -.02, 2.35)], .022, coal),
+        ribbon("Lance silk streamer", [(.39, -.03, 2.12), (.39, -.02, 2.28)], [(.50, -.20, 1.98), (.54, -.16, 2.18)], banner_red),
+        horn("Barbed gilt lance tip", [(.39, -.02, 2.32), (.39, -.01, 2.44), (.40, .01, 2.70)], [.026, .072, .003], gold, 8),
+    ]
+    for q_idx in range(3):
+        qx = .34 + (q_idx - 1) * .022
+        qy = -.29 - q_idx * .018
+        horse.append(cord("Quiver arrow", [(qx, qy, 1.56), (qx + .02, qy - .05, 1.78)], .008, gold, 2))
+        horse.append(oval("Quiver fletching", (qx + .02, qy - .05, 1.77), (.014, .026, .038), banner_red))
     export(combine("TsenRider", horse))
 
     # 3. Himalayan Snow Migoi & 4. Glacial Crowned Snow Migoi King (Wilderness Boss)

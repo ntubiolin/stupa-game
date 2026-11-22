@@ -339,7 +339,13 @@ FVector ATibetGameMode::Anchor() const
             (Hub ? 2300. : 3250.)*FMath::Sin(A),0);
     }
     case EObjective::Boss:
-    case EObjective::Combat: return {-50+110.*(Count%3),-350+150.*(Count%4),0};
+    case EObjective::Combat:
+    {
+        FVector DiverseAt;
+        if (FTibetCombatExtras::TryGetChapterCombatAnchor(Map, Step, Count, K == EObjective::Boss, DiverseAt))
+            return DiverseAt;
+        return {-50+110.*(Count%3),-350+150.*(Count%4),0};
+    }
     case EObjective::Interact: return {-1100+200.*(Count%5),((Count%2)?-1.:1.)*340,0};
     case EObjective::Escort: return bEscorting ? FVector(520,-250,0) : FVector(-1300,230,0);
     case EObjective::Reach: return {380,(GetStep()%2?1.:-1.)*370,0};
@@ -421,6 +427,7 @@ bool ATibetGameMode::TravelToMap(const FString& Destination)
         return false;
     }
     bTravel = true;
+    CombatExtras.ClearActors(true);
     if (auto* PC = GetWorld()->GetFirstPlayerController())
         if (auto* HUD = PC->GetHUD<ATibetHUD>()) HUD->CloseJournal();
     UGameplayStatics::OpenLevel(this, FName(*(TEXT("/Game/Maps/Tibet/") + Destination)));
@@ -973,6 +980,7 @@ FString ATibetGameMode::DialoguePage() const
 
 void ATibetGameMode::SetDialogueWord(int32 Offset)
 {
+    if (bDialoguePaused) return;
     if (!bSpokenWord)
     {
         const auto& VoiceInfo = TibetVoice::LastSelection();
@@ -1052,6 +1060,7 @@ void ATibetGameMode::EndPlay(const EEndPlayReason::Type Reason)
     GetWorldTimerManager().ClearTimer(ScoreTimer);
     GetWorldTimerManager().ClearTimer(AuthPollTimer);
     StopDialogue();
+    CombatExtras.ClearActors(true);
     if (Save && !bTravel && !SlotName.IsEmpty()) Store();
     Super::EndPlay(Reason);
 }
@@ -1142,6 +1151,7 @@ void ATibetGameMode::CastSkill(int32 Slot)
         P->SetActorRotation((To - From).GetSafeNormal2D().Rotation());
     auto* Effect = GetWorld()->SpawnActor<ATibetRitualEffect>();
     if (Effect) Effect->Start(Slot, From, To, P, RitualMaterial);
+    FTibetCombatExtras::PlaySfx(this, FTibetCombatExtras::SkillCastSfx(Slot));
 
     const int32 Before = EnemyMaximum > 0 ? EnemyHealth : 0;
     const int32 Damage = Hit ? FMath::Min(Before, Skill.Power + int(IsEquipped(ETibetItem::Vajra))) : 0;
@@ -1153,6 +1163,8 @@ void ATibetGameMode::CastSkill(int32 Slot)
         TEXT("TIBET_CAST slot=%d map=%s hit=%d mp=%.1f shield=%.1f before=%d after=%d damage=%d effect=%d"),
         Slot, *Map, Hit ? 1 : 0, Mana, Shield, Before, After, Damage, Effect ? 1 : 0);
     if (Damage == 0) return;
+    const FVector MonsterBasePos = Focus->GetActorLocation();
+    const bool bDefeatedBoss = Objective(Route, GetStep()).Kind == EObjective::Boss;
     if (!WildernessPack.IsEmpty())
     {
         const auto* Body = Focus->FindComponentByClass<UStaticMeshComponent>();
@@ -1162,6 +1174,8 @@ void ATibetGameMode::CastSkill(int32 Slot)
     }
     EnemyHealth = After;
     LastHitTime = GetWorld()->GetTimeSeconds();
+    FTibetCombatExtras::PlaySfx(this, ETibetSfx::EnemyHit);
+    FTibetCombatExtras::RecordMonsterHit(CombatExtras, *Focus, Player, After > 0 && !bEnemyWindingUp);
     if (Slot == 2 || Slot == 3)
     {
         Stun = 2;
@@ -1172,8 +1186,11 @@ void ATibetGameMode::CastSkill(int32 Slot)
     DamageCues.Add({Meter.Anchor, Damage, LastHitTime});
     if (auto* Impact = GetWorld()->SpawnActor<ATibetRitualEffect>())
         Impact->StartImpact(To + (Player - To).GetSafeNormal2D() * 5, Player - To, Slot, After == 0, RitualMaterial);
+    FTibetCombatExtras::SpawnHitAndPurifyVfx(*this, To, MonsterBasePos, Slot, After == 0);
     if (After == 0)
     {
+        FTibetCombatExtras::PlaySfx(this, ETibetSfx::EnemyPurify);
+        FTibetCombatExtras::SpawnLootDrop(*this, CombatExtras, MonsterBasePos, bDefeatedBoss);
         FinishingMeter = Meter;
         FinishTime = LastHitTime;
         Advance();
@@ -1198,9 +1215,12 @@ void ATibetGameMode::Tick(float Dt)
     auto* P=UGameplayStatics::GetPlayerPawn(this,0);
     if (!P) return;
     UpdatePills(Now);
+    CombatExtras.PruneStaleMonsters();
     Mana=FMath::Min(MaxMana(),Mana+Dt*5);
     for(float& T:Cooldown) T=FMath::Max(0.f,T-Dt);
     Shield=FMath::Max(0.f,Shield-Dt); Stun=FMath::Max(0.f,Stun-Dt);
+    FTibetCombatExtras::TickArrows(*this, CombatExtras, P, Dt);
+    FTibetCombatExtras::TickLootDrops(*this, CombatExtras, P, Dt);
     const auto K=Objective(Route,GetStep()).Kind;
     if (!WildernessPack.IsEmpty()) UpdateWilderness(P->GetActorLocation(),Dt);
     const FVector ToPlayer=P->GetActorLocation()-GetObjectiveLocation();
@@ -1222,20 +1242,23 @@ void ATibetGameMode::Tick(float Dt)
         }
         else Advance();
     }
-    if (EnemyMaximum > 0 && Focus)
-    {
-        FRotator Pose = Focus->GetActorRotation();
-        if (!bEnemyWindingUp && Stun <= 0 && Dist < 1600) Pose.Yaw = ToPlayer.Rotation().Yaw + 90;
-        const float Phase = FMath::Clamp((Now - LastHitTime) / .32f, 0.f, 1.f);
-        Pose.Roll = -18 * FMath::Sin(Phase * UE_PI) * (1 - Phase);
-        Focus->SetActorRotation(Pose);
-    }
     if ((K==EObjective::Combat || K==EObjective::Boss) && Focus && Stun<=0 && Dist<1600)
         UpdateEnemyAttack(*P, K == EObjective::Boss, Dt);
     else
     {
         CancelEnemyWindup();
         Health=FMath::Min(MaxHealth(),Health+Dt*2);
+    }
+    if (EnemyMaximum > 0 && Focus)
+    {
+        const FVector FocusToPlayer = P->GetActorLocation() - Focus->GetActorLocation();
+        FRotator Pose = Focus->GetActorRotation();
+        if (!bEnemyWindingUp && Stun <= 0 && FocusToPlayer.Size2D() < 1600)
+            Pose.Yaw = FocusToPlayer.Rotation().Yaw + 90;
+        Focus->SetActorRotation(Pose);
+        const float Phase = FMath::Clamp((Now - LastHitTime) / .32f, 0.f, 1.f);
+        const float HitRecoilRoll = -18.f * FMath::Sin(Phase * UE_PI) * (1.f - Phase);
+        FTibetCombatExtras::UpdateMonsterKinematics(*this, CombatExtras, *Focus, HitRecoilRoll, Dt);
     }
 }
 
@@ -1249,6 +1272,7 @@ void ATibetGameMode::CancelEnemyWindup()
 void ATibetGameMode::RespawnPlayer(APawn& Player)
 {
     CancelEnemyWindup();
+    CombatExtras.ClearActors(false);
     if (auto* Pilgrim = Cast<ATibetCharacter>(&Player))
     {
         Pilgrim->RespawnAtStart();
@@ -1279,6 +1303,39 @@ void ATibetGameMode::UpdateEnemyAttack(APawn& Player, bool bBoss, float Dt)
     const FVector Offset = Player.GetActorLocation() - Focus->GetActorLocation();
     const double Distance = Offset.Size2D();
     HurtTimer -= Dt;
+    if (FTibetCombatExtras::IsRangedArcher(Focus))
+    {
+        constexpr float ArcherVisualRadius = 145.f;
+        constexpr float ArcherWindup = .52f;
+        constexpr float ArcherInterval = 1.65f;
+        if (!bEnemyWindingUp)
+        {
+            if (Distance > FTibetCombatExtras::RangedStandoffStop)
+            {
+                Focus->AddActorWorldOffset(Offset.GetSafeNormal2D() *
+                    FMath::Min<double>(Dt * PursuitSpeed(false), Distance - FTibetCombatExtras::RangedStandoffStop));
+            }
+            if (Distance >= FTibetCombatExtras::RangedAttackRadius || HurtTimer > ArcherWindup) return;
+
+            HurtTimer = ArcherWindup;
+            bEnemyWindingUp = true;
+            WindupEffect = GetWorld()->SpawnActor<ATibetRitualEffect>();
+            if (auto* Effect = WindupEffect.Get())
+                Effect->StartEnemyAttack(*Focus, false, false, ArcherVisualRadius, ArcherWindup, RitualMaterial);
+            return;
+        }
+        if (HurtTimer > 0) return;
+
+        CancelEnemyWindup();
+        HurtTimer = ArcherInterval;
+        if (auto* Effect = GetWorld()->SpawnActor<ATibetRitualEffect>())
+            Effect->StartEnemyAttack(*Focus, true, false, ArcherVisualRadius, ArcherWindup, RitualMaterial);
+        FTibetCombatExtras::PlaySfx(this, ETibetSfx::BowShot);
+        const FVector ArrowOrigin = Focus->GetActorLocation() + FVector(0.f, 0.f, 148.f);
+        const FVector ArrowAim = Player.GetActorLocation() + FVector(0.f, 0.f, 12.f);
+        FTibetCombatExtras::SpawnArrowProjectile(*this, CombatExtras, ArrowOrigin, ArrowAim);
+        return;
+    }
     if (!bEnemyWindingUp)
     {
         if (Distance > 124)
@@ -1576,6 +1633,7 @@ bool ATibetGameMode::ResetProgress()
     if (SlotName.IsEmpty()) SlotName = TEXT("TibetPilgrimage-v1");
     const bool bKeepEnglish = IsEnglish();
     StopDialogue();
+    CombatExtras.ClearActors(true);
     UGameplayStatics::DeleteGameInSlot(SlotName, 0);
     Save = NewObject<UTibetSave>(this);
     Save->bEnglish = bKeepEnglish;

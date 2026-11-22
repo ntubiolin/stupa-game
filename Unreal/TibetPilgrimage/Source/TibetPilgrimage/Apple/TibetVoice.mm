@@ -255,9 +255,17 @@ AVSpeechUtterance* Utterance(NSString* Text, bool English, const char* SpeakerId
 @public
     AVSpeechSynthesizer* Synth;
     AVSpeechUtterance* Active;
+    NSTimer* ProgressTimer;
     TibetVoice::FWord Word;
     TibetVoice::FFinish Finish;
+    NSUInteger TextLength;
+    double CharsPerSecond;
+    double ElapsedSeconds;
+    int LastReportedOffset;
+    BOOL bPaused;
+    BOOL bSawNativeRange;
 }
+- (void)startProgressTimer;
 @end
 
 @implementation TibetSpeechPlayer
@@ -272,20 +280,60 @@ AVSpeechUtterance* Utterance(NSString* Text, bool English, const char* SpeakerId
 }
 - (void)clear
 {
+    if (ProgressTimer)
+    {
+        [ProgressTimer invalidate];
+        ProgressTimer = nil;
+    }
     [Active release];
     Active = nil;
     Word = {};
     Finish = {};
+    TextLength = 0;
+    ElapsedSeconds = 0.0;
+    LastReportedOffset = -1;
+    bPaused = NO;
+    bSawNativeRange = NO;
+}
+- (void)onProgressTick:(NSTimer*)timer
+{
+    if (!Active || bPaused || bSawNativeRange || !Word || TextLength == 0) return;
+    ElapsedSeconds += 0.08;
+    const int Est = (int)std::min<double>((double)(TextLength - 1), ElapsedSeconds * CharsPerSecond);
+    if (Est > LastReportedOffset)
+    {
+        LastReportedOffset = Est;
+        Word(Est);
+    }
+}
+- (void)startProgressTimer
+{
+    if (ProgressTimer) [ProgressTimer invalidate];
+    ProgressTimer = [NSTimer scheduledTimerWithTimeInterval:0.08 target:self selector:@selector(onProgressTick:) userInfo:nil repeats:YES];
+}
+- (void)speechSynthesizer:(AVSpeechSynthesizer*)sender didStartSpeechUtterance:(AVSpeechUtterance*)line
+{
+    if (Active == line && Word && LastReportedOffset < 0)
+    {
+        LastReportedOffset = 0;
+        Word(0);
+    }
 }
 - (void)speechSynthesizer:(AVSpeechSynthesizer*)sender willSpeakRangeOfSpeechString:(NSRange)range utterance:(AVSpeechUtterance*)line
 {
-    if (Active == line && Word) Word((int)range.location);
+    if (Active == line && Word)
+    {
+        bSawNativeRange = YES;
+        LastReportedOffset = (int)range.location;
+        Word((int)range.location);
+    }
 }
 - (void)speechSynthesizer:(AVSpeechSynthesizer*)sender didFinishSpeechUtterance:(AVSpeechUtterance*)line
 {
     if (Active != line) return;
-    if (Finish) Finish();
+    TibetVoice::FFinish Done = Finish;
     [self clear];
+    if (Done) Done();
 }
 - (void)speechSynthesizer:(AVSpeechSynthesizer*)sender didCancelSpeechUtterance:(AVSpeechUtterance*)line
 {
@@ -320,11 +368,19 @@ void TibetVoice::SpeakNative(const char* SpeakerId, const char* Utf8, bool Engli
         auto* P = Player();
         [P clear];
         [P->Synth stopSpeakingAtBoundary:AVSpeechBoundaryImmediate];
-        AVSpeechUtterance* Line = Utterance(Text, English, Role.length ? Role.UTF8String : nullptr);
+        TibetVoice::FVoiceSelection Sel{};
+        AVSpeechUtterance* Line = Utterance(Text, English, Role.length ? Role.UTF8String : nullptr, &Sel);
         if (!Line) return; // The in-game subtitles retain their reading timer if a voice is unavailable.
         P->Active = [Line retain];
         P->Word = OnWord;
         P->Finish = OnFinish;
+        P->TextLength = Text.length;
+        P->CharsPerSecond = (English ? 12.5 : 4.2) * (Sel.RateMultiplier > 0.1f ? Sel.RateMultiplier : 0.9);
+        P->ElapsedSeconds = 0.0;
+        P->LastReportedOffset = -1;
+        P->bPaused = NO;
+        P->bSawNativeRange = NO;
+        [P startProgressTimer];
         [P->Synth speakUtterance:Line];
     });
 }
@@ -334,6 +390,7 @@ void TibetVoice::PauseNative(bool Paused)
     dispatch_async(dispatch_get_main_queue(), ^{
         auto* P = Player();
         if (!P->Active) return;
+        P->bPaused = Paused ? YES : NO;
         if (Paused) [P->Synth pauseSpeakingAtBoundary:AVSpeechBoundaryImmediate];
         else [P->Synth continueSpeaking];
     });

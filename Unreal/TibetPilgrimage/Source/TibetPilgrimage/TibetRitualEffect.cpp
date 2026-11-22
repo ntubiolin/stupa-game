@@ -3,6 +3,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "GameFramework/Pawn.h"
+#include "Materials/Material.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "ProceduralMeshComponent.h"
 
@@ -90,8 +91,15 @@ struct FSurface
     {
         if (Points.IsEmpty()) return;
         Mesh->CreateMeshSection(Section, Points, Indices, Normals, {}, {}, {}, false);
-        auto* Ink = Mesh->CreateDynamicMaterialInstance(Section, Base);
-        if (Ink) Ink->SetVectorParameterValue(TEXT("Color"), Colour);
+        if (Base)
+        {
+            auto* Ink = Mesh->CreateDynamicMaterialInstance(Section, Base);
+            if (Ink) Ink->SetVectorParameterValue(TEXT("Color"), Colour);
+        }
+        else if (UMaterialInterface* DefaultMat = UMaterial::GetDefaultMaterial(MD_Surface))
+        {
+            Mesh->SetMaterial(Section, DefaultMat);
+        }
     }
 };
 
@@ -422,11 +430,23 @@ void ATibetRitualEffect::StartImpact(const FVector& Position, const FVector& Out
 {
     Slot = 7; Origin = Position; Facing = Outward.GetSafeNormal2D().Rotation();
     bFinisher = bFinal;
-    Duration = bFinal ? .62f : .43f;
-    FSurface Body, Rim;
+    Duration = bFinal ? .68f : .45f;
+    FSurface Body, Rim, Crown;
     Impact(Body, Rim, SourceSlot);
-    Body.Install(Motif, 0, Material, Fill[SourceSlot]);
-    Rim.Install(Motif, 1, Material, Edge[SourceSlot]);
+    Crown.Hoop(FVector::ZeroVector, FVector::RightVector, Up, bFinal ? 68 : 42, bFinal ? 3.2 : 2.0);
+    if (bFinal)
+    {
+        for (int32 I = 0; I < 8; ++I)
+        {
+            const double A = I * UE_TWO_PI / 8.0;
+            const FVector R(0, FMath::Cos(A), FMath::Sin(A)), Side(0, -R.Z, R.Y);
+            Crown.Leaf(R * 22, R * 88 + Up * 42, Side * 7, Up * 16);
+        }
+    }
+    const int32 ClampedSlot = FMath::Clamp(SourceSlot, 0, int32(UE_ARRAY_COUNT(Fill)) - 1);
+    Body.Install(Motif, 0, Material, Fill[ClampedSlot]);
+    Rim.Install(Motif, 1, Material, Edge[ClampedSlot]);
+    Crown.Install(Aura, 0, Material, bFinal ? FLinearColor(1.95f, 1.38f, 0.30f, 0.95f) : Accent[ClampedSlot]);
     SetLifeSpan(Duration);
     Animate();
 }
