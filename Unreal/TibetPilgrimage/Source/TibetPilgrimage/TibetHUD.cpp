@@ -4,6 +4,7 @@
 #include "Engine/Canvas.h"
 #include "CanvasItem.h"
 #include "Engine/Engine.h"
+#include "Engine/Font.h"
 #include "GameFramework/GameUserSettings.h"
 #include "GameFramework/PlayerController.h"
 #include "TibetCharacter.h"
@@ -17,9 +18,20 @@
 #include "Misc/Parse.h"
 #include "GenericPlatform/GenericApplication.h"
 
+const UFont* ATibetHUD::EnsureCanvasFont()
+{
+    if (!CanvasFont)
+    {
+        CanvasFont = NewObject<UFont>(this);
+        CanvasFont->FontCacheType = EFontCacheType::Runtime;
+    }
+    return CanvasFont;
+}
+
 void ATibetHUD::BeginPlay()
 {
     Super::BeginPlay();
+    EnsureCanvasFont();
 #if !UE_BUILD_SHIPPING
     FString QA;
     if (FParse::Value(FCommandLine::Get(),TEXT("TibetQA="),QA) && QA==TEXT("Photo")) return;
@@ -114,6 +126,7 @@ void ATibetHUD::DrawHUD()
     const auto* M=GetWorld()->GetAuthGameMode<ATibetGameMode>();
     const auto* PC=GetOwningPlayerController();
     if(IsJournalOpen() || !Overlay || !Canvas || !PC || !PC->GetPawn() || !M || M->IsCampaignComplete()) return;
+    const UFont* RuntimeFont = EnsureCanvasFont();
     const float HScale = FMath::Clamp(Canvas->SizeY / 800.f, .76f, 1.4f);
     FVector AnimalPosition;
     int32 AnimalMeters;
@@ -122,6 +135,7 @@ void ATibetHUD::DrawHUD()
     {
         const FString Label=FString::Printf(TEXT("%s · %d m"),*M->Local(TEXT("Macaque"),TEXT("獼猴")),AnimalMeters);
         FCanvasTextItem Text(AnimalPixel,FText::FromString(Label),Overlay->Font(FMath::RoundToInt(16*HScale)),FLinearColor(1,.91f,.66f));
+        Text.Font = RuntimeFont;
         Text.bCentreX=true; Text.bOutlined=true;
         Text.OutlineColor=FLinearColor(.06,.04,.03);
         Canvas->DrawItem(Text);
@@ -151,6 +165,7 @@ void ATibetHUD::DrawHUD()
             const FString Tag = M->Local(TEXT("◆ Dharmapala / Boss ◆"), TEXT("◆ 護法試煉・首領 ◆"));
             FCanvasTextItem CrownText(FVector2D(At.X, Y - 18.f * HScale), FText::FromString(Tag),
                 Overlay->Font(FMath::RoundToInt(12 * HScale)), FLinearColor(1.f, .86f, .46f));
+            CrownText.Font = RuntimeFont;
             CrownText.bCentreX = true;
             CrownText.bOutlined = true;
             CrownText.OutlineColor = FLinearColor(.05f, .02f, .02f);
@@ -201,22 +216,27 @@ void ATibetHUD::DrawHUD()
         Canvas->DrawItem(Numeral);
     }
     FVector CueAnchor;
-    if (M->GetInteractionCue(CueAnchor) && PC->ProjectWorldLocationToScreen(CueAnchor, At, true))
+    if (M->GetInteractionCue(CueAnchor) && PC->ProjectWorldLocationToScreen(CueAnchor, At, true) &&
+        At.X >= -32.0 && At.X <= Canvas->SizeX + 32.0 && At.Y >= -48.0 && At.Y <= Canvas->SizeY)
     {
-        const FString Label = Overlay->IsTouch() ? M->Local(TEXT("Tap Act"),TEXT("點選互動")) : TEXT("[E]");
+        const FString Label = M->GetInteractionPrompt(Overlay->IsTouch());
         FCanvasTextItem Key(FVector2D::ZeroVector, FText::FromString(Label), Overlay->Font(FMath::RoundToInt(16 * HScale)),
             FLinearColor(1.f,.90f,.64f));
+        Key.Font = RuntimeFont;
+        Key.bOutlined = true;
+        Key.OutlineColor = FLinearColor(.04f,.03f,.02f,.95f);
         const FVector2D Size = FSlateApplication::Get().GetRenderer()->GetFontMeasureService()->Measure(Label, Key.SlateFontInfo.GetValue());
-        const FVector2D Corner(At.X - Size.X * .5 - 7, At.Y - Size.Y - 6);
-        if (Corner.X >= 0 && Corner.Y >= 0 && Corner.X+Size.X+16 < Canvas->SizeX && At.Y < Canvas->SizeY)
-        {
-            DrawRect(FLinearColor(.88f,.68f,.28f,.92f), Corner.X-1.5f, Corner.Y-1.5f, Size.X+19, Size.Y+11);
-            DrawRect(FLinearColor(.06f,.08f,.13f,.95f), Corner.X, Corner.Y, Size.X+16, Size.Y+8);
-            bDrewInteraction = true;
-            Key.Position = Corner + FVector2D(8,4);
-            Canvas->DrawItem(Key);
-            return;
-        }
+        const double BoxW = Size.X + 16.0;
+        const double BoxH = Size.Y + 8.0;
+        const FVector2D Corner(
+            FMath::Clamp(At.X - BoxW * .5, 4.0, FMath::Max(4.0, double(Canvas->SizeX) - BoxW - 4.0)),
+            FMath::Clamp(At.Y - Size.Y - 6.0, 4.0, FMath::Max(4.0, double(Canvas->SizeY) - BoxH - 4.0)));
+        DrawRect(FLinearColor(.88f,.68f,.28f,.92f), Corner.X - 1.5f, Corner.Y - 1.5f, BoxW + 3.0f, BoxH + 3.0f);
+        DrawRect(FLinearColor(.06f,.08f,.13f,.95f), Corner.X, Corner.Y, BoxW, BoxH);
+        bDrewInteraction = true;
+        Key.Position = Corner + FVector2D(8.0, 4.0);
+        Canvas->DrawItem(Key);
+        return;
     }
     const FVector Target=M->GetObjectiveLocation()+FVector(0,0,130);
     FVector2D Point;

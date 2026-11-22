@@ -447,15 +447,30 @@ TSharedRef<SWidget> STibetPlayOverlay::Play()
     DialogueCard->AddSlot().AutoHeight()[SNew(STextBlock).Font(Font(bTouch ? 13 : 16)).ColorAndOpacity(Gold)
         .Text_Lambda([this] {
             const FString& Spk = Mode->DialogueSpeaker();
-            return Text(Spk.IsEmpty() ? FString() : FString::Printf(TEXT("◆  %s"), *Spk));
+            if (Spk.IsEmpty()) return FText::GetEmpty();
+            const int32 Total = Mode->DialoguePageCount();
+            return Text(Total > 1
+                ? FString::Printf(TEXT("◆  %s   (%d / %d)"), *Spk, FMath::Clamp(Mode->DialoguePageIndex() + 1, 1, Total), Total)
+                : FString::Printf(TEXT("◆  %s"), *Spk));
         })];
     DialogueCard->AddSlot().AutoHeight().Padding(0,4,0,0)[SNew(STextBlock).Font(Font(bTouch ? 16 : 19))
         .ColorAndOpacity(Paper).AutoWrapText(true).Text_Lambda([this] { return Text(Mode->DialoguePage()); })];
+    auto DialogueButtons = SNew(SHorizontalBox);
+    DialogueButtons->AddSlot().AutoWidth().VAlign(VAlign_Center)
+        [Button(TAttribute<FText>::CreateLambda([this] {
+                return Mode->HasNextDialoguePage()
+                    ? Local(TEXT("Next"), TEXT("下一則"))
+                    : Local(TEXT("Done"), TEXT("完成"));
+            }),
+            FSimpleDelegate::CreateLambda([this] { Mode->NextDialoguePage(); }),
+            true, TEXT("TibetDialogueNext"))];
+    DialogueButtons->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(6,0,0,0)
+        [Button(TAttribute<FText>::CreateLambda([this] { return Local(TEXT("Skip"), TEXT("略過")); }),
+            FSimpleDelegate::CreateLambda([this] { Mode->StopDialogue(); }),
+            false, TEXT("TibetDialogueSkip"))];
     auto DialogueRow = SNew(SHorizontalBox);
     DialogueRow->AddSlot().FillWidth(1)[DialogueCard];
-    DialogueRow->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(10,0,0,0)
-        [Button(TAttribute<FText>::CreateLambda([this]{return Local(TEXT("Skip"),TEXT("略過"));}),
-            FSimpleDelegate::CreateLambda([this]{Mode->StopDialogue();}))];
+    DialogueRow->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(10,0,0,0)[DialogueButtons];
     Lower->AddSlot().AutoHeight().HAlign(HAlign_Center).Padding(0,0,0,6)
         [SNew(SBox).Visibility_Lambda([this]{return Mode->DialogueSpeaker().IsEmpty() ? EVisibility::Collapsed : EVisibility::SelfHitTestInvisible;})
          .WidthOverride_Lambda([this]{return FOptionalSize(FMath::Clamp(Width()-(bTouch?165.f:32.f),150.f,690.f));})

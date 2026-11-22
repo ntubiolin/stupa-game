@@ -82,7 +82,12 @@ public:
     virtual void StartPlay() override;
     virtual void EndPlay(const EEndPlayReason::Type Reason) override;
     bool GetInteractionCue(FVector& WorldAnchor) const;
+    FString GetInteractionPrompt(bool bTouchControls) const;
     FString DialoguePage() const;
+    int32 DialoguePageIndex() const { return PageIndex; }
+    int32 DialoguePageCount() const { return PageStarts.Num(); }
+    bool HasNextDialoguePage() const { return PageStarts.IsValidIndex(PageIndex + 1); }
+    void NextDialoguePage();
     const FString& DialogueSpeaker() const { return Speaker; }
     bool HasSpokenWord() const { return bSpokenWord; }
     void PauseDialogue(bool Paused);
@@ -268,6 +273,7 @@ private:
     void SetNotice(const FString& Line);
     void Pulse(const FVector& At, const FLinearColor& Color, float Magnitude);
     friend struct FTibetGameplayTestAccessor;
+    friend struct FTibetDialogueTestAccessor;
     friend struct FTibetMangyulTestAccessor;
 };
 

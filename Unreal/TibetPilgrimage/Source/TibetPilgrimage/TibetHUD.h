@@ -15,6 +15,7 @@ public:
     void CloseJournal();
     void RefreshInputMode();
     bool HasDrawnInteractionCue() const { return bDrewInteraction; }
+    const class UFont* EnsureCanvasFont();
     void UseQuickSlot();
     bool IsJournalOpen() const;
     ETibetPage GetJournalPage() const { return Page; }
@@ -23,6 +24,7 @@ protected:
     virtual void BeginPlay() override;
     virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 private:
+    UPROPERTY() TObjectPtr<class UFont> CanvasFont;
     TSharedPtr<STibetPlayOverlay> Overlay;
     ETibetPage Page{};
     bool bDrewInteraction = false;

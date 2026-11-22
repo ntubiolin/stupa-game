@@ -494,6 +494,10 @@ FString ATibetGameMode::ActionLabel(EInteraction Action) const
         return Local(TEXT("Cross the threshold"),TEXT("前往下一區"));
     case EInteraction::Talk:
         if (Map==TEXT("stupa")) return Local(TEXT("Talk to Lobsang"),TEXT("與洛桑交談"));
+        if (const auto& Obj = Objective(Route, GetStep()); Obj.Kind == EObjective::Talk && Obj.SpeakerEn && Obj.SpeakerZh)
+            return IsEnglish()
+                ? FString::Printf(TEXT("Talk to %s"), Obj.SpeakerEn)
+                : FString::Printf(TEXT("與%s交談"), Obj.SpeakerZh);
         return Local(TEXT("Talk"),TEXT("交談"));
     case EInteraction::Use:
         if (Map==TEXT("stupa")) return Local(TEXT("Light the butter lamp"),TEXT("點亮酥油燈"));
@@ -505,6 +509,20 @@ FString ATibetGameMode::ActionLabel(EInteraction Action) const
         return Local(TEXT("Hear Guru Rinpoche & open Keepsake Thangka"),TEXT("聆聽虛空蓮師開示並展開紀念唐卡"));
     default: return {};
     }
+}
+FString ATibetGameMode::GetInteractionPrompt(bool bTouchControls) const
+{
+    const APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+    const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+    const EInteraction Action = Pawn ? InteractionAt(Pawn->GetActorLocation()) : EInteraction::None;
+    const FString Label = ActionLabel(Action);
+    if (Label.IsEmpty())
+    {
+        return bTouchControls ? Local(TEXT("Tap Act"), TEXT("點選互動")) : TEXT("[E]");
+    }
+    return bTouchControls
+        ? FString::Printf(TEXT("%s · %s"), *Local(TEXT("Tap Act"), TEXT("點選互動")), *Label)
+        : FString::Printf(TEXT("[E] %s"), *Label);
 }
 FString ATibetGameMode::Status(bool bTouchControls) const
 {
@@ -907,21 +925,28 @@ void ATibetGameMode::BeginCustomDialogue(const TCHAR* SpeakerEn, const TCHAR* Sp
 void ATibetGameMode::StartDialogueVoice()
 {
     bVoicePending = false;
+    ++VoiceGeneration;
     // Existing automated campaigns run unattended. Only the audio QA scenario opts into audible playback.
-    if (FParse::Param(FCommandLine::Get(), TEXT("nosound")) ||
+    if (!GetWorld() || !PageStarts.IsValidIndex(PageIndex) ||
+        FParse::Param(FCommandLine::Get(), TEXT("nosound")) ||
         (FApp::IsUnattended() && !FParse::Param(FCommandLine::Get(), TEXT("TibetQAVoice")))) return;
+    const int32 BaseOffset = PageStarts[PageIndex];
+    if (BaseOffset < 0 || BaseOffset >= Dialogue.Len()) return;
     bVoiceRequested = true;
     const auto Owner = TWeakObjectPtr<ATibetGameMode>(this);
     const uint32 Generation = VoiceGeneration;
-    TibetVoice::Speak(GetWorld(), TCHAR_TO_UTF8(*DialogueCueId), TCHAR_TO_UTF8(*DialogueSpeakerId), TCHAR_TO_UTF8(*Dialogue), IsEnglish(), [Owner, Generation](int Offset) {
-        AsyncTask(ENamedThreads::GameThread, [Owner, Generation, Offset] {
-            if (Owner.IsValid() && Owner->VoiceGeneration == Generation) Owner->SetDialogueWord(Offset);
+    const FString Remaining = Dialogue.Mid(BaseOffset);
+    const FString EffectiveCue = BaseOffset == 0 ? DialogueCueId : FString();
+    TibetVoice::Speak(GetWorld(), TCHAR_TO_UTF8(*EffectiveCue), TCHAR_TO_UTF8(*DialogueSpeakerId), TCHAR_TO_UTF8(*Remaining), IsEnglish(), [Owner, Generation, BaseOffset](int Offset) {
+        AsyncTask(ENamedThreads::GameThread, [Owner, Generation, BaseOffset, Offset] {
+            if (Owner.IsValid() && Owner->VoiceGeneration == Generation) Owner->SetDialogueWord(BaseOffset + Offset);
         });
     }, [Owner, Generation] {
         AsyncTask(ENamedThreads::GameThread, [Owner, Generation] {
-            if (!Owner.IsValid() || Owner->VoiceGeneration != Generation) return;
+            if (!Owner.IsValid() || Owner->VoiceGeneration != Generation || Owner->PageStarts.IsEmpty()) return;
             Owner->PageIndex = Owner->PageStarts.Num() - 1;
-            Owner->PageDeadline = Owner->GetWorld()->GetTimeSeconds() + 1.4;
+            const double Now = Owner->GetWorld() ? Owner->GetWorld()->GetTimeSeconds() : 0.0;
+            Owner->PageDeadline = Now + 1.4;
         });
     });
 }
@@ -946,7 +971,39 @@ void ATibetGameMode::SetDialogueWord(int32 Offset)
     bSpokenWord = true;
     while (PageStarts.IsValidIndex(PageIndex + 1) && Offset >= PageStarts[PageIndex + 1]) ++PageIndex;
     // Allow a missing device finish callback to recover after its longest remaining clause.
-    PageDeadline = GetWorld()->GetTimeSeconds() + 4. + (Dialogue.Len() - Offset) / (IsEnglish() ? 9. : 2.5);
+    const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+    PageDeadline = Now + 4. + FMath::Max(0, Dialogue.Len() - Offset) / (IsEnglish() ? 9. : 2.5);
+}
+
+void ATibetGameMode::NextDialoguePage()
+{
+    if (!PageStarts.IsValidIndex(PageIndex + 1))
+    {
+        StopDialogue();
+        return;
+    }
+    ++PageIndex;
+    bSpokenWord = false;
+    const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+    PageDeadline = Now + 1.4 + DialoguePage().Len() / (IsEnglish() ? 14. : 4.);
+    if (bDialoguePaused)
+    {
+        if (bVoiceRequested)
+        {
+            TibetVoice::Stop();
+            bVoiceRequested = false;
+        }
+        ++VoiceGeneration;
+        bVoicePending = true;
+    }
+    else if (GetWorld() && (bVoiceRequested || !FApp::IsUnattended()))
+    {
+        StartDialogueVoice();
+    }
+    else
+    {
+        ++VoiceGeneration;
+    }
 }
 
 void ATibetGameMode::TickDialogue()
