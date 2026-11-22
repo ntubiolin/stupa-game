@@ -4,14 +4,18 @@
 #include "Engine/Canvas.h"
 #include "CanvasItem.h"
 #include "Engine/Engine.h"
+#include "GameFramework/GameUserSettings.h"
 #include "GameFramework/PlayerController.h"
 #include "TibetCharacter.h"
 #include "TibetPlayOverlay.h"
 #include "Widgets/SViewport.h"
+#include "Widgets/SWindow.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Fonts/FontMeasure.h"
+#include "Misc/App.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
+#include "GenericPlatform/GenericApplication.h"
 
 void ATibetHUD::BeginPlay()
 {
@@ -38,12 +42,20 @@ void ATibetHUD::RefreshInputMode()
     PC->SetShowMouseCursor(!Overlay->IsTouch());
     if (IsJournalOpen() || Mode->FeedingPanel())
     {
+#if PLATFORM_MAC
+        if (FSlateApplication::IsInitialized())
+            FSlateApplication::Get().SetHandleDeviceInputWhenApplicationNotActive(true);
+#endif
         FInputModeUIOnly Menu;
         Menu.SetWidgetToFocus(Overlay).SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
         PC->SetInputMode(Menu);
     }
     else
     {
+#if PLATFORM_MAC
+        if (FSlateApplication::IsInitialized())
+            FSlateApplication::Get().SetHandleDeviceInputWhenApplicationNotActive(false);
+#endif
         // The live HUD is clickable. Only a right-button drag captures the mouse for look.
         FInputModeGameAndUI Play;
         Play.SetWidgetToFocus(Viewport->GetGameViewportWidget()).SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);

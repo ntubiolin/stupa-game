@@ -133,6 +133,10 @@ void ATibetGameMode::StartPlay()
     if (!RitualMaterial) UE_LOG(LogTemp,Error,TEXT("Missing M_RitualColor; regenerate the spell material before cooking."));
     SlotName=TEXT("TibetPilgrimage-v1");
     FParse::Value(FCommandLine::Get(),TEXT("TibetSaveSlot="),SlotName);
+    if (FParse::Param(FCommandLine::Get(),TEXT("TibetResetSave")))
+    {
+        UGameplayStatics::DeleteGameInSlot(SlotName,0);
+    }
     Save=Cast<UTibetSave>(UGameplayStatics::LoadGameFromSlot(SlotName,0));
     if (!Save) Save=NewObject<UTibetSave>(this);
     // A normal app launch opens stupa. Explicit test slots and epilogue returns start the named map.
@@ -1149,4 +1153,29 @@ void ATibetGameMode::ChangeLanguage()
     Save->bEnglish=!Save->bEnglish;
     if (DialogueIndex != INDEX_NONE) BeginDialogue(DialogueIndex);
     Store();
+}
+
+bool ATibetGameMode::ResetProgress()
+{
+    if (bTravel) return false;
+    if (SlotName.IsEmpty()) SlotName = TEXT("TibetPilgrimage-v1");
+    const bool bKeepEnglish = IsEnglish();
+    StopDialogue();
+    UGameplayStatics::DeleteGameInSlot(SlotName, 0);
+    Save = NewObject<UTibetSave>(this);
+    Save->bEnglish = bKeepEnglish;
+    Save->Map = TEXT("stupa");
+    Health = 100.f;
+    Mana = 100.f;
+    FurthestMap = 0;
+    HealTicks.Reset();
+    if (!Store()) return false;
+    if (UWorld* World = GetWorld())
+    {
+        bTravel = true;
+        if (auto* PC = World->GetFirstPlayerController())
+            if (auto* HUD = PC->GetHUD<ATibetHUD>()) HUD->CloseJournal();
+        UGameplayStatics::OpenLevel(this, TEXT("/Game/Maps/Tibet/stupa"));
+    }
+    return true;
 }

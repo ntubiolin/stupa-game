@@ -256,6 +256,7 @@ void STibetPlayOverlay::Construct(const FArguments& A)
 void STibetPlayOverlay::Show(ETibetPage Next)
 {
     Page=Next;
+    bConfirmReset=false;
     ChildSlot[SNew(SSafeZone).Visibility(EVisibility::SelfHitTestInvisible)
         [SNew(SDPIScaler).Visibility(EVisibility::SelfHitTestInvisible).DPIScale_Lambda([this](){return LayoutScale();})
          [Page==ETibetPage::Play?Play():Journal()]]];
@@ -547,7 +548,14 @@ TSharedRef<SWidget> STibetPlayOverlay::Pack()
         {
             const bool Selected=Equipment?Mode->IsEquipped(Item):Item==Quick;
             if (!Equipment && Selected)
+            {
+                if (Item==ETibetItem::Amrita && Mode->Pills()>0 && Mode->GetHealth()<Mode->MaxHealth())
+                {
+                    Row->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(4,0)[Button(Local(TEXT("Use pill"),TEXT("服用")),
+                        FSimpleDelegate::CreateLambda([this](){Mode->UsePill(); Show(ETibetPage::Pack);}))];
+                }
                 Row->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(7,0)[Label(Local(TEXT("Quick slot"),TEXT("快捷中")),12,Jade)];
+            }
             else
             {
                 const auto Action=Equipment ? (Selected?Local(TEXT("Remove"),TEXT("卸下")):Local(TEXT("Equip"),TEXT("裝備"))) : Local(TEXT("Set quick"),TEXT("設為快捷"));
@@ -557,6 +565,10 @@ TSharedRef<SWidget> STibetPlayOverlay::Pack()
                     Show(ETibetPage::Pack);
                 }),false,FName(*FString::Printf(TEXT("TibetPackAction%d"),I)))];
             }
+        }
+        else
+        {
+            Row->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(7,0)[Label(Local(TEXT("Not yet found"),TEXT("尚未取得")),12,Faded)];
         }
         List->AddSlot().AutoHeight().Padding(0,3)[SNew(SThangkaBorder).Background(Owned?Card:Ink).Padding(FMargin(10,8))[Row]];
     }
@@ -590,6 +602,21 @@ TSharedRef<SWidget> STibetPlayOverlay::Controls()
         FSimpleDelegate::CreateLambda([Settings](){Settings->SetVerticalInverted(!Settings->IsVerticalInverted());}))];
     Box->AddSlot().AutoHeight()[Button(Local(TEXT("Language · English / 繁體中文"),TEXT("語言・繁體中文 / English")),
         FSimpleDelegate::CreateLambda([this](){Mode->ChangeLanguage(); Show(ETibetPage::Controls);}))];
+    Box->AddSlot().AutoHeight().Padding(0,10,0,0)[SNew(SBox).MinDesiredWidth(bTouch?44.f:0.f).MinDesiredHeight(bTouch?44.f:35.f)
+        [SNew(SButton).ButtonStyle(&FlatButton()).Tag(TEXT("TibetResetProgress")).IsFocusable(false)
+        .ButtonColorAndOpacity_Lambda([this](){ return bConfirmReset ? Coral : CrimsonLacquer; })
+        .ContentPadding(FMargin(10,5)).HAlign(HAlign_Center).VAlign(VAlign_Center)
+        .OnClicked_Lambda([this](){
+            if (!bConfirmReset) { bConfirmReset = true; return FReply::Handled(); }
+            bConfirmReset = false;
+            Mode->ResetProgress();
+            return FReply::Handled();
+        })
+        [SNew(STextBlock).Font(Font(14)).ColorAndOpacity(Paper).Text_Lambda([this](){
+            return bConfirmReset
+                ? Local(TEXT("Confirm reset? Click again to restart at Boudhanath"),TEXT("確認重設進度？（再按一次回到序章博達哈）"))
+                : Local(TEXT("Reset pilgrimage progress"),TEXT("重設朝聖進度（從頭開始）"));
+        })]]];
     if (!bTouch)
         Box->AddSlot().AutoHeight().HAlign(HAlign_Right).Padding(0,12,0,0)
             [Button(Local(TEXT("Quit game"),TEXT("離開遊戲")),FSimpleDelegate::CreateLambda([this](){

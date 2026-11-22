@@ -145,6 +145,7 @@ public:
     float GetHealth() const { return Health; }
     const FTibetPlayerFeedback& GetPlayerFeedback() const { return PlayerFeedback; }
     void ChangeLanguage();
+    bool ResetProgress();
     FString AreaName() const;
     int32 CurrentAreaIndex() const;
     FString AreaName(int32 Index) const;
