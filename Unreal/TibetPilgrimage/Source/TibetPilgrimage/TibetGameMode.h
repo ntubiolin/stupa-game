@@ -132,8 +132,11 @@ public:
     float MaxMana() const;
     static constexpr float FeedingManaReward = 10.f;
     static constexpr float HumBoltManaRestore = 2.f;
+    static constexpr int32 MangyulAltarCount = 12;
     static float ClampRestoredMana(float CurrentMana, float Gain, float MaximumMana);
     static FString CombatFigureModel(const FString& MapName, bool bBoss, int32 Step, int32 Progress);
+    static FVector MangyulAltarLocation(int32 Index);
+    int32 GetPlacedTenmaStoneCount() const { return PlacedTenmaStones; }
     void RestoreMana(float Amount);
     bool OwnsItem(ETibetItem Item) const;
     bool IsEquipped(ETibetItem Item) const;
@@ -187,6 +190,10 @@ private:
     FString Map, Route, SlotName;
     TMap<FName, FVector> PassageSockets;
     int32 LitCaveLamps = 0;
+    int32 PlacedTenmaStones = 0;
+    bool bSpawnedMangyulLatseFlags = false;
+    UPROPERTY() TArray<TObjectPtr<AActor>> TenmaStoneActors;
+    UPROPERTY() TObjectPtr<AActor> MangyulLatseFlagsActor;
     uint8 SpawnedLampMask = 0;
     UPROPERTY() TObjectPtr<class ATibetMacaques> Macaques;
     UPROPERTY() TObjectPtr<class ATibetSkyClock> OutdoorSky;
@@ -243,6 +250,10 @@ private:
     void PopulateResidents();
     AActor* ActiveResident() const;
     void RestoreStupaFlames();
+    void RefreshMangyulAltars();
+    AActor* SpawnTenmaAltarFocus(const FVector& AltarBase);
+    AActor* SpawnTenmaOathStone(int32 Index);
+    AActor* SpawnMangyulLatseFlags(const FVector& LatseAnchor);
     void Refresh();
     void Advance();
     ETibetItem LastPackReward = ETibetItem::Count;
@@ -257,5 +268,6 @@ private:
     void SetNotice(const FString& Line);
     void Pulse(const FVector& At, const FLinearColor& Color, float Magnitude);
     friend struct FTibetGameplayTestAccessor;
+    friend struct FTibetMangyulTestAccessor;
 };
 
