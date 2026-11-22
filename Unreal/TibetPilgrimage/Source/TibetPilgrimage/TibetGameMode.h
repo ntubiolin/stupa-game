@@ -100,7 +100,12 @@ public:
     virtual void StartPlay() override;
     virtual void EndPlay(const EEndPlayReason::Type Reason) override;
     bool GetInteractionCue(FVector& WorldAnchor) const;
+    FString GetInteractionPrompt(bool bTouchControls) const;
     FString DialoguePage() const;
+    int32 DialoguePageIndex() const { return PageIndex; }
+    int32 DialoguePageCount() const { return PageStarts.Num(); }
+    bool HasNextDialoguePage() const { return PageStarts.IsValidIndex(PageIndex + 1); }
+    void NextDialoguePage();
     const FString& DialogueSpeaker() const { return Speaker; }
     bool HasSpokenWord() const { return bSpokenWord; }
     void PauseDialogue(bool Paused);
@@ -150,8 +155,11 @@ public:
     float MaxMana() const;
     static constexpr float FeedingManaReward = 10.f;
     static constexpr float HumBoltManaRestore = 2.f;
+    static constexpr int32 MangyulAltarCount = 12;
     static float ClampRestoredMana(float CurrentMana, float Gain, float MaximumMana);
     static FString CombatFigureModel(const FString& MapName, bool bBoss, int32 Step, int32 Progress);
+    static FVector MangyulAltarLocation(int32 Index);
+    int32 GetPlacedTenmaStoneCount() const { return PlacedTenmaStones; }
     void RestoreMana(float Amount);
     bool OwnsItem(ETibetItem Item) const;
     bool IsEquipped(ETibetItem Item) const;
@@ -205,7 +213,7 @@ private:
     void UpdateSkyGuruRadiance(float Now);
     void PollGoogleDesktopAuth();
     void ApplyLoadedSaveAndReload(UTibetSave* Loaded);
-    void BeginCustomDialogue(const TCHAR* SpeakerEn, const TCHAR* SpeakerZh, const TCHAR* SpeechEn, const TCHAR* SpeechZh);
+    void BeginCustomDialogue(const TCHAR* SpeakerEn, const TCHAR* SpeakerZh, const TCHAR* SpeechEn, const TCHAR* SpeechZh, const TCHAR* InSpeakerId = nullptr, const TCHAR* InCueBase = nullptr);
     UPROPERTY() TObjectPtr<AActor> Messenger;
     UPROPERTY() TMap<FName, TObjectPtr<AActor>> Residents;
     TArray<FTibetResidentState> ResidentStates;
@@ -216,6 +224,10 @@ private:
     FString Map, Route, SlotName;
     TMap<FName, FVector> PassageSockets;
     int32 LitCaveLamps = 0;
+    int32 PlacedTenmaStones = 0;
+    bool bSpawnedMangyulLatseFlags = false;
+    UPROPERTY() TArray<TObjectPtr<AActor>> TenmaStoneActors;
+    UPROPERTY() TObjectPtr<AActor> MangyulLatseFlagsActor;
     uint8 SpawnedLampMask = 0;
     UPROPERTY() TObjectPtr<class ATibetMacaques> Macaques;
     UPROPERTY() TObjectPtr<class ATibetSkyClock> OutdoorSky;
@@ -252,7 +264,7 @@ private:
     float Health = 100, Mana = 100, HurtTimer = 0, Stun = 0, Shield = 0, NoticeUntil = 0;
     float Cooldown[7]{};
     FString Notice;
-    FString Speaker, Dialogue;
+    FString Speaker, Dialogue, DialogueSpeakerId, DialogueCueId;
     TArray<int32> PageStarts;
     int32 DialogueIndex = INDEX_NONE, PageIndex = 0;
     uint32 VoiceGeneration = 0;
@@ -272,6 +284,10 @@ private:
     void PopulateResidents();
     AActor* ActiveResident() const;
     void RestoreStupaFlames();
+    void RefreshMangyulAltars();
+    AActor* SpawnTenmaAltarFocus(const FVector& AltarBase);
+    AActor* SpawnTenmaOathStone(int32 Index);
+    AActor* SpawnMangyulLatseFlags(const FVector& LatseAnchor);
     void Refresh();
     void Advance();
     ETibetItem LastPackReward = ETibetItem::Count;
@@ -287,5 +303,7 @@ private:
     void Pulse(const FVector& At, const FLinearColor& Color, float Magnitude);
     friend struct FTibetGameplayTestAccessor;
     friend struct FTibetResidentTestAccessor;
+    friend struct FTibetDialogueTestAccessor;
+    friend struct FTibetMangyulTestAccessor;
 };
 

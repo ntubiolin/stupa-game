@@ -319,7 +319,7 @@ FVector ATibetGameMode::Anchor() const
     }
     if (Map==TEXT("mangyul"))
     {
-        if(Step==1) return FVector(-720+(Count/2)*250, (Count%2?1.:-1.)*(470+30*(Count%3)),0);
+        if(Step==1) return MangyulAltarLocation(Count);
         if(Step>=2 && K!=EObjective::Gate) return FVector(1510+(Step%2)*120, -660+(Step%3)*120,0);
     }
     if (Map==TEXT("yarlung"))
@@ -473,6 +473,14 @@ bool ATibetGameMode::GetInteractionCue(FVector& WorldAnchor) const
     const auto* PC = GetWorld()->GetFirstPlayerController();
     if (!PC || !PC->GetPawn()) return false;
     const EInteraction Action = InteractionAt(PC->GetPawn()->GetActorLocation());
+    if (Action == EInteraction::Use && Map == TEXT("mangyul") && Focus)
+    {
+        FVector Eye;
+        FRotator View;
+        PC->GetPlayerViewPoint(Eye, View);
+        WorldAnchor = Focus->GetActorLocation() + FVector(0, 0, GetStep() == 1 ? 202.0 : 145.0);
+        return ClearSight(Eye, WorldAnchor, Focus);
+    }
     const AActor* Target = nullptr;
     if (Action == EInteraction::Talk) Target = ActiveResident();
     else if (Action == EInteraction::Grove) Target = SideGate;
@@ -497,15 +505,35 @@ FString ATibetGameMode::ActionLabel(EInteraction Action) const
         return Local(TEXT("Cross the threshold"),TEXT("前往下一區"));
     case EInteraction::Talk:
         if (Map==TEXT("stupa")) return Local(TEXT("Talk to Lobsang"),TEXT("與洛桑交談"));
+        if (const auto& Obj = Objective(Route, GetStep()); Obj.Kind == EObjective::Talk && Obj.SpeakerEn && Obj.SpeakerZh)
+            return IsEnglish()
+                ? FString::Printf(TEXT("Talk to %s"), Obj.SpeakerEn)
+                : FString::Printf(TEXT("與%s交談"), Obj.SpeakerZh);
         return Local(TEXT("Talk"),TEXT("交談"));
     case EInteraction::Use:
         if (Map==TEXT("stupa")) return Local(TEXT("Light the butter lamp"),TEXT("點亮酥油燈"));
         if (Map==TEXT("grove")) return Local(TEXT("Consecrate the votive stupa"),TEXT("為小佛塔裝藏開光"));
+        if (Map==TEXT("mangyul") && GetStep()==1) return Local(TEXT("Place Oath Stone on the Tenma Altar"),TEXT("安放丹瑪誓言石"));
+        if (Map==TEXT("mangyul") && GetStep()==5) return Local(TEXT("Hang five-colored prayer flags"),TEXT("掛起五色風馬經幡"));
         return Local(TEXT("Interact"),TEXT("操作"));
     case EInteraction::Guru:
         return Local(TEXT("Hear Guru Rinpoche & open Keepsake Thangka"),TEXT("聆聽虛空蓮師開示並展開紀念唐卡"));
     default: return {};
     }
+}
+FString ATibetGameMode::GetInteractionPrompt(bool bTouchControls) const
+{
+    const APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+    const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+    const EInteraction Action = Pawn ? InteractionAt(Pawn->GetActorLocation()) : EInteraction::None;
+    const FString Label = ActionLabel(Action);
+    if (Label.IsEmpty())
+    {
+        return bTouchControls ? Local(TEXT("Tap Act"), TEXT("點選互動")) : TEXT("[E]");
+    }
+    return bTouchControls
+        ? FString::Printf(TEXT("%s · %s"), *Local(TEXT("Tap Act"), TEXT("點選互動")), *Label)
+        : FString::Printf(TEXT("[E] %s"), *Label);
 }
 FString ATibetGameMode::Status(bool bTouchControls) const
 {
@@ -638,6 +666,10 @@ void ATibetGameMode::Refresh()
             ++LitCaveLamps;
         }
     }
+    if (Map == TEXT("mangyul"))
+    {
+        RefreshMangyulAltars();
+    }
     if (IsCampaignComplete()) return;
     const FVector At=Anchor();
     if (K==EObjective::Talk || (K==EObjective::Escort && !bEscorting))
@@ -676,6 +708,8 @@ void ATibetGameMode::Refresh()
         Focus=GetWorld()->SpawnActor<ATibetTravelGate>(At,FRotator::ZeroRotator);
     else if ((Map==TEXT("pharping") && GetStep()==5) || (Map==TEXT("yarlung") && GetStep()==3))
         Focus=GetWorld()->SpawnActor<ATargetPoint>(At,FRotator::ZeroRotator);
+    else if (Map==TEXT("mangyul") && GetStep()==1)
+        Focus=SpawnTenmaAltarFocus(At);
     else
         Focus=MeshActor(At+FVector(0,0,10),Cylinder,FVector(.82,.82,.16),&Gold);
     UE_LOG(LogTemp,Display,TEXT("Tibet objective map=%s route=%s step=%d kind=%s count=%d"),
@@ -839,7 +873,16 @@ void ATibetGameMode::Interact()
     if(Action==EInteraction::Gate) MoveToNextMap();
     if(Action==EInteraction::Talk || Action==EInteraction::Use)
     {
-        Pulse(GetObjectiveLocation()+FVector(0,0,80),Gold,.6);
+        const bool bMangyulAltar = Action == EInteraction::Use && Map == TEXT("mangyul") && GetStep() == 1;
+        Pulse(GetObjectiveLocation() + FVector(0, 0, bMangyulAltar ? 148 : 80),
+            bMangyulAltar ? FLinearColor(0.22f, 1.35f, 1.18f, 0.95f) : Gold, bMangyulAltar ? .85f : .6f);
+        if (bMangyulAltar)
+        {
+            const int32 NextPlaced = FMath::Clamp(GetStepProgress() + 1, 1, MangyulAltarCount);
+            SetNotice(IsEnglish()
+                ? FString::Printf(TEXT("Placed Tenma Oath Stone (%d/%d)"), NextPlaced, MangyulAltarCount)
+                : FString::Printf(TEXT("已於丹瑪祭壇安放誓言石（%d/%d）"), NextPlaced, MangyulAltarCount));
+        }
         if(Action==EInteraction::Talk)
         {
             BeginDialogue(GetStep());
@@ -850,14 +893,20 @@ void ATibetGameMode::Interact()
 void ATibetGameMode::BeginDialogue(int32 ObjectiveIndex)
 {
     const auto& Line = Objective(Route, ObjectiveIndex);
-    BeginCustomDialogue(Line.SpeakerEn, Line.SpeakerZh, Line.SpeechEn, Line.SpeechZh);
+    const FString SafeResident = FString(Line.Resident ? Line.Resident : TEXT("npc")).Replace(TEXT("."), TEXT("_"));
+    const FString CueBase = FString::Printf(TEXT("%s_%d_%s"), *Route, ObjectiveIndex, *SafeResident);
+    BeginCustomDialogue(Line.SpeakerEn, Line.SpeakerZh, Line.SpeechEn, Line.SpeechZh, Line.Resident, *CueBase);
     DialogueIndex = ObjectiveIndex;
 }
 
-void ATibetGameMode::BeginCustomDialogue(const TCHAR* SpeakerEn, const TCHAR* SpeakerZh, const TCHAR* SpeechEn, const TCHAR* SpeechZh)
+void ATibetGameMode::BeginCustomDialogue(const TCHAR* SpeakerEn, const TCHAR* SpeakerZh, const TCHAR* SpeechEn, const TCHAR* SpeechZh, const TCHAR* InSpeakerId, const TCHAR* InCueBase)
 {
     StopDialogue();
     DialogueIndex = -2;
+    DialogueSpeakerId = InSpeakerId ? InSpeakerId : TEXT("");
+    DialogueCueId = (InCueBase && *InCueBase)
+        ? FString::Printf(TEXT("%s_%s"), InCueBase, IsEnglish() ? TEXT("en") : TEXT("zh"))
+        : FString();
     Speaker = Local(SpeakerEn, SpeakerZh);
     Dialogue = Local(SpeechEn, SpeechZh);
     const int32 Limit = IsEnglish() ? 82 : 32;
@@ -888,21 +937,28 @@ void ATibetGameMode::BeginCustomDialogue(const TCHAR* SpeakerEn, const TCHAR* Sp
 void ATibetGameMode::StartDialogueVoice()
 {
     bVoicePending = false;
+    ++VoiceGeneration;
     // Existing automated campaigns run unattended. Only the audio QA scenario opts into audible playback.
-    if (FParse::Param(FCommandLine::Get(), TEXT("nosound")) ||
+    if (!GetWorld() || !PageStarts.IsValidIndex(PageIndex) ||
+        FParse::Param(FCommandLine::Get(), TEXT("nosound")) ||
         (FApp::IsUnattended() && !FParse::Param(FCommandLine::Get(), TEXT("TibetQAVoice")))) return;
+    const int32 BaseOffset = PageStarts[PageIndex];
+    if (BaseOffset < 0 || BaseOffset >= Dialogue.Len()) return;
     bVoiceRequested = true;
     const auto Owner = TWeakObjectPtr<ATibetGameMode>(this);
     const uint32 Generation = VoiceGeneration;
-    TibetVoice::Speak(TCHAR_TO_UTF8(*Dialogue), IsEnglish(), [Owner, Generation](int Offset) {
-        AsyncTask(ENamedThreads::GameThread, [Owner, Generation, Offset] {
-            if (Owner.IsValid() && Owner->VoiceGeneration == Generation) Owner->SetDialogueWord(Offset);
+    const FString Remaining = Dialogue.Mid(BaseOffset);
+    const FString EffectiveCue = BaseOffset == 0 ? DialogueCueId : FString();
+    TibetVoice::Speak(GetWorld(), TCHAR_TO_UTF8(*EffectiveCue), TCHAR_TO_UTF8(*DialogueSpeakerId), TCHAR_TO_UTF8(*Remaining), IsEnglish(), [Owner, Generation, BaseOffset](int Offset) {
+        AsyncTask(ENamedThreads::GameThread, [Owner, Generation, BaseOffset, Offset] {
+            if (Owner.IsValid() && Owner->VoiceGeneration == Generation) Owner->SetDialogueWord(BaseOffset + Offset);
         });
     }, [Owner, Generation] {
         AsyncTask(ENamedThreads::GameThread, [Owner, Generation] {
-            if (!Owner.IsValid() || Owner->VoiceGeneration != Generation) return;
+            if (!Owner.IsValid() || Owner->VoiceGeneration != Generation || Owner->PageStarts.IsEmpty()) return;
             Owner->PageIndex = Owner->PageStarts.Num() - 1;
-            Owner->PageDeadline = Owner->GetWorld()->GetTimeSeconds() + 1.4;
+            const double Now = Owner->GetWorld() ? Owner->GetWorld()->GetTimeSeconds() : 0.0;
+            Owner->PageDeadline = Now + 1.4;
         });
     });
 }
@@ -918,11 +974,48 @@ FString ATibetGameMode::DialoguePage() const
 void ATibetGameMode::SetDialogueWord(int32 Offset)
 {
     if (!bSpokenWord)
-        UE_LOG(LogTemp, Display, TEXT("TIBET_VOICE playing language=%s speaker=%s"), IsEnglish() ? TEXT("en-US") : TEXT("zh-TW"), *Speaker);
+    {
+        const auto& VoiceInfo = TibetVoice::LastSelection();
+        UE_LOG(LogTemp, Display, TEXT("TIBET_VOICE playing language=%s speaker=%s speakerId=%s cue=%s mode=%s voice=%s gender=%s"),
+            IsEnglish() ? TEXT("en-US") : TEXT("zh-TW"), *Speaker, *DialogueSpeakerId, *DialogueCueId,
+            UTF8_TO_TCHAR(VoiceInfo.Mode), UTF8_TO_TCHAR(VoiceInfo.VoiceName), UTF8_TO_TCHAR(VoiceInfo.Gender));
+    }
     bSpokenWord = true;
     while (PageStarts.IsValidIndex(PageIndex + 1) && Offset >= PageStarts[PageIndex + 1]) ++PageIndex;
     // Allow a missing device finish callback to recover after its longest remaining clause.
-    PageDeadline = GetWorld()->GetTimeSeconds() + 4. + (Dialogue.Len() - Offset) / (IsEnglish() ? 9. : 2.5);
+    const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+    PageDeadline = Now + 4. + FMath::Max(0, Dialogue.Len() - Offset) / (IsEnglish() ? 9. : 2.5);
+}
+
+void ATibetGameMode::NextDialoguePage()
+{
+    if (!PageStarts.IsValidIndex(PageIndex + 1))
+    {
+        StopDialogue();
+        return;
+    }
+    ++PageIndex;
+    bSpokenWord = false;
+    const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+    PageDeadline = Now + 1.4 + DialoguePage().Len() / (IsEnglish() ? 14. : 4.);
+    if (bDialoguePaused)
+    {
+        if (bVoiceRequested)
+        {
+            TibetVoice::Stop();
+            bVoiceRequested = false;
+        }
+        ++VoiceGeneration;
+        bVoicePending = true;
+    }
+    else if (GetWorld() && (bVoiceRequested || !FApp::IsUnattended()))
+    {
+        StartDialogueVoice();
+    }
+    else
+    {
+        ++VoiceGeneration;
+    }
 }
 
 void ATibetGameMode::TickDialogue()
@@ -948,6 +1041,8 @@ void ATibetGameMode::StopDialogue()
     PageStarts.Reset();
     Dialogue.Reset();
     Speaker.Reset();
+    DialogueSpeakerId.Reset();
+    DialogueCueId.Reset();
     PageIndex = 0;
     bVoicePending = false;
     bSpokenWord = false;
@@ -1288,7 +1383,9 @@ void ATibetGameMode::SpeakSkyGuruBlessing()
         TEXT("Guru Padmasambhava"),
         TEXT("蓮花生大士（鄔金仁波切）"),
         TEXT("Well done, faithful pilgrim! From your first vow beneath Jarung Khashor Stupa through the rains of Yangleshö, the snows of Mangyul, the taming of Yarlha Shampo, the mandala of Samye, and the hidden vaults of Chimphu, you have walked the full path home. Never think Padmasambhava dwells far away—wherever pure faith and bodhicitta arise, there shines the Copper-Colored Mountain, and I am never parted from you. Receive this keepsake Thangka of our meeting in pure vision; may the Dharma lamp shine ever bright in your heart!"),
-        TEXT("善哉，具信的行者！你自夏絨卡秀大佛塔下發心啟程，歷經帕平岩洞的甘露、芒域風雪的誓言、雅礱雪山的調伏、桑耶曼荼羅的建立，乃至青朴深巖的伏藏試煉，如今圓滿歸來。切莫以為蓮花生遠在異域——凡有清淨信願與菩提心生起之處，即是銅色吉祥山淨土，吾未曾離汝須臾。今以此幅同框唐卡相贈，願此法炬長明於心，吉祥圓滿！"));
+        TEXT("善哉，具信的行者！你自夏絨卡秀大佛塔下發心啟程，歷經帕平岩洞的甘露、芒域風雪的誓言、雅礱雪山的調伏、桑耶曼荼羅的建立，乃至青朴深巖的伏藏試煉，如今圓滿歸來。切莫以為蓮花生遠在異域——凡有清淨信願與菩提心生起之處，即是銅色吉祥山淨土，吾未曾離汝須臾。今以此幅同框唐卡相贈，願此法炬長明於心，吉祥圓滿！"),
+        TEXT("skyGuru"),
+        TEXT("ending_skyguru"));
 }
 
 bool ATibetGameMode::SaveNowAndExportBackup(FString& OutPath)
