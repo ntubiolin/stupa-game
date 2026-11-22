@@ -4,15 +4,26 @@
 #include "GameFramework/Character.h"
 #include "TibetCharacter.generated.h"
 
+struct TIBETPILGRIMAGE_API FTibetLimbPose
+{
+    float LeftHipPitch = 0.f, RightHipPitch = 0.f;
+    float LeftKneePitch = 0.f, RightKneePitch = 0.f;
+    float LeftArmPitch = 0.f, RightArmPitch = 0.f;
+    float TorsoPitch = 0.f, FigureZOffset = 0.f;
+};
+
 UCLASS()
 class TIBETPILGRIMAGE_API ATibetCharacter : public ACharacter
 {
     GENERATED_BODY()
 public:
     ATibetCharacter();
+    static FTibetLimbPose ComputeLimbPose(
+        float WalkPhase, float GroundSpeed, bool bFalling, float VerticalVelocity, float LandAlpha);
     virtual void SetPlayerDefaults() override;
     virtual FRotator GetViewRotation() const override;
     virtual void Tick(float DeltaSeconds) override;
+    virtual void Landed(const FHitResult& Hit) override;
     void CancelGameplayInput();
     void RespawnAtStart();
     FVector GetStartLocation() const { return Start; }
@@ -21,11 +32,19 @@ public:
 protected:
     virtual void BeginPlay() override;
 private:
+    static constexpr float LandCushionDuration = 0.18f;
     UPROPERTY() TObjectPtr<USceneComponent> Figure;
-    UPROPERTY() TArray<USceneComponent*> Joints;
+    UPROPERTY() TObjectPtr<USceneComponent> LeftLegJoint;
+    UPROPERTY() TObjectPtr<USceneComponent> RightLegJoint;
+    UPROPERTY() TObjectPtr<USceneComponent> LeftCalfJoint;
+    UPROPERTY() TObjectPtr<USceneComponent> RightCalfJoint;
+    UPROPERTY() TObjectPtr<USceneComponent> LeftSleeveJoint;
+    UPROPERTY() TObjectPtr<USceneComponent> RightSleeveJoint;
     FVector Start = FVector(-2000.f, 0.f, 100.f);
     FRotator StartRotation = FRotator::ZeroRotator;
-    float WalkPhase = 0;
+    float WalkPhase = 0.f;
+    float LandTimer = 0.f;
+    FTibetLimbPose CurrentPose;
     FVector2D Thumb, Drag;
     int32 MoveFinger = -1, LookFinger = -1;
     bool bAwaitingDragMotion = true;

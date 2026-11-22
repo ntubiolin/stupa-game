@@ -10,6 +10,7 @@ from mathutils import Vector
 ROOT = Path(__file__).resolve().parents[1]
 FIGURES = ROOT / "Assets/Figures"
 JOINTS = {"Pilgrim": (0,0,0), "PilgrimLeftLeg": (-.12,0,.84), "PilgrimRightLeg": (.12,0,.84),
+          "PilgrimLeftCalf": (-.12,0,.47), "PilgrimRightCalf": (.12,0,.47),
           "PilgrimLeftSleeve": (-.23,0,1.35), "PilgrimRightSleeve": (.23,0,1.35)}
 EXPECTED = {"Pilgrim": {"PilgrimChalkShawl", "PilgrimUndyedCotton", "PilgrimWovenBrick", "PeopleHair"},
             "Guide": {"LamaWineDrape", "LamaLowerMaroon", "LamaOchreVest"},

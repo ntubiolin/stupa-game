@@ -40,6 +40,11 @@ class CastTests(unittest.TestCase):
     def test_costumes_anchors_and_assets(self):
         manifest=json.loads((ROOT/'Assets/Figures/triangle-counts.json').read_text())
         self.assertEqual({p.stem for p in (ROOT/'Assets/Figures').glob('*.fbx')}, set(manifest))
+        for part in ('Pilgrim', 'PilgrimLeftLeg', 'PilgrimRightLeg',
+                     'PilgrimLeftCalf', 'PilgrimRightCalf',
+                     'PilgrimLeftSleeve', 'PilgrimRightSleeve'):
+            self.assertIn(part, manifest)
+            self.assertGreater(manifest[part], 500, part)
         for area,cast in PLACEMENTS.items():
             positions=set()
             for person,(model,x,y) in cast.items():
@@ -50,6 +55,17 @@ class CastTests(unittest.TestCase):
                     self.assertEqual(model,'Guide')
                 else:
                     self.assertNotEqual(model,'Guide')
+
+    def test_pilgrim_knee_and_limb_pivots_stay_synchronized(self):
+        build_src = (ROOT / 'Tools/build_figures.py').read_text(encoding='utf-8')
+        render_src = (ROOT / 'QA/render_people.py').read_text(encoding='utf-8')
+        cpp_src = (CPP / 'TibetCharacter.cpp').read_text(encoding='utf-8')
+        for part in ('PilgrimLeftLeg', 'PilgrimRightLeg',
+                     'PilgrimLeftCalf', 'PilgrimRightCalf',
+                     'PilgrimLeftSleeve', 'PilgrimRightSleeve'):
+            self.assertIn(f'"{part}"', build_src)
+            self.assertIn(f'"{part}"', render_src)
+            self.assertIn(f'TEXT("{part}")', cpp_src)
 
     def test_visible_actor_must_survive_the_next_objective(self):
         initial = """TIBET_RESIDENT_LEVEL map=stupa route=stupa
