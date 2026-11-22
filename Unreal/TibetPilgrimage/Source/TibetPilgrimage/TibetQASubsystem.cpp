@@ -720,16 +720,18 @@ void UTibetQASubsystem::Arrival(APlayerController& PC)
     {
         SendKey(PC, EKeys::D, false);
         Record(TEXT("released-walking\t") + PC.GetControlRotation().ToCompactString());
-        // The steering basis and pitch stay fixed while the rendered yaw follows travel.
-        const bool bStable = PC.GetControlRotation().Equals(HeadingAfterDrag, .05)
-            && FMath::IsNearlyEqual(PC.PlayerCameraManager->GetCameraRotation().Pitch,HeadingAfterDrag.Pitch,.05);
+        // Free mouse leaves pitch untouched while lateral walking begins turning behind the pilgrim.
+        const double YawTurn = FRotator::NormalizeAxis(PC.GetControlRotation().Yaw - HeadingAfterDrag.Yaw);
+        const bool bStable = YawTurn > 1. && YawTurn < 65.
+            && FMath::IsNearlyEqual(PC.GetControlRotation().Pitch, HeadingAfterDrag.Pitch, .05)
+            && FMath::IsNearlyEqual(PC.PlayerCameraManager->GetCameraRotation().Pitch, HeadingAfterDrag.Pitch, .05);
         Finish(bStable && IFileManager::Get().FileSize(*Screenshot) > 0,
-            bStable ? TEXT("arrival and mouse controls") : TEXT("Free mouse changed pitch or movement steering"));
+            bStable ? TEXT("arrival and mouse controls") : TEXT("Free mouse changed pitch or lateral follow failed"));
     }
 }
 
-// Drive the real movement and E bindings. Observe the final rendered camera,
-// rather than the controller yaw retained as the player's movement reference.
+// Drive the real movement and E bindings. Observe the final rendered camera as lateral
+// movement smoothly aligns behind the pilgrim while pure backing preserves heading.
 void UTibetQASubsystem::CameraFollow(APlayerController& PC,ATibetGameMode& Mode)
 {
     const double Now=FPlatformTime::Seconds();
@@ -751,99 +753,117 @@ void UTibetQASubsystem::CameraFollow(APlayerController& PC,ATibetGameMode& Mode)
         HeadingBeforeDrag=CameraView; ArrivalPosition=Pos;
         SendKey(PC,EKeys::D,true); Next(); break;
     case 1:
-        // Move the free pointer throughout the strafe. Both the walked path and
-        // the final rendered camera heading must survive these raw mouse events.
+        // Move the free pointer throughout the right turn. Unclicked raw mouse events
+        // must not hijack pitch or prevent smooth auto-follow behind the pilgrim.
         PC.InputKey(FInputKeyEventArgs::CreateSimulated(EKeys::MouseX,IE_Axis,15,1));
-        if (Held<1.15) break;
-        Detail(TEXT("side-travel"));
-        if (FVector::Dist2D(Pos,ArrivalPosition)<180 ||
-            FMath::Abs(FRotator::NormalizeAxis((Pos-ArrivalPosition).Rotation().Yaw-HeadingBeforeDrag.Yaw-90))>5 ||
-            FMath::Abs(Error(HeadingBeforeDrag.Yaw))>.15)
-        { Finish(false,TEXT("Right strafe curved or rotated the camera")); return; }
-        SendKey(PC,EKeys::D,false);
-        FScreenshotRequest::RequestScreenshot(Output/TEXT("travel.png"),true,false,false);
-        ArrivalPosition=Pos;
-        SendKey(PC,EKeys::A,true); Next(); break;
+        if (Held<.60) break;
+        if (FVector::Dist2D(Pos,ArrivalPosition)<140 ||
+            FRotator::NormalizeAxis(CameraView.Yaw-HeadingBeforeDrag.Yaw)<12. ||
+            !FMath::IsNearlyEqual(CameraView.Pitch,HeadingBeforeDrag.Pitch,.05))
+        { Finish(false,TEXT("Right movement failed to displace pawn or start camera follow")); return; }
+        SendKey(PC,EKeys::D,false); Next(); break;
     case 2:
+        PC.InputKey(FInputKeyEventArgs::CreateSimulated(EKeys::MouseX,IE_Axis,15,1));
+        if (Held<1.45) break;
+        Detail(TEXT("side-travel"));
+        if (FRotator::NormalizeAxis(CameraView.Yaw-HeadingBeforeDrag.Yaw)<55. ||
+            FMath::Abs(Error(Pawn->GetActorRotation().Yaw))>3.5 ||
+            !FMath::IsNearlyEqual(CameraView.Pitch,HeadingBeforeDrag.Pitch,.05))
+        { Finish(false,TEXT("Right movement camera failed to settle behind pilgrim")); return; }
+        FScreenshotRequest::RequestScreenshot(Output/TEXT("travel.png"),true,false,false);
+        HeadingBeforeDrag=CameraView; ArrivalPosition=Pos;
+        SendKey(PC,EKeys::A,true); Next(); break;
     case 3:
+        if (Held<.60) break;
+        if (FVector::Dist2D(Pos,ArrivalPosition)<140 ||
+            FRotator::NormalizeAxis(CameraView.Yaw-HeadingBeforeDrag.Yaw)>-12.)
+        { Finish(false,TEXT("Left movement failed to displace pawn or start camera follow")); return; }
+        SendKey(PC,EKeys::A,false); Next(); break;
+    case 4:
+        if (Held<1.45) break;
+        Detail(TEXT("reverse-strafe"));
+        if (FRotator::NormalizeAxis(CameraView.Yaw-HeadingBeforeDrag.Yaw)>-55. ||
+            FMath::Abs(Error(Pawn->GetActorRotation().Yaw))>3.5)
+        { Finish(false,TEXT("Left movement camera failed to settle behind pilgrim")); return; }
+        HeadingBeforeDrag=CameraView; ArrivalPosition=Pos;
+        SendKey(PC,EKeys::S,true); Next(); break;
+    case 5:
     {
-        // Changing direction must first brake the previous movement. Observe the actual
-        // displacement along the requested input axis while checking yaw on every frame.
-        const bool Reversing=Frames==2;
-        const FVector Direction=FRotator(0,HeadingBeforeDrag.Yaw+(Reversing?-90.:180.),0).Vector();
-        const double Displacement=FVector::DotProduct(Pos-ArrivalPosition,Direction);
+        // Pure backward walking must preserve camera heading without whipping 180 degrees.
+        const FVector Backward=-FRotator(0,HeadingBeforeDrag.Yaw,0).Vector();
+        const double Displacement=FVector::DotProduct(Pos-ArrivalPosition,Backward);
         if (FMath::Abs(Error(HeadingBeforeDrag.Yaw))>.15 || Held>2.)
         {
-            Finish(false,FString::Printf(TEXT("Unstable strafe/backing at phase %d: displacement %.1f cm, yaw change %.2f"),
-                Frames,Displacement,Error(HeadingBeforeDrag.Yaw)));
+            Finish(false,FString::Printf(TEXT("Backward movement spun camera: displacement %.1f cm, yaw change %.2f"),
+                Displacement,Error(HeadingBeforeDrag.Yaw)));
             return;
         }
         if (Displacement<120.) break;
-        Detail(Reversing?TEXT("reverse-strafe"):TEXT("backward"));
-        SendKey(PC,Reversing?EKeys::A:EKeys::S,false);
-        if (Reversing) SendKey(PC,EKeys::S,true);
-        ArrivalPosition=Pos; Next(); break;
+        Detail(TEXT("backward"));
+        SendKey(PC,EKeys::S,false); Next(); break;
     }
-    case 4:
+    case 6:
         if (Held<.5) break;
+        if (FMath::Abs(Error(HeadingBeforeDrag.Yaw))>.15)
+        { Finish(false,TEXT("Idle after backing up rotated camera")); return; }
         HeadingBeforeDrag=CameraView;
         SendKey(PC,EKeys::Q,true); Next(); break;
-    case 5:
+    case 7:
         if (Held<.55) break;
         Detail(TEXT("orbit-left"));
         if (Error(HeadingBeforeDrag.Yaw)>-35 || Error(HeadingBeforeDrag.Yaw)<-85)
         { Finish(false,TEXT("Q did not orbit left")); return; }
         HeadingAfterDrag=CameraView;
         SendKey(PC,EKeys::Q,false); Next(); break;
-    case 6:
+    case 8:
         if (Held<.08) break;
         if (FMath::Abs(Error(HeadingBeforeDrag.Yaw))<3 || FMath::Abs(Error(HeadingAfterDrag.Yaw))<2)
         { Finish(false,TEXT("Q release snapped or failed to ease")); return; }
         Next(); break;
-    case 7:
+    case 9:
         if (Held<1.25) break;
         Detail(TEXT("return-left"));
         if (FMath::Abs(Error(HeadingBeforeDrag.Yaw))>3)
         { Finish(false,TEXT("Q release failed to restore the chosen heading")); return; }
         PC.SetControlRotation((Goal-Pos).GetSafeNormal2D().Rotation());
         SendKey(PC,EKeys::W,true); Next(); break;
-    case 8:
+    case 10:
         if (FVector::Dist2D(Pos,Goal)>150) break;
         SendKey(PC,EKeys::W,false); Next(); break;
-    case 9:
+    case 11:
         if (Held<.5) break;
         HeadingBeforeDrag=CameraView;
         SendKey(PC,EKeys::E,true); Next(); break;
-    case 10:
+    case 12:
         if (Held<.72) break;
         Detail(TEXT("orbit-right"));
         if (Error(HeadingBeforeDrag.Yaw)<35 || Mode.GetStep()!=0)
         { Finish(false,TEXT("Held E did not orbit right or activated dialogue")); return; }
         FScreenshotRequest::RequestScreenshot(Output/TEXT("orbit.png"),true,false,false);
         SendKey(PC,EKeys::E,false); Next(); break;
-    case 11:
+    case 13:
         if (Held<1.5) break;
         Detail(TEXT("return-right"));
         if (FMath::Abs(Error(HeadingBeforeDrag.Yaw))>3 || Mode.GetStep()!=0)
         { Finish(false,TEXT("E release failed to return or triggered interaction")); return; }
         HeadingBeforeDrag=CameraView;
         SendKey(PC,EKeys::E,true); Next(); break;
-    case 12:
+    case 14:
         SendKey(PC,EKeys::M,true); Next(); break;
-    case 13:
+    case 15:
         if (Held<.20) break;
         if (!PC.IsPaused() || Mode.GetStep()!=0) { Finish(false,TEXT("Menu did not cancel pending E interaction")); return; }
         SendKey(PC,EKeys::M,false); SendKey(PC,EKeys::E,false); SendKey(PC,EKeys::Q,true);
         PC.InputKey(FInputKeyEventArgs::CreateSimulated(EKeys::MouseX,IE_Axis,20,1)); Next(); break;
-    case 14:
+    case 16:
         if (Held<.25) break;
         if (!CameraView.Equals(HeadingBeforeDrag,.15)) { Finish(false,TEXT("Menu allowed camera input")); return; }
         SendKey(PC,EKeys::Q,false); SendKey(PC,EKeys::Escape,true); Next(); break;
-    case 15:
+    case 17:
         if (Held<.20) break;
         if (PC.IsPaused() || Mode.GetStep()!=0) { Finish(false,TEXT("Return from menu leaked interaction")); return; }
         SendKey(PC,EKeys::Escape,false); SendKey(PC,EKeys::E,true); Next(); break;
-    case 16:
+    case 18:
         SendKey(PC,EKeys::E,false); Next(); break;
     default:
         if (Held<.25 || FScreenshotRequest::IsScreenshotRequested()) break;

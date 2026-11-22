@@ -21,17 +21,50 @@ namespace TibetCamera
 
     constexpr double OrbitDegreesPerSecond = 105.;
     constexpr double InteractHoldSeconds = .20;
+    constexpr double AutoBehindDegreesPerSecond = 88.;
+    constexpr double AutoBehindTimeConstant = .24;
+    constexpr double LateralInputDeadzone = .05;
+
+    inline double StepYawToward(double View, double Target, double Rate, double TimeConstant, double Dt)
+    {
+        if (Rate <= 0. || Dt <= 0.) return FRotator::NormalizeAxis(View);
+        const double EaseDistance = Rate * TimeConstant;
+        const double Gap = FRotator::NormalizeAxis(Target - View);
+        const double Distance = FMath::Abs(Gap);
+        const double LinearTime = FMath::Min(Dt, FMath::Max(0., Distance - EaseDistance) / Rate);
+        const double Remaining = (Distance - Rate * LinearTime) * FMath::Exp(-(Dt - LinearTime) / TimeConstant);
+        return FRotator::NormalizeAxis(Target - (Remaining < .05 ? 0. : FMath::Sign(Gap) * Remaining));
+    }
 
     inline double FollowYaw(double View, double Travel, double Dt)
     {
         // At large angles turn at a comfortable fixed speed, then ease to a stop.
         // Crossing between the two regimes within a frame uses the leftover time.
-        constexpr double Rate = 175., TimeConstant = .22, EaseDistance = Rate * TimeConstant;
-        const double Gap = FRotator::NormalizeAxis(Travel - View);
-        const double Distance = FMath::Abs(Gap);
-        const double LinearTime = FMath::Min(Dt, FMath::Max(0., Distance - EaseDistance) / Rate);
-        const double Remaining = (Distance - Rate * LinearTime) * FMath::Exp(-(Dt - LinearTime) / TimeConstant);
-        return FRotator::NormalizeAxis(Travel - (Remaining < .05 ? 0. : FMath::Sign(Gap) * Remaining));
+        return StepYawToward(View, Travel, 175., .22, Dt);
+    }
+
+    inline double AutoBehindYaw(double ControlYaw, FVector2D MoveAxis, double CharacterYaw,
+        double HorizontalSpeed, double Dt, bool bPendingAlign = false)
+    {
+        const double NormalizedView = FRotator::NormalizeAxis(ControlYaw);
+        if (Dt <= 0.) return NormalizedView;
+        const double Lateral = FMath::Clamp(FMath::Abs(MoveAxis.X), 0., 1.);
+        // Pure backward walking preserves the camera heading rather than spinning 180 degrees.
+        if (Lateral <= LateralInputDeadzone && MoveAxis.Y < -LateralInputDeadzone)
+            return NormalizedView;
+        if (Lateral > LateralInputDeadzone)
+        {
+            const double Gap = FRotator::NormalizeAxis(CharacterYaw - NormalizedView);
+            if (Gap * MoveAxis.X <= 0.) return NormalizedView;
+            const double SpeedScale = FMath::GetMappedRangeValueClamped(
+                FVector2D(0., 180.), FVector2D(.35, 1.), FMath::Max(0., HorizontalSpeed));
+            return StepYawToward(NormalizedView, CharacterYaw,
+                AutoBehindDegreesPerSecond * Lateral * SpeedScale, AutoBehindTimeConstant, Dt);
+        }
+        if (bPendingAlign)
+            return StepYawToward(NormalizedView, CharacterYaw,
+                AutoBehindDegreesPerSecond, AutoBehindTimeConstant, Dt);
+        return NormalizedView;
     }
 
     // Limit the boom's descent as the lens tilts up, keeping the camera above the ground.

@@ -186,7 +186,7 @@ private:
     void EnsureSkyGuru();
     void PollGoogleDesktopAuth();
     void ApplyLoadedSaveAndReload(UTibetSave* Loaded);
-    void BeginCustomDialogue(const TCHAR* SpeakerEn, const TCHAR* SpeakerZh, const TCHAR* SpeechEn, const TCHAR* SpeechZh);
+    void BeginCustomDialogue(const TCHAR* SpeakerEn, const TCHAR* SpeakerZh, const TCHAR* SpeechEn, const TCHAR* SpeechZh, const TCHAR* InSpeakerId = nullptr, const TCHAR* InCueBase = nullptr);
     UPROPERTY() TObjectPtr<AActor> Messenger;
     UPROPERTY() TMap<FName, TObjectPtr<AActor>> Residents;
     FString Map, Route, SlotName;
@@ -228,7 +228,7 @@ private:
     float Health = 100, Mana = 100, HurtTimer = 0, Stun = 0, Shield = 0, NoticeUntil = 0;
     float Cooldown[7]{};
     FString Notice;
-    FString Speaker, Dialogue;
+    FString Speaker, Dialogue, DialogueSpeakerId, DialogueCueId;
     TArray<int32> PageStarts;
     int32 DialogueIndex = INDEX_NONE, PageIndex = 0;
     uint32 VoiceGeneration = 0;

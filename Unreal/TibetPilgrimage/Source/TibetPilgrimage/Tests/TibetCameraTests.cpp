@@ -73,4 +73,67 @@ bool FTibetFollowTest::RunTest(const FString&)
     }
     return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTibetAutoBehindTest, "Tibet.Camera.AutoBehind",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FTibetAutoBehindTest::RunTest(const FString&)
+{
+    for (int32 Frames : {30, 60, 120})
+    {
+        const double Dt = 1. / Frames;
+
+        // Right movement turns the camera smoothly clockwise behind the pilgrim.
+        double RightView = 0.;
+        for (int32 I = 0; I < Frames; ++I)
+        {
+            const double Next = TibetCamera::AutoBehindYaw(RightView, FVector2D(1., 0.), 90., 570., Dt);
+            const double Step = FRotator::NormalizeAxis(Next - RightView);
+            TestTrue(TEXT("Right move turns clockwise at bounded speed"),
+                Step >= 0. && Step <= TibetCamera::AutoBehindDegreesPerSecond * Dt + .05);
+            RightView = Next;
+        }
+        TestTrue(TEXT("Right follow is frame-rate independent across 30/60/120 Hz"),
+            FMath::IsNearlyEqual(RightView, TibetCamera::AutoBehindYaw(0., FVector2D(1., 0.), 90., 570., 1.), .001));
+        TestTrue(TEXT("Right follow approaches character back within a second"),
+            RightView > 75. && RightView <= 90.);
+
+        // Left movement turns counter-clockwise cleanly across the +/-180 yaw seam.
+        double LeftView = -135.;
+        const double LeftTarget = 135.;
+        for (int32 I = 0; I < Frames; ++I)
+        {
+            const double Next = TibetCamera::AutoBehindYaw(LeftView, FVector2D(-1., 0.), LeftTarget, 570., Dt);
+            const double Step = FRotator::NormalizeAxis(Next - LeftView);
+            TestTrue(TEXT("Left move turns counter-clockwise at bounded speed"),
+                Step <= 0. && -Step <= TibetCamera::AutoBehindDegreesPerSecond * Dt + .05);
+            LeftView = Next;
+        }
+        TestTrue(TEXT("Left follow across seam is frame-rate independent"),
+            FMath::IsNearlyEqual(LeftView, TibetCamera::AutoBehindYaw(-135., FVector2D(-1., 0.), LeftTarget, 570., 1.), .001));
+        TestTrue(TEXT("Left follow approaches character back across seam"),
+            FMath::Abs(FRotator::NormalizeAxis(LeftTarget - LeftView)) < 15.);
+
+        // Releasing lateral input with pending align finishes framing directly behind the pilgrim.
+        double SettleView = RightView;
+        for (int32 I = 0; I < Frames; ++I)
+            SettleView = TibetCamera::AutoBehindYaw(SettleView, FVector2D::ZeroVector, 90., 0., Dt, true);
+        TestTrue(TEXT("Post-lateral settle finishes framing behind character"),
+            FMath::Abs(FRotator::NormalizeAxis(90. - SettleView)) < .5);
+
+        // Pure backward walking and idle states keep camera heading steady with zero drift.
+        double BackView = 35.;
+        double IdleView = 35.;
+        for (int32 I = 0; I < Frames; ++I)
+        {
+            BackView = TibetCamera::AutoBehindYaw(BackView, FVector2D(0., -1.), -145., 570., Dt, true);
+            IdleView = TibetCamera::AutoBehindYaw(IdleView, FVector2D::ZeroVector, 125., 0., Dt, false);
+        }
+        TestEqual(TEXT("Pure S backward keeps camera heading steady"), BackView, 35.);
+        TestEqual(TEXT("Idle without pending align has zero camera drift"), IdleView, 35.);
+        TestEqual(TEXT("Direction reversal waits until body crosses to new side"),
+            TibetCamera::AutoBehindYaw(0., FVector2D(-1., 0.), 45., 300., Dt, true), 0.);
+    }
+    return true;
+}
 #endif

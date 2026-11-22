@@ -856,14 +856,20 @@ void ATibetGameMode::Interact()
 void ATibetGameMode::BeginDialogue(int32 ObjectiveIndex)
 {
     const auto& Line = Objective(Route, ObjectiveIndex);
-    BeginCustomDialogue(Line.SpeakerEn, Line.SpeakerZh, Line.SpeechEn, Line.SpeechZh);
+    const FString SafeResident = FString(Line.Resident ? Line.Resident : TEXT("npc")).Replace(TEXT("."), TEXT("_"));
+    const FString CueBase = FString::Printf(TEXT("%s_%d_%s"), *Route, ObjectiveIndex, *SafeResident);
+    BeginCustomDialogue(Line.SpeakerEn, Line.SpeakerZh, Line.SpeechEn, Line.SpeechZh, Line.Resident, *CueBase);
     DialogueIndex = ObjectiveIndex;
 }
 
-void ATibetGameMode::BeginCustomDialogue(const TCHAR* SpeakerEn, const TCHAR* SpeakerZh, const TCHAR* SpeechEn, const TCHAR* SpeechZh)
+void ATibetGameMode::BeginCustomDialogue(const TCHAR* SpeakerEn, const TCHAR* SpeakerZh, const TCHAR* SpeechEn, const TCHAR* SpeechZh, const TCHAR* InSpeakerId, const TCHAR* InCueBase)
 {
     StopDialogue();
     DialogueIndex = -2;
+    DialogueSpeakerId = InSpeakerId ? InSpeakerId : TEXT("");
+    DialogueCueId = (InCueBase && *InCueBase)
+        ? FString::Printf(TEXT("%s_%s"), InCueBase, IsEnglish() ? TEXT("en") : TEXT("zh"))
+        : FString();
     Speaker = Local(SpeakerEn, SpeakerZh);
     Dialogue = Local(SpeechEn, SpeechZh);
     const int32 Limit = IsEnglish() ? 82 : 32;
@@ -905,7 +911,8 @@ void ATibetGameMode::StartDialogueVoice()
     const auto Owner = TWeakObjectPtr<ATibetGameMode>(this);
     const uint32 Generation = VoiceGeneration;
     const FString Remaining = Dialogue.Mid(BaseOffset);
-    TibetVoice::Speak(TCHAR_TO_UTF8(*Remaining), IsEnglish(), [Owner, Generation, BaseOffset](int Offset) {
+    const FString EffectiveCue = BaseOffset == 0 ? DialogueCueId : FString();
+    TibetVoice::Speak(GetWorld(), TCHAR_TO_UTF8(*EffectiveCue), TCHAR_TO_UTF8(*DialogueSpeakerId), TCHAR_TO_UTF8(*Remaining), IsEnglish(), [Owner, Generation, BaseOffset](int Offset) {
         AsyncTask(ENamedThreads::GameThread, [Owner, Generation, BaseOffset, Offset] {
             if (Owner.IsValid() && Owner->VoiceGeneration == Generation) Owner->SetDialogueWord(BaseOffset + Offset);
         });
@@ -930,7 +937,12 @@ FString ATibetGameMode::DialoguePage() const
 void ATibetGameMode::SetDialogueWord(int32 Offset)
 {
     if (!bSpokenWord)
-        UE_LOG(LogTemp, Display, TEXT("TIBET_VOICE playing language=%s speaker=%s"), IsEnglish() ? TEXT("en-US") : TEXT("zh-TW"), *Speaker);
+    {
+        const auto& VoiceInfo = TibetVoice::LastSelection();
+        UE_LOG(LogTemp, Display, TEXT("TIBET_VOICE playing language=%s speaker=%s speakerId=%s cue=%s mode=%s voice=%s gender=%s"),
+            IsEnglish() ? TEXT("en-US") : TEXT("zh-TW"), *Speaker, *DialogueSpeakerId, *DialogueCueId,
+            UTF8_TO_TCHAR(VoiceInfo.Mode), UTF8_TO_TCHAR(VoiceInfo.VoiceName), UTF8_TO_TCHAR(VoiceInfo.Gender));
+    }
     bSpokenWord = true;
     while (PageStarts.IsValidIndex(PageIndex + 1) && Offset >= PageStarts[PageIndex + 1]) ++PageIndex;
     // Allow a missing device finish callback to recover after its longest remaining clause.
@@ -992,6 +1004,8 @@ void ATibetGameMode::StopDialogue()
     PageStarts.Reset();
     Dialogue.Reset();
     Speaker.Reset();
+    DialogueSpeakerId.Reset();
+    DialogueCueId.Reset();
     PageIndex = 0;
     bVoicePending = false;
     bSpokenWord = false;
@@ -1307,7 +1321,9 @@ void ATibetGameMode::SpeakSkyGuruBlessing()
         TEXT("Guru Padmasambhava"),
         TEXT("蓮花生大士（鄔金仁波切）"),
         TEXT("Well done, faithful pilgrim! From your first vow beneath Jarung Khashor Stupa through the rains of Yangleshö, the snows of Mangyul, the taming of Yarlha Shampo, the mandala of Samye, and the hidden vaults of Chimphu, you have walked the full path home. Never think Padmasambhava dwells far away—wherever pure faith and bodhicitta arise, there shines the Copper-Colored Mountain, and I am never parted from you. Receive this keepsake Thangka of our meeting in pure vision; may the Dharma lamp shine ever bright in your heart!"),
-        TEXT("善哉，具信的行者！你自夏絨卡秀大佛塔下發心啟程，歷經帕平岩洞的甘露、芒域風雪的誓言、雅礱雪山的調伏、桑耶曼荼羅的建立，乃至青朴深巖的伏藏試煉，如今圓滿歸來。切莫以為蓮花生遠在異域——凡有清淨信願與菩提心生起之處，即是銅色吉祥山淨土，吾未曾離汝須臾。今以此幅同框唐卡相贈，願此法炬長明於心，吉祥圓滿！"));
+        TEXT("善哉，具信的行者！你自夏絨卡秀大佛塔下發心啟程，歷經帕平岩洞的甘露、芒域風雪的誓言、雅礱雪山的調伏、桑耶曼荼羅的建立，乃至青朴深巖的伏藏試煉，如今圓滿歸來。切莫以為蓮花生遠在異域——凡有清淨信願與菩提心生起之處，即是銅色吉祥山淨土，吾未曾離汝須臾。今以此幅同框唐卡相贈，願此法炬長明於心，吉祥圓滿！"),
+        TEXT("skyGuru"),
+        TEXT("ending_skyguru"));
 }
 
 bool ATibetGameMode::SaveNowAndExportBackup(FString& OutPath)
