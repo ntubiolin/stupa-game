@@ -74,6 +74,24 @@ struct FTibetWildEnemy
     float StunnedUntil = 0.f;
 };
 
+struct FTibetResidentState
+{
+    FName Id;
+    TWeakObjectPtr<AActor> Actor;
+    TWeakObjectPtr<class ATibetGuruHalo> GuruHalo;
+    FVector Home = FVector::ZeroVector;
+    double FloorZ = 0.0;
+    bool bFixedSocketFloor = false;
+    bool bIsGuruVision = false;
+    uint8 Routine = 0;
+    int32 WaypointIndex = 0;
+    float PauseRemaining = 0.f;
+    float WalkPhase = 0.f;
+    float SpeedAlpha = 0.f;
+    float HeadingYaw = -180.f;
+    float PhaseSeed = 0.f;
+};
+
 UCLASS()
 class TIBETPILGRIMAGE_API ATibetGameMode : public AGameModeBase
 {
@@ -83,7 +101,12 @@ public:
     virtual void StartPlay() override;
     virtual void EndPlay(const EEndPlayReason::Type Reason) override;
     bool GetInteractionCue(FVector& WorldAnchor) const;
+    FString GetInteractionPrompt(bool bTouchControls) const;
     FString DialoguePage() const;
+    int32 DialoguePageIndex() const { return PageIndex; }
+    int32 DialoguePageCount() const { return PageStarts.Num(); }
+    bool HasNextDialoguePage() const { return PageStarts.IsValidIndex(PageIndex + 1); }
+    void NextDialoguePage();
     const FString& DialogueSpeaker() const { return Speaker; }
     bool HasSpokenWord() const { return bSpokenWord; }
     void PauseDialogue(bool Paused);
@@ -133,8 +156,11 @@ public:
     float MaxMana() const;
     static constexpr float FeedingManaReward = 10.f;
     static constexpr float HumBoltManaRestore = 2.f;
+    static constexpr int32 MangyulAltarCount = 12;
     static float ClampRestoredMana(float CurrentMana, float Gain, float MaximumMana);
     static FString CombatFigureModel(const FString& MapName, bool bBoss, int32 Step, int32 Progress);
+    static FVector MangyulAltarLocation(int32 Index);
+    int32 GetPlacedTenmaStoneCount() const { return PlacedTenmaStones; }
     void RestoreMana(float Amount);
     bool OwnsItem(ETibetItem Item) const;
     bool IsEquipped(ETibetItem Item) const;
@@ -156,6 +182,9 @@ public:
     FString CloudStatusText() const;
     void SpeakSkyGuruBlessing();
     bool HasSkyGuruManifested() const { return SkyGuru != nullptr; }
+    static constexpr float GuruLevitationHeight = 46.f;
+    static bool IsGuruVisionId(FName Id);
+    bool IsGuruVisionManifested(FName Id) const;
     FString AreaName() const;
     int32 CurrentAreaIndex() const;
     FString AreaName(int32 Index) const;
@@ -175,19 +204,31 @@ private:
     UPROPERTY() TObjectPtr<AActor> Focus;
     UPROPERTY() TObjectPtr<AActor> SkyGuru;
     UPROPERTY() TObjectPtr<AActor> SkyGuruMandala;
+    UPROPERTY() TObjectPtr<class ATibetGuruHalo> SkyGuruHalo;
+    UPROPERTY() TObjectPtr<class UMaterialInstanceDynamic> SkyGuruAuraMaterial;
     UPROPERTY() TObjectPtr<class UTexture2D> KeepsakeTexture;
     FString CloudMessage, PendingAuthTicket;
     FTimerHandle AuthPollTimer;
     int32 AuthPollAttempts = 0;
     void EnsureSkyGuru();
+    void UpdateSkyGuruRadiance(float Now);
     void PollGoogleDesktopAuth();
     void ApplyLoadedSaveAndReload(UTibetSave* Loaded);
     void BeginCustomDialogue(const TCHAR* SpeakerEn, const TCHAR* SpeakerZh, const TCHAR* SpeechEn, const TCHAR* SpeechZh, const TCHAR* InSpeakerId = nullptr, const TCHAR* InCueBase = nullptr);
     UPROPERTY() TObjectPtr<AActor> Messenger;
     UPROPERTY() TMap<FName, TObjectPtr<AActor>> Residents;
+    TArray<FTibetResidentState> ResidentStates;
+    void RegisterSpawnedResident(FName Id, AActor* Actor, const FVector& ResolvedFloorPos, bool bFixedSocketFloor);
+    void UpdateResidentVisibility();
+    void UpdateResidents(float Dt, const FVector* PilgrimOverride = nullptr);
+    double GetResidentFloorZ(const AActor* ResidentActor) const;
     FString Map, Route, SlotName;
     TMap<FName, FVector> PassageSockets;
     int32 LitCaveLamps = 0;
+    int32 PlacedTenmaStones = 0;
+    bool bSpawnedMangyulLatseFlags = false;
+    UPROPERTY() TArray<TObjectPtr<AActor>> TenmaStoneActors;
+    UPROPERTY() TObjectPtr<AActor> MangyulLatseFlagsActor;
     uint8 SpawnedLampMask = 0;
     UPROPERTY() TObjectPtr<class ATibetMacaques> Macaques;
     UPROPERTY() TObjectPtr<class ATibetSkyClock> OutdoorSky;
@@ -244,6 +285,10 @@ private:
     void PopulateResidents();
     AActor* ActiveResident() const;
     void RestoreStupaFlames();
+    void RefreshMangyulAltars();
+    AActor* SpawnTenmaAltarFocus(const FVector& AltarBase);
+    AActor* SpawnTenmaOathStone(int32 Index);
+    AActor* SpawnMangyulLatseFlags(const FVector& LatseAnchor);
     void Refresh();
     void Advance();
     ETibetItem LastPackReward = ETibetItem::Count;
@@ -261,5 +306,8 @@ private:
     friend struct FTibetCombatExtras;
     friend struct FTibetGameplayTestAccessor;
     friend struct FTibetCombatLootTestAccessor;
+    friend struct FTibetResidentTestAccessor;
+    friend struct FTibetDialogueTestAccessor;
+    friend struct FTibetMangyulTestAccessor;
 };
 

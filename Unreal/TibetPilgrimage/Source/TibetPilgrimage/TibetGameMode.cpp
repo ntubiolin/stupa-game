@@ -18,6 +18,7 @@
 #include "TimerManager.h"
 #include "GameFramework/PlayerController.h"
 #include "TibetBossHalo.h"
+#include "TibetGuruHalo.h"
 #include "TibetRitualEffect.h"
 #include "TibetTravelGate.h"
 #include "TibetButterFlame.h"
@@ -28,8 +29,10 @@
 #include "Engine/TargetPoint.h"
 #include "GameFramework/Character.h"
 #include "Kismet/GameplayStatics.h"
+#include "Materials/Material.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Misc/CommandLine.h"
+#include "Misc/PackageName.h"
 #include "Misc/Parse.h"
 
 namespace
@@ -236,6 +239,8 @@ FString ATibetGameMode::CombatFigureModel(const FString& MapName, bool bBoss, in
 
 void ATibetGameMode::PopulateResidents()
 {
+    Residents.Empty();
+    ResidentStates.Reset();
     UE_LOG(LogTemp, Display, TEXT("TIBET_RESIDENT_LEVEL map=%s route=%s"), *Map, *Route);
     for (const FResidentPlacement& Resident : CastPlacements)
     {
@@ -266,6 +271,7 @@ void ATibetGameMode::PopulateResidents()
         Actor->Tags.Add(TEXT("TibetResident"));
         Actor->Tags.Add(FName(Resident.Id));
         Residents.Add(FName(Resident.Id), Actor);
+        RegisterSpawnedResident(FName(Resident.Id), Actor, Location, Marker != nullptr);
         if (bBearer && Save->bMessengerJoined && Objective(Route,GetStep()).Kind == EObjective::Escort)
         {
             Messenger = Actor;
@@ -313,7 +319,7 @@ FVector ATibetGameMode::Anchor() const
     }
     if (Map==TEXT("mangyul"))
     {
-        if(Step==1) return FVector(-720+(Count/2)*250, (Count%2?1.:-1.)*(470+30*(Count%3)),0);
+        if(Step==1) return MangyulAltarLocation(Count);
         if(Step>=2 && K!=EObjective::Gate) return FVector(1510+(Step%2)*120, -660+(Step%3)*120,0);
     }
     if (Map==TEXT("yarlung"))
@@ -349,7 +355,12 @@ FVector ATibetGameMode::Anchor() const
 FVector ATibetGameMode::GetObjectiveLocation() const
 {
     if (Focus) return Focus->GetActorLocation();
-    if (AActor* Resident = ActiveResident()) return Resident->GetActorLocation();
+    if (AActor* Resident = ActiveResident())
+    {
+        FVector Loc = Resident->GetActorLocation();
+        Loc.Z = GetResidentFloorZ(Resident);
+        return Loc;
+    }
     return Anchor();
 }
 FString ATibetGameMode::GetObjectiveText() const
@@ -469,6 +480,14 @@ bool ATibetGameMode::GetInteractionCue(FVector& WorldAnchor) const
     const auto* PC = GetWorld()->GetFirstPlayerController();
     if (!PC || !PC->GetPawn()) return false;
     const EInteraction Action = InteractionAt(PC->GetPawn()->GetActorLocation());
+    if (Action == EInteraction::Use && Map == TEXT("mangyul") && Focus)
+    {
+        FVector Eye;
+        FRotator View;
+        PC->GetPlayerViewPoint(Eye, View);
+        WorldAnchor = Focus->GetActorLocation() + FVector(0, 0, GetStep() == 1 ? 202.0 : 145.0);
+        return ClearSight(Eye, WorldAnchor, Focus);
+    }
     const AActor* Target = nullptr;
     if (Action == EInteraction::Talk) Target = ActiveResident();
     else if (Action == EInteraction::Grove) Target = SideGate;
@@ -493,15 +512,35 @@ FString ATibetGameMode::ActionLabel(EInteraction Action) const
         return Local(TEXT("Cross the threshold"),TEXT("前往下一區"));
     case EInteraction::Talk:
         if (Map==TEXT("stupa")) return Local(TEXT("Talk to Lobsang"),TEXT("與洛桑交談"));
+        if (const auto& Obj = Objective(Route, GetStep()); Obj.Kind == EObjective::Talk && Obj.SpeakerEn && Obj.SpeakerZh)
+            return IsEnglish()
+                ? FString::Printf(TEXT("Talk to %s"), Obj.SpeakerEn)
+                : FString::Printf(TEXT("與%s交談"), Obj.SpeakerZh);
         return Local(TEXT("Talk"),TEXT("交談"));
     case EInteraction::Use:
         if (Map==TEXT("stupa")) return Local(TEXT("Light the butter lamp"),TEXT("點亮酥油燈"));
         if (Map==TEXT("grove")) return Local(TEXT("Consecrate the votive stupa"),TEXT("為小佛塔裝藏開光"));
+        if (Map==TEXT("mangyul") && GetStep()==1) return Local(TEXT("Place Oath Stone on the Tenma Altar"),TEXT("安放丹瑪誓言石"));
+        if (Map==TEXT("mangyul") && GetStep()==5) return Local(TEXT("Hang five-colored prayer flags"),TEXT("掛起五色風馬經幡"));
         return Local(TEXT("Interact"),TEXT("操作"));
     case EInteraction::Guru:
         return Local(TEXT("Hear Guru Rinpoche & open Keepsake Thangka"),TEXT("聆聽虛空蓮師開示並展開紀念唐卡"));
     default: return {};
     }
+}
+FString ATibetGameMode::GetInteractionPrompt(bool bTouchControls) const
+{
+    const APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+    const APawn* Pawn = PC ? PC->GetPawn() : nullptr;
+    const EInteraction Action = Pawn ? InteractionAt(Pawn->GetActorLocation()) : EInteraction::None;
+    const FString Label = ActionLabel(Action);
+    if (Label.IsEmpty())
+    {
+        return bTouchControls ? Local(TEXT("Tap Act"), TEXT("點選互動")) : TEXT("[E]");
+    }
+    return bTouchControls
+        ? FString::Printf(TEXT("%s · %s"), *Local(TEXT("Tap Act"), TEXT("點選互動")), *Label)
+        : FString::Printf(TEXT("[E] %s"), *Label);
 }
 FString ATibetGameMode::Status(bool bTouchControls) const
 {
@@ -608,6 +647,7 @@ void ATibetGameMode::Refresh()
 {
     if (!GetWorld()) return;
     CancelEnemyWindup();
+    UpdateResidentVisibility();
     const auto K=Objective(Route,GetStep()).Kind;
     if (Map==TEXT("wild") && K==EObjective::Combat && !IsCampaignComplete())
     {
@@ -632,6 +672,10 @@ void ATibetGameMode::Refresh()
             if (!Bowl || !GetWorld()->SpawnActor<ATibetButterFlame>(*Bowl + FVector(0,0,129),FRotator::ZeroRotator)) break;
             ++LitCaveLamps;
         }
+    }
+    if (Map == TEXT("mangyul"))
+    {
+        RefreshMangyulAltars();
     }
     if (IsCampaignComplete()) return;
     const FVector At=Anchor();
@@ -671,6 +715,8 @@ void ATibetGameMode::Refresh()
         Focus=GetWorld()->SpawnActor<ATibetTravelGate>(At,FRotator::ZeroRotator);
     else if ((Map==TEXT("pharping") && GetStep()==5) || (Map==TEXT("yarlung") && GetStep()==3))
         Focus=GetWorld()->SpawnActor<ATargetPoint>(At,FRotator::ZeroRotator);
+    else if (Map==TEXT("mangyul") && GetStep()==1)
+        Focus=SpawnTenmaAltarFocus(At);
     else
         Focus=MeshActor(At+FVector(0,0,10),Cylinder,FVector(.82,.82,.16),&Gold);
     UE_LOG(LogTemp,Display,TEXT("Tibet objective map=%s route=%s step=%d kind=%s count=%d"),
@@ -834,7 +880,16 @@ void ATibetGameMode::Interact()
     if(Action==EInteraction::Gate) MoveToNextMap();
     if(Action==EInteraction::Talk || Action==EInteraction::Use)
     {
-        Pulse(GetObjectiveLocation()+FVector(0,0,80),Gold,.6);
+        const bool bMangyulAltar = Action == EInteraction::Use && Map == TEXT("mangyul") && GetStep() == 1;
+        Pulse(GetObjectiveLocation() + FVector(0, 0, bMangyulAltar ? 148 : 80),
+            bMangyulAltar ? FLinearColor(0.22f, 1.35f, 1.18f, 0.95f) : Gold, bMangyulAltar ? .85f : .6f);
+        if (bMangyulAltar)
+        {
+            const int32 NextPlaced = FMath::Clamp(GetStepProgress() + 1, 1, MangyulAltarCount);
+            SetNotice(IsEnglish()
+                ? FString::Printf(TEXT("Placed Tenma Oath Stone (%d/%d)"), NextPlaced, MangyulAltarCount)
+                : FString::Printf(TEXT("已於丹瑪祭壇安放誓言石（%d/%d）"), NextPlaced, MangyulAltarCount));
+        }
         if(Action==EInteraction::Talk)
         {
             BeginDialogue(GetStep());
@@ -889,21 +944,28 @@ void ATibetGameMode::BeginCustomDialogue(const TCHAR* SpeakerEn, const TCHAR* Sp
 void ATibetGameMode::StartDialogueVoice()
 {
     bVoicePending = false;
+    ++VoiceGeneration;
     // Existing automated campaigns run unattended. Only the audio QA scenario opts into audible playback.
-    if (FParse::Param(FCommandLine::Get(), TEXT("nosound")) ||
+    if (!GetWorld() || !PageStarts.IsValidIndex(PageIndex) ||
+        FParse::Param(FCommandLine::Get(), TEXT("nosound")) ||
         (FApp::IsUnattended() && !FParse::Param(FCommandLine::Get(), TEXT("TibetQAVoice")))) return;
+    const int32 BaseOffset = PageStarts[PageIndex];
+    if (BaseOffset < 0 || BaseOffset >= Dialogue.Len()) return;
     bVoiceRequested = true;
     const auto Owner = TWeakObjectPtr<ATibetGameMode>(this);
     const uint32 Generation = VoiceGeneration;
-    TibetVoice::Speak(GetWorld(), TCHAR_TO_UTF8(*DialogueCueId), TCHAR_TO_UTF8(*DialogueSpeakerId), TCHAR_TO_UTF8(*Dialogue), IsEnglish(), [Owner, Generation](int Offset) {
-        AsyncTask(ENamedThreads::GameThread, [Owner, Generation, Offset] {
-            if (Owner.IsValid() && Owner->VoiceGeneration == Generation) Owner->SetDialogueWord(Offset);
+    const FString Remaining = Dialogue.Mid(BaseOffset);
+    const FString EffectiveCue = BaseOffset == 0 ? DialogueCueId : FString();
+    TibetVoice::Speak(GetWorld(), TCHAR_TO_UTF8(*EffectiveCue), TCHAR_TO_UTF8(*DialogueSpeakerId), TCHAR_TO_UTF8(*Remaining), IsEnglish(), [Owner, Generation, BaseOffset](int Offset) {
+        AsyncTask(ENamedThreads::GameThread, [Owner, Generation, BaseOffset, Offset] {
+            if (Owner.IsValid() && Owner->VoiceGeneration == Generation) Owner->SetDialogueWord(BaseOffset + Offset);
         });
     }, [Owner, Generation] {
         AsyncTask(ENamedThreads::GameThread, [Owner, Generation] {
-            if (!Owner.IsValid() || Owner->VoiceGeneration != Generation) return;
+            if (!Owner.IsValid() || Owner->VoiceGeneration != Generation || Owner->PageStarts.IsEmpty()) return;
             Owner->PageIndex = Owner->PageStarts.Num() - 1;
-            Owner->PageDeadline = Owner->GetWorld()->GetTimeSeconds() + 1.4;
+            const double Now = Owner->GetWorld() ? Owner->GetWorld()->GetTimeSeconds() : 0.0;
+            Owner->PageDeadline = Now + 1.4;
         });
     });
 }
@@ -928,7 +990,39 @@ void ATibetGameMode::SetDialogueWord(int32 Offset)
     bSpokenWord = true;
     while (PageStarts.IsValidIndex(PageIndex + 1) && Offset >= PageStarts[PageIndex + 1]) ++PageIndex;
     // Allow a missing device finish callback to recover after its longest remaining clause.
-    PageDeadline = GetWorld()->GetTimeSeconds() + 4. + (Dialogue.Len() - Offset) / (IsEnglish() ? 9. : 2.5);
+    const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+    PageDeadline = Now + 4. + FMath::Max(0, Dialogue.Len() - Offset) / (IsEnglish() ? 9. : 2.5);
+}
+
+void ATibetGameMode::NextDialoguePage()
+{
+    if (!PageStarts.IsValidIndex(PageIndex + 1))
+    {
+        StopDialogue();
+        return;
+    }
+    ++PageIndex;
+    bSpokenWord = false;
+    const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+    PageDeadline = Now + 1.4 + DialoguePage().Len() / (IsEnglish() ? 14. : 4.);
+    if (bDialoguePaused)
+    {
+        if (bVoiceRequested)
+        {
+            TibetVoice::Stop();
+            bVoiceRequested = false;
+        }
+        ++VoiceGeneration;
+        bVoicePending = true;
+    }
+    else if (GetWorld() && (bVoiceRequested || !FApp::IsUnattended()))
+    {
+        StartDialogueVoice();
+    }
+    else
+    {
+        ++VoiceGeneration;
+    }
 }
 
 void ATibetGameMode::TickDialogue()
@@ -1110,7 +1204,9 @@ void ATibetGameMode::Tick(float Dt)
     if (SkyGuru)
     {
         SkyGuru->SetActorLocation(SkyGuruHome + FVector(0.0, 0.0, 15.0 * FMath::Sin(Now * 1.45f)));
+        UpdateSkyGuruRadiance(Now);
     }
+    if (Save && !bTravel) UpdateResidents(Dt);
     DamageCues.RemoveAll([Now](const FTibetDamageCue& Cue) { return Now - Cue.SpawnTime >= 1.05f; });
     if (Now - LastHitTime > .22f)
         EnemyTrailing = FMath::FInterpConstantTo(EnemyTrailing, EnemyHealth, Dt, FMath::Max(4.f, EnemyMaximum * 1.7f));
@@ -1128,15 +1224,6 @@ void ATibetGameMode::Tick(float Dt)
     if (!WildernessPack.IsEmpty()) UpdateWilderness(P->GetActorLocation(),Dt);
     const FVector ToPlayer=P->GetActorLocation()-GetObjectiveLocation();
     const double Dist=ToPlayer.Size2D();
-    if (bEscorting && Messenger)
-    {
-        const FVector Delta=P->GetActorLocation()-Messenger->GetActorLocation();
-        if(Delta.Size2D()>95 && Delta.Size2D()<1800)
-        {
-            Messenger->AddActorWorldOffset(Delta.GetSafeNormal2D()*FMath::Min<double>(Dt*470,Delta.Size2D()-90));
-            Messenger->SetActorRotation(FRotator(0,Delta.Rotation().Yaw+90,0));
-        }
-    }
     if ((K==EObjective::Reach || K==EObjective::Kora || K==EObjective::Escort) && Dist<140 && OnObjectiveFloor(P,Anchor()))
     {
         if(K==EObjective::Escort && !bEscorting)
@@ -1292,23 +1379,55 @@ void ATibetGameMode::ChangeLanguage()
 void ATibetGameMode::EnsureSkyGuru()
 {
     if (!GetWorld()) return;
+    if (!RitualMaterial)
+    {
+        RitualMaterial = FPackageName::DoesPackageExist(TEXT("/Game/Figures/Materials/M_RitualColor"))
+            ? LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Figures/Materials/M_RitualColor.M_RitualColor"))
+            : UMaterial::GetDefaultMaterial(MD_Surface);
+    }
     if (!SkyGuruMandala)
     {
         SkyGuruMandala = MeshActor(SkyGuruAltar + FVector(0, 0, 3), Cylinder, FVector(2.35, 2.35, .04), &Gold);
     }
     if (!SkyGuru)
     {
-        SkyGuru = MeshActor(SkyGuruHome, TEXT("/Game/Figures/GuruVision.GuruVision"), FVector(2.35));
+        const FString GuruMeshPath = FPackageName::DoesPackageExist(TEXT("/Game/Figures/GuruVision"))
+            ? TEXT("/Game/Figures/GuruVision.GuruVision")
+            : Cylinder;
+        SkyGuru = MeshActor(SkyGuruHome, GuruMeshPath, FVector(2.35));
         if (SkyGuru)
         {
             SkyGuru->SetActorRotation(FRotator(0, -90, 0));
             SkyGuru->Tags.Add(TEXT("TibetSkyGuru"));
+            if (auto* GuruMesh = LoadObject<UStaticMesh>(nullptr, *GuruMeshPath))
+            {
+                auto* RadianceShell = NewObject<UStaticMeshComponent>(SkyGuru, TEXT("SkyGuruRadianceShell"));
+                RadianceShell->SetupAttachment(SkyGuru->GetRootComponent());
+                RadianceShell->SetMobility(EComponentMobility::Movable);
+                RadianceShell->SetStaticMesh(GuruMesh);
+                RadianceShell->SetRelativeLocation(FVector(0.f, 0.f, -4.0f));
+                RadianceShell->SetRelativeScale3D(FVector(1.045f));
+                RadianceShell->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+                RadianceShell->SetGenerateOverlapEvents(false);
+                RadianceShell->SetCastShadow(false);
+                RadianceShell->ComponentTags.Add(TEXT("TibetSkyGuruAura"));
+                if (RitualMaterial)
+                {
+                    SkyGuruAuraMaterial = UMaterialInstanceDynamic::Create(RitualMaterial, SkyGuru);
+                    SkyGuruAuraMaterial->SetVectorParameterValue(TEXT("Color"), FLinearColor(1.55f, 1.05f, 0.28f, 0.34f));
+                    const int32 NumMats = RadianceShell->GetNumMaterials();
+                    for (int32 SlotIdx = 0; SlotIdx < NumMats; ++SlotIdx)
+                        RadianceShell->SetMaterial(SlotIdx, SkyGuruAuraMaterial);
+                }
+                RadianceShell->RegisterComponent();
+            }
             FActorSpawnParameters Spawn;
             Spawn.Owner = SkyGuru;
-            if (auto* Halo = GetWorld()->SpawnActor<ATibetBossHalo>(SkyGuruHome + FVector(45, 0, 210), FRotator(90, 0, 0), Spawn))
+            if (auto* Halo = GetWorld()->SpawnActor<ATibetGuruHalo>(SkyGuruHome, FRotator::ZeroRotator, Spawn))
             {
-                Halo->SetActorScale3D(FVector(1.85));
-                Halo->AttachToActor(SkyGuru, FAttachmentTransformRules::KeepWorldTransform);
+                Halo->AttachToActor(SkyGuru, FAttachmentTransformRules::SnapToTargetIncludingScale);
+                Halo->ConfigureHalo(true, RitualMaterial);
+                SkyGuruHalo = Halo;
             }
         }
     }
