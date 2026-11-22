@@ -5,6 +5,7 @@
 #include "GameFramework/SaveGame.h"
 #include "TibetPlayerFeedback.h"
 #include "TibetPack.h"
+#include "TibetCombatExtras.h"
 #include "TibetGameMode.generated.h"
 
 USTRUCT()
@@ -256,6 +257,9 @@ private:
     void MoveToNextMap();
     void SetNotice(const FString& Line);
     void Pulse(const FVector& At, const FLinearColor& Color, float Magnitude);
+    FTibetCombatState CombatExtras;
+    friend struct FTibetCombatExtras;
     friend struct FTibetGameplayTestAccessor;
+    friend struct FTibetCombatLootTestAccessor;
 };
 
