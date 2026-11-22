@@ -1,17 +1,24 @@
 #include "../TibetGameMode.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
+#include "Kismet/GameplayStatics.h"
 #include "Misc/AutomationTest.h"
 
 struct FTibetGameplayTestAccessor
 {
     static void Configure(ATibetGameMode& Mode, UTibetSave* Save, float Mana,
-        const FString& Map = FString(), const FString& Route = FString())
+        const FString& Map = FString(), const FString& Route = FString(), const FString& Slot = FString())
     {
         Mode.Save = Save;
         Mode.Mana = Mana;
         Mode.Map = Map;
         Mode.Route = Route.IsEmpty() ? Map : Route;
+        if (!Slot.IsEmpty()) Mode.SlotName = Slot;
+    }
+
+    static UTibetSave* GetSave(const ATibetGameMode& Mode)
+    {
+        return Mode.Save;
     }
 
     static FString EnemyLabel(const ATibetGameMode& Mode)
@@ -149,6 +156,63 @@ bool FTibetChapterEnemyLabelsTest::RunTest(const FString&)
     Check(TEXT("terma1"), 1, TEXT("Cave Sentinel"), TEXT("岩窟守衛"));
     Check(TEXT("terma2"), 1, TEXT("Crystal Spirit"), TEXT("水晶精靈"));
     Check(TEXT("terma3"), 1, TEXT("Terma Guardian"), TEXT("伏藏守護者"));
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTibetResetProgressTest, "Tibet.Gameplay.ResetProgress",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FTibetResetProgressTest::RunTest(const FString&)
+{
+    const FString Slot = TEXT("TibetPilgrimage-UnitTest-ResetProgress");
+    UGameplayStatics::DeleteGameInSlot(Slot, 0);
+
+    auto* Save = NewObject<UTibetSave>();
+    Save->Map = TEXT("wild");
+    Save->bComplete = true;
+    Save->bEpilogue = true;
+    Save->bReturnFromTerma = true;
+    Save->bEnglish = true;
+    Save->Steps.Add(TEXT("stupa"), 5);
+    Save->Steps.Add(TEXT("wild"), 3);
+    Save->Equipment = (1 << int32(ETibetItem::Vajra)) | (1 << int32(ETibetItem::Bell));
+    Save->PillCharges = 1;
+    Save->ButterLampMask = 7;
+    Save->MonkeysFed = 9;
+    UGameplayStatics::SaveGameToSlot(Save, Slot, 0);
+
+    auto* Mode = NewObject<ATibetGameMode>();
+    FTibetGameplayTestAccessor::Configure(*Mode, Save, 42.f, TEXT("wild"), TEXT("wild"), Slot);
+
+    TestTrue(TEXT("ResetProgress succeeds and writes fresh save"), Mode->ResetProgress());
+    UTibetSave* Reset = FTibetGameplayTestAccessor::GetSave(*Mode);
+    TestNotNull(TEXT("In-memory save recreated"), Reset);
+    if (Reset)
+    {
+        TestEqual(TEXT("Reset restores starting map stupa"), Reset->Map, FString(TEXT("stupa")));
+        TestTrue(TEXT("Reset preserves language preference"), Reset->bEnglish);
+        TestFalse(TEXT("Reset clears campaign complete"), Reset->bComplete);
+        TestFalse(TEXT("Reset clears epilogue"), Reset->bEpilogue);
+        TestFalse(TEXT("Reset clears terma return"), Reset->bReturnFromTerma);
+        TestEqual(TEXT("Reset clears steps"), Reset->Steps.Num(), 0);
+        TestEqual(TEXT("Reset clears equipment"), Reset->Equipment, 0);
+        TestEqual(TEXT("Reset restores 4 Amrita pills"), Reset->PillCharges, 4);
+        TestEqual(TEXT("Reset clears butter lamps"), int32(Reset->ButterLampMask), 0);
+        TestEqual(TEXT("Reset clears monkeys fed"), Reset->MonkeysFed, 0);
+    }
+
+    auto* Disk = Cast<UTibetSave>(UGameplayStatics::LoadGameFromSlot(Slot, 0));
+    TestNotNull(TEXT("Disk save slot updated"), Disk);
+    if (Disk)
+    {
+        TestEqual(TEXT("Disk save map is stupa"), Disk->Map, FString(TEXT("stupa")));
+        TestFalse(TEXT("Disk save bComplete cleared"), Disk->bComplete);
+        TestEqual(TEXT("Disk save steps empty"), Disk->Steps.Num(), 0);
+        TestEqual(TEXT("Disk save pills restored to 4"), Disk->PillCharges, 4);
+        TestTrue(TEXT("Disk save preserves language"), Disk->bEnglish);
+    }
+
+    UGameplayStatics::DeleteGameInSlot(Slot, 0);
     return true;
 }
 #endif

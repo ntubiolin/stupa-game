@@ -28,6 +28,7 @@ private:
     TSharedPtr<const FCompositeFont> Typeface;
     ETibetPage Page = ETibetPage::Play;
     bool bTouch = false;
+    bool bConfirmReset = false;
     float Width() const;
     float Height() const;
     float LayoutScale() const;
