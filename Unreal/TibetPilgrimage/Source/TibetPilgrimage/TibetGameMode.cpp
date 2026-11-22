@@ -313,7 +313,7 @@ FVector ATibetGameMode::Anchor() const
     }
     if (Map==TEXT("mangyul"))
     {
-        if(Step==1) return FVector(-720+(Count/2)*250, (Count%2?1.:-1.)*(470+30*(Count%3)),0);
+        if(Step==1) return MangyulAltarLocation(Count);
         if(Step>=2 && K!=EObjective::Gate) return FVector(1510+(Step%2)*120, -660+(Step%3)*120,0);
     }
     if (Map==TEXT("yarlung"))
@@ -462,6 +462,14 @@ bool ATibetGameMode::GetInteractionCue(FVector& WorldAnchor) const
     const auto* PC = GetWorld()->GetFirstPlayerController();
     if (!PC || !PC->GetPawn()) return false;
     const EInteraction Action = InteractionAt(PC->GetPawn()->GetActorLocation());
+    if (Action == EInteraction::Use && Map == TEXT("mangyul") && Focus)
+    {
+        FVector Eye;
+        FRotator View;
+        PC->GetPlayerViewPoint(Eye, View);
+        WorldAnchor = Focus->GetActorLocation() + FVector(0, 0, GetStep() == 1 ? 202.0 : 145.0);
+        return ClearSight(Eye, WorldAnchor, Focus);
+    }
     const AActor* Target = nullptr;
     if (Action == EInteraction::Talk) Target = ActiveResident();
     else if (Action == EInteraction::Grove) Target = SideGate;
@@ -490,6 +498,8 @@ FString ATibetGameMode::ActionLabel(EInteraction Action) const
     case EInteraction::Use:
         if (Map==TEXT("stupa")) return Local(TEXT("Light the butter lamp"),TEXT("點亮酥油燈"));
         if (Map==TEXT("grove")) return Local(TEXT("Consecrate the votive stupa"),TEXT("為小佛塔裝藏開光"));
+        if (Map==TEXT("mangyul") && GetStep()==1) return Local(TEXT("Place Oath Stone on the Tenma Altar"),TEXT("安放丹瑪誓言石"));
+        if (Map==TEXT("mangyul") && GetStep()==5) return Local(TEXT("Hang five-colored prayer flags"),TEXT("掛起五色風馬經幡"));
         return Local(TEXT("Interact"),TEXT("操作"));
     case EInteraction::Guru:
         return Local(TEXT("Hear Guru Rinpoche & open Keepsake Thangka"),TEXT("聆聽虛空蓮師開示並展開紀念唐卡"));
@@ -626,6 +636,10 @@ void ATibetGameMode::Refresh()
             ++LitCaveLamps;
         }
     }
+    if (Map == TEXT("mangyul"))
+    {
+        RefreshMangyulAltars();
+    }
     if (IsCampaignComplete()) return;
     const FVector At=Anchor();
     if (K==EObjective::Talk || (K==EObjective::Escort && !bEscorting))
@@ -664,6 +678,8 @@ void ATibetGameMode::Refresh()
         Focus=GetWorld()->SpawnActor<ATibetTravelGate>(At,FRotator::ZeroRotator);
     else if ((Map==TEXT("pharping") && GetStep()==5) || (Map==TEXT("yarlung") && GetStep()==3))
         Focus=GetWorld()->SpawnActor<ATargetPoint>(At,FRotator::ZeroRotator);
+    else if (Map==TEXT("mangyul") && GetStep()==1)
+        Focus=SpawnTenmaAltarFocus(At);
     else
         Focus=MeshActor(At+FVector(0,0,10),Cylinder,FVector(.82,.82,.16),&Gold);
     UE_LOG(LogTemp,Display,TEXT("Tibet objective map=%s route=%s step=%d kind=%s count=%d"),
@@ -827,7 +843,16 @@ void ATibetGameMode::Interact()
     if(Action==EInteraction::Gate) MoveToNextMap();
     if(Action==EInteraction::Talk || Action==EInteraction::Use)
     {
-        Pulse(GetObjectiveLocation()+FVector(0,0,80),Gold,.6);
+        const bool bMangyulAltar = Action == EInteraction::Use && Map == TEXT("mangyul") && GetStep() == 1;
+        Pulse(GetObjectiveLocation() + FVector(0, 0, bMangyulAltar ? 148 : 80),
+            bMangyulAltar ? FLinearColor(0.22f, 1.35f, 1.18f, 0.95f) : Gold, bMangyulAltar ? .85f : .6f);
+        if (bMangyulAltar)
+        {
+            const int32 NextPlaced = FMath::Clamp(GetStepProgress() + 1, 1, MangyulAltarCount);
+            SetNotice(IsEnglish()
+                ? FString::Printf(TEXT("Placed Tenma Oath Stone (%d/%d)"), NextPlaced, MangyulAltarCount)
+                : FString::Printf(TEXT("已於丹瑪祭壇安放誓言石（%d/%d）"), NextPlaced, MangyulAltarCount));
+        }
         if(Action==EInteraction::Talk)
         {
             BeginDialogue(GetStep());
