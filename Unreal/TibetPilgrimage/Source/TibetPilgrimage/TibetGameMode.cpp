@@ -1,10 +1,20 @@
 #include "TibetGameMode.h"
 #include "TibetCharacter.h"
+#include "TibetCloudSave.h"
 #include "TibetHUD.h"
 #include "TibetPlayOverlay.h"
 #include "TibetVoice.h"
 #include "Async/Async.h"
+#include "Dom/JsonObject.h"
+#include "Engine/Texture2D.h"
+#include "HAL/PlatformProcess.h"
+#include "HttpModule.h"
+#include "Interfaces/IHttpRequest.h"
+#include "Interfaces/IHttpResponse.h"
 #include "Misc/App.h"
+#include "Misc/Guid.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 #include "TimerManager.h"
 #include "GameFramework/PlayerController.h"
 #include "TibetBossHalo.h"
@@ -81,6 +91,8 @@ const FResidentPlacement CastPlacements[] = {
 };
 const FVector MessengerDestination(1370,-65,0);
 const FVector GroveGate(-1860,-480,0);
+const FVector SkyGuruAltar(-380,0,0);
+const FVector SkyGuruHome(460,0,295);
 // Stable bit positions in ButterLampMask. Only the first three advance the quest.
 constexpr int32 QuestLampCount = 3;
 constexpr int32 CourtyardLampCount = QuestLampCount + 3;
@@ -288,8 +300,9 @@ FVector ATibetGameMode::Anchor() const
         if (const FVector* At = PassageSockets.Find(Key)) return *At;
         if (const FVector* At = PassageSockets.Find(FName(*FString::Printf(TEXT("Step%d_%d"), Step, Count)))) return *At;
     }
+    if (Route==TEXT("ending") && K==EObjective::Reach) return SkyGuruAltar;
     if (Map==TEXT("grove") && K==EObjective::Interact) return FVector(1280,0,0);
-    if (Map==TEXT("stupa") && K==EObjective::Interact)
+    if (Route==TEXT("stupa") && K==EObjective::Interact)
         return StupaLampLocation(Save->NextUnlitLamp());
     if (Map==TEXT("pharping"))
     {
@@ -405,13 +418,19 @@ bool ATibetGameMode::TravelToMap(const FString& Destination)
 
 ATibetGameMode::EInteraction ATibetGameMode::InteractionAt(const FVector& PlayerLocation) const
 {
-    if (!Save || bTravel || IsCampaignComplete()) return EInteraction::None;
+    if (!Save || bTravel) return EInteraction::None;
     const APawn* Pawn = UGameplayStatics::GetPlayerPawn(this,0);
     if (!Pawn) return EInteraction::None;
     const double Feet = PlayerLocation.Z - Pawn->GetSimpleCollisionHalfHeight();
     if (SideGate && FMath::Abs(Feet - GroveGate.Z) < 110 && FVector::Dist2D(PlayerLocation,GroveGate)<215 &&
         ClearSight(Pawn->GetPawnViewLocation(), GroveGate + FVector(0,0,135), SideGate))
         return EInteraction::Grove;
+    if (IsCampaignComplete())
+    {
+        if (SkyGuru && FMath::Abs(Feet - SkyGuruAltar.Z) < 110 && FVector::Dist2D(PlayerLocation, SkyGuruAltar) < 235)
+            return EInteraction::Guru;
+        return EInteraction::None;
+    }
     if (FMath::Abs(Feet - GetObjectiveLocation().Z) > 110 || FVector::Dist2D(PlayerLocation,GetObjectiveLocation())>225 ||
         !OnObjectiveFloor(UGameplayStatics::GetPlayerPawn(this,0), Anchor())) return EInteraction::None;
     switch (Objective(Route,GetStep()).Kind)
@@ -447,6 +466,7 @@ bool ATibetGameMode::GetInteractionCue(FVector& WorldAnchor) const
     if (Action == EInteraction::Talk) Target = ActiveResident();
     else if (Action == EInteraction::Grove) Target = SideGate;
     else if (Action == EInteraction::Gate) Target = Focus;
+    else if (Action == EInteraction::Guru) Target = SkyGuruMandala ? SkyGuruMandala.Get() : SkyGuru.Get();
     if (!Target) return false;
     FVector Center, Extent, Eye;
     FRotator View;
@@ -471,6 +491,8 @@ FString ATibetGameMode::ActionLabel(EInteraction Action) const
         if (Map==TEXT("stupa")) return Local(TEXT("Light the butter lamp"),TEXT("點亮酥油燈"));
         if (Map==TEXT("grove")) return Local(TEXT("Consecrate the votive stupa"),TEXT("為小佛塔裝藏開光"));
         return Local(TEXT("Interact"),TEXT("操作"));
+    case EInteraction::Guru:
+        return Local(TEXT("Hear Guru Rinpoche & open Keepsake Thangka"),TEXT("聆聽虛空蓮師開示並展開紀念唐卡"));
     default: return {};
     }
 }
@@ -482,10 +504,10 @@ FString ATibetGameMode::Status(bool bTouchControls) const
     const auto K=Objective(Route,GetStep()).Kind;
     FString S=FString::Printf(TEXT("%s %d   ·   %d m"),*Local(TEXT("Life"),TEXT("體力")),FMath::CeilToInt(Health),Meters);
     if (K==EObjective::Boss || K==EObjective::Combat) S+=FString::Printf(TEXT("   ·   %s %d"),*EnemyLabel(),EnemyHealth);
-    if (P && Map!=TEXT("stupa"))
+    if (P)
     {
         const EInteraction Action=InteractionAt(P->GetActorLocation());
-        if (Action==EInteraction::Use)
+        if ((Map!=TEXT("stupa") && Action==EInteraction::Use) || Action==EInteraction::Guru)
         {
             S+=bTouchControls ? Local(TEXT("\nTap Act · "),TEXT("\n點選「互動」・")) : Local(TEXT("\nTap E · "),TEXT("\n輕按 E・"));
             S+=ActionLabel(Action);
@@ -577,6 +599,7 @@ int32 ATibetGameMode::NearestButterLamp(const FVector& Where) const
 }
 void ATibetGameMode::Refresh()
 {
+    if (!GetWorld()) return;
     CancelEnemyWindup();
     const auto K=Objective(Route,GetStep()).Kind;
     if (Map==TEXT("wild") && K==EObjective::Combat && !IsCampaignComplete())
@@ -588,7 +611,11 @@ void ATibetGameMode::Refresh()
     EnemyMaximum = 0;
     LastHitTime = -10;
     if (Focus) { Focus->Destroy(); Focus=nullptr; }
-    if (Map==TEXT("stupa")) RestoreStupaFlames();
+    if (Map==TEXT("stupa"))
+    {
+        RestoreStupaFlames();
+        if ((Route==TEXT("ending") && GetStep()>=1) || IsCampaignComplete()) EnsureSkyGuru();
+    }
     if (Map == TEXT("pharping"))
     {
         const int32 Lit = GetStep() > 5 ? 7 : (GetStep() == 5 ? GetStepProgress() : 0);
@@ -644,10 +671,12 @@ void ATibetGameMode::Refresh()
 }
 void ATibetGameMode::Advance()
 {
-    PlayerFeedback.ObjectiveTime = GetWorld()->GetTimeSeconds();
-    const ETibetItem Rewards[] = {ETibetItem::Vajra, ETibetItem::Bell, ETibetItem::Map, ETibetItem::Robe};
+    const float Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+    PlayerFeedback.ObjectiveTime = Now;
+    const ETibetItem Rewards[] = {ETibetItem::Vajra, ETibetItem::Bell, ETibetItem::Map, ETibetItem::Robe, ETibetItem::Thangka};
     bool WasOwned[UE_ARRAY_COUNT(Rewards)];
     for (int32 I = 0; I < UE_ARRAY_COUNT(Rewards); ++I) WasOwned[I] = OwnsItem(Rewards[I]);
+    bool bJustCompletedCampaign = false;
     if (++Save->Counts.FindOrAdd(Route)>=Objective(Route,GetStep()).Count)
     {
         Save->Counts[Route]=0;
@@ -659,7 +688,11 @@ void ATibetGameMode::Advance()
             Save->bMessengerJoined=false;
             Messenger=nullptr;
         }
-        if (Route==TEXT("ending")) Save->bComplete=true;
+        if (Route==TEXT("ending") && GetStep()>=Routes().FindChecked(Route).Num())
+        {
+            bJustCompletedCampaign = !Save->bComplete;
+            Save->bComplete=true;
+        }
     }
     if (Route==TEXT("stupa")) Save->ReconcileLampQuest();
     for (int32 I = 0; I < UE_ARRAY_COUNT(Rewards); ++I)
@@ -667,11 +700,18 @@ void ATibetGameMode::Advance()
         if (!WasOwned[I] && OwnsItem(Rewards[I]))
         {
             LastPackReward = Rewards[I];
-            PackRewardUntil = GetWorld()->GetTimeSeconds() + 5.f;
+            PackRewardUntil = Now + 6.5f;
         }
     }
     Store();
     Refresh();
+    if (bJustCompletedCampaign)
+    {
+        Pulse(SkyGuruAltar + FVector(0,0,60), Gold, 1.4f);
+        SpeakSkyGuruBlessing();
+        SetNotice(Local(TEXT("Received Keepsake Thangka · Open Journal → Keepsake or press E at the golden lotus"),
+            TEXT("獲贈通關紀念品：蓮師同框紀念唐卡（可於手記「紀念唐卡」展開，或於金蓮壇城按 E 瞻仰）")));
+    }
 }
 void ATibetGameMode::MoveToNextMap()
 {
@@ -768,6 +808,17 @@ void ATibetGameMode::Interact()
         if (Map==TEXT("stupa") && Action==EInteraction::Use) return;
         if (CanFeed() && Action==EInteraction::None) { BeginFeeding(); return; }
     }
+    if (Action==EInteraction::Guru)
+    {
+        Pulse(SkyGuruAltar + FVector(0,0,70), Gold, 1.1f);
+        SpeakSkyGuruBlessing();
+        if (!FApp::IsUnattended())
+        {
+            if (auto* PC = GetWorld()->GetFirstPlayerController())
+                if (auto* HUD = PC->GetHUD<ATibetHUD>()) HUD->ToggleJournal(ETibetPage::Thangka);
+        }
+        return;
+    }
     if (Action==EInteraction::Grove)
     {
         TravelToMap(TEXT("grove"));
@@ -786,11 +837,17 @@ void ATibetGameMode::Interact()
 }
 void ATibetGameMode::BeginDialogue(int32 ObjectiveIndex)
 {
-    StopDialogue();
-    DialogueIndex = ObjectiveIndex;
     const auto& Line = Objective(Route, ObjectiveIndex);
-    Speaker = Local(Line.SpeakerEn, Line.SpeakerZh);
-    Dialogue = Local(Line.SpeechEn, Line.SpeechZh);
+    BeginCustomDialogue(Line.SpeakerEn, Line.SpeakerZh, Line.SpeechEn, Line.SpeechZh);
+    DialogueIndex = ObjectiveIndex;
+}
+
+void ATibetGameMode::BeginCustomDialogue(const TCHAR* SpeakerEn, const TCHAR* SpeakerZh, const TCHAR* SpeechEn, const TCHAR* SpeechZh)
+{
+    StopDialogue();
+    DialogueIndex = -2;
+    Speaker = Local(SpeakerEn, SpeakerZh);
+    Dialogue = Local(SpeechEn, SpeechZh);
     const int32 Limit = IsEnglish() ? 82 : 32;
     for (int32 Start = 0; Start < Dialogue.Len();)
     {
@@ -810,9 +867,10 @@ void ATibetGameMode::BeginDialogue(int32 ObjectiveIndex)
         }
         Start = End;
     }
+    const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
     bVoicePending = true;
-    PageDeadline = GetWorld()->GetTimeSeconds() + 1.0 + DialoguePage().Len() / (IsEnglish() ? 14. : 4.);
-    if (!bDialoguePaused) StartDialogueVoice();
+    PageDeadline = Now + 1.0 + DialoguePage().Len() / (IsEnglish() ? 14. : 4.);
+    if (!bDialoguePaused && GetWorld()) StartDialogueVoice();
 }
 
 void ATibetGameMode::StartDialogueVoice()
@@ -885,6 +943,7 @@ void ATibetGameMode::StopDialogue()
 void ATibetGameMode::EndPlay(const EEndPlayReason::Type Reason)
 {
     GetWorldTimerManager().ClearTimer(ScoreTimer);
+    GetWorldTimerManager().ClearTimer(AuthPollTimer);
     StopDialogue();
     if (Save && !bTravel && !SlotName.IsEmpty()) Store();
     Super::EndPlay(Reason);
@@ -892,10 +951,11 @@ void ATibetGameMode::EndPlay(const EEndPlayReason::Type Reason)
 
 void ATibetGameMode::SetNotice(const FString& Line)
 {
-    Notice=Line; NoticeUntil=GetWorld()->GetTimeSeconds()+3.f;
+    Notice=Line; NoticeUntil=(GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f)+3.f;
 }
 void ATibetGameMode::Pulse(const FVector& At,const FLinearColor& Color,float Magnitude)
 {
+    if (!GetWorld()) return;
     for (int32 j=0;j<8;++j)
     {
         const double A=UE_TWO_PI*j/8;
@@ -1018,6 +1078,10 @@ void ATibetGameMode::Tick(float Dt)
     TickDialogue();
     if(Save && !bTravel) UpdateClock(Dt);
     const float Now = GetWorld()->GetTimeSeconds();
+    if (SkyGuru)
+    {
+        SkyGuru->SetActorLocation(SkyGuruHome + FVector(0.0, 0.0, 15.0 * FMath::Sin(Now * 1.45f)));
+    }
     DamageCues.RemoveAll([Now](const FTibetDamageCue& Cue) { return Now - Cue.SpawnTime >= 1.05f; });
     if (Now - LastHitTime > .22f)
         EnemyTrailing = FMath::FInterpConstantTo(EnemyTrailing, EnemyHealth, Dt, FMath::Max(4.f, EnemyMaximum * 1.7f));
@@ -1151,8 +1215,225 @@ void ATibetGameMode::ChangeLanguage()
 {
     if (!Save) return;
     Save->bEnglish=!Save->bEnglish;
-    if (DialogueIndex != INDEX_NONE) BeginDialogue(DialogueIndex);
+    if (DialogueIndex == -2) SpeakSkyGuruBlessing();
+    else if (DialogueIndex != INDEX_NONE) BeginDialogue(DialogueIndex);
     Store();
+}
+
+void ATibetGameMode::EnsureSkyGuru()
+{
+    if (!GetWorld()) return;
+    if (!SkyGuruMandala)
+    {
+        SkyGuruMandala = MeshActor(SkyGuruAltar + FVector(0, 0, 3), Cylinder, FVector(2.35, 2.35, .04), &Gold);
+    }
+    if (!SkyGuru)
+    {
+        SkyGuru = MeshActor(SkyGuruHome, TEXT("/Game/Figures/GuruVision.GuruVision"), FVector(2.35));
+        if (SkyGuru)
+        {
+            SkyGuru->SetActorRotation(FRotator(0, -90, 0));
+            SkyGuru->Tags.Add(TEXT("TibetSkyGuru"));
+            FActorSpawnParameters Spawn;
+            Spawn.Owner = SkyGuru;
+            if (auto* Halo = GetWorld()->SpawnActor<ATibetBossHalo>(SkyGuruHome + FVector(45, 0, 210), FRotator(90, 0, 0), Spawn))
+            {
+                Halo->SetActorScale3D(FVector(1.85));
+                Halo->AttachToActor(SkyGuru, FAttachmentTransformRules::KeepWorldTransform);
+            }
+        }
+    }
+}
+
+void ATibetGameMode::SpeakSkyGuruBlessing()
+{
+    BeginCustomDialogue(
+        TEXT("Guru Padmasambhava"),
+        TEXT("蓮花生大士（鄔金仁波切）"),
+        TEXT("Well done, faithful pilgrim! From your first vow beneath Jarung Khashor Stupa through the rains of Yangleshö, the snows of Mangyul, the taming of Yarlha Shampo, the mandala of Samye, and the hidden vaults of Chimphu, you have walked the full path home. Never think Padmasambhava dwells far away—wherever pure faith and bodhicitta arise, there shines the Copper-Colored Mountain, and I am never parted from you. Receive this keepsake Thangka of our meeting in pure vision; may the Dharma lamp shine ever bright in your heart!"),
+        TEXT("善哉，具信的行者！你自夏絨卡秀大佛塔下發心啟程，歷經帕平岩洞的甘露、芒域風雪的誓言、雅礱雪山的調伏、桑耶曼荼羅的建立，乃至青朴深巖的伏藏試煉，如今圓滿歸來。切莫以為蓮花生遠在異域——凡有清淨信願與菩提心生起之處，即是銅色吉祥山淨土，吾未曾離汝須臾。今以此幅同框唐卡相贈，願此法炬長明於心，吉祥圓滿！"));
+}
+
+bool ATibetGameMode::SaveNowAndExportBackup(FString& OutPath)
+{
+    if (!Save) return false;
+    Store();
+    if (!TibetCloudSave::ExportBackup(*Save, OutPath)) return false;
+    CloudMessage = Local(TEXT("Saved & exported JSON backup."), TEXT("已儲存遊戲進度並匯出 JSON 備份檔。"));
+    return true;
+}
+
+void ATibetGameMode::ApplyLoadedSaveAndReload(UTibetSave* Loaded)
+{
+    if (!Loaded || bTravel) return;
+    if (SlotName.IsEmpty()) SlotName = TEXT("TibetPilgrimage-v1");
+    Save = Loaded;
+    if (!Order.Contains(Save->Map)) Save->Map = TEXT("stupa");
+    Store();
+    if (UWorld* World = GetWorld())
+    {
+        bTravel = true;
+        if (auto* PC = World->GetFirstPlayerController())
+            if (auto* HUD = PC->GetHUD<ATibetHUD>()) HUD->CloseJournal();
+        UGameplayStatics::OpenLevel(this, FName(*(TEXT("/Game/Maps/Tibet/") + Save->Map)));
+    }
+}
+
+bool ATibetGameMode::ImportBackupAndReload(FString& OutPath)
+{
+    auto* Loaded = NewObject<UTibetSave>(this);
+    if (!TibetCloudSave::ImportBackup(*Loaded, OutPath))
+    {
+        CloudMessage = Local(TEXT("No backup JSON found in Saved/SaveBackups."), TEXT("尚未找到備份檔（請先點選匯出備份）。"));
+        return false;
+    }
+    CloudMessage = Local(TEXT("Backup restored."), TEXT("已成功載入備份存檔。"));
+    ApplyLoadedSaveAndReload(Loaded);
+    return true;
+}
+
+bool ATibetGameMode::ExportKeepsakeThangkaPng(FString& OutPath)
+{
+    if (!KeepsakeTexture)
+        KeepsakeTexture = LoadObject<UTexture2D>(nullptr, TEXT("/Game/Journal/KeepsakeThangka.KeepsakeThangka"));
+    return TibetCloudSave::ExportTexturePng(KeepsakeTexture, TEXT("Padmasambhava-Pilgrim-Thangka.png"), OutPath);
+}
+
+FString ATibetGameMode::CloudStatusText() const
+{
+    const FString SignedIn = TibetCloudSave::SignedInLabel();
+    FString Line = SignedIn.IsEmpty()
+        ? Local(TEXT("Google Cloud · Not signed in"), TEXT("Google 雲端存檔・尚未登入"))
+        : (Local(TEXT("Google Cloud · Signed in as "), TEXT("Google 雲端・已登入：")) + SignedIn);
+    if (!CloudMessage.IsEmpty()) Line += TEXT("\n") + CloudMessage;
+    return Line;
+}
+
+void ATibetGameMode::StartGoogleCloudSignIn()
+{
+    if (!GetWorld()) return;
+    PendingAuthTicket = FGuid::NewGuid().ToString(EGuidFormats::Digits) + FGuid::NewGuid().ToString(EGuidFormats::Digits).Left(8);
+    AuthPollAttempts = 0;
+    const FString Url = TibetCloudSave::ServerUrl() + TEXT("/api/auth/desktop-start?ticket=") + PendingAuthTicket;
+    CloudMessage = Local(TEXT("Opened browser for Google Sign-In..."), TEXT("已開啟瀏覽器進行 Google 登入驗證…"));
+    FPlatformProcess::LaunchURL(*Url, nullptr, nullptr);
+    GetWorldTimerManager().SetTimer(AuthPollTimer, this, &ATibetGameMode::PollGoogleDesktopAuth, 1.5f, true, 1.5f);
+}
+
+void ATibetGameMode::PollGoogleDesktopAuth()
+{
+    if (PendingAuthTicket.IsEmpty() || ++AuthPollAttempts > 80)
+    {
+        if (GetWorld()) GetWorldTimerManager().ClearTimer(AuthPollTimer);
+        PendingAuthTicket.Reset();
+        CloudMessage = Local(TEXT("Sign-in timed out."), TEXT("登入逾時，請確認伺服器已啟動後重試。"));
+        return;
+    }
+    auto Req = FHttpModule::Get().CreateRequest();
+    Req->SetURL(TibetCloudSave::ServerUrl() + TEXT("/api/auth/desktop-poll?ticket=") + PendingAuthTicket);
+    Req->SetVerb(TEXT("GET"));
+    const TWeakObjectPtr<ATibetGameMode> WeakThis(this);
+    Req->OnProcessRequestComplete().BindLambda([WeakThis](FHttpRequestPtr, FHttpResponsePtr Resp, bool bOk)
+    {
+        if (!WeakThis.IsValid()) return;
+        if (!bOk || !Resp.IsValid())
+        {
+            if (WeakThis->AuthPollAttempts >= 3)
+            {
+                if (WeakThis->GetWorld()) WeakThis->GetWorldTimerManager().ClearTimer(WeakThis->AuthPollTimer);
+                WeakThis->PendingAuthTicket.Reset();
+                WeakThis->CloudMessage = WeakThis->Local(
+                    TEXT("Cloud server unreachable (run `npm run start:server` on 127.0.0.1:8787)."),
+                    TEXT("無法連線至雲端存檔伺服器（請確認已啟動 `npm run start:server`）。"));
+            }
+            return;
+        }
+        TSharedPtr<FJsonObject> Json;
+        auto Reader = TJsonReaderFactory<>::Create(Resp->GetContentAsString());
+        if (!FJsonSerializer::Deserialize(Reader, Json) || !Json.IsValid()) return;
+        FString Status;
+        Json->TryGetStringField(TEXT("status"), Status);
+        if (Status == TEXT("complete"))
+        {
+            if (WeakThis->GetWorld()) WeakThis->GetWorldTimerManager().ClearTimer(WeakThis->AuthPollTimer);
+            WeakThis->PendingAuthTicket.Reset();
+            FString Token, Email, Name;
+            Json->TryGetStringField(TEXT("sessionToken"), Token);
+            if (Json->HasTypedField<EJson::Object>(TEXT("user")))
+            {
+                const auto User = Json->GetObjectField(TEXT("user"));
+                User->TryGetStringField(TEXT("email"), Email);
+                User->TryGetStringField(TEXT("name"), Name);
+            }
+            TibetCloudSave::SaveSession(Token, Email, Name);
+            WeakThis->CloudMessage = WeakThis->Local(TEXT("Signed in! Syncing cloud save..."), TEXT("Google 登入成功！正在同步雲端存檔…"));
+            WeakThis->SyncCloudSaveNow(false);
+        }
+    });
+    Req->ProcessRequest();
+}
+
+void ATibetGameMode::SyncCloudSaveNow(bool bForceUpload)
+{
+    if (!Save) return;
+    Store();
+    const FString Token = TibetCloudSave::SessionToken();
+    if (Token.IsEmpty())
+    {
+        StartGoogleCloudSignIn();
+        return;
+    }
+    const TWeakObjectPtr<ATibetGameMode> WeakThis(this);
+    if (!bForceUpload)
+    {
+        auto GetReq = FHttpModule::Get().CreateRequest();
+        GetReq->SetURL(TibetCloudSave::ServerUrl() + TEXT("/api/save"));
+        GetReq->SetVerb(TEXT("GET"));
+        GetReq->SetHeader(TEXT("Authorization"), TEXT("Bearer ") + Token);
+        GetReq->OnProcessRequestComplete().BindLambda([WeakThis](FHttpRequestPtr, FHttpResponsePtr Resp, bool bOk)
+        {
+            if (!WeakThis.IsValid() || !WeakThis->Save) return;
+            if (!bOk || !Resp.IsValid() || Resp->GetResponseCode() >= 400)
+            {
+                WeakThis->CloudMessage = WeakThis->Local(TEXT("Cloud sync failed; check server/login."), TEXT("雲端同步失敗，請確認伺服器連線或重新登入。"));
+                return;
+            }
+            auto* RemoteSave = NewObject<UTibetSave>(WeakThis.Get());
+            if (TibetCloudSave::FromJson(Resp->GetContentAsString(), *RemoteSave) &&
+                (RemoteSave->Steps.Num() > WeakThis->Save->Steps.Num() || (RemoteSave->bComplete && !WeakThis->Save->bComplete)))
+            {
+                WeakThis->CloudMessage = WeakThis->Local(TEXT("Downloaded newer progress from Google Cloud!"), TEXT("已從 Google 雲端取回較新的朝聖進度！"));
+                WeakThis->ApplyLoadedSaveAndReload(RemoteSave);
+                return;
+            }
+            WeakThis->SyncCloudSaveNow(true);
+        });
+        GetReq->ProcessRequest();
+        return;
+    }
+
+    auto PostReq = FHttpModule::Get().CreateRequest();
+    PostReq->SetURL(TibetCloudSave::ServerUrl() + TEXT("/api/save"));
+    PostReq->SetVerb(TEXT("POST"));
+    PostReq->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
+    PostReq->SetHeader(TEXT("Authorization"), TEXT("Bearer ") + Token);
+    const FString SaveJson = TibetCloudSave::ToJson(*Save);
+    const FString Payload = FString::Printf(TEXT("{\"mode\":\"merge\",\"writableSections\":[\"tibetUnreal\"],\"saveData\":%s}"), *SaveJson);
+    PostReq->SetContentAsString(Payload);
+    PostReq->OnProcessRequestComplete().BindLambda([WeakThis](FHttpRequestPtr, FHttpResponsePtr Resp, bool bOk)
+    {
+        if (!WeakThis.IsValid()) return;
+        WeakThis->CloudMessage = (bOk && Resp.IsValid() && Resp->GetResponseCode() < 300)
+            ? WeakThis->Local(TEXT("Progress uploaded to Google Cloud!"), TEXT("朝聖進度已成功上傳至 Google 雲端！"))
+            : WeakThis->Local(TEXT("Cloud upload failed."), TEXT("雲端存檔上傳失敗。"));
+    });
+    PostReq->ProcessRequest();
+}
+
+void ATibetGameMode::SignOutCloudSave()
+{
+    TibetCloudSave::ClearSession();
+    CloudMessage = Local(TEXT("Signed out of Google Cloud."), TEXT("已登出 Google 雲端帳號。"));
 }
 
 bool ATibetGameMode::ResetProgress()

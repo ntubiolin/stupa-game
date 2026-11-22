@@ -1,9 +1,11 @@
 #include "TibetPlayOverlay.h"
 #include "TibetAtlas.h"
 #include "TibetCameraSettings.h"
+#include "TibetCloudSave.h"
 #include "TibetGameMode.h"
 #include "TibetHUD.h"
 #include "Brushes/SlateColorBrush.h"
+#include "Engine/Texture2D.h"
 #include "Engine/World.h"
 #include "Fonts/CompositeFont.h"
 #include "Fonts/FontMeasure.h"
@@ -12,6 +14,7 @@
 #include "Misc/Paths.h"
 #include "Rendering/DrawElements.h"
 #include "Styling/CoreStyle.h"
+#include "Widgets/Images/SImage.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
@@ -225,6 +228,12 @@ public:
         case 11: // Thangka Pilgrimage Scroll Map
             Stroke({{2,5},{8,3},{16,5},{22,3},{22,19},{16,21},{8,19},{2,21},{2,5}});
             Stroke({{5,15},{10,10},{14,13},{19,8}}, 1.5f); break;
+        case 12: // Lineage Keepsake Hanging Thangka Scroll
+            Stroke({{3,3},{21,3}}, 2.2f);
+            Stroke({{5,3},{5,20},{19,20},{19,3}});
+            Stroke({{3,20},{21,20}}, 2.2f);
+            Stroke({{12,7},{14.5f,10.5f},{12,14},{9.5f,10.5f},{12,7}}, 1.5f);
+            Stroke({{8,17},{12,15.5f},{16,17}}, 1.4f); break;
         case 6: // Eight-Spoked Golden Dharma Wheel
             { TArray<FVector2f> Ring;
               for (int32 I=0;I<=16;++I) {const float A=I*UE_TWO_PI/16.f; Ring.Add({12+8.8f*FMath::Cos(A),12+8.8f*FMath::Sin(A)});}
@@ -250,6 +259,13 @@ void STibetPlayOverlay::Construct(const FArguments& A)
     Faces->FallbackTypeface.Typeface=FTypeface(TEXT("Regular"),Fonts/TEXT("DroidSansFallback.ttf"),
         EFontHinting::Default,EFontLoadingPolicy::LazyLoad);
     Typeface=Faces;
+    KeepsakeArt.Reset(LoadObject<UTexture2D>(nullptr, TEXT("/Game/Journal/KeepsakeThangka.KeepsakeThangka")));
+    if (KeepsakeArt.IsValid())
+    {
+        KeepsakeBrush.SetResourceObject(KeepsakeArt.Get());
+        KeepsakeBrush.ImageSize = FVector2f(1200.f, 1600.f);
+        KeepsakeBrush.DrawAs = ESlateBrushDrawType::Image;
+    }
     SetVisibility(EVisibility::SelfHitTestInvisible);
     Show(ETibetPage::Play);
 }
@@ -528,7 +544,7 @@ TSharedRef<SWidget> STibetPlayOverlay::Pack()
         *Mode->Local(TEXT("Life"),TEXT("體力")),FMath::CeilToInt(Mode->GetHealth()),int(Mode->MaxHealth()))),16,Gold)];
     TArray<ETibetItem> Ordered;
     for (const bool Owned : {true,false})
-        for (ETibetItem Item : {ETibetItem::Amrita,ETibetItem::Map,ETibetItem::Vajra,ETibetItem::Bell,ETibetItem::Robe})
+        for (ETibetItem Item : {ETibetItem::Thangka,ETibetItem::Amrita,ETibetItem::Map,ETibetItem::Vajra,ETibetItem::Bell,ETibetItem::Robe})
             if (Mode->OwnsItem(Item)==Owned) Ordered.Add(Item);
     for (const auto Item : Ordered)
     {
@@ -546,24 +562,33 @@ TSharedRef<SWidget> STibetPlayOverlay::Pack()
         Row->AddSlot().FillWidth(1)[Copy];
         if (Owned)
         {
-            const bool Selected=Equipment?Mode->IsEquipped(Item):Item==Quick;
-            if (!Equipment && Selected)
+            if (Item==ETibetItem::Thangka)
             {
-                if (Item==ETibetItem::Amrita && Mode->Pills()>0 && Mode->GetHealth()<Mode->MaxHealth())
-                {
-                    Row->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(4,0)[Button(Local(TEXT("Use pill"),TEXT("服用")),
-                        FSimpleDelegate::CreateLambda([this](){Mode->UsePill(); Show(ETibetPage::Pack);}))];
-                }
-                Row->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(7,0)[Label(Local(TEXT("Quick slot"),TEXT("快捷中")),12,Jade)];
+                Row->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(5,0)[Button(Local(TEXT("View Thangka"),TEXT("展開唐卡")),
+                    FSimpleDelegate::CreateLambda([this](){ HUD->ToggleJournal(ETibetPage::Thangka); }),
+                    true, FName(*FString::Printf(TEXT("TibetPackAction%d"),I)))];
             }
             else
             {
-                const auto Action=Equipment ? (Selected?Local(TEXT("Remove"),TEXT("卸下")):Local(TEXT("Equip"),TEXT("裝備"))) : Local(TEXT("Set quick"),TEXT("設為快捷"));
-                Row->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(5,0)[Button(Action,FSimpleDelegate::CreateLambda([this,Item,Equipment](){
-                    if (Equipment) Mode->ToggleEquipment(Item);
-                    else Mode->SetQuickItem(Item);
-                    Show(ETibetPage::Pack);
-                }),false,FName(*FString::Printf(TEXT("TibetPackAction%d"),I)))];
+                const bool Selected=Equipment?Mode->IsEquipped(Item):Item==Quick;
+                if (!Equipment && Selected)
+                {
+                    if (Item==ETibetItem::Amrita && Mode->Pills()>0 && Mode->GetHealth()<Mode->MaxHealth())
+                    {
+                        Row->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(4,0)[Button(Local(TEXT("Use pill"),TEXT("服用")),
+                            FSimpleDelegate::CreateLambda([this](){Mode->UsePill(); Show(ETibetPage::Pack);}))];
+                    }
+                    Row->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(7,0)[Label(Local(TEXT("Quick slot"),TEXT("快捷中")),12,Jade)];
+                }
+                else
+                {
+                    const auto Action=Equipment ? (Selected?Local(TEXT("Remove"),TEXT("卸下")):Local(TEXT("Equip"),TEXT("裝備"))) : Local(TEXT("Set quick"),TEXT("設為快捷"));
+                    Row->AddSlot().AutoWidth().VAlign(VAlign_Center).Padding(5,0)[Button(Action,FSimpleDelegate::CreateLambda([this,Item,Equipment](){
+                        if (Equipment) Mode->ToggleEquipment(Item);
+                        else Mode->SetQuickItem(Item);
+                        Show(ETibetPage::Pack);
+                    }),false,FName(*FString::Printf(TEXT("TibetPackAction%d"),I)))];
+                }
             }
         }
         else
@@ -602,6 +627,39 @@ TSharedRef<SWidget> STibetPlayOverlay::Controls()
         FSimpleDelegate::CreateLambda([Settings](){Settings->SetVerticalInverted(!Settings->IsVerticalInverted());}))];
     Box->AddSlot().AutoHeight()[Button(Local(TEXT("Language · English / 繁體中文"),TEXT("語言・繁體中文 / English")),
         FSimpleDelegate::CreateLambda([this](){Mode->ChangeLanguage(); Show(ETibetPage::Controls);}))];
+
+    // Save Backup & Google Cloud Sync Card
+    auto SaveCard=SNew(SVerticalBox);
+    SaveCard->AddSlot().AutoHeight().Padding(0,0,0,4)
+        [Label(TAttribute<FText>::CreateLambda([this](){ return Text(Mode->CloudStatusText()); }),12,Jade)];
+    auto SaveBtns=SNew(SHorizontalBox);
+    SaveBtns->AddSlot().FillWidth(1).Padding(0,0,3,0)[Button(
+        Local(TEXT("Save & export JSON"),TEXT("手動存檔並匯出備份")),
+        FSimpleDelegate::CreateLambda([this](){ FString P; Mode->SaveNowAndExportBackup(P); }),
+        false, TEXT("TibetExportSave"))];
+    SaveBtns->AddSlot().FillWidth(1).Padding(3,0,0,0)[Button(
+        Local(TEXT("Restore JSON backup"),TEXT("載入備份存檔")),
+        FSimpleDelegate::CreateLambda([this](){ FString P; Mode->ImportBackupAndReload(P); }),
+        false, TEXT("TibetImportSave"))];
+    SaveCard->AddSlot().AutoHeight()[SaveBtns];
+    auto CloudRow=SNew(SHorizontalBox);
+    CloudRow->AddSlot().FillWidth(1).Padding(0,4,0,0)[Button(
+        TAttribute<FText>::CreateLambda([this](){
+            return TibetCloudSave::SessionToken().IsEmpty()
+                ? Local(TEXT("Google Sign-In & Cloud Save"),TEXT("Google 帳號登入／雲端存檔同步"))
+                : Local(TEXT("Sync Cloud Save now"),TEXT("立即同步 Google 雲端存檔"));
+        }),
+        FSimpleDelegate::CreateLambda([this](){ Mode->SyncCloudSaveNow(false); }),
+        false, TEXT("TibetGoogleSync"))];
+    if (!TibetCloudSave::SessionToken().IsEmpty())
+    {
+        CloudRow->AddSlot().AutoWidth().Padding(4,4,0,0)[Button(
+            Local(TEXT("Sign out"),TEXT("登出")),
+            FSimpleDelegate::CreateLambda([this](){ Mode->SignOutCloudSave(); Show(ETibetPage::Controls); }))];
+    }
+    SaveCard->AddSlot().AutoHeight()[CloudRow];
+    Box->AddSlot().AutoHeight().Padding(0,8,0,0)[SNew(SThangkaBorder).Background(Ink).Padding(FMargin(10,8))[SaveCard]];
+
     Box->AddSlot().AutoHeight().Padding(0,10,0,0)[SNew(SBox).MinDesiredWidth(bTouch?44.f:0.f).MinDesiredHeight(bTouch?44.f:35.f)
         [SNew(SButton).ButtonStyle(&FlatButton()).Tag(TEXT("TibetResetProgress")).IsFocusable(false)
         .ButtonColorAndOpacity_Lambda([this](){ return bConfirmReset ? Coral : CrimsonLacquer; })
@@ -624,6 +682,80 @@ TSharedRef<SWidget> STibetPlayOverlay::Controls()
             }))];
     return Box;
 }
+TSharedRef<SWidget> STibetPlayOverlay::Thangka()
+{
+    if (!Mode->OwnsItem(ETibetItem::Thangka))
+    {
+        auto Locked=SNew(SVerticalBox);
+        Locked->AddSlot().AutoHeight().Padding(0,4,0,8)[Label(
+            Local(TEXT("◆  Lineage Keepsake Thangka (Locked)"),TEXT("◆  通關紀念唐卡・尚未結緣")),18,Gold)];
+        Locked->AddSlot().AutoHeight()[Label(
+            Local(TEXT("Complete the five-chapter pilgrimage through Chimphu’s Terma vaults, return to Boudhanath Great Stupa, and step onto the golden lotus mandala to behold Guru Padmasambhava in the sky."),
+                  TEXT("完成序章至第五章青朴伏藏秘境的完整朝聖，歸返尼泊爾博達哈大佛塔後，步入佛塔廣場前的金蓮壇城瞻仰虛空蓮師顯相，即可獲贈「行者與蓮師同框」圓滿紀念唐卡。")),14,Paper)];
+        return SNew(SThangkaBorder).Background(Card).Padding(FMargin(16,14))[Locked];
+    }
+
+    const float ScrollH = FMath::Clamp(Height() - 180.f, 240.f, 440.f);
+    const float ScrollW = ScrollH * 0.75f;
+    TSharedRef<SWidget> Painting = KeepsakeArt.IsValid()
+        ? StaticCastSharedRef<SWidget>(SNew(SImage).Image(&KeepsakeBrush))
+        : StaticCastSharedRef<SWidget>(SNew(SBorder).BorderImage(Tile()).BorderBackgroundColor(Card));
+
+    const auto ScrollFrame = SNew(SBox).WidthOverride(ScrollW).HeightOverride(ScrollH)
+        [SNew(SThangkaBorder).Background(Ink).Rim(Gold).Accent(CrimsonLacquer).Padding(FMargin(4))[Painting]];
+
+    const auto Dedications = Mode->Dedications();
+    const FString PilgrimName = Dedications.IsEmpty()
+        ? Mode->Local(TEXT("Destined Pilgrim"),TEXT("具緣行者"))
+        : Dedications.Last().Pilgrim;
+    const FString PilgrimPrayer = Dedications.IsEmpty()
+        ? Mode->Local(TEXT("May all beings awaken in boundless light."),TEXT("願一切有情離苦得樂，同證菩提。"))
+        : Dedications.Last().Prayer;
+
+    auto Colophon = SNew(SVerticalBox);
+    Colophon->AddSlot().AutoHeight().Padding(0,0,0,6)[Label(
+        Local(TEXT("◆  Guru Padmasambhava & the Pilgrim in Pure Vision"),
+              TEXT("◆  蓮師與行者同框・圓滿紀念唐卡")),18,Gold)];
+    Colophon->AddSlot().AutoHeight().Padding(0,2,0,10)[Label(
+        Local(TEXT("“Never think Padmasambhava dwells far away—wherever pure faith and bodhicitta arise, there shines the Copper-Colored Mountain, and I am never parted from you.”"),
+              TEXT("「切莫以為蓮花生遠在異域——凡有清淨信願與菩提心生起之處，即是銅色吉祥山淨土，吾未曾離汝須臾。」")),14,Paper)];
+    Colophon->AddSlot().AutoHeight().Padding(0,4,0,8)[SNew(SThangkaBorder).Background(Ink).Padding(FMargin(10,8))
+        [Label(Text(FString::Printf(TEXT("%s：%s\n%s：%s\n%s"),
+            *Mode->Local(TEXT("Pilgrim"),TEXT("朝聖行者")), *PilgrimName,
+            *Mode->Local(TEXT("Dedication Vow"),TEXT("回向祈願")), *PilgrimPrayer,
+            *Mode->Local(TEXT("Sacred Sites Completed · 11 / 11 (Boudhanath → Samye → Chimphu Terma → Boudhanath)"),
+                         TEXT("聖地巡禮圓滿・11 / 11（博達哈大佛塔 → 桑耶寺 → 青朴伏藏 → 歸返大佛塔）")))),12,Jade)]];
+
+    auto Actions = SNew(SHorizontalBox);
+    Actions->AddSlot().AutoWidth().Padding(0,0,6,0)[Button(
+        Local(TEXT("Hear Guru’s Blessing"),TEXT("聆聽蓮師開示")),
+        FSimpleDelegate::CreateLambda([this](){
+            HUD->CloseJournal();
+            Mode->SpeakSkyGuruBlessing();
+        }), false, TEXT("TibetHearGuruBlessing"))];
+    Actions->AddSlot().AutoWidth()[Button(
+        Local(TEXT("Save Thangka Image (.png)"),TEXT("匯出紀念唐卡圖檔 (.png)")),
+        FSimpleDelegate::CreateLambda([this](){
+            FString Saved;
+            if (Mode->ExportKeepsakeThangkaPng(Saved))
+                ExportedThangkaPath = Mode->Local(TEXT("Saved PNG: "),TEXT("已匯出高清唐卡：")) + Saved;
+            else
+                ExportedThangkaPath = Mode->Local(TEXT("Could not write PNG file."),TEXT("唐卡圖檔匯出失敗。"));
+        }), true, TEXT("TibetExportThangka"))];
+    Colophon->AddSlot().AutoHeight().Padding(0,4,0,6)[Actions];
+    Colophon->AddSlot().AutoHeight()[Label(
+        TAttribute<FText>::CreateLambda([this](){ return Text(ExportedThangkaPath); }),11,Gold)];
+
+    if (Width() < 560.f)
+    {
+        return SNew(SVerticalBox)
+            + SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0,0,0,10)[ScrollFrame]
+            + SVerticalBox::Slot().AutoHeight()[Colophon];
+    }
+    return SNew(SHorizontalBox)
+        + SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Top).Padding(0,0,16,0)[ScrollFrame]
+        + SHorizontalBox::Slot().FillWidth(1).VAlign(VAlign_Center)[Colophon];
+}
 TSharedRef<SWidget> STibetPlayOverlay::Journal()
 {
     auto Panel=SNew(SVerticalBox);
@@ -636,13 +768,15 @@ TSharedRef<SWidget> STibetPlayOverlay::Journal()
     auto Tab=[&](ETibetPage Target,FText Title){
         Tabs->AddSlot().FillWidth(1).Padding(2,0)[Button(Title,FSimpleDelegate::CreateLambda([this,Target](){
             if (Page!=Target) HUD->ToggleJournal(Target);
-        }),Page==Target,Target==ETibetPage::Pack ? FName(TEXT("TibetPackTab")) : NAME_None)];
+        }),Page==Target,Target==ETibetPage::Pack ? FName(TEXT("TibetPackTab")) : Target==ETibetPage::Thangka ? FName(TEXT("TibetThangkaTab")) : NAME_None)];
     };
     Tab(ETibetPage::Map,Local(TEXT("World map"),TEXT("世界地圖")));
     Tab(ETibetPage::Skills,Local(TEXT("Ritual skills"),TEXT("法術技能")));
     Tab(ETibetPage::Pack,Local(TEXT("Pack"),TEXT("行囊")));
     Tab(ETibetPage::Dedication,Local(TEXT("Dedication"),TEXT("回向")));
     Tab(ETibetPage::Controls,Local(TEXT("Controls"),TEXT("操作設定")));
+    if (Mode->OwnsItem(ETibetItem::Thangka) || Page==ETibetPage::Thangka)
+        Tab(ETibetPage::Thangka,Local(TEXT("Keepsake"),TEXT("紀念唐卡")));
     Panel->AddSlot().AutoHeight().Padding(0,10)[Tabs];
     auto Body=SNew(SVerticalBox);
     if (Page==ETibetPage::Map)
@@ -655,12 +789,13 @@ TSharedRef<SWidget> STibetPlayOverlay::Journal()
             .Width(FMath::Min(Width()-68.f,1090.f)).Height(FMath::Clamp(Height()-(CompactAtlas?218.f:195.f),105.f,422.f))];
     }
     else if (Page==ETibetPage::Dedication) Body->AddSlot().AutoHeight()[Dedication()];
+    else if (Page==ETibetPage::Thangka) Body->AddSlot().AutoHeight()[Thangka()];
     else Body->AddSlot().AutoHeight()[Page==ETibetPage::Skills?Skills():Page==ETibetPage::Pack?Pack():Controls()];
     Panel->AddSlot().FillHeight(1)[SNew(SScrollBox)+SScrollBox::Slot()[Body]];
     return SNew(SBorder).BorderImage(Tile()).BorderBackgroundColor(FLinearColor(0.008f,0.010f,0.018f,.68f))
         .HAlign(HAlign_Center).VAlign(VAlign_Center).Padding(8)
         .OnMouseButtonDown_Lambda([](const FGeometry&,const FPointerEvent&){return FReply::Handled();})
-        [SNew(SBox).WidthOverride_Lambda([this](){return FOptionalSize(FMath::Clamp(Width()-36.f,250.f,Page==ETibetPage::Map?1120.f:725.f));})
-            .HeightOverride_Lambda([this](){return FOptionalSize(FMath::Clamp(Height()-36.f,185.f,Page==ETibetPage::Map?635.f:Page==ETibetPage::Skills?605.f:525.f));})
+        [SNew(SBox).WidthOverride_Lambda([this](){return FOptionalSize(FMath::Clamp(Width()-36.f,250.f,(Page==ETibetPage::Map || Page==ETibetPage::Thangka)?1120.f:725.f));})
+            .HeightOverride_Lambda([this](){return FOptionalSize(FMath::Clamp(Height()-36.f,185.f,(Page==ETibetPage::Map || Page==ETibetPage::Thangka)?635.f:Page==ETibetPage::Skills?605.f:545.f));})
             [SNew(SThangkaBorder).HeaderBand(true).Padding(FMargin(16,14))[Panel]]];
 }

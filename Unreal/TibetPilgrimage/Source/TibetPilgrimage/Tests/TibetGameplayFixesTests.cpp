@@ -1,4 +1,5 @@
 #include "../TibetGameMode.h"
+#include "../TibetCloudSave.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Kismet/GameplayStatics.h"
@@ -14,6 +15,11 @@ struct FTibetGameplayTestAccessor
         Mode.Map = Map;
         Mode.Route = Route.IsEmpty() ? Map : Route;
         if (!Slot.IsEmpty()) Mode.SlotName = Slot;
+    }
+
+    static void Advance(ATibetGameMode& Mode)
+    {
+        Mode.Advance();
     }
 
     static UTibetSave* GetSave(const ATibetGameMode& Mode)
@@ -211,6 +217,86 @@ bool FTibetResetProgressTest::RunTest(const FString&)
         TestEqual(TEXT("Disk save pills restored to 4"), Disk->PillCharges, 4);
         TestTrue(TEXT("Disk save preserves language"), Disk->bEnglish);
     }
+
+    UGameplayStatics::DeleteGameInSlot(Slot, 0);
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTibetCloudSaveJsonTest, "Tibet.Gameplay.CloudSaveJsonRoundTrip",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FTibetCloudSaveJsonTest::RunTest(const FString&)
+{
+    auto* Source = NewObject<UTibetSave>();
+    Source->Map = TEXT("samye");
+    Source->bEnglish = true;
+    Source->bReturnFromTerma = true;
+    Source->bEpilogue = true;
+    Source->bComplete = true;
+    Source->Equipment = (1 << int32(ETibetItem::Vajra)) | (1 << int32(ETibetItem::Robe));
+    Source->PillCharges = 2;
+    Source->ButterLampMask = 0b101;
+    Source->bUsesDistinctLamps = true;
+    Source->MonkeysFed = 7;
+    Source->Steps.Add(TEXT("stupa"), 5);
+    Source->Steps.Add(TEXT("samye"), 8);
+    Source->Counts.Add(TEXT("samye"), 2);
+    Source->Dedications.Add({TEXT("蓮師弟子"), TEXT("願吉祥圓滿")});
+
+    const FString Json = TibetCloudSave::ToJson(*Source);
+    TestTrue(TEXT("Serialized JSON contains tibetUnreal section"), Json.Contains(TEXT("tibetUnreal")));
+
+    auto* Restored = NewObject<UTibetSave>();
+    const FString ServerEnvelope = FString::Printf(TEXT("{\"ok\":true,\"saveData\":%s}"), *Json);
+    TestTrue(TEXT("Deserialize from /api/save GET envelope"), TibetCloudSave::FromJson(ServerEnvelope, *Restored));
+    TestEqual(TEXT("Round-trip map"), Restored->Map, FString(TEXT("samye")));
+    TestTrue(TEXT("Round-trip English flag"), Restored->bEnglish);
+    TestTrue(TEXT("Round-trip bComplete"), Restored->bComplete);
+    TestEqual(TEXT("Round-trip equipment"), Restored->Equipment, Source->Equipment);
+    TestEqual(TEXT("Round-trip pill charges"), Restored->PillCharges, 2);
+    TestEqual(TEXT("Round-trip lamp mask"), int32(Restored->ButterLampMask), 5);
+    TestEqual(TEXT("Round-trip steps"), Restored->Steps.FindRef(TEXT("samye")), 8);
+    TestEqual(TEXT("Round-trip counts"), Restored->Counts.FindRef(TEXT("samye")), 2);
+    TestEqual(TEXT("Round-trip dedications count"), Restored->Dedications.Num(), 1);
+    if (Restored->Dedications.Num() == 1)
+    {
+        TestEqual(TEXT("Round-trip dedication pilgrim"), Restored->Dedications[0].Pilgrim, FString(TEXT("蓮師弟子")));
+    }
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FTibetEndingGuruThangkaTest, "Tibet.Gameplay.EndingGuruAndKeepsakeThangka",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FTibetEndingGuruThangkaTest::RunTest(const FString&)
+{
+    const FString Slot = TEXT("TibetPilgrimage-UnitTest-EndingThangka");
+    UGameplayStatics::DeleteGameInSlot(Slot, 0);
+
+    auto* Save = NewObject<UTibetSave>();
+    Save->Map = TEXT("stupa");
+    Save->bEpilogue = true;
+    auto* Mode = NewObject<ATibetGameMode>();
+    FTibetGameplayTestAccessor::Configure(*Mode, Save, 100.f, TEXT("stupa"), TEXT("ending"), Slot);
+
+    TestFalse(TEXT("Keepsake Thangka is locked before meeting Sky Guru"), Mode->OwnsItem(ETibetItem::Thangka));
+    TestFalse(TEXT("Campaign not complete at ending step 0"), Mode->IsCampaignComplete());
+
+    // Step 0: Speak with Old Lama Lobsang -> advances to Step 1 (Reach golden lotus mandala beneath Sky Guru)
+    FTibetGameplayTestAccessor::Advance(*Mode);
+    TestEqual(TEXT("Ending advances to step 1 (Sky Guru mandala)"), Mode->GetStep(), 1);
+    TestFalse(TEXT("Campaign still awaits Sky Guru blessing at step 1"), Mode->IsCampaignComplete());
+    TestEqual(TEXT("Step 1 anchor is Sky Guru golden lotus mandala"), Mode->GetObjectiveLocation(), FVector(-380, 0, 0));
+
+    // Step 1: Step onto Sky Guru mandala -> completes campaign, unlocks Thangka keepsake, and speaks Guru blessing!
+    FTibetGameplayTestAccessor::Advance(*Mode);
+    TestTrue(TEXT("Campaign completes upon beholding Sky Guru"), Mode->IsCampaignComplete());
+    TestTrue(TEXT("Player receives Lineage Keepsake Thangka"), Mode->OwnsItem(ETibetItem::Thangka));
+    TestEqual(TEXT("Sky Guru speaks blessing in Chinese"), Mode->DialogueSpeaker(), FString(TEXT("蓮花生大士（鄔金仁波切）")));
+    TestTrue(TEXT("Sky Guru dialogue text is populated"), Mode->DialoguePage().Contains(TEXT("善哉")) || !Mode->DialoguePage().IsEmpty());
+
+    Mode->ChangeLanguage();
+    TestEqual(TEXT("Sky Guru speaker switches to English"), Mode->DialogueSpeaker(), FString(TEXT("Guru Padmasambhava")));
 
     UGameplayStatics::DeleteGameInSlot(Slot, 0);
     return true;

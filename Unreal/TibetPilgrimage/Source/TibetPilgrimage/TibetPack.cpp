@@ -9,7 +9,8 @@ const FTibetItemInfo Items[] = {
     {TEXT("Bronze Vajra"), TEXT("銅金剛杵"), TEXT("Main hand · +1 damage to each damaging ritual hit."), TEXT("主手法器・命中的攻擊法術額外造成 1 點傷害。"), TEXT("Complete Lobsang’s vow after the three butter lamps."), TEXT("點亮三盞酥油燈後，向洛桑回報序章誓願。")},
     {TEXT("Bronze Bell"), TEXT("銅鈴"), TEXT("Off hand · +10 maximum mantra."), TEXT("副手法器・法力上限增加 10。"), TEXT("Liberate your first spirit in the Northern Wilderness."), TEXT("在北郊原野首次調伏靈障。")},
     {TEXT("Pulu Robe"), TEXT("氆氌法衣"), TEXT("Body · +15 maximum life."), TEXT("身穿法衣・體力上限增加 15。"), TEXT("Complete the night defence at Samye."), TEXT("在桑耶寺完成夜間守護。")},
-    {TEXT("Ancient Pilgrim’s Map"), TEXT("古老的朝聖地圖"), TEXT("Open the painted route chart from the quick slot."), TEXT("從快捷欄展開朝聖路線圖。"), TEXT("Recover the map beside the tilted mani cairn in the Northern Wilderness."), TEXT("在北郊原野傾斜的瑪尼堆旁尋回。")}
+    {TEXT("Ancient Pilgrim’s Map"), TEXT("古老的朝聖地圖"), TEXT("Open the painted route chart from the quick slot."), TEXT("從快捷欄展開朝聖路線圖。"), TEXT("Recover the map beside the tilted mani cairn in the Northern Wilderness."), TEXT("在北郊原野傾斜的瑪尼堆旁尋回。")},
+    {TEXT("Lineage Keepsake Thangka"), TEXT("蓮師同框紀念唐卡"), TEXT("Commemorative Thangka of Guru Padmasambhava & the Pilgrim together; view or export as PNG."), TEXT("虛空蓮師與行者同框之通關紀念唐卡；可隨時展開瞻仰或匯出 PNG 紀念圖檔。"), TEXT("Return to Boudhanath Stupa in the finale and behold Guru Padmasambhava in the sky."), TEXT("於終章返回博達哈大佛塔，步入金蓮壇城瞻仰虛空蓮師顯相後獲贈。")}
 };
 static_assert(UE_ARRAY_COUNT(Items) == int(ETibetItem::Count));
 }
@@ -26,6 +27,7 @@ bool ATibetGameMode::OwnsItem(ETibetItem Item) const
     case ETibetItem::Bell: return Wild > 0 || Save->Counts.FindRef(TEXT("wild")) > 0;
     case ETibetItem::Map: return Wild >= 2;
     case ETibetItem::Robe: return Save->Steps.FindRef(TEXT("samye")) >= 3;
+    case ETibetItem::Thangka: return Save->bComplete;
     default: return false;
     }
 }

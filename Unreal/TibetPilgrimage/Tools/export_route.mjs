@@ -106,6 +106,7 @@ for (const file of ['prologue', 'ch1', 'ch2', 'ch3', 'ch4', 'ch5']) {
     append(map,entry);
   }
 }
+append('ending',custom('Reach','Step onto the golden lotus mandala to behold Guru Padmasambhava in the sky','步入佛塔前金蓮壇城，瞻仰虛空蓮師顯相並領受紀念唐卡'));
 append('grove',custom('Interact','Consecrate the votive stupa','為小佛塔裝藏開光'));
 for (let floor=1;floor<=3;floor++) {
   append('terma'+floor,custom('Reach',['Find the earth seal','Trace the crystal vein','Enter the sky vault'][floor-1],

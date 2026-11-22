@@ -146,6 +146,15 @@ public:
     const FTibetPlayerFeedback& GetPlayerFeedback() const { return PlayerFeedback; }
     void ChangeLanguage();
     bool ResetProgress();
+    bool SaveNowAndExportBackup(FString& OutPath);
+    bool ImportBackupAndReload(FString& OutPath);
+    bool ExportKeepsakeThangkaPng(FString& OutPath);
+    void StartGoogleCloudSignIn();
+    void SyncCloudSaveNow(bool bForceUpload = false);
+    void SignOutCloudSave();
+    FString CloudStatusText() const;
+    void SpeakSkyGuruBlessing();
+    bool HasSkyGuruManifested() const { return SkyGuru != nullptr; }
     FString AreaName() const;
     int32 CurrentAreaIndex() const;
     FString AreaName(int32 Index) const;
@@ -156,13 +165,23 @@ public:
     bool IsEnglish() const { return Save && Save->bEnglish; }
     FString Local(const TCHAR* En, const TCHAR* Zh) const { return IsEnglish() ? En : Zh; }
 private:
-    enum class EInteraction { None, Grove, Gate, Talk, Use };
+    enum class EInteraction { None, Grove, Gate, Talk, Use, Guru };
     EInteraction InteractionAt(const FVector& PlayerLocation) const;
     int32 LampForInteraction(const FVector& PlayerLocation, EInteraction Action) const;
     FString ActionLabel(EInteraction Action) const;
     UPROPERTY() TObjectPtr<class UMaterialInterface> RitualMaterial;
     UPROPERTY() TObjectPtr<UTibetSave> Save;
     UPROPERTY() TObjectPtr<AActor> Focus;
+    UPROPERTY() TObjectPtr<AActor> SkyGuru;
+    UPROPERTY() TObjectPtr<AActor> SkyGuruMandala;
+    UPROPERTY() TObjectPtr<class UTexture2D> KeepsakeTexture;
+    FString CloudMessage, PendingAuthTicket;
+    FTimerHandle AuthPollTimer;
+    int32 AuthPollAttempts = 0;
+    void EnsureSkyGuru();
+    void PollGoogleDesktopAuth();
+    void ApplyLoadedSaveAndReload(UTibetSave* Loaded);
+    void BeginCustomDialogue(const TCHAR* SpeakerEn, const TCHAR* SpeakerZh, const TCHAR* SpeechEn, const TCHAR* SpeechZh);
     UPROPERTY() TObjectPtr<AActor> Messenger;
     UPROPERTY() TMap<FName, TObjectPtr<AActor>> Residents;
     FString Map, Route, SlotName;

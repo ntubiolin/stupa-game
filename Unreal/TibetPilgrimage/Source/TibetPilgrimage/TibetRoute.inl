@@ -66,6 +66,7 @@
     }},
     {TEXT("ending"), {
         {EObjective::Talk, TEXT("Return to Boudhanath Stupa and speak with the Old Lama"), TEXT("返回博達哈大佛塔與老喇嘛交談"), 1, TEXT("(You gently open your eyes. The vast white dome and all-seeing eyes of Boudhanath Stupa shine quietly in the Kathmandu sunlight, and the warm scent of butter lamps fills the air.) Aha, pilgrim—you have awakened from deep samadhi. By the serene clarity in your eyes, you have walked the Master’s journey from Nepal into Tibet and witnessed how the ancient vows of the four sons at Jarung Khashor came to fruition. King Trisong Detsen, Abbot Śāntarakṣita, Padmasambhava, and the royal messenger—their aspirations beside this Stupa lit a lamp across the Land of Snows. And the countless Terma hidden by the Master and Yeshe Tsogyal still rest within rock, water, and mind: the Terma still await those with karmic affinity."), TEXT("（你緩緩睜開雙眼，博達哈大佛塔洁白巨大的覆鉢與智慧眼在陽光下靜靜注視著眾生，酥油燈的暖香依舊縈繞鼻端。）呵呵，行者，你從甚深禪觀中醒來了。看你眉宇間湛然寂靜，必是在定中走過了大士自尼泊爾入吐蕃的漫漫長路，亦見證了夏絨卡秀大佛塔下四子發願的宿世因果。建寺之王赤松德贊、大堪布寂護、蓮花生大士與送信使者——昔日於佛塔前立下的宏願，化作了雪域千年的法炬。而大士與益西措嘉埋藏的無數伏藏，至今仍在山水與心識深處，伏藏仍在等待有緣人。"), TEXT("oldLama"), TEXT("Old Lama Lobsang"), TEXT("老喇嘛・洛桑")},
+        {EObjective::Reach, TEXT("Step onto the golden lotus mandala to behold Guru Padmasambhava in the sky"), TEXT("步入佛塔前金蓮壇城，瞻仰虛空蓮師顯相並領受紀念唐卡"), 1, TEXT(""), TEXT("")},
     }},
     {TEXT("grove"), {
         {EObjective::Interact, TEXT("Consecrate the votive stupa"), TEXT("為小佛塔裝藏開光"), 1, TEXT(""), TEXT("")},

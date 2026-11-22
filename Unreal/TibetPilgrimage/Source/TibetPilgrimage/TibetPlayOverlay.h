@@ -2,10 +2,13 @@
 
 #include "Widgets/SCompoundWidget.h"
 #include "Fonts/SlateFontInfo.h"
+#include "Styling/SlateBrush.h"
+#include "UObject/StrongObjectPtr.h"
 
 class ATibetGameMode;
 class ATibetHUD;
-enum class ETibetPage : uint8 { Play, Map, Skills, Controls, Pack, Dedication };
+class UTexture2D;
+enum class ETibetPage : uint8 { Play, Map, Skills, Controls, Pack, Dedication, Thangka };
 
 class STibetPlayOverlay : public SCompoundWidget
 {
@@ -29,6 +32,9 @@ private:
     ETibetPage Page = ETibetPage::Play;
     bool bTouch = false;
     bool bConfirmReset = false;
+    FString ExportedThangkaPath;
+    TStrongObjectPtr<UTexture2D> KeepsakeArt;
+    FSlateBrush KeepsakeBrush;
     float Width() const;
     float Height() const;
     float LayoutScale() const;
@@ -38,6 +44,7 @@ private:
     TSharedRef<SWidget> CourtyardControls();
     TSharedRef<SWidget> FeedingMenu();
     TSharedRef<SWidget> Dedication();
+    TSharedRef<SWidget> Thangka();
     TSharedRef<SWidget> Play();
     TSharedRef<SWidget> Journal();
     TSharedRef<SWidget> SkillSlot(int32 Index);
