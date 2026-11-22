@@ -8,7 +8,7 @@
 {TEXT("mangyul"), TEXT("guruVision.mangyul"), TEXT("GuruVision"), {1630, -420, 0}},
 {TEXT("yarlung"), TEXT("palaceKeeper"), TEXT("Guide"), {1490, -1040, 0}},
 {TEXT("yarlung"), TEXT("herder"), TEXT("Herder"), {-1320, 230, 0}},
-{TEXT("yarlung"), TEXT("guruVision.yarlung"), TEXT("GuruVision"), {-1150, -300, 0}},
+{TEXT("yarlung"), TEXT("guruVision.yarlung"), TEXT("GuruVision"), {680, -320, 0}},
 {TEXT("samye"), TEXT("shantarakshita"), TEXT("Guide"), {1420, -210, 0}},
 {TEXT("samye"), TEXT("trisongDetsen"), TEXT("King"), {1420, 210, 0}},
 {TEXT("chimphu"), TEXT("yesheTsogyal"), TEXT("Tsogyal"), {1570, -720, 0}},

@@ -18,6 +18,7 @@
 #include "TimerManager.h"
 #include "GameFramework/PlayerController.h"
 #include "TibetBossHalo.h"
+#include "TibetGuruHalo.h"
 #include "TibetRitualEffect.h"
 #include "TibetTravelGate.h"
 #include "TibetButterFlame.h"
@@ -28,8 +29,10 @@
 #include "Engine/TargetPoint.h"
 #include "GameFramework/Character.h"
 #include "Kismet/GameplayStatics.h"
+#include "Materials/Material.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Misc/CommandLine.h"
+#include "Misc/PackageName.h"
 #include "Misc/Parse.h"
 
 namespace
@@ -236,6 +239,8 @@ FString ATibetGameMode::CombatFigureModel(const FString& MapName, bool bBoss, in
 
 void ATibetGameMode::PopulateResidents()
 {
+    Residents.Empty();
+    ResidentStates.Reset();
     UE_LOG(LogTemp, Display, TEXT("TIBET_RESIDENT_LEVEL map=%s route=%s"), *Map, *Route);
     for (const FResidentPlacement& Resident : CastPlacements)
     {
@@ -266,6 +271,7 @@ void ATibetGameMode::PopulateResidents()
         Actor->Tags.Add(TEXT("TibetResident"));
         Actor->Tags.Add(FName(Resident.Id));
         Residents.Add(FName(Resident.Id), Actor);
+        RegisterSpawnedResident(FName(Resident.Id), Actor, Location, Marker != nullptr);
         if (bBearer && Save->bMessengerJoined && Objective(Route,GetStep()).Kind == EObjective::Escort)
         {
             Messenger = Actor;
@@ -343,7 +349,12 @@ FVector ATibetGameMode::Anchor() const
 FVector ATibetGameMode::GetObjectiveLocation() const
 {
     if (Focus) return Focus->GetActorLocation();
-    if (AActor* Resident = ActiveResident()) return Resident->GetActorLocation();
+    if (AActor* Resident = ActiveResident())
+    {
+        FVector Loc = Resident->GetActorLocation();
+        Loc.Z = GetResidentFloorZ(Resident);
+        return Loc;
+    }
     return Anchor();
 }
 FString ATibetGameMode::GetObjectiveText() const
@@ -601,6 +612,7 @@ void ATibetGameMode::Refresh()
 {
     if (!GetWorld()) return;
     CancelEnemyWindup();
+    UpdateResidentVisibility();
     const auto K=Objective(Route,GetStep()).Kind;
     if (Map==TEXT("wild") && K==EObjective::Combat && !IsCampaignComplete())
     {
@@ -1081,7 +1093,9 @@ void ATibetGameMode::Tick(float Dt)
     if (SkyGuru)
     {
         SkyGuru->SetActorLocation(SkyGuruHome + FVector(0.0, 0.0, 15.0 * FMath::Sin(Now * 1.45f)));
+        UpdateSkyGuruRadiance(Now);
     }
+    if (Save && !bTravel) UpdateResidents(Dt);
     DamageCues.RemoveAll([Now](const FTibetDamageCue& Cue) { return Now - Cue.SpawnTime >= 1.05f; });
     if (Now - LastHitTime > .22f)
         EnemyTrailing = FMath::FInterpConstantTo(EnemyTrailing, EnemyHealth, Dt, FMath::Max(4.f, EnemyMaximum * 1.7f));
@@ -1096,15 +1110,6 @@ void ATibetGameMode::Tick(float Dt)
     if (!WildernessPack.IsEmpty()) UpdateWilderness(P->GetActorLocation(),Dt);
     const FVector ToPlayer=P->GetActorLocation()-GetObjectiveLocation();
     const double Dist=ToPlayer.Size2D();
-    if (bEscorting && Messenger)
-    {
-        const FVector Delta=P->GetActorLocation()-Messenger->GetActorLocation();
-        if(Delta.Size2D()>95 && Delta.Size2D()<1800)
-        {
-            Messenger->AddActorWorldOffset(Delta.GetSafeNormal2D()*FMath::Min<double>(Dt*470,Delta.Size2D()-90));
-            Messenger->SetActorRotation(FRotator(0,Delta.Rotation().Yaw+90,0));
-        }
-    }
     if ((K==EObjective::Reach || K==EObjective::Kora || K==EObjective::Escort) && Dist<140 && OnObjectiveFloor(P,Anchor()))
     {
         if(K==EObjective::Escort && !bEscorting)
@@ -1223,23 +1228,55 @@ void ATibetGameMode::ChangeLanguage()
 void ATibetGameMode::EnsureSkyGuru()
 {
     if (!GetWorld()) return;
+    if (!RitualMaterial)
+    {
+        RitualMaterial = FPackageName::DoesPackageExist(TEXT("/Game/Figures/Materials/M_RitualColor"))
+            ? LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/Figures/Materials/M_RitualColor.M_RitualColor"))
+            : UMaterial::GetDefaultMaterial(MD_Surface);
+    }
     if (!SkyGuruMandala)
     {
         SkyGuruMandala = MeshActor(SkyGuruAltar + FVector(0, 0, 3), Cylinder, FVector(2.35, 2.35, .04), &Gold);
     }
     if (!SkyGuru)
     {
-        SkyGuru = MeshActor(SkyGuruHome, TEXT("/Game/Figures/GuruVision.GuruVision"), FVector(2.35));
+        const FString GuruMeshPath = FPackageName::DoesPackageExist(TEXT("/Game/Figures/GuruVision"))
+            ? TEXT("/Game/Figures/GuruVision.GuruVision")
+            : Cylinder;
+        SkyGuru = MeshActor(SkyGuruHome, GuruMeshPath, FVector(2.35));
         if (SkyGuru)
         {
             SkyGuru->SetActorRotation(FRotator(0, -90, 0));
             SkyGuru->Tags.Add(TEXT("TibetSkyGuru"));
+            if (auto* GuruMesh = LoadObject<UStaticMesh>(nullptr, *GuruMeshPath))
+            {
+                auto* RadianceShell = NewObject<UStaticMeshComponent>(SkyGuru, TEXT("SkyGuruRadianceShell"));
+                RadianceShell->SetupAttachment(SkyGuru->GetRootComponent());
+                RadianceShell->SetMobility(EComponentMobility::Movable);
+                RadianceShell->SetStaticMesh(GuruMesh);
+                RadianceShell->SetRelativeLocation(FVector(0.f, 0.f, -4.0f));
+                RadianceShell->SetRelativeScale3D(FVector(1.045f));
+                RadianceShell->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+                RadianceShell->SetGenerateOverlapEvents(false);
+                RadianceShell->SetCastShadow(false);
+                RadianceShell->ComponentTags.Add(TEXT("TibetSkyGuruAura"));
+                if (RitualMaterial)
+                {
+                    SkyGuruAuraMaterial = UMaterialInstanceDynamic::Create(RitualMaterial, SkyGuru);
+                    SkyGuruAuraMaterial->SetVectorParameterValue(TEXT("Color"), FLinearColor(1.55f, 1.05f, 0.28f, 0.34f));
+                    const int32 NumMats = RadianceShell->GetNumMaterials();
+                    for (int32 SlotIdx = 0; SlotIdx < NumMats; ++SlotIdx)
+                        RadianceShell->SetMaterial(SlotIdx, SkyGuruAuraMaterial);
+                }
+                RadianceShell->RegisterComponent();
+            }
             FActorSpawnParameters Spawn;
             Spawn.Owner = SkyGuru;
-            if (auto* Halo = GetWorld()->SpawnActor<ATibetBossHalo>(SkyGuruHome + FVector(45, 0, 210), FRotator(90, 0, 0), Spawn))
+            if (auto* Halo = GetWorld()->SpawnActor<ATibetGuruHalo>(SkyGuruHome, FRotator::ZeroRotator, Spawn))
             {
-                Halo->SetActorScale3D(FVector(1.85));
-                Halo->AttachToActor(SkyGuru, FAttachmentTransformRules::KeepWorldTransform);
+                Halo->AttachToActor(SkyGuru, FAttachmentTransformRules::SnapToTargetIncludingScale);
+                Halo->ConfigureHalo(true, RitualMaterial);
+                SkyGuruHalo = Halo;
             }
         }
     }
